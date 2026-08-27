@@ -1,0 +1,21 @@
+# dsh-context-economy bundle 层：
+# 1) 插入任务记忆插件行（追加到根级 entry list）；
+# 2) 把原生自动压缩的触发权收拢到插件 —— 用【按 id 覆盖】patch
+#    （非 insert！insert 会追加第二行同 id 条目，触发 duplicate loader entry id 崩溃）。
+#    覆盖语义（vendor/include applyEntryPatches）：id 命中已有行 → 整行 config 替换。
+#    auto:false 只停"何时压"的自动钩子（pre-step 压力 + request-error 溢出）；
+#    compactRegion/compactIfNeeded/compactNow 与 /compact 手动命令照常。
+- insert:
+    - id: dsh-context-economy
+      name: '@dsh-external/dsh-context-economy'
+      config:
+        sub2IntentMapping: true
+        compressionDriver: native
+        embeddingTier: off
+        taskCompression: true
+        overflowRecovery: true
+
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  config:
+    auto: false
