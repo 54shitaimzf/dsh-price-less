@@ -5,9 +5,19 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { taskProjectionDefinition } from '../src/task/projection.js'
+import { createTaskProjection, taskProjectionDefinition } from '../src/task/projection.js'
+import type { SemanticVoteTable } from '../src/task/types.js'
 
 const stateSchema = taskProjectionDefinition.stateSchema
+
+/** 简单内存语义票表（测试注入用）。 */
+function tableOf(entries: Record<number, number>): SemanticVoteTable {
+  const votes = new Map(Object.entries(entries).map(([seq, score]) => [Number(seq), score]))
+  return {
+    scoreOf: messageSeq => votes.get(messageSeq) ?? null,
+    set: (messageSeq, score) => { if (!votes.has(messageSeq)) votes.set(messageSeq, score) },
+  }
+}
 
 /** 纯函数 replay：按序 fold（模拟 registry 的 drive）。 */
 function fold(events: SessionEvent[]) {
@@ -260,6 +270,59 @@ describe('实测回归样本（card-b5f9 真实会话提炼）', () => {
   })
 })
 
+describe('语义票（embedding 档，回退链第 4 步）', () => {
+  function foldWith(votes: SemanticVoteTable, mode: 'off' | 'on', threshold: number, events: SessionEvent[]) {
+    const projection = createTaskProjection({ mode, threshold, votes })
+    let state = projection.init()
+    for (const event of events) state = projection.apply(state, event)
+    return state
+  }
+
+  it('语义漂移（score < threshold）→ 转正，证据含 semantic 标注', () => {
+    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
+    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.41 }), 'on', 0.5, msgs)
+    expect(state.tasks).toHaveLength(2)
+    expect(state.tasks[1]!.evidence).toContain('semantic:0.410')
+    expect(state.tasks[1]!.anchorText).toContain('全面审视')
+  })
+
+  it('语义同任务（score ≥ threshold）→ 不转正（fail-lazy 保守）', () => {
+    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
+    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.72 }), 'on', 0.5, msgs)
+    expect(state.tasks).toHaveLength(1)
+  })
+
+  it('无票（embedding 失败/未算）→ 机械底线，不因语义缺位误转正', () => {
+    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
+    const state = foldWith(tableOf({}), 'on', 0.5, msgs)
+    expect(state.tasks).toHaveLength(1)
+  })
+
+  it('机械强信号（user-correction）在语义同任务时仍保留兜底', () => {
+    const msgs: SessionEvent[] = [user('先别动手，完全不够放开，思路太笨了'), turnEnd()]
+    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.88 }), 'on', 0.5, msgs)
+    expect(state.tasks).toHaveLength(2)
+    expect(state.tasks[1]!.evidence).toContain('user-correction')
+  })
+
+  it("'off' 档忽略语义票（纯机械，票再漂移也不转正）", () => {
+    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
+    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.10 }), 'off', 0.5, msgs)
+    expect(state.tasks).toHaveLength(1)
+  })
+
+  it('多 turn：票作用于"上一 turn 边界后"的新锚（锚文本随 task 更新）', () => {
+    const s1 = user('帮我复查一下 R12 的落地效果')
+    const e1 = turnEnd()
+    const s2 = user('帮我全面审视一下当前项目的架构是否干净，边界清晰')
+    const e2 = turnEnd()
+    // 第一 turn：高相似（同任务）不转正；第二 turn：漂移 → 转正，锚 = 第二消息。
+    const state = foldWith(tableOf({ [s1.seq]: 0.68, [s2.seq]: 0.41 }), 'on', 0.5, [s1, e1, s2, e2])
+    expect(state.tasks).toHaveLength(2)
+    expect(state.tasks[1]!.anchorText).toContain('全面审视')
+  })
+})
+
 describe('契约守卫', () => {
   it('无兴趣事件返回同一引用', () => {
     const state = taskProjectionDefinition.init()
@@ -277,8 +340,8 @@ describe('契约守卫', () => {
     expect(() => stateSchema.parse(state)).not.toThrow()
   })
 
-  it('stateVersion 为非负整数且 =2（v2: 分数制+簇迁移，旧 checkpoint 行失效）', () => {
+  it('stateVersion 为非负整数且 =3（v3: 语义票 + 锚文本/最近消息，旧 checkpoint 行失效）', () => {
     expect(Number.isSafeInteger(taskProjectionDefinition.stateVersion)).toBe(true)
-    expect(taskProjectionDefinition.stateVersion).toBe(2)
+    expect(taskProjectionDefinition.stateVersion).toBe(3)
   })
 })

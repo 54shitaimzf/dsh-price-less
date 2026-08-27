@@ -2,14 +2,15 @@
  * task 边界信号检测（纯函数，无副作用）。
  *
  * 模块: task 判界信号
- * 平面: L0（确定性规则：事件观测 + 字符串签名 + 文件簇相似度）
+ * 平面: L0（确定性规则：事件观测 + 字符串签名 + 文件簇相似度）+ L1（语义票 = 本地
+ *       embedding，回退链第 4 步；本轮落为可注入 vote 通道，'off' 档机械降级）
  * 回退链步数: 2（代码分支）→ 3（机械字符匹配：'/task' 前缀、路径签名、关键词）
- *            —— embedding 语义票（回退链第 4 步）在本轮缺位：等价
- *            `embeddingTier:'off'` 的既定降级（信号分数制合议），判定略保守。
+ *            → 4（语义票：当前用户消息 vs task 宣言锚的余弦漂移，见 docs/11）
  * 审查清单: 信号取自会话日志确定性事件；**不读 event.time（时间戳非判据，
- *           保证事件流重放字节可复现）**；可匹配/可分支部分全部 L0 化；
- *           模块自证附于本头注释；无 LLM 调用。
- * 度量: taskSwitchRate（docs/07）
+ *           保证事件流重放字节可复现）**；语义票经 voteTable 同步注入（fold 纯函数，
+ *           无 IO/无模型调用）；可匹配/可分支部分全部 L0 化；
+ *           模块自证附于本头注释。
+ * 度量: taskSwitchRate / semanticVoteLatency / embeddingTier（docs/07）
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -194,6 +195,47 @@ export function decideBoundary(
   if (total >= BOUNDARY_SCORE_THRESHOLD && hasStrong) return 'boundary'
   // 有信号但未达标：turn 未结束时继续累积；turn/end 时按 drop 处理（fail-lazy）。
   return 'pending'
+}
+
+/** 语义票档位：'off' 纯机械判定；'on' 语义漂移为主判定（机械强信号保留兜底）。 */
+export type SemanticMode = 'off' | 'on'
+
+/** 语义票合议输入/输出裁决（与机械合议正交，组合见 decideBoundaryWithSemantic）。 */
+export interface SemanticVote {
+  /** 余弦相似度 ∈ [-1,1]（当前用户消息 vs 当前 task 锚）。 */
+  score: number
+}
+
+/** 语义票合议选项。 */
+export interface SemanticVoteOptions {
+  /** 档位。 */
+  mode: SemanticMode
+  /**
+   * 语义漂移阈值（docs/07 contract `taskEmbeddingThreshold`，默认 0.5）：
+   * score < threshold 视为"语义离开当前 task" → 边界候选。
+   */
+  threshold: number
+}
+
+/**
+ * 语义票合议：机械合议（decideBoundary）为底线，语义漂移（cosine < threshold）为
+ * 主判据；三票合一。规则（fail-lazy 与机械一致）：
+ * - 'off'：完全机械（等价 decideBoundary；语义票被忽略）。
+ * - 'on'：'boundary' 当且仅当 (机械合议达标) 或 (语义票存在且 score < threshold)。
+ *   机械强信号（user-correction，≥1.0）比 embedding 更可靠，保留为兜底——
+ *   语义票失败（null）不影响机械底线（降级即机械档）。
+ * @param semantic 语义票（null = 无票/未计算/embedding 失败）。
+ */
+export function decideBoundaryWithSemantic(
+  signals: readonly SignalName[],
+  semantic: SemanticVote | null,
+  opts: SemanticVoteOptions,
+): 'boundary' | 'pending' | 'drop' {
+  const mechanical = decideBoundary(signals)
+  if (opts.mode === 'off') return mechanical
+  if (mechanical === 'boundary') return 'boundary'
+  if (semantic !== null && semantic.score < opts.threshold) return 'boundary'
+  return mechanical
 }
 
 /**

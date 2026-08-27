@@ -14,12 +14,26 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { CompactionEngine, CompactionResult } from '@deepseek-ai/dsh-compaction'
 import { CONTEXT_WINDOW_EXCEEDED_CODE } from '@deepseek-ai/dsh-llm'
-import type { Session } from '@deepseek-ai/dsh-session'
-import type { ContextEconomyTaskState, TaskRecord } from './types.ts'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { ContextEconomyTaskState, SemanticVoteTable, TaskRecord } from './types.ts'
 import { selectCompressibleRange, type CompressibleRange } from './range.ts'
 import { emitTaskBoundary, emitTaskCompacted } from './graph-hook.ts'
 import type { TaskBoundarySignal } from './events.ts'
+import { isSystemInjectedUserText, type SemanticVoteProvider } from './embedding.ts'
+import { userMessageText } from './boundary.ts'
 import { TASK_PROJECTION_KEY } from './types.ts'
+
+/** node:fs/promises 的 VoteArtifactStore 默认端口（宿主 Node 运行时；/ 分隔符 Windows 亦可）。 */
+const defaultPathImpl = {
+  async mkdir(p: string) { await (await import('node:fs/promises')).mkdir(p, { recursive: true }) },
+  async write(p: string, content: string) { await (await import('node:fs/promises')).writeFile(p, content, 'utf-8') },
+  async read(p: string) { return (await import('node:fs/promises')).readFile(p, 'utf-8') },
+  async list(p: string) { return (await import('node:fs/promises')).readdir(p) },
+  async exists(p: string) {
+    try { await (await import('node:fs/promises')).stat(p); return true } catch { return false }
+  },
+  join(...parts: string[]) { return parts.join('/') },
+}
 
 /** 压缩驱动接口（替换缝：现在 = 原生 compactRegion；后续自研 = 新实现）。 */
 export interface CompressionDriver {
@@ -77,6 +91,14 @@ export interface OrchestratorDeps {
   }
   readonly compaction?: CompactionEngine
   readonly driver?: CompressionDriver
+  /** 语义票 provider（<embeddingTier>'off' 时缺省 = 无投票，机械判定）。 */
+  readonly votes?: SemanticVoteProvider
+  /** 语义票表决表（与投影 factory 共享同一实例；fold 只读，本处写入）。 */
+  readonly votesTable?: SemanticVoteTable
+  /** 语义票落盘根目录（缺省跳过 artifact——仅内存票）。 */
+  readonly artifactRoot?: string
+  /** 语义模型标识（artifact 记录用）。 */
+  readonly voteModel?: string
 }
 
 /**
@@ -90,12 +112,93 @@ export function registerOrchestrator(deps: OrchestratorDeps): () => void {
 
   let lastBoundarySeqSeen = -1
 
+  // —— 语义票投票状态（每会话）——
+  const votedSeqs = new Map<string, Set<number>>()
+  const artifactCache = new Map<string, Map<number, number>>()
+
+  /** 取会话最近一条非系统注入的用户消息（seq + 文本）。 */
+  function lastUserMessage(session: Session): { seq: number; text: string } | null {
+    const events = session.events as readonly SessionEvent[]
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const ev = events[i]!
+      if (ev.type !== 'user/message') continue
+      if (ev.surfaceOp !== undefined && ev.surfaceOp !== 'append') continue
+      const text = userMessageText(ev)
+      if (isSystemInjectedUserText(text)) continue
+      return { seq: ev.seq, text }
+    }
+    return null
+  }
+
+  /**
+   * 语义票（每个新用户消息一次；三源闭合：内存票 → 已落盘 artifact → provider 现算）。
+   * 失败全链 fail-lazy：无票 = 机械底线，绝不抛错打断 step。
+   */
+  async function voteOnce(session: Session, state: ContextEconomyTaskState): Promise<void> {
+    if (deps.votes === undefined || deps.votesTable === undefined) return
+    if (state.current === null) return
+    const currentTask = state.tasks.find(task => task.taskId === state.current!.taskId)
+    if (currentTask === undefined) return
+    const msg = lastUserMessage(session)
+    if (msg === null) return
+    const sessionId = session.header.id
+
+    let voted = votedSeqs.get(sessionId)
+    if (voted === undefined) {
+      voted = new Set<number>()
+      votedSeqs.set(sessionId, voted)
+    }
+    if (voted.has(msg.seq)) return
+
+    // 1) artifact 预读（恢复路径：同判据同票，重建一致性）。
+    let cached = artifactCache.get(sessionId)
+    if (cached === undefined) {
+      cached = new Map<number, number>()
+      artifactCache.set(sessionId, cached)
+      if (deps.artifactRoot !== undefined) {
+        try {
+          const { VoteArtifactStore } = await import('./embedding.ts')
+          const store = new VoteArtifactStore(deps.artifactRoot, defaultPathImpl)
+          for (const [seq, score] of await store.loadAll(sessionId)) cached.set(seq, score)
+        } catch {
+          // artifact 读失败：走现算（仅丢缓存，不抛错）。
+        }
+      }
+    }
+    if (cached.has(msg.seq)) {
+      voted.add(msg.seq)
+      deps.votesTable.set(msg.seq, cached.get(msg.seq)!)
+      return
+    }
+
+    // 2) provider 现算（Ollama；失败 → null 不写票 = 本回合机械判定，fail-lazy）。
+    const score = await deps.votes.score(msg.text, currentTask.anchorText)
+    voted.add(msg.seq)
+    if (score === null) return
+    deps.votesTable.set(msg.seq, score)
+    // 3) 版本化落盘（docs/09；失败仅记日志，不影响判定）。
+    if (deps.artifactRoot !== undefined) {
+      try {
+        const { VoteArtifactStore } = await import('./embedding.ts')
+        const store = new VoteArtifactStore(deps.artifactRoot, defaultPathImpl)
+        await store.save(sessionId, msg.seq, currentTask.startSeq, currentTask.anchorText, score, deps.voteModel ?? '')
+      } catch (error: unknown) {
+        ctx.logger.warn(`task-memory: vote artifact save failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+
   const disposePreStep = ctx.on(
     'agent/pre-step',
     async ({ agent, signal }, next) => {
       // 1) 读取投影状态（经 stateOf；key 未注册时直接放行——headless 弹性）。
       const state = sessionProjections.stateOf(agent.session, TASK_PROJECTION_KEY)
-      if (state === undefined || driver === undefined) return next()
+      if (state === undefined) return next()
+
+      // 1.5) 语义票（异步；不阻塞 step 主链——失败/缺票均 fail-lazy）。
+      await voteOnce(agent.session, state)
+
+      if (driver === undefined) return next()
 
       // 2) 边界信号发射（每次状态推进都检一次 lastBoundary；幂等由 seq 门控）。
       if (state.lastBoundary !== null && state.lastBoundarySeq !== null

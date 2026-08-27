@@ -8,6 +8,7 @@ import {
   CLUSTER_SHIFT_THRESHOLD,
   classifyExplicitUserMessage,
   decideBoundary,
+  decideBoundaryWithSemantic,
   evaluateClusterShift,
   extractTaskName,
   fileDirKey,
@@ -198,5 +199,36 @@ describe('用户消息文本提取', () => {
     const a = userEvent('先别动手', 1)
     const b = { ...userEvent('先别动手', 1), time: 9999999 }
     expect(isUserCorrection(userMessageText(a))).toBe(isUserCorrection(userMessageText(b)))
+  })
+})
+
+describe('语义票合议（decideBoundaryWithSemantic）', () => {
+  const off = { mode: 'off' as const, threshold: 0.5 }
+  const on = { mode: 'on' as const, threshold: 0.5 }
+
+  it("'off' 档忽略语义票（票漂移也不转正）", () => {
+    expect(decideBoundaryWithSemantic([], { score: 0.1 }, off)).toBe('drop')
+    expect(decideBoundaryWithSemantic(['user-correction'], { score: 0.1 }, off)).toBe('boundary')
+  })
+
+  it("'on' 档：无机械信号 + 票漂移（score < threshold）→ 转正——embedding 主判据", () => {
+    expect(decideBoundaryWithSemantic([], { score: 0.4 }, on)).toBe('boundary')
+  })
+
+  it("'on' 档：无机械信号 + 票同任务（score ≥ threshold）→ 不转正", () => {
+    expect(decideBoundaryWithSemantic([], { score: 0.6 }, on)).toBe('drop')
+  })
+
+  it("'on' 档：无票（null，embedding 失败）→ 纯机械底线", () => {
+    expect(decideBoundaryWithSemantic([], null, on)).toBe('drop')
+    expect(decideBoundaryWithSemantic(['user-correction'], null, on)).toBe('boundary')
+  })
+
+  it("'on' 档：票漂移 + 机械强信号 → 转正（证据双通道，取并）", () => {
+    expect(decideBoundaryWithSemantic(['user-correction'], { score: 0.2 }, on)).toBe('boundary')
+  })
+
+  it("'on' 档：弱信号组合（todo+lexical）无票 → 仍 fail-lazy", () => {
+    expect(decideBoundaryWithSemantic(['todo-completed', 'lexical-hint'], null, on)).toBe('pending')
   })
 })

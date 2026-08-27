@@ -37,6 +37,11 @@ export interface TaskRecord {
   summary: string | null
   /** 生命周期状态。 */
   status: TaskStatus
+  /**
+   * 语义锚：task 宣言的原始文本 = 本 task 首条（用户）消息文本。
+   * L0 纯规则产物（消息文本即锚）；供语义票 provider 计算"当前消息 vs 任务锚"漂移。
+   */
+  anchorText: string
 }
 
 /**
@@ -76,6 +81,20 @@ export interface ContextEconomyTaskState {
   compactedTaskIds: string[]
   /** 最近一次边界事件种类（供指挥半边读取）。 */
   lastBoundary: { taskId: string; kind: BoundaryKind; evidence: string[] } | null
+  /** 最近一条（非替换语义的）用户消息（seq + 文本）——turn/end 时供语义票查表。 */
+  lastUserMsg: { seq: number; text: string } | null
+}
+
+/**
+ * 语义票表决表（运行时通道）：投影 fold 在 turn/end 以 `messageSeq` 同步查票。
+ * 实现方保证：同一 (session, messageSeq) 的分数一旦写入即固定（判据=文本+模型+温度0），
+ * 且退出进程前持久化为版本化 artifact（docs/09：LLM 产物复用必须先版本化落盘）。
+ */
+export interface SemanticVoteTable {
+  /** 读最近一次语义票（null = 无票/未计算——机械降级）。 */
+  scoreOf(messageSeq: number): number | null
+  /** 写票（幂等：同 seq 重复写以第一次为准）。 */
+  set(messageSeq: number, score: number): void
 }
 
 /** 投影 key（host-only 单元，无 wire——本轮无需客户端视图）。 */
