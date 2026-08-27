@@ -112,10 +112,15 @@ describe('VoteArtifactStore', () => {
 
 describe('createVoteProvider + 系统注入过滤', () => {
   it("tier 'off' → null（机械降级）", () => {
-    expect(createVoteProvider('off', 'http://x', 'm')).toBeNull()
+    expect(createVoteProvider('off', {})).toBeNull()
   })
-  it("tier 'local' → Ollama provider 实例", () => {
-    expect(createVoteProvider('local', 'http://localhost:11434', 'qwen3-embedding:0.6b')).toBeInstanceOf(OllamaVoteProvider)
+  it("tier 'local' → 外部 Ollama provider 实例", () => {
+    expect(createVoteProvider('local', { endpoint: 'http://localhost:11434', model: 'qwen3-embedding:0.6b' }))
+      .toBeInstanceOf(OllamaVoteProvider)
+  })
+  it("tier 'lite' → 插件内嵌 provider；缺 modelDir → null（防呆）", () => {
+    expect(createVoteProvider('lite', { modelDir: 'D:/x/models' })).toBeInstanceOf(OllamaVoteProvider)
+    expect(createVoteProvider('lite', {})).toBeNull()
   })
   it('系统注入用户消息被识别（不参与投票）', () => {
     expect(isSystemInjectedUserText('This is an automatically generated checkpoint condensing an earlier span')).toBe(true)

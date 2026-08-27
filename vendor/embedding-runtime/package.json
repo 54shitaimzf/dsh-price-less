@@ -1,0 +1,1 @@
+{"name":"embedding-runtime","version":"0.1.0","private":true,"dependencies":{"@huggingface/transformers":"^3.7.0","onnxruntime-node":"^1.22.0"}}

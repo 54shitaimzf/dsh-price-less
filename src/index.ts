@@ -18,6 +18,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { CompactionEngine } from '@deepseek-ai/dsh-compaction'
 import type { Session } from '@deepseek-ai/dsh-session'
+import { fileURLToPath } from 'node:url'
 import { Config, type Config as ConfigShape } from './config.ts'
 import { createTaskProjection } from './task/projection.ts'
 import { registerOrchestrator } from './task/orchestrator.ts'
@@ -49,15 +50,35 @@ class InMemoryVoteTable implements SemanticVoteTable {
   }
 }
 
-/** 装配内共享的语义票表 + 提供方（同一次 apply 内创建，投影与指挥共用）。 */
+/** 插件包内资源目录解析（lib/index.js → 包根）。 */
+function packageRoot(): string {
+  return fileURLToPath(new URL('./..', import.meta.url))
+}
+
+/**
+ * 装配内共享的语义票表 + 提供方（同一次 apply 内创建，投影与指挥共用）。
+ * 'off' → provider null（fold 纯机械）；'lite' → 插件内嵌模型目录；
+ * 'local' → 外部 Ollama（experimental，需自行装服务）。
+ */
 export function makeVotes(config: ConfigShape, ctx: Context): {
   provider: ReturnType<typeof createVoteProvider>
   table: SemanticVoteTable
 } {
   const table = new InMemoryVoteTable()
-  const provider = config.embeddingTier === 'local'
-    ? createVoteProvider(config.embeddingTier, config.embeddingEndpoint, config.embeddingModel, ctx.logger as never)
-    : null
+  const root = packageRoot()
+  const modelDir = config.embeddingModelDir.length > 0
+    ? config.embeddingModelDir
+    : `${root}/models/${config.embeddingModel}`
+  const vendorDir = config.embeddingVendorDir.length > 0
+    ? config.embeddingVendorDir
+    : `${root}/vendor/embedding-runtime`
+  const provider = createVoteProvider(config.embeddingTier, {
+    tier: config.embeddingTier as 'off' | 'local' | 'lite',
+    endpoint: config.embeddingEndpoint,
+    model: config.embeddingModel,
+    modelDir,
+    vendorDir,
+  }, ctx.logger as never)
   return { provider, table }
 }
 
@@ -71,9 +92,9 @@ export function registerTaskProjection(
   votesTable: SemanticVoteTable,
 ): void {
   const definition = createTaskProjection({
-    mode: config.embeddingTier === 'local' ? 'on' : 'off',
+    mode: config.embeddingTier === 'off' ? 'off' : 'on',
     threshold: config.taskEmbeddingThreshold,
-    votes: config.embeddingTier === 'local' ? votesTable : undefined,
+    votes: config.embeddingTier === 'off' ? undefined : votesTable,
   })
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     projectionCtx.sessionProjections.register(definition)

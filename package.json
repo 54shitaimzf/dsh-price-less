@@ -1,13 +1,15 @@
 {
   "name": "@dsh-external/dsh-context-economy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH 任务记忆插件：task 状态机/历史/摘要 + task 边界触发原生压缩 + 图谱 hook 占位",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
   "files": [
-    "lib"
+    "lib",
+    "models",
+    "vendor"
   ],
   "license": "BSD-3-Clause",
   "dependencies": {
@@ -27,7 +29,9 @@
   "scripts": {
     "build": "bash scripts/build.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --pool=threads"
+    "test": "vitest run --pool=threads",
+    "setup:vendor": "powershell -ExecutionPolicy Bypass -File scripts/setup_vendor.ps1",
+    "smoke": "node scripts/embed_smoke.mjs"
   },
   "dsh": {
     "bundle": {

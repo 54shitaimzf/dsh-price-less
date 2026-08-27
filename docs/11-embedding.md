@@ -126,3 +126,43 @@ embedding 是"笨"模型，它的分类/检索质量高度依赖输入形态。�
 3. **任务级分类器**：轻量分类模型（意图域路由），预算内 128 维（`embeddingDimension`）；
 4. 或接受"换向 = 机械强信号 + 显式命令"的保守组合（当前默认），把 embedding 留给
    映射检索（文档语义检索是它的强项，与本节诊断不矛盾）。
+
+## 10. 2026.8 选型重验与插件内打包形态（v0.2.0）
+
+> 上一轮（§9）默认模型为 Qwen3-Embedding-0.6B（Ollama 外部服务，639MB）。
+> 用户质询"100M 以内最先进"后重验（HF 实测文件尺寸），结论：**选型改为
+> `ibm-granite/granite-embedding-97m-multilingual-r2`（2026-05，Apache-2.0，97M 参数 =
+> "Sub-100M 检索 SOTA"，多语，32K 上下文），量化 ONNX 93.3MB**。
+
+### 失格清单（实测，非推测）
+
+| 候选 | 实测体积 | 结论 |
+|---|---|---|
+| Qwen3-Embedding-0.6B | GGUF 639MB / ONNX q8 585MB | 顶配档（experimental），超出 100M |
+| KaLM-embedding-multilingual-mini-instruct-v2.5 | ONNX q8 **536MB**（名字 mini≠体积小） | 出局 |
+| granite-embedding-107m-multilingual | fp16 204MB / ONNX fp32 408MB | 出局（无现成 ≤100M 量化 ONNX） |
+| geevec-embeddings-1.0-lite | 698MB | 出局 |
+| **granite-embedding-97m-multilingual-r2** | **ONNX q8 93.3MB**（onnx-community 导出） | **✅ 入选**（官方 1_Pooling=CLS+Normalize，384 维） |
+
+### 打包形态（单插件确保的最终回答）
+
+```
+插件包（@dsh-external/dsh-context-economy, v0.2.0）
+├─ lib/                            # 编译产物
+├─ models/granite-embedding-97m-multilingual-r2/   # 118MB（模型 93.3 + tokenizer 24）
+├─ vendor/embedding-runtime/       # 81MB（transformers.js CJS + onnxruntime-node win32-x64 CPU 精简）
+│    └─ README.md  + scripts/setup_vendor.ps1      # 复现：npm install → sharp 存根 → 平台裁剪
+└─ src/  ...（SemanticVoteProvider / LiteEmbeddingPort / 档位工厂）
+```
+
+- **零外部服务**：推理 = transformers.js CJS + onnxruntime-node（CPU），首次加载 ~840ms，
+  热推理 **3-4ms/条**（384 维 CLS+normalize；对比 Ollama 0.6B 40ms + 外部进程）；
+- **零 C 盘**：全部文件随插件目录（本会话为 D:\deepseek-plugin，junction 装配不复制）；
+- **离线可用**：模型随包分发（local_files_only），不联网；
+- **插拔档位**：`embeddingTier: 'off' | 'lite'(默认打包档) | 'local'(外部 Ollama，experimental)`；
+  `embeddingModel/embeddingModelDir/embeddingVendorDir/taskEmbeddingThreshold` 均可配置；
+  provider 接口（SemanticVoteProvider/EmbeddingPort）不变，测试全绿 66/66。
+- 注意事项：sharp 以存根满足（仅文本推理，图像功能禁用）；裁剪仅保留 win32-x64 CPU 后端并
+  删除 GPU EP（DirectML/dxcompiler）与 wasm——如需 GPU 加速可经 setup 脚本参数放开。
+- 代价诚实声明：模型 q8 量化 + BERT 各向异性 → 原始余弦区间压缩（0.70-0.79）——
+  与 §9 结论一致，**不得用"宣言锚距离"作为判据**；判别须用原型三类对比 / 相对差（见 §9 下一步）。
