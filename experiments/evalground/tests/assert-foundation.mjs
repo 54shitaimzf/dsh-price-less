@@ -45,7 +45,7 @@ const ok = (cond, label, extra = '') => {
   ok(netEgress.length === 0, 'O1 closed world: no external fetch outside gateway.mjs', netEgress.join(' | ') || '(clean)')
 
   const shim = createGateway({ fetchImpl: async () => ({ ok: false, status: 418, text: async () => 'teapot' }) })
-  ok(typeof shim.chatCall === 'function' && shim.baseUrl.includes('opencode.ai'), 'O2 createGateway returns usable transport', shim.baseUrl)
+  ok(typeof shim.chatCall === 'function' && shim.baseUrl.includes('api.deepseek.com'), 'O2 createGateway returns usable transport', shim.baseUrl)
 
   const scripted = createScriptedGateway({
     script: [
@@ -105,7 +105,7 @@ const ok = (cond, label, extra = '') => {
   ok(rep.forbid.ok === true, 'W12 derived never allowed into conclusions by default')
   const p1 = priceOf('mimo-v2.5')
   ok(p1 && p1.inputPerM === 0.14, 'W13 priceOf resolves mimo-v2.5 row', JSON.stringify(p1))
-  const p2 = priceOf('deepseek-v4-flash', 'opencode-go-v4')
+  const p2 = priceOf('deepseek-v4-flash', 'deepseek-v4')
   ok(p2 && p2.id.includes('-peak'), 'W14 v4 route resolves peak tier row', p2?.id)
   ok(loadPricing().models.length > 0, 'W15 pricing table loaded')
 }

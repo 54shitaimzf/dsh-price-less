@@ -15,7 +15,7 @@ function isCompressCall(rec) {
 const tasks = [loadTask('T0'), loadTask('T0'), loadTask('T0')]
 const boundaryMark = {
   taskId: 'CASCADE', source: 'premark',
-  cost: { usage: { inputTokens: 40, outputTokens: 0, cacheReadTokens: 0, calls: 2 }, usd: 0.0004, model: 'hy3', provider: 'opencode-go-v4' },
+  cost: { usage: { inputTokens: 40, outputTokens: 0, cacheReadTokens: 0, calls: 2 }, usd: 0.0004, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' },
   boundaries: [
     { segmentIndex: 0, taskId: 'g0', startSeq: 0, endSeq: 0, status: 'closed' },
     { segmentIndex: 1, taskId: 'g1', startSeq: 1, endSeq: 1, status: 'closed' },
@@ -29,7 +29,7 @@ try {
   b = await runCascade({
     tasks, arm: 'self-s2-orig', callLLM: rec.chatCall,
     boundaryMark,
-    model: 'hy3', provider: 'opencode-go-v4',
+    model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek',
     skipScore: true,
     maxSteps: 15,
   })

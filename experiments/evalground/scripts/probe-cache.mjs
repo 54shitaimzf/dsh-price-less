@@ -1,7 +1,7 @@
 /**
  * Gateway prompt-cache probe (V1 prerequisite, batch 0; a few real requests,
  * ≈$0.01-0.05). Answers one question before V1 arms are finalized:
- * does the opencode gateway actually honor prefix caching for our request
+ * does the gateway actually honor prefix caching for our request
  * shape — and under what conditions (same prefix, changed tail, changed 1 byte)?
  *
  *   node scripts/probe-cache.mjs [--model=deepseek-v4-flash] [--calls=4]
@@ -19,7 +19,7 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => {
 }))
 
 const gw = createGateway()
-const model = args.model ?? 'hy3'
+const model = args.model ?? 'deepseek-v4-flash-vision-exp'
 const prefixBase = [
   'You are a probe. The following block is FIXED and must be treated as a stable prefix.',
   'TASK: medium audit scenario; keep this text byte-identical across calls.',
@@ -49,13 +49,13 @@ function usageRows(r) {
 async function probe() {
   const calls = []
   // 1) warm bucket: same prefix A twice → expect cache hit on 2nd
-  for (let i = 0; i < 2; i++) calls.push(await gw.chatCall({ provider: 'opencode-go-v4', model, messages: [{ role: 'user', content: prefixBase + tailA }], maxTokens: 20 }))
+  for (let i = 0; i < 2; i++) calls.push(await gw.chatCall({ provider: 'deepseek', model, messages: [{ role: 'user', content: prefixBase + tailA }], maxTokens: 20 }))
   // 2) same prefix, changed tail → hit should persist
-  calls.push(await gw.chatCall({ provider: 'opencode-go-v4', model, messages: [{ role: 'user', content: prefixBase + tailB }], maxTokens: 20 }))
+  calls.push(await gw.chatCall({ provider: 'deepseek', model, messages: [{ role: 'user', content: prefixBase + tailB }], maxTokens: 20 }))
   // 3) prefix changed by ONE byte → hit should drop to 0
-  calls.push(await gw.chatCall({ provider: 'opencode-go-v4', model, messages: [{ role: 'user', content: prefixBase + '\nX' + tailA }], maxTokens: 20 }))
+  calls.push(await gw.chatCall({ provider: 'deepseek', model, messages: [{ role: 'user', content: prefixBase + '\nX' + tailA }], maxTokens: 20 }))
   // 4) prefix again → hit should return
-  calls.push(await gw.chatCall({ provider: 'opencode-go-v4', model, messages: [{ role: 'user', content: prefixBase + tailA }], maxTokens: 20 }))
+  calls.push(await gw.chatCall({ provider: 'deepseek', model, messages: [{ role: 'user', content: prefixBase + tailA }], maxTokens: 20 }))
 
   const rows = calls.map(usageRows)
   const hit = (r) => (r.cacheRead ?? r.promptDetails?.cached_tokens ?? 0) > 0

@@ -1,5 +1,5 @@
 {
-  "$schema": "opencode-go pricing, user-provided (2026)",
+  "$schema": "opencode-go pricing (user-provided, 2026) + DeepSeek official API rows (2026-09, api-docs.deepseek.com: vision-exp = v4-flash pricing, 空闲=高峰半价, peak=工作日 9-12/14-18 北京时间; offpeak row is the canonical accounting basis)",
   "note": "Columns (per 1M tokens, USD): inputPerM | outputPerM | cacheReadPerM | cacheWritePerM. The trailing column ($15/$30/$60) is stored as contextTier: its exact semantic is UNVERIFIED and it is NOT used in any cost math. cacheWritePerM null means the row had '-'.",
   "currency": "USD / 1M tokens",
   "models": [
@@ -31,8 +31,8 @@
     { "id": "deepseek-v4-pro-peak", "name": "DeepSeek V4 Pro (Peak)", "inputPerM": 1.32, "outputPerM": 3.96, "cacheReadPerM": 0.044, "cacheWritePerM": null, "contextTier": 15 },
     { "id": "deepseek-v4-flash-offpeak", "name": "DeepSeek V4 Flash (Off-Peak)", "inputPerM": 0.22, "outputPerM": 0.66, "cacheReadPerM": 0.007, "cacheWritePerM": null, "contextTier": 30 },
     { "id": "deepseek-v4-flash-peak", "name": "DeepSeek V4 Flash (Peak)", "inputPerM": 0.44, "outputPerM": 1.32, "cacheReadPerM": 0.014, "cacheWritePerM": null, "contextTier": 30 },
-    { "id": "deepseek-v4-flash-vision-offpeak", "name": "DeepSeek V4 Flash Vision Exp (Off-Peak)", "inputPerM": 0.22, "outputPerM": 0.66, "cacheReadPerM": 0.007, "cacheWritePerM": null, "contextTier": 15 },
-    { "id": "deepseek-v4-flash-vision-peak", "name": "DeepSeek V4 Flash Vision Exp (Peak)", "inputPerM": 0.44, "outputPerM": 1.32, "cacheReadPerM": 0.014, "cacheWritePerM": null, "contextTier": 15 },
+    { "id": "deepseek-v4-flash-vision-exp", "name": "DeepSeek V4 Flash Vision Exp (Off-Peak)", "inputPerM": 0.22, "outputPerM": 0.66, "cacheReadPerM": 0.007, "cacheWritePerM": null, "contextTier": 15 },
+    { "id": "deepseek-v4-flash-vision-exp-peak", "name": "DeepSeek V4 Flash Vision Exp (Peak)", "inputPerM": 0.44, "outputPerM": 1.32, "cacheReadPerM": 0.014, "cacheWritePerM": null, "contextTier": 15 },
     { "id": "hy3", "name": "Hy3", "inputPerM": 0.14, "outputPerM": 0.58, "cacheReadPerM": 0.035, "cacheWritePerM": null, "contextTier": 60 }
   ]
 }

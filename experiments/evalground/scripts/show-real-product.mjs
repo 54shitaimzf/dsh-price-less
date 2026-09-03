@@ -52,7 +52,7 @@ const rawWorkText = await bindings.read_transcript({ segmentRef: 'task' })
 const subtasks = clusterSubtasks(transcript)
 
 const gateway = createGateway()
-const MODEL = process.env.COMPRESSOR_CHECK_MODEL ?? 'hy3'
+const MODEL = process.env.COMPRESSOR_CHECK_MODEL ?? 'deepseek-v4-flash-vision-exp'
 const MODES = [
   { label: 'S2 × 方案0（keep-original：refs 只留坐标指针）', a1: 's2', a2: 'keep-original' },
   { label: 'S1 × 方案1（expand：refs 由 harness 展开为真实内容 + 热桥接保留）', a1: 's1', a2: 'expand' },
@@ -72,7 +72,7 @@ for (const mode of MODES) {
   let call
   try {
     call = await gateway.chatCall({
-      provider: 'opencode-go-v4', model: MODEL,
+      provider: 'deepseek', model: MODEL,
       messages: buildCompressorMessages({ rawWorkText, a1: mode.a1, a2: mode.a2 }),
       maxTokens: 16000, timeoutMs: 600000,
     })

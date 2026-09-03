@@ -20,7 +20,7 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => {
 const runRel = args.run ?? 'runs/T1-industry-mthhap1r'
 const n = Number(args.n) || 5
 const models = (args.models ?? 'hy3,deepseek-v4-flash,glm-5.3-flash').split(',').filter(Boolean)
-const provider = 'opencode-go-v4'
+const provider = 'deepseek'
 
 const runDir = path.resolve(EVAL_ROOT, runRel)
 const sc = JSON.parse(fs.readFileSync(path.join(runDir, 'scorecard.json'), 'utf8'))

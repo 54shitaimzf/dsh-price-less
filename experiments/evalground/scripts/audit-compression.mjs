@@ -4,7 +4,7 @@
  * A mini 3-segment cascade over a REAL workspace with REAL file changes:
  *   executor = scripted (deterministic tools: read big file → write fixed
  *              src/auth.js → real test run) so the transcript/change records
- *              are real and grounded; compressor = REAL opencode/go gateway
+ *              are real and grounded; compressor = REAL gateway (DeepSeek official direct)
  *              (the model writes the PTC program; runProgram executes it; all
  *              mechanical gates run).
  *
@@ -35,7 +35,7 @@ import { validateProductSchema, checkRatio, checkRetention, DEFAULT_RATIO } from
 import { clusterSubtasks, computePointers, verifyRefGroundTruth, rawEchoMarkers, findRawEcho } from '../lib/compressor-io.mjs'
 import { estimateTokens } from '../lib/prefix.mjs'
 
-const MODEL = process.env.COMPRESSOR_CHECK_MODEL ?? 'hy3'
+const MODEL = process.env.COMPRESSOR_CHECK_MODEL ?? 'deepseek-v4-flash-vision-exp'
 const gateway = createGateway()
 let failures = 0
 const report = (ok, label, extra = '') => {
@@ -76,7 +76,7 @@ function makeGate() {
       // Forward the SAME tool schemas as the routed request (wire-prefix cache
       // alignment: dropping tools diverges the provider cache at the tools
       // position — observed compressor cacheRead 128 vs ~3k before the fix).
-      return gateway.chatCall({ provider: 'opencode-go-v4', model: MODEL, messages: msgs, tools: req.tools, maxTokens: 16000, timeoutMs: 600000 })
+      return gateway.chatCall({ provider: 'deepseek', model: MODEL, messages: msgs, tools: req.tools, maxTokens: 16000, timeoutMs: 600000 })
     }
     if (toolPending) { toolPending = false; return { text: 'DONE: fixed the auth guard; tests pass', usage: { inputTokens: 500, outputTokens: 30, cacheReadTokens: 0 } } }
     toolPending = true
@@ -112,7 +112,7 @@ async function runArm(a1, a2, label) {
   const staged = ['Fix the auth bug in src/auth.js so tests pass.', 'Verify the fix and confirm both tests pass.', 'Now add a test for a malformed token.']
   const res = await runSession({
     workspace: ws, taskId: 'AUDIT', task: { id: 'AUDIT', title: 'audit' }, prompt: staged[0],
-    stagedMessages: staged, model: MODEL, provider: 'opencode-go-v4',
+    stagedMessages: staged, model: MODEL, provider: 'deepseek',
     transcriptPath: path.join(dir, 'tr.jsonl'), callLLM: g.chatCall,
     compression: 'task-boundary', a1, a2, maxCompressions: 99, maxSteps: 20,
   })

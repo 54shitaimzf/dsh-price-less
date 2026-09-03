@@ -55,7 +55,7 @@ const tasks = ['T0','T1','T2','T3','T4','T5','T6','T7'].map(loadTask).filter(Boo
     }
     return createScriptedGateway({ script: () => new Array(80).fill(dyn) })
   }
-  const mark = await markCascadeBoundaries({ tasks, callLLM: discGate().chatCall, model: 'minimax-m3', provider: 'opencode-go' })
+  const mark = await markCascadeBoundaries({ tasks, callLLM: discGate().chatCall, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' })
   ok(mark.boundaries.length === 8, 'MASTER-1 real projection fold cuts T0..T7 into 8 segments', mark.boundaries.length)
   ok(mark.boundaries[7]?.startSeq === 7 && mark.boundaries[7]?.endSeq === 9, 'MASTER-2 T7 (3 messages) is ONE segment (startSeq=7 endSeq=9)', JSON.stringify(mark.boundaries[7]?.startSeq + '..' + mark.boundaries[7]?.endSeq))
   ok(mark.cost?.judgements === 9 && mark.cost?.real !== false, 'MASTER-3 real discriminator cost recorded (9 judgements)', JSON.stringify(mark.cost))
@@ -116,7 +116,7 @@ const cascadeMarkExisted = fs.existsSync(cascadeMarkFile)
 const cascadeMarkBackup = cascadeMarkExisted ? fs.readFileSync(cascadeMarkFile, 'utf8') : null
 {
   const g = (() => { let c = 0; const dyn = (req) => { const msgs = req.messages; const isDisc = msgs && msgs.length === 2 && msgs[0].role === 'system' && msgs[1].role === 'user' && msgs[1].content === JUDGE_PLACEHOLDER; if (!isDisc) return null; const verdict = c <= 6 ? 'new_task' : 'continue'; c++; return { text: `{"decision":"${verdict}"}`, usage: { inputTokens: 50, outputTokens: 20, cacheReadTokens: 0 } } }; return createScriptedGateway({ script: () => new Array(80).fill(dyn) }) })()
-  const mark = await markCascadeBoundaries({ tasks, callLLM: g.chatCall, model: 'minimax-m3', provider: 'opencode-go' })
+  const mark = await markCascadeBoundaries({ tasks, callLLM: g.chatCall, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' })
   writeBoundaries('CASCADE', mark)
 }
 

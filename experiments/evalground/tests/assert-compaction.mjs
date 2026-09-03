@@ -50,7 +50,7 @@ const ok = (cond, label, extra = '') => {
     { text: JSON.stringify({ decision: 'continue' }), usage: { inputTokens: 300, outputTokens: 20, cacheReadTokens: 0 } },
     { text: JSON.stringify({ decision: 'continue' }), usage: { inputTokens: 300, outputTokens: 20, cacheReadTokens: 0 } },
   ]})
-  const mark = await markBoundaries({ taskId: 'T7', userMessages: ['a', 'b', 'c'], callLLM: g.chatCall, model: 'minimax-m3', provider: 'opencode-go-v4' })
+  const mark = await markBoundaries({ taskId: 'T7', userMessages: ['a', 'b', 'c'], callLLM: g.chatCall, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' })
   ok(mark.taskId === 'T7' && mark.source === 'premark', 'PREMARK1 markBoundaries tags source premark')
   ok(Array.isArray(mark.boundaries) && mark.boundaries.length === 1, 'PREMARK2 continue/continue → 1 segment (same task)', mark.boundaries.length)
   ok(mark.verdicts.length === 3 && mark.verdicts[0].trigger === 'implicit-open', 'PREMARK2b u=0 is open, not judged', mark.verdicts.length)
@@ -98,8 +98,8 @@ const ok = (cond, label, extra = '') => {
   const g = createScriptedGateway({ script: [
     { text: JSON.stringify({ decision: 'new_task' }), usage: { inputTokens: 250, outputTokens: 12, cacheReadTokens: 0 } },
   ]})
-  const mark = await markBoundaries({ taskId: 'T7', userMessages: ['a', 'b'], callLLM: g.chatCall, model: 'minimax-m3', provider: 'opencode-go-v4' })
-  ok(mark.cost && mark.cost.usage.inputTokens === 250 && mark.cost.model === 'minimax-m3', 'MARK-COST1 cost carries usage + model')
+  const mark = await markBoundaries({ taskId: 'T7', userMessages: ['a', 'b'], callLLM: g.chatCall, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' })
+  ok(mark.cost && mark.cost.usage.inputTokens === 250 && mark.cost.model === 'deepseek-v4-flash-vision-exp', 'MARK-COST1 cost carries usage + model')
   ok(mark.cost.usd !== null && mark.cost.usd > 0, 'MARK-COST2 real USD (non-zero, non-estimate)', mark.cost.usd)
 
   // no callLLM fallback: usage=0 cost, still source premark (fail-lazy continue)
@@ -273,7 +273,7 @@ const ok = (cond, label, extra = '') => {
   // case B: self-s2-orig with injected boundary mark → 2 compressions at seg heads.
   const boundaryMark = {
     taskId: 'CASCADE', source: 'premark',
-    cost: { usage: { inputTokens: 120, outputTokens: 0, cacheReadTokens: 0, calls: 9 }, usd: 0.00123456, model: 'minimax-m3', provider: 'opencode-go' },
+    cost: { usage: { inputTokens: 120, outputTokens: 0, cacheReadTokens: 0, calls: 9 }, usd: 0.00123456, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' },
     boundaries: [
       { segmentIndex: 0, taskId: 'task-0', startSeq: 0, endSeq: 2, status: 'closed' },
       { segmentIndex: 1, taskId: 'task-3', startSeq: 3, endSeq: 6, status: 'closed' },
@@ -324,7 +324,7 @@ const ok = (cond, label, extra = '') => {
   // must NOT leak into the judge ledger).
   const boundaryMark = {
     taskId: 'CASCADE', source: 'premark',
-    cost: { usage: { inputTokens: 12, outputTokens: 0, cacheReadTokens: 3, calls: 1 }, usd: 0.00000042, model: 'minimax-m3', provider: 'opencode-go' },
+    cost: { usage: { inputTokens: 12, outputTokens: 0, cacheReadTokens: 3, calls: 1 }, usd: 0.00000042, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' },
     boundaries: [
       { segmentIndex: 0, taskId: 'g0', startSeq: 0, endSeq: 0, status: 'closed' },
       { segmentIndex: 1, taskId: 'g1', startSeq: 1, endSeq: 1, status: 'active' },
@@ -428,7 +428,7 @@ const ok = (cond, label, extra = '') => {
   // feed the compressor ONLY the un-compressed new work, and ACCUMULATE segments.
   const boundaryMark = {
     taskId: 'CASCADE', source: 'premark',
-    cost: { usage: { inputTokens: 40, outputTokens: 0, cacheReadTokens: 0, calls: 9 }, usd: 0.0004, model: 'minimax-m3', provider: 'opencode-go' },
+    cost: { usage: { inputTokens: 40, outputTokens: 0, cacheReadTokens: 0, calls: 9 }, usd: 0.0004, model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek' },
     boundaries: [
       { segmentIndex: 0, taskId: 'g0', startSeq: 0, endSeq: 1, status: 'closed' },
       { segmentIndex: 1, taskId: 'g1', startSeq: 2, endSeq: 3, status: 'closed' },

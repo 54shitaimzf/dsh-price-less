@@ -20,7 +20,7 @@ let b
 try {
   b = await runCascade({
     tasks, arm: 'native-auto', callLLM: rec.chatCall,
-    model: 'hy3', provider: 'opencode-go-v4',
+    model: 'deepseek-v4-flash-vision-exp', provider: 'deepseek',
     skipScore: true,
     // tiny task-scale calib so the F1-double-count trigger fires on this small stream
     calibrated: { retainTokens: 400, thresholdTokens: 700 },

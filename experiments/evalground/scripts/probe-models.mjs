@@ -11,8 +11,8 @@ function cred(name) {
   } catch { return '' }
 }
 
-const key = cred('OPENCODE_GO_API_KEY')
-const base = process.env.EVAL_GROUND_BASEURL ?? 'https://opencode.ai/zen/go/v1'
+const key = cred('DEEPSEEK_API_KEY')
+const base = process.env.EVAL_GROUND_BASEURL ?? 'https://api.deepseek.com'
 console.log('base:', base)
 for (const pathE of ['/models', '/v1/models']) {
   try {

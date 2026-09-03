@@ -203,7 +203,7 @@ function selectModels(all) {
   } else {
     const byInput = [...all].sort((a, b) => a.inputPerM - b.inputPerM)
     const cheapest = byInput.slice(0, 5).map(m => m.id)
-    const current = 'deepseek-v4-flash-vision-offpeak'
+    const current = 'deepseek-v4-flash-vision-exp'
     picked = all.filter(m => new Set([current, ...cheapest]).has(m.id))
   }
   // 归一化为成本代码所用的字段名：input / output / cacheRead。
@@ -258,7 +258,7 @@ function report({ models, sessionCount }) {
   md.push('')
   md.push('| model | input$/M | output$/M | cache-read$/M | 用途 |')
   md.push('|---|---|---|---|---|')
-  for (const m of models) md.push(`| ${m.name} | ${fmt$(m.input)} | ${fmt$(m.output)} | ${fmt$(m.cacheRead)} | ${m.id === 'deepseek-v4-flash-vision-offpeak' ? '当前 agent' : '最便宜'}`)
+  for (const m of models) md.push(`| ${m.name} | ${fmt$(m.input)} | ${fmt$(m.output)} | ${fmt$(m.cacheRead)} | ${m.id === 'deepseek-v4-flash-vision-exp' ? '当前 agent' : '最便宜'}`)
   md.push('')
   md.push(`## 三路对比（retainChars=${RETAIN_CHARS}；$/session，稳态）`)
   md.push('')

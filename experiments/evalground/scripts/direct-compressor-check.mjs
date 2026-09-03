@@ -42,7 +42,7 @@ const regionTokens = estimateTokens(rawWorkText)
 const subtasks = clusterSubtasks(transcript)
 
 const gateway = createGateway()
-const MODEL = process.env.COMPRESSOR_CHECK_MODEL ?? 'hy3'
+const MODEL = process.env.COMPRESSOR_CHECK_MODEL ?? 'deepseek-v4-flash-vision-exp'
 const SAMPLES = [
   { label: 'S2 × keep-original', a1: 's2', a2: 'keep-original' },
   { label: 'S2 × expand', a1: 's2', a2: 'expand' },
@@ -64,7 +64,7 @@ for (const sample of SAMPLES) {
   let call
   try {
     call = await gateway.chatCall({
-      provider: 'opencode-go-v4', model: MODEL,
+      provider: 'deepseek', model: MODEL,
       messages: buildCompressorMessages({ rawWorkText, a1: sample.a1, a2: sample.a2 }),
       maxTokens: 16000, timeoutMs: 600000,
     })

@@ -129,7 +129,7 @@ function selectModels(all) {
   else {
     const byInput = [...all].sort((a, b) => a.inputPerM - b.inputPerM)
     const cheapest = byInput.slice(0, 5).map(m => m.id)
-    picked = all.filter(m => new Set(['deepseek-v4-flash-vision-offpeak', ...cheapest]).has(m.id))
+    picked = all.filter(m => new Set(['deepseek-v4-flash-vision-exp', ...cheapest]).has(m.id))
   }
   return picked.map(m => ({ id: m.id, name: m.name, input: m.inputPerM, output: m.outputPerM, cacheRead: m.cacheReadPerM }))
 }
@@ -249,7 +249,7 @@ md.push('- **先看效果门，再看钱**：\$ 数值是分/cent 级且随模�
 md.push('- **效果门原始读数（三臂，确定性；digest=' + DIGEST_TOKENS + 't 真实摘要体积）**：')
 md.push('')
 {
-  const agg = summarize(sessions, RETAIN_CHARS, models.find(m => m.id === 'deepseek-v4-flash-vision-offpeak'))
+  const agg = summarize(sessions, RETAIN_CHARS, models.find(m => m.id === 'deepseek-v4-flash-vision-exp'))
   md.push('| 臂 | 被压任务 | pass | **fail（判"必丢"）** | fail 率 | 门后净收益$(当前 agent) |')
   md.push('|---|---|---|---|---|---|')
   for (const arm of ['a1', 'a2', 'a3']) {
@@ -263,7 +263,7 @@ md.push('')
 md.push('| digest(t) | A1 fail | A2 fail | A3 fail | A2 净收益 | A3 净收益 | A2 最优? |')
 md.push('|---|---|---|---|---|---|---|')
 for (const d of [100, 200, 400, 800]) {
-  const g = summarizeAt(sessions, RETAIN_CHARS, models.find(m => m.id === 'deepseek-v4-flash-vision-offpeak'), d)
+  const g = summarizeAt(sessions, RETAIN_CHARS, models.find(m => m.id === 'deepseek-v4-flash-vision-exp'), d)
   md.push(`| ${d} | ${g.a1.failCount} | ${g.a2.failCount} | ${g.a3.failCount} | ${fmt$(g.a2.net)} | ${fmt$(g.a3.net)} | ${g.a2.net > g.a3.net ? '是' : '否'} |`)
 }
 md.push('')
