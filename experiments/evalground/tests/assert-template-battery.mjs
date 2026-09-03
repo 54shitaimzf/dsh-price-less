@@ -193,11 +193,11 @@ const CONCRETE_S1 = [
   const bad = { refs: Array.from({ length: 9 }, (_, i) => ({ path: `f${i}.js` })), outline: 'x' }
   const r9 = checkRetention(bad)
   ok(!r9.ok && r9.degraded, 'RET-2 refs=9 → degraded', r9.reason ?? '')
-  const bigOutline = { refs: [], outline: 'x'.repeat(164) } // 41 tok
+  const bigOutline = { refs: [], outline: 'x'.repeat(166) } // 111 tok (wire-calibrated est)
   const rBig = checkRetention(bigOutline)
-  ok(!rBig.ok && rBig.degraded, 'RET-3 outline 164 chars (41 tok) → degraded', rBig.reason ?? '')
-  const okOutline = { refs: [], outline: 'x'.repeat(160) } // 40 tok
-  ok(checkRetention(okOutline).ok, 'RET-4 outline 160 chars (40 tok) → ok')
+  ok(!rBig.ok && rBig.degraded, 'RET-3 outline 166 chars (111 tok) → degraded', rBig.reason ?? '')
+  const okOutline = { refs: [], outline: 'x'.repeat(160) } // 107 tok ≤ 110 budget
+  ok(checkRetention(okOutline).ok, 'RET-4 outline 160 chars (107 tok) → ok')
   ok(checkRetention(undefined).ok && !checkRetention(undefined).degraded, 'RET-5 no retain (S2) → ok')
 }
 

@@ -277,9 +277,9 @@ const ok = (cond, label, extra = '') => {
   const { estimateTokens, estimateMessagesTokens, splitPrefix, trimPrompt, accountPrefix, shouldTrigger, CHARS_PER_TOKEN } = await import('../lib/prefix.mjs')
   const { prefixModeOf } = await import('../lib/run-one.mjs')
 
-  ok(CHARS_PER_TOKEN === 4, 'V0 token-approx constant locked (reproducible)')
-  ok(estimateTokens('1234') === 1 && estimateTokens('') === 0 && estimateTokens('x'.repeat(9)) === 3, 'V1 estimateTokens chars/4 math', estimateTokens('x'.repeat(9)))
-  ok(estimateMessagesTokens([{ content: 'abcd' }]) === 1, 'V2 estimateMessagesTokens sums messages')
+  ok(CHARS_PER_TOKEN === 1.5, 'V0 token-approx constant locked (wire-calibrated 2026-09)')
+  ok(estimateTokens('123') === 2 && estimateTokens('') === 0 && estimateTokens('x'.repeat(9)) === 6, 'V1 estimateTokens wire-calibrated math', estimateTokens('x'.repeat(9)))
+  ok(estimateMessagesTokens([{ content: 'abc' }]) === 2, 'V2 estimateMessagesTokens sums messages')
 
   const msgs = [
     { role: 'system', content: 'sys' },

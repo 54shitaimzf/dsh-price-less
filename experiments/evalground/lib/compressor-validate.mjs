@@ -28,7 +28,7 @@ export const BLOCK_ALLOWED = {
 }
 
 export const DEFAULT_RATIO = { effective: 0.5, hardFail: 0.75, minRegionTokens: 3000 }
-export const DEFAULT_RETENTION = { maxRefs: 8, outlineTokenBudget: 40 }
+export const DEFAULT_RETENTION = { maxRefs: 8, outlineTokenBudget: 110 }
 
 // refs: refKey optional; path mandatory; lineRange/symbol optional coordinates;
 // `content` is HARNESS-injected (A2 方案1 expand) — never model-authored.
@@ -124,7 +124,8 @@ export function checkRatio({ productTokens, regionTokens, cfg = DEFAULT_RATIO })
 
 /**
  * S1 retention length gate: refs ≤ maxRefs AND outline ≤ outlineTokenBudget
- * (chars/4). Exceed → `degraded: true` (caller drops the retain passthrough and
+ * (wire-calibrated estimate; 110 tok ≈ the original 160-char one-line intent).
+ * Exceed → `degraded: true` (caller drops the retain passthrough and
  * keeps the typed block only).
  */
 export function checkRetention(retain, cfg = DEFAULT_RETENTION) {

@@ -1228,3 +1228,9 @@ cacheHitRate(热)       87%            91%        +4pp
 - **E3/E3b 真实短流**（T0,T1 self-s1-orig）：`mtlze9r5`（指令 v2）拒写消失（refusal:false）但围栏噪声致 type-strip 失败 → 加 `stripProgramFences`；`mtm09n7d`（+围栏剥离 + judge 协议）**task-compact 成功**（ratio=skip 属设计内、S1 retain、pruned=0）、judge samples=3 生效、finished=true、缓存命中 94.6%、total=109。
 - **成本验证**：judge 账本 $0.0102（v1 单样本）→ $0.0072（v2+low+samples=3）——三倍评审更便宜（low 砍输出 + 重复输入缓存命中）。
 - 本轮真实支出合计 ≈ $0.24（E2+E3+E3b），帽内。
+
+**§29.2 追记（2026-09-04）：F10 压缩域重标定（shakedown 双对照驱动）**
+
+- **实测**：native `mtm2wwpf`（总96，$0.268）+ manual `mtm4ovi3`（总92，$0.219）全链路组装/账本/判分验证通过；native 真实上下文峰值 **233,249 wire tokens**（旧 256K 假设的 91%，险溢出），估计器（chars/4）对 wire 低估中位数 **2.7×**，保留尾名义 8K 实际圈住 ~28K，native 两次压缩净减仅 ~5K（2%）。
+- **修正**：`CHARS_PER_TOKEN` 4→1.5（wire 校准）；触发公式改纯消息估计（去双倍计数）；`contextWindow`→1M（安全阀专用，地板 800K 恢复活阀）；`compressionDomain` 50K→125K ⇒ **threshold=100K 真实 / retain=20K 真实**；outlineTokenBudget 40→110（保留原意图）。
+- **有效性**：shakedown 批 mech/judge/账本/组装结论有效；臂间压缩效率结论以重标定后批次为准（旧两对照降级为 shakedown 证据）。回归：E0 全量 + vitest 153 全绿。

@@ -43,12 +43,16 @@ export async function wholeSurfaceStep(ctx) {
     const calib = opts.calibrated ?? calibrateThresholds()
     const domain = opts.compressionDomain ?? compressionDomain()
     let fired = null
+    // Trigger on the CURRENT message estimate only. The estimator is wire-calibrated
+    // (CHARS_PER_TOKEN 1.5 ≈ provider tokenizer, 2026-09 batch measurement); the old
+    // `lastPromptTokens + estimate` form double-counted the context once the
+    // estimator became accurate (lastPromptTokens already IS the last request's size).
+    const roundTokens = estimateMessagesTokens(messages)
     if (ctx.nativeAuto) {
-      const roundTokens = st.lastPromptTokens + estimateMessagesTokens(messages)
       if (roundTokens >= calib.thresholdTokens) fired = { trigger: 'pressure', roundTokens }
     } else {
       const at = detectHumanTrigger({ messages, transcript: ctx.transcript, domain })
-      if (at) fired = { ...at, roundTokens: st.lastPromptTokens + estimateMessagesTokens(messages) }
+      if (at) fired = { ...at, roundTokens }
     }
     if (fired) {
       // ---- range select over the CONVERSATION surface (M0 严格原生: exclude
@@ -108,7 +112,7 @@ export async function wholeSurfaceStep(ctx) {
       }
     }
   } else {
-    const roundTokens = st.lastPromptTokens + estimateMessagesTokens(messages)
+    const roundTokens = estimateMessagesTokens(messages)
     if (shouldTrigger(ctx.triggerThreshold)(roundTokens)) {
       const res = await compressOnce({
         task,
@@ -160,7 +164,7 @@ export async function taskBoundaryStep(ctx, stageIndex) {
   const nextSeq = stageIndex + 1
   const segAt = segs.find(b => b.startSeq === nextSeq)
   if (segAt && segAt.startSeq > 0) {
-    const roundTokens = st.lastPromptTokens + estimateMessagesTokens(messages) // diagnostic only (not a gate)
+    const roundTokens = estimateMessagesTokens(messages) // diagnostic only (not a gate)
     // M4: drop the S1 hot-bridge node FIRST (it is transient — the design
     // says: deleted on the next compaction; never re-fed, never re-compressed).
     if (st.retainNode) {

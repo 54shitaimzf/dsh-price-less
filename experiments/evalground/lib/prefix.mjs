@@ -13,7 +13,7 @@
  */
 import { triggerConfig } from './arm-spec.mjs'
 
-export const CHARS_PER_TOKEN = 4 // deterministic approximation constant (arm-spec)
+export const CHARS_PER_TOKEN = 1.5 // wire-calibrated 2026-09: median wire/est was 2.7 at chars/4 (batch CASCADE-native-auto-mtm2wwpf / manual-habit-mtm4ovi3)
 
 /** Deterministic token estimate from text length. */
 export function estimateTokens(text) {
