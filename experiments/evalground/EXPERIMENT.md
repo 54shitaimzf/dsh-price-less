@@ -413,6 +413,9 @@ checkpoint 单一 `<compacted-summary>` 节点。见 `tests/assert-cascade-loop.
 
 ---
 
+- **F9（PTC 拒写与围栏噪声——机制级修复，2026-09-04，DeepSeek 首批实测驱动）**：传输层切换后首个真实压缩调用暴露两类模型行为差异，均已机制层修复（`COMPRESSOR_PROMPT_VERSION = 2`）：①**拒写**（`mtlwulff`）——deepseek 看到执行器会话的工具白名单（read/write/glob/grep/run）里没有 `tools.*` bindings，以"我不会编造坐标"为由拒绝写程序，旧提示词下弱模型常态合规、强接地模型必然抵抗——根因是"程序在哪执行"不可自证，不是门禁过严；**修复 = L1 执行环境声明**（程序在 harness worker 沙箱执行、白名单属执行器、拒写即失败）+ **L2 前置事实包**（`renderChangeManifest`：压缩输入尾部附上 `computePointers` 全部真实记录——与 PTR 门同一判定集、天然不漂移；模型从"盲写调用"变"看着真实坐标写程序"）。实测 `mtlze9r5`：refusal 消失（compress 事件 `refusal:false`）。②**围栏噪声**（同 run）——程序本身语法正确但被 ``` 围栏包裹，type-strip 误判 invalid-program；**修复 = `stripProgramFences` 确定性剥离**（格式噪声不杀有效压缩，门禁语义不变）。③**拒绝分型**（`classifyProgramText` + compress 事件 `refusal` 字段）——拒写与程序错误分账，批次健康度可分别观测。回归：PC-24~26 / MW-8~11 离线断言红→绿；端到端 `mtm09n7d` task-compact 成功（ratio=skip 属设计内：region 2498 < minRegion 门槛）。**批次声明**：修复后 run = 新处理版本（指令 v2），与 v1 指令 run 不混批。
+- **judge 协议 v2（`JUDGE_PROMPT_VERSION = 2`，2026-09-04 测量定版）**：单样本波动实测触目（同工件 n=5：v1 摆幅 27 分、sd 9.1——根因是 thinking 模式下 temp 0 无效、采样随机地板）。三杠杆解耦测量（`reports/judge-stability-deepseek-2026-09.md`，3 臂 × n=5）：①判分提示词硬化（**SCORING DISCIPLINE**：证据先行/并列档位取低/一致性/中性化）→ spread 27→19；②effort=low → spread 12 且输出 token −64%；③逐维中位数聚合（`judgeTask` samples 基建既有）。**锁定协议 = v2 + effort=low + samples=3**（预注册规则第 3 条：无臂达 samples=1 门槛）。成本核算：3×low 输出 ≈15K ≈ v1 单次 13.5K——**三倍评审 ≈ 原单次成本**（输入重复命中缓存），实测 `mtm09n7d` judge 账本 $0.0072 < 改造前 $0.0102。均值漂移 −0.2~−0.6（≤2 达标）；prioritization 维均值 3.0→2.0~2.4（纪律块收紧证据标准，v2 内自洽）。协议为批次级固定项。
+
 ## 批次声明：评测模型与传输层切换（2026-09-03）
 
 **opencode zen 网关整体退役 → DeepSeek 官方 API 直连**（`https://api.deepseek.com`，key 在 homedir yaml `DEEPSEEK_API_KEY`，不进仓库）。scores.config.json 单一事实源：executor = judge = decision = `deepseek-v4-flash-vision-exp`（provider `deepseek`）；判别器默认 `deepseek-official@deepseek-v4-flash-vision-exp`（presets V2，`lib/boundary-mark.mjs` 同步）。

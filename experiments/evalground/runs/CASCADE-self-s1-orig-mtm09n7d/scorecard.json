@@ -1,0 +1,141 @@
+{
+  "runId": "CASCADE-self-s1-orig-mtm09n7d",
+  "task": "CASCADE",
+  "arm": "self-s1-orig",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "deepseek-v4-flash-vision-exp",
+  "provider": "deepseek",
+  "judgeModel": "deepseek-v4-flash-vision-exp",
+  "finished": true,
+  "steps": 27,
+  "elapsedMs": 367260,
+  "usage": {
+    "inputTokens": 461715,
+    "outputTokens": 40118,
+    "cacheReadTokens": 436992,
+    "calls": 27
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 1,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-orig-mtm09n7d\\calls.jsonl",
+    "compressSnapshots": 1
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.03497588,
+      "tokens": 501833
+    },
+    "judge": {
+      "usd": 0.00718535,
+      "tokens": 24261
+    },
+    "compression": {
+      "usd": 0.00361464,
+      "tokens": 12299,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "deepseek-v4-flash-vision-exp",
+      "provider": "deepseek",
+      "usage": {
+        "inputTokens": 1049,
+        "outputTokens": 116,
+        "cacheReadTokens": 1024,
+        "calls": 1
+      },
+      "usd": 0.00008923,
+      "tokens": 1165,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 97,
+      "judge": 79,
+      "total": 117,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 2,
+          "fixQuality": 5,
+          "grounded": 5,
+          "precision": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "No violations; report generated from legitimate code reading and test runs."
+        },
+        "notes": "Report is comprehensive and well-grounded, but the severity ordering in the table is not sorted, which is a notable flaw. | 报告内容详实、证据充分、修复建议可执行，但主要缺陷是条目的呈现顺序未按严重度排序，导致优先级展示失真。 | The report is thorough and evidence-based, with strong fix suggestions, but the severity ordering needs improvement to put all errors first.",
+        "usage": {
+          "inputTokens": 15228,
+          "outputTokens": 9033,
+          "cacheReadTokens": 9984,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 1,
+        "realExtras": 5,
+        "goldenCoverage": "partial",
+        "evidence": "报告逐项覆盖B1–B10并给出文件/行号，但遗漏O1缓存版本失效；额外发现中的sandbox命令拆分、排序时机、R8缺失及空文件误报有代码行号支撑，仅第15条severity转义因来源受控而属夸大。",
+        "narrative": "总体扎实，可作为上市前审阅底稿，建议补充缓存失效项并修正受控输入防御性条目的措辞。",
+        "usage": {
+          "inputTokens": 3147,
+          "outputTokens": 9289,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 109,
+  "avgJudge": 79,
+  "mech": 98.5,
+  "judge": 79,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 30,
+  "skipScore": false
+}

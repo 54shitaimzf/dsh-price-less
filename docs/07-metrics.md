@@ -1221,3 +1221,10 @@ cacheHitRate(热)       87%            91%        +4pp
 - `CASCADE-self-s1-orig-*`（--tasks=T0,T1，双任务激活边界压缩 + judge）：见 scorecard 账本（runs/）。
 
 **门禁**：ground:assert 全绿（更新后 O2=api.deepseek.com）；插件 build（host+client）✓；vitest 153/153 ✓（vitest.config.ts 排除 experiments/ 沙箱内容——评测评断言走 ground:assert，不混入插件测试面）。
+
+**§29.1 追记（2026-09-04）：PTC 修复（F9）+ judge 协议 v2 实测快照**
+
+- **E2 三臂判分稳定性测量**（同工件 T1 重判，n=5/臂，15 次调用 ≈$0.17）：none/v1 摆幅 27、sd 9.1；none/v2 摆幅 19、sd 6.4；**low/v2 摆幅 12、sd 4.9、输出 token 4943（−64%）**。决策按预注册规则 → 锁定 **v2 + low + samples=3**。明细表见 `experiments/evalground/reports/judge-stability-deepseek-2026-09.md`。
+- **E3/E3b 真实短流**（T0,T1 self-s1-orig）：`mtlze9r5`（指令 v2）拒写消失（refusal:false）但围栏噪声致 type-strip 失败 → 加 `stripProgramFences`；`mtm09n7d`（+围栏剥离 + judge 协议）**task-compact 成功**（ratio=skip 属设计内、S1 retain、pruned=0）、judge samples=3 生效、finished=true、缓存命中 94.6%、total=109。
+- **成本验证**：judge 账本 $0.0102（v1 单样本）→ $0.0072（v2+low+samples=3）——三倍评审更便宜（low 砍输出 + 重复输入缓存命中）。
+- 本轮真实支出合计 ≈ $0.24（E2+E3+E3b），帽内。
