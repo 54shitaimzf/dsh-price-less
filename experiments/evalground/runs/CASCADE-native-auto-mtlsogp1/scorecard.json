@@ -1,0 +1,226 @@
+{
+  "runId": "CASCADE-native-auto-mtlsogp1",
+  "task": "CASCADE",
+  "arm": "native-auto",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "native-auto",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true
+    }
+  },
+  "model": "m",
+  "provider": "x",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 10,
+  "elapsedMs": 6,
+  "usage": {
+    "inputTokens": 15225,
+    "outputTokens": 300,
+    "cacheReadTokens": 0,
+    "calls": 10
+  },
+  "compression": {
+    "mode": "native-auto",
+    "count": 0,
+    "degenerate": true
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": null,
+    "compressSnapshots": 0
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.00243375,
+      "tokens": 15525
+    },
+    "judge": null,
+    "compression": null,
+    "decision": null
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 50,
+      "judge": null,
+      "total": 50,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 33,
+      "judge": null,
+      "total": 15,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T2",
+      "mech": 80,
+      "judge": null,
+      "total": 44,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T3",
+      "mech": 25,
+      "judge": null,
+      "total": 13,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T4",
+      "mech": 50,
+      "judge": null,
+      "total": 30,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T5",
+      "mech": 22,
+      "judge": null,
+      "total": 8,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T6",
+      "mech": 11,
+      "judge": null,
+      "total": 6,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T7",
+      "mech": 67,
+      "judge": null,
+      "total": 47,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-degenerate:native-auto:never-compressed"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: Error: scripted gateway exhausted after 10 calls"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    }
+  ],
+  "total": 27,
+  "avgJudge": 0,
+  "mech": 42.25,
+  "judge": 0,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 0,
+  "skipScore": false
+}

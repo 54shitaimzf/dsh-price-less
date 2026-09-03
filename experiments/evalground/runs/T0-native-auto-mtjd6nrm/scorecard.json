@@ -1,0 +1,104 @@
+{
+  "runId": "T0-native-auto-mtjd6nrm",
+  "task": "T0",
+  "arm": "native-auto",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "native-auto",
+    "trigger": null,
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true
+    }
+  },
+  "model": "hy3",
+  "provider": "opencode-go-v4",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 5,
+  "elapsedMs": 13584,
+  "usage": {
+    "inputTokens": 9066,
+    "outputTokens": 771,
+    "cacheReadTokens": 5568,
+    "calls": 5
+  },
+  "prefixStats": {
+    "prefixTokens": 0,
+    "tailTokens": 0,
+    "cacheReadTokens": 0,
+    "derivedCacheRead": 0,
+    "tracked": false
+  },
+  "compression": {
+    "mode": "native-auto",
+    "count": 0,
+    "degenerate": true
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "cost": {
+    "usd": 0.001132,
+    "usage": {
+      "inputTokens": 9066,
+      "outputTokens": 771,
+      "cacheReadTokens": 5568,
+      "calls": 5
+    }
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.00113178,
+      "tokens": 9837
+    },
+    "judge": null,
+    "compression": null,
+    "decision": null
+  },
+  "track": {
+    "mech": 100,
+    "judge": 0,
+    "human": 0
+  },
+  "total": 100,
+  "mech": {
+    "score": 100,
+    "passed": true,
+    "checks": [
+      {
+        "check": "diff-empty",
+        "pass": true,
+        "detail": "no changes"
+      },
+      {
+        "check": "answer",
+        "pass": true,
+        "detail": "patterns found in final message"
+      }
+    ],
+    "violations": [
+      "tool-guard:compression-degenerate:native-auto:never-compressed"
+    ],
+    "diff": {
+      "modified": [],
+      "added": [],
+      "deleted": []
+    },
+    "testResult": null
+  },
+  "judge": {
+    "score": null,
+    "dims": {},
+    "antiCheat": {
+      "verdict": "none",
+      "evidence": "no rubric"
+    },
+    "skipped": true
+  },
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 0
+}

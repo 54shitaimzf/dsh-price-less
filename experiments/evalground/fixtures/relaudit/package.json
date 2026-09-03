@@ -1,0 +1,13 @@
+{
+  "name": "relaudit",
+  "version": "1.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Plugin release pipeline auditor: audits a plugin package (version gates, tarball structure, lib completeness, sandbox rules, dependency manifest, changelog format, README consistency) and renders a report panel.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test tests/",
+    "check": "node scripts/self-check.js"
+  }
+}

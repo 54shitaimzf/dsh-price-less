@@ -1,0 +1,10 @@
+{
+  "goal": "为 relaudit v1.3.0 写一份像真实项目的发布说明 release-notes-v1.3.0.md（语气专业、事实准确）",
+  "steps": [
+    "读 docs/rules.md 与 changelog 确定 v1.3.0 实际变更",
+    "写发布说明：引导语、新特性、修复、升级提示",
+    "核对每个版本号/日期/特性均可由仓库证实"
+  ],
+  "fileStream": ["docs/rules.md", "release-notes-v1.3.0.md"],
+  "compressed": "不得编造版本号或日期；语气像真实发布说明；只允许写 release-notes-v1.3.0.md。"
+}

@@ -1,0 +1,11 @@
+{
+  "source": "C:/Users/Administrator/.dsh/sessions (real DSH event streams, zstd archives)",
+  "space": "seq space (legacy probe18 GT), converted to U-index at load time",
+  "labeler": "human (probe18 hand-label)",
+  "note": "Recovered from deleted scripts/embed_eval.mjs GT block. GT seq = 首条用户消息 seq 或 前一 task 末 turn/end seq。convertSeqToU 规则：seq 为 user/message → 该消息 U；seq 为非 user/message → 其后第一条 user/message 的 U。每个会话 seqGt[0] = 会话起点（首条真实用户消息），在 flip 空间应丢弃（相当于 claudeset 的 u=0），故 startAsSessionStart = true。",
+  "sessions": [
+    { "file": "dsp-14b", "id": "session-14b08b7d-8e28-4d27-88fb-34ed896fe25d", "seqGt": [9, 47567, 56716, 90065, 257703], "startAsSessionStart": true },
+    { "file": "dsp-c388", "id": "session-c388286e-d0e6-459a-ac94-bd72d2342b27", "seqGt": [8, 5217], "startAsSessionStart": true },
+    { "file": "card-b5f9", "id": "session-b5f92412-9193-4387-af8d-ea6591d65973", "seqGt": [18, 99715, 228215, 679433, 890470, 936581, 1122018], "startAsSessionStart": true }
+  ]
+}

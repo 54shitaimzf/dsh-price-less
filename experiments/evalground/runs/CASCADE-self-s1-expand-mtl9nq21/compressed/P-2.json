@@ -1,0 +1,38 @@
+{
+  "total": 3,
+  "sections": [
+    {
+      "summary": "<task-level summary>",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "REVIEW.md",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "REVIEW.md",
+              "lineRange": "1-24",
+              "symbol": "relaudit",
+              "content": "# relaudit 上市前代码审查报告\n\n审查范围：`src/audit/`（R1–R7 规则实现）、`src/audit/index.js`（组装）、`public/filter.js`、`public/format.js`、`src/render-panel.js`。\n不审查测试文件，不报告文档问题。\n\n结论概览：共发现 **15** 条问题（error 7 / warn 5 / info 3）。其中 10 条为源码中已标注的植入缺陷（planted bug），另有 3 条为审查中额外发现的真实缺陷（排序失效、R2 声明校验缺失、未知规则降级），以及 3 条 info 级死代码/健壮性提示。`src/render-panel.js` 经审查未发现阻塞性缺陷，其正确性依赖上游 `summary`/`findings` 的字段名一致（已核对匹配），仅受上游严重度错误影响。\n\n| 编号 | 位置 | 损害 | 修复建议 | 严重度 |\n| --- | --- | --- | --- | --- |\n| 1 | `src/audit/semver.js` — `compareVersions()` L17-18（被 `isVersionGreater`/`checkSemver` 调用） | 版本比较采用字典序字符串比较，导致 `1.9.0` 被判定为 `>` `1.10.0`。R1 版本门禁可静默误判，降级/越级版本可能被放行。 | 用已实现的 `parseVersion()` 解析后按 `major/minor/patch/pre` 做数值比较（见 #14）。 | error |\n| 2 | `src/audit/tarball.js` — `listTarballEntries()` L29/L35 | 忽略 ustar `prefix` 字段（offset 345），长路径条目只返回被截断的 basename。深层未声明文件被当作空目录/丢失，R2 无法正确识别条目路径，审计被绕过。 | 组装名称：`name = prefix === '' ? name : prefix + '/' + name`（L35 处）。 | error |\n| 3 | `src/audit/files.js` — `checkLib()` L17-18 | 缺少对 `main` 解析路径的“包内包含性”检查（`path.resolve` 后 `startsWith(pkgDir)`）。`main` 指向包外（如 `../../evil.js`）也能通过审计，存在路径穿越/供应链风险。 | 在 `resolved` 计算后增加：`if (!resolved.startsWith(path.resolve(pkgDir) + path.sep)) findings.push({code:'R3', message:'main 指向包外', file: pkg.main})`。 | error |\n| 4 | `src/audit/sandbox.js` — `ALLOWED_COMMANDS` L10-11 | 将 `npx`、`curl` 列入构建脚本白名单。构建步骤可联网下载（`curl`）或执行任意 npm 包（`npx`），沙箱的网络/命令限制形同虚设。 | 从白名单移除 `npx`、`curl`（或显式禁止网络访问）。 | error |\n| 5 | `src/audit/deps.js` — `checkDeps()` L11 | 将 `devDependencies` 合并进运行时依赖集合。仅 dev 依赖若未进入产物会被误报为运行时缺失（假阳性），干扰发布决策。 | 仅用 `pkg.dependencies`（及 `link:` 对）做运行时校验；`devDependencies` 单独处理或不报。 | warn |\n| 6 | `src/audit/changelog.js` — `checkChangelog()` L30-31 | 仅用正则校验日期“形状”，未做月份/日期范围校验。`2026-13-05` 等非法日历日期通过审计（正确的 `isValidDate` 已实现却未调用，见 #15）。 | 调用 `isValidDate(entry.year, entry.month, entry.day)` 校验范围。 | warn |\n| 7 | `src/audit/consistency.js` — `checkConsistency()` L14 | 取 README 中“最后一个”版本 token 而非顶部（第一个）。当下方变更日志提及当前版本时，顶部过期版本徽章被漏检，错误版本随发布流出。 | 使用 `tokens[0]` 而非 `tokens[tokens.length - 1]`。 | warn |\n| 8 | `src/audit/severity.js` — `RULE_SEVERITY` L10 | R1（版本门禁不匹配）被映射为 `'warn'`（应为 `'error'`）。该关键门禁被降级为警告，排序靠后、易在发布中被忽略。 | `R1: 'error'`。 | error |\n| 9 | `src/audit/index.js` — `runAudit()` L45-46 | `sortFindings()` 在给 findings 赋 `severity` 之前调用，而 `sortFindings` 按 `f.severity` 排序；此时 `severity` 为 `undefined` → 权重恒为 0，按严重度排序实际失效，仅按 `rule` 字典序排列。 | 先 `decorate`（赋 `severity`）再 `sortFindings`，或让 `sortFindings` 接收已带 `severity` 的对象。 | warn |\n| 10 | `public/filter.js` — `applyFilter()` L11 | 用严格 `>` 而非 `>=` 比较严重度。`minSeverity` 过滤会丢弃“恰好等于所选级别”的行（选 `'info'` 丢弃所有 info，选 `'warn'` 丢弃所有 warn），过滤功能实质失效。 | 改为 `>= min`。 | error |\n| 11 | `public/format.js` — `countTotal()` L9 | 先字符串拼接 `errors`+`warns` 再 `+infos`：`Number(\"21\") + 4 = 25`。汇总总数显示错误（2错+1警+4提 显示 25 而非 7），误导发布判断。 | 直接 `counts.errors + counts.warns + counts.infos`。 | warn |\n| 12 | `src/audit/index.js` — `checkTarball()` L49-61 | R2 仅检查空 tarball 与空条目，从未调用 `tarball.js` 的 `isDeclared` 做 `files` 字段声明校验。tarball 中未声明/多余文件完全无法被 R2 检出，存在审计能力缺口。 | 对每个 `entry` 调用 `isDeclared(entry.name, pkg.files)` 校验声明（结合 #2 修复前缀截断）。 | error |\n| 13 | `src/audit/severity.js` — `severityOf()` L22 | 未知规则回退 `'info'`。未来新增高严重度规则若漏配 `RULE_SEVERITY`，会被降级为 info 并排到报告底部。 | 未知规则默认 `'error'` 或显式告警/报错。 | info |\n| 14 | `src/audit/semver.js` — `parseVersion()` L8-11 | 已实现正确的版本解析，但未被 `compareVersions`/`checkSemver` 使用（死代码），加剧 #1。 | 在 `compareVersions` 中复用 `parseVersion` 做数值比较。 | info |\n| 15 | `src/audit/changelog.js` — `isValidDate()` L10-15 | 已实现正确的日期范围校验，但未被 `checkChangelog` 调用（死代码），加剧 #6。 | 在 `checkChangelog` 中调用 `isValidDate` 校验。 | info |"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "<one-line outline of the last subtask>"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "total": 4,
+  "sections": [
+    {
+      "summary": "为插件作者撰写 docs/quickstart.md 5 步上手手册",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/quickstart.md",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "docs/quickstart.md",
+              "lineRange": "1-43",
+              "symbol": "relaudit",
+              "content": "# relaudit 上手手册（面向插件作者）\n\n本手册帮助初次使用 relaudit 的插件作者，用 5 步完成一次本地发布前审计。所有命令均从项目根目录执行。\n\n### 步骤 1：运行测试确认环境\n\n在终端执行 `npm test`。\n\n- **做什么**：运行全部领域与契约测试，确认你的工作区依赖与规则实现正常。\n- **预期看到什么**：测试套件全部通过（无失败、无报错），终端打印通过数量。\n- **常见问题**：若报模块缺失，先确认在 relaudit 项目根目录执行，而非插件包目录。\n\n### 步骤 2：自检数据与样例包\n\n执行 `npm run check`。\n\n- **做什么**：运行自检脚本，核对数据与样例包的完整性。\n- **预期看到什么**：自检通过，提示数据与样例包完整。\n- **常见问题**：若提示样例包缺失，说明 `sample-pkg/` 被误删，需恢复后再继续。\n\n### 步骤 3：启动本地审计服务\n\n执行 `npm run start`。\n\n- **做什么**：启动零依赖的本地 HTTP 服务。\n- **预期看到什么**：终端打印 `relaudit listening on http://127.0.0.1:8787`，表示服务已在 8787 端口就绪。\n- **常见问题**：若端口被占用，可用 `PORT=其他端口 npm run start` 覆盖默认 8787。\n\n### 步骤 4：触发一次审计\n\n在浏览器或终端访问 `http://127.0.0.1:8787/api/audit`。\n\n- **做什么**：调用审计接口，对 `sample-pkg/` 执行 R1–R8 规则并生成一次审计运行。\n- **预期看到什么**：返回 JSON，包含 `id`、`createdAt` 与 `report`（含各规则 findings 与严重度汇总）。\n- **常见问题**：若返回 404，确认路径为 `/api/audit`（含前缀 `/api`），而非根路径。\n\n### 步骤 5：查看报告面板\n\n在浏览器打开 `http://127.0.0.1:8787`。\n\n- **做什么**：加载前端报告面板，查看交互式审计结果。\n- **预期看到什么**：面板展示按级别与规则分组的审计发现，可筛选并复制修复片段。\n- **常见问题**：若面板空白，先回到步骤 4 确认 `/api/audit` 已成功返回报告数据。"
+            }
+          ]
+        },
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "撰写 docs/quickstart.md 5 步上手手册"
+  }
+}

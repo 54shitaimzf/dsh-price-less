@@ -1,0 +1,50 @@
+{
+  "id": "T6",
+  "title": "写给插件作者的 5 步上手手册（文字）",
+  "type": "manual",
+  "weight": 5,
+  "track": { "mech": 55, "judge": 45, "human": 0 },
+  "prompt": "你是开发者关系工程师。当前工作区是插件发布审计器 relaudit。请为初次使用的插件作者写一份 5 步上手手册（只允许写 docs/quickstart.md，不得改动其他文件）。\n\n要求：\n- 恰好 5 个步骤，每步一个 `### 步骤 N：<标题>`；\n- 每步必须引用真实存在的命令/地址（先阅读项目以确认）：npm test、npm run check、npm run start、http://127.0.0.1:8787、/api/audit；\n- 不准出现未在项目中真实存在的命令、参数或端点（请自行核对 src/server.js 与 package.json）；\n- 每步写明：做什么、预期看到什么、常见问题一句；\n- 面向插件作者，语言简洁，总字数 300–700。\n\n最后一条消息以 DONE 开头。",
+  "accept": {
+    "checks": [
+      { "type": "file-exists", "path": "docs/quickstart.md" },
+      { "type": "pattern", "path": "docs/quickstart.md", "regex": "^### 步骤 [1-5]", "count": "eq", "value": 5 },
+      { "type": "pattern", "path": "docs/quickstart.md", "regex": "npm test", "count": "gte", "value": 1 },
+      { "type": "pattern", "path": "docs/quickstart.md", "regex": "npm run check", "count": "gte", "value": 1 },
+      { "type": "pattern", "path": "docs/quickstart.md", "regex": "npm run start", "count": "gte", "value": 1 },
+      { "type": "pattern", "path": "docs/quickstart.md", "regex": "8787", "count": "gte", "value": 1 },
+      { "type": "pattern", "path": "docs/quickstart.md", "regex": "api/audit", "count": "gte", "value": 1 },
+      { "type": "word-count", "path": "docs/quickstart.md", "min": 300, "max": 700 },
+      { "type": "allowed-scope", "paths": ["docs/quickstart.md"] }
+    ]
+  },
+  "rubric": {
+    "dims": [
+      { "id": "clarity", "name": "清晰度（步骤可照做不卡壳）", "weight": 0.5, "bands": [
+        ["5", "每步的做什么/预期/常见问题齐备，新人零卡顿"],
+        ["4", "步骤清晰，个别细节可补充"],
+        ["3", "大体可照做，缺预期描述"],
+        ["2", "步骤跳跃或含糊，需回读多遍"],
+        ["1", "无法照做"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "accuracy", "name": "命令与端点真实性（无编造）", "weight": 0.3, "bands": [
+        ["5", "全部命令/端点真实存在，无杜撰参数"],
+        ["4", "真实但顺序/场景描述可再优化"],
+        ["3", "出现 1 处不存在或错拼的命令/端点"],
+        ["2", "多处虚构命令或参数"],
+        ["1", "关键命令错误会误导"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "structure", "name": "结构（五步完整、长度适中）", "weight": 0.2, "bands": [
+        ["5", "步骤编号、层级、长度完全符合要求"],
+        ["4", "结构良好，1 步略超/略短"],
+        ["3", "步骤数或层级不完全符合"],
+        ["2", "结构松散"],
+        ["1", "无结构"],
+        ["0", "无有效产出"]
+      ] }
+    ],
+    "antiCheat": true
+  }
+}

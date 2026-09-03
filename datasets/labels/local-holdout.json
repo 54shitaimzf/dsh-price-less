@@ -1,0 +1,22 @@
+{
+  "source": "C:/Users/Administrator/.dsh/sessions (local DSH archives) — holdout set (not used in probe22 LOSO search)",
+  "space": "U-index: 0-based ordinal among append user/message events (any source kind)",
+  "labeler": "ai-draft (in-session review), pending human review",
+  "note": "holdout 组成：本对话（多意图）+ 74a1b607（安装配置，单意图）+ d76c205b（简历优化，单意图）。",
+  "sessions": [
+    {
+      "id": "session-74a1b607-7f0a-43fa-9887-630e0638075a",
+      "U": 28,
+      "coarse": [],
+      "single": true,
+      "note": "单一意图：安装/配置 dsh-super-injector、router-standard、anchored-standard 插件并答疑。U15 从 super-injector 修复转向安装 router-standard 属同一'装好我的 dsh 环境'目标内。"
+    },
+    {
+      "id": "session-d76c205b-dac5-4537-8f76-3ffb00474540",
+      "U": 13,
+      "coarse": [],
+      "single": true,
+      "note": "单一意图：简历审查/优化/导出与投递准备（U1→U12 同一目标弧）。U9 粘贴产品经理 JD 属应用决策，非意图反转。"
+    }
+  ]
+}

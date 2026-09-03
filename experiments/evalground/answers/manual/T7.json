@@ -1,0 +1,11 @@
+{
+  "goal": "三阶段长链路：审查写 REVIEW.md → 修复 7 缺陷 + 新增 R8 + 修前端面板 → 补 docs/rules.md（R8）与 docs/api.md（6 端点）",
+  "steps": [
+    "第一阶段只读：审查 src/audit/ 与 public/ 的正确性缺陷，写 REVIEW.md（编号/位置/损害/修复建议/严重度）",
+    "第二阶段修复：src/audit/ 修 7 缺陷、新增 files-field.js R8 并接入 runAudit；public/ 修 filter.js（>= 而非 >）与 format.js（数值相加）并补 groupByRule/copyFixSnippet 导出",
+    "第三阶段补文档：docs/rules.md 补 R8 说明，docs/api.md 确保 6 端点全部记载",
+    "node --test --test-isolation=none tests/*.test.js 全绿"
+  ],
+  "fileStream": ["src/audit/*.js", "public/filter.js", "public/format.js", "public/app.js", "docs/rules.md", "docs/api.md", "REVIEW.md"],
+  "compressed": "不得修改 tests/ 与 package.json；每阶段完成后以 DONE 开头汇报；面板交付为单文件离线（file:// 双击即用、无外部资源、无 import.meta/动态 import）。7 缺陷清单以自身诊断为准，R8 规则见任务定义。"
+}

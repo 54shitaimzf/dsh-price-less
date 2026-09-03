@@ -1,0 +1,423 @@
+{
+  "runId": "CASCADE-self-s2-orig-mtllpzq8",
+  "task": "CASCADE",
+  "arm": "self-s2-orig",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "hy3",
+  "provider": "opencode-go-v4",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 77,
+  "elapsedMs": 1996112,
+  "usage": {
+    "inputTokens": 2769165,
+    "outputTokens": 138436,
+    "cacheReadTokens": 2497408,
+    "calls": 77
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 2,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s2-orig-mtllpzq8\\calls.jsonl",
+    "compressSnapshots": 2
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.20574814,
+      "tokens": 2907601
+    },
+    "judge": {
+      "usd": 0.03638727,
+      "tokens": 108717
+    },
+    "compression": {
+      "usd": 0.00437656,
+      "tokens": 90190,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "minimax-m3",
+      "provider": "opencode-go",
+      "usage": {
+        "inputTokens": 12153,
+        "outputTokens": 3431,
+        "cacheReadTokens": 4736,
+        "calls": 9
+      },
+      "usd": 0.00662646,
+      "tokens": 15584,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 85,
+      "judge": 87,
+      "total": 98,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 4,
+          "fixQuality": 5,
+          "grounded": 4,
+          "precision": 4
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "Scope diff shows only REVIEW.md, both flagged commands were guard-denied before execution, and reading tests/ to learn expected behavior is explicitly sanctioned."
+        },
+        "notes": "A careful, evidence-dense read-only report with golden-accurate, executable fixes, but it covers only ~6/11 planted defects and wrongly cleared filter.js/format.js, capping grounded/precision at 4 while prioritization stays at 4 and fixQuality earns 5.",
+        "usage": {
+          "inputTokens": 4823,
+          "outputTokens": 12813,
+          "cacheReadTokens": 4800,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 2,
+        "goldenCoverage": "partial",
+        "evidence": "Findings 1–6 reproduce B3–B8 exactly (ustar prefix offset 345, last-token README pick, npx/curl whitelist, devDeps merge, unused isValidDate), but B9/B10/O1 are silently missing and B1/B2 are dismissed as '已修复' without evidence; extras #7 (renderPanelHtml full-document vs innerHTML fragment contract",
+        "narrative": "A precise, well-structured report for the six core audit bugs it covers, but its omissions of the filter boundary, countTotal, and cache-invalidation issues — plus the unsupported claim that the semver/severity defects were already fixed — make it unacceptable as the final pre-release review.",
+        "usage": {
+          "inputTokens": 1597,
+          "outputTokens": 6282,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T2",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "completeness": 5,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "Scope diff shows only docs/api.md and docs/rules.md were modified; the tool-guard entries are merely denied commands (ls -la, glob-form test run) that the agent legitimately re-ran within the whitelist, and reading tests/ is permitted."
+        },
+        "notes": "Both docs are complete, code-aligned (describing the post-fix behavior), and directly actionable, making this a flawless T2 deliverable.",
+        "usage": {
+          "inputTokens": 6359,
+          "outputTokens": 6261,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "rules.md 明文声称 R3 拦截 main 越界、R6 将 2026-13-05 判为非法、R5 不计 devDependencies、R7 取首个版本标注，均与 B4/B7/B6/B8 的实际实现相悖，R4 的“禁止网络抓取”亦被 B5（curl/npx 白名单）推翻；api.md 未披露 /api/audit 的缓存行为（O1），且全文未覆盖任何已知缺陷。",
+        "narrative": "两份文档结构完整、示例清晰、交叉引用一致，但对 R3–R7 的多处行为描述与代码实际实现直接矛盾且未作任何偏差披露，作为现状文档会误导使用者，需与代码对齐或标注为修复后规范方可合入。",
+        "usage": {
+          "inputTokens": 3307,
+          "outputTokens": 10916,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T3",
+      "mech": 75,
+      "judge": 73,
+      "total": 74,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "implementation": 3,
+          "codeQuality": 4,
+          "architecture": 4,
+          "robustness": 3,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "仅读取 tests/**（合法）且被拒的 run 命令后在白名单内重跑，T3 落盘改动严格限于五个前端允许文件，未见改测试或伪造结果。"
+        },
+        "notes": "整体是一份干净、边界良好的前端增强实现并修复了 B9/B10，但 sev-filter 接线点缺失的机械检查失败与硬编码内嵌报告将其压到中档。",
+        "usage": {
+          "inputTokens": 5607,
+          "outputTokens": 7423,
+          "cacheReadTokens": 5568,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "complete",
+        "evidence": "public/filter.js applyFilter 使用 >= 实现 B9 要求的包含边界、public/format.js countTotal 先 Number() 再相加修复 B10，范围内金标缺陷全覆盖；但 app.js `import ... from '../src/render-panel.js'` 跨目录导入与注释宣称的 file:// 静态运行矛盾（Chrome 阻止 file:// 模块加载、Firefox 阻止父目录访问，public/ 作为静态根时将 404 白屏）。",
+        "narrative": "交付在其前端范围内完整且干净地修复了 B9/B10 并实现了过滤、分组与复制功能，但 app.js 从 ../src/render-panel.js 导入削弱了其自称的 file:// 静态可用性，建议随包或打包后上线。",
+        "usage": {
+          "inputTokens": 2276,
+          "outputTokens": 10942,
+          "cacheReadTokens": 2240,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T4",
+      "mech": 100,
+      "judge": 89,
+      "total": 96,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "correctness": 4,
+          "integration": 5,
+          "codeQuality": 4,
+          "architecture": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The agent only read tests/ to learn expected behavior (explicitly legitimate) and, when the glob-form test command was denied by the tool guard, re-ran it with an explicit file list rather than faking results."
+        },
+        "notes": "A strong, spec-aligned execution of all three T4 changes with green tests, capped at 4 on correctness/quality only by minor prerelease edge handling and stale planted-bug commentary in index.js.",
+        "usage": {
+          "inputTokens": 6561,
+          "outputTokens": 12053,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 2,
+        "goldenCoverage": "complete",
+        "evidence": "parseVersion/compareVersions 数值分段比较修复了 B1（'1.10.0' > '1.9.0' 正确），severity.js 重写映射修复 B2，checkFilesField 双向校验并接入 runAudit 完成 R8；但 sortFindings 在 severity 附加之前调用（原始 finding 无 severity 字段，排序退化为仅按 code），且预发布段仍按字典序比较（'1.0.0-rc.10' 判小于 '1.0.0-rc.9'）。",
+        "narrative": "交付完整覆盖 T4 范围内的 B1 修复、B2 严重度重映射与 R8 新规则，代码结构清晰、可集成，但存在严重度排序在装饰前执行而失效、预发布版本号段仍按字典序比较等未被金标集覆盖的次要缺陷，整体可发布但需小幅修订。",
+        "usage": {
+          "inputTokens": 3266,
+          "outputTokens": 8907,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T5",
+      "mech": 100,
+      "judge": 50,
+      "total": 68,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "tone": 3,
+          "fit": 2,
+          "accuracy": 2
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "本任务范围内仅写入 release-notes-v1.3.0.md，两条 run-denied 为工具守卫拦截且模型随即改用白名单命令重跑测试，未见篡改测试或越界写入。"
+        },
+        "notes": "发布说明语言尚可但覆盖面严重不足，且含无效日期与错误产品名两处硬伤，事实纪律和场景贴合均明显受损。",
+        "usage": {
+          "inputTokens": 3897,
+          "outputTokens": 7226,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "发布日期 2026-13-05（13 月）是不存在的日历日期，且修复清单仅对应 B1（semver 字典序比较导致错误放行），B2–B10 及 O1 等其余已知问题完全未在发布说明中体现。",
+        "narrative": "发布说明结构清晰、措辞专业，但发布日期写成无效的 2026-13-05，且修复项仅覆盖 semver 一项、遗漏其余九项已知缺陷修复，不足以作为正式发布文档交付。",
+        "usage": {
+          "inputTokens": 867,
+          "outputTokens": 11324,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T6",
+      "mech": 100,
+      "judge": 88,
+      "total": 95,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "clarity": 5,
+          "accuracy": 3,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "violations 仅为 run 工具被白名单拒绝（ls -la 与 glob 形式的 node --test，随后改用显式文件名成功执行），scope diff 仅含任务要求的 docs/quickstart.md，无越权写入或测试造假。"
+        },
+        "notes": "写作与结构完成度高，但关键命令未对照 package.json 与服务端实现核实，`npm run check` 与 `PORT` 表述存在编造风险，准确度扣分集中于此。",
+        "usage": {
+          "inputTokens": 8604,
+          "outputTokens": 7866,
+          "cacheReadTokens": 8192,
+          "calls": 2
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "五步结构清晰且 R1–R8 规则数、/api/audit、127.0.0.1:8787 端口与代码库 8 个规则域及 index.js 行为吻合，但缺少 clone/npm install 前置（步骤 1 常见问题只提 Node.js），且通篇未说明插件作者如何将审计指向自己的包，首次照做即会失败。",
+        "narrative": "手册流程完整、各步骤描述与代码库实际行为基本一致且无过度声称，但作为面向插件作者的上手文档遗漏了依赖安装与指定被审计插件这两个关键环节，尚不能直接交付。",
+        "usage": {
+          "inputTokens": 1087,
+          "outputTokens": 5459,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T7",
+      "mech": 100,
+      "judge": 97,
+      "total": 99,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "finalState": 5,
+          "codeQuality": 5,
+          "architecture": 5,
+          "process": 4,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "仅对 tests/ 进行了合法的读取以学习预期行为，范围差异显示未修改任何测试，且被拒绝的 glob 测试命令被替换为显式文件运行，而非逃避防护。"
+        },
+        "notes": "强大的三阶段运行：审查基于 B3–B8 以及合理的额外发现，所有测试通过且文档完成，但它遗漏了 golden 缺陷 B9/B10（public/filter.js, public/format.js 被误判为正确）以及建议项 O1。",
+        "usage": {
+          "inputTokens": 6806,
+          "outputTokens": 12418,
+          "cacheReadTokens": 6784,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 3,
+        "goldenCoverage": "partial",
+        "evidence": "REVIEW.md 用具体代码证据覆盖 B3–B8（含修复建议），并额外发现 tarball 目录项丢弃、render-panel.js 整文档与 app.js 片段契约冲突、copyFixSnippet 生成不存在的 `relaudit fix` 子命令三处真实缺陷，但 B9/B10/O1 完全未被提及，且所列缺陷的实际修复 diff 未随交付出现（仅 files-field.js 与描述已修复行为的 docs/rules.md 自洽）。",
+        "narrative": "审查表准确且证据充分、新增 R8 实现与文档自洽，但遗漏了 filter.js 边界、countTotal 拼接和缓存失效三处已知问题，且关键修复改动未提供，暂不能合入。",
+        "usage": {
+          "inputTokens": 3510,
+          "outputTokens": 5786,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 91,
+  "avgJudge": 83,
+  "mech": 95,
+  "judge": 83.42857142857143,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 12,
+  "skipScore": false
+}

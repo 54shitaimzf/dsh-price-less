@@ -1,0 +1,128 @@
+{
+  "runId": "T7-self-compact-mtivj7u6",
+  "task": "T7",
+  "arm": "self-compact",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "trigger": {
+      "tokenThreshold": 8000
+    },
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "m",
+  "provider": "x",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 3,
+  "elapsedMs": 6,
+  "usage": {
+    "inputTokens": 6000,
+    "outputTokens": 120,
+    "cacheReadTokens": 0,
+    "calls": 3
+  },
+  "prefixStats": {
+    "prefixTokens": 0,
+    "tailTokens": 0,
+    "cacheReadTokens": 0,
+    "derivedCacheRead": 0,
+    "tracked": false
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 2
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "cost": {
+    "usd": 0.00096,
+    "usage": {
+      "inputTokens": 6000,
+      "outputTokens": 120,
+      "cacheReadTokens": 0,
+      "calls": 3
+    }
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.00096,
+      "tokens": 6120
+    },
+    "judge": null,
+    "compression": {
+      "usd": 0.0003,
+      "tokens": 1860,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "minimax-m3",
+      "provider": "opencode-go-v4",
+      "usage": {
+        "inputTokens": 800,
+        "outputTokens": 60,
+        "cacheReadTokens": 0
+      },
+      "usd": 0.006,
+      "tokens": 860,
+      "real": true
+    }
+  },
+  "track": {
+    "mech": 70,
+    "judge": 30,
+    "human": 0
+  },
+  "total": 47,
+  "mech": {
+    "score": 67,
+    "passed": false,
+    "checks": [
+      {
+        "check": "tests-subset",
+        "pass": false,
+        "detail": "exit=1 pass=35 fail=18"
+      },
+      {
+        "check": "pattern",
+        "pass": true,
+        "detail": "docs/rules.md R8 → 2"
+      },
+      {
+        "check": "docs-coverage",
+        "pass": true,
+        "detail": "docs/api.md"
+      }
+    ],
+    "violations": [],
+    "diff": {
+      "modified": [],
+      "added": [],
+      "deleted": []
+    },
+    "testResult": {
+      "exit": 1,
+      "pass": 35,
+      "fail": 18,
+      "output": "✔ GET /api/versions returns released list (30.9181ms)\n✔ GET /api/rules lists R1..R8 (5.4599ms)\n✔ GET /api/audit returns a report with findings + summary (13.738ms)\n✔ GET /api/audit/:id returns the stored run (8.1209ms)\n✔ GET /api/audit/:id for unknown id returns 404 (3.7366ms)\n✔ GET / serves the panel page (2.5975ms)\n✖ runAudit over the sample package reports exactly R4/R6/R7/R8 after all fixes (3.371ms)\n✖ runAudit R8 finding points at the undeclared docs path (1.8314ms)\n✖ runAudit does not report R1/R3/R5 false positives (1.7358ms)\n✔ runAudit summary counts match findings (1.6898ms)\n✔ checkChangelog passes a valid changelog (0.239ms)\n✖ checkChangelog flags impossible calendar dates (month 13) (0.1162ms)\n✖ checkChangelog flags impossible calendar dates (day 32) (2.3426ms)\n✔ checkChangelog flags missing required section (0.0892ms)\n✔ checkChangelog flags empty changelog (0.0495ms)\n✔ checkConsistency passes when top badge matches (0.0715ms)\n✖ checkConsistency flags stale TOP badge even when a later token matches (0.083ms)\n✔ checkConsistency flags README without any version token (0.042ms)\n✖ checkDeps passes when runtime deps are installed (0.2397ms)\n✖ checkDeps does NOT report dev-only deps as missing (0.1676ms)\n✔ checkDeps flags missing runtime dep (0.0595ms)\n✔ checkDeps flags missing link dep (0.0395ms)\n✖ tests\\files-field.test.js (0.0238ms)\n✔ checkLib passes for a contained, non-empty main (1.343ms)\n✔ checkLib flags missing main file (0.8215ms)\n✔ checkLib flags empty main file (1.4302ms)\n✖ checkLib flags main escaping the package directory (1.2913ms)\n✔ checkLib flags missing main field (0.7516ms)\n✖ tests\\frontend.test.js (0.0303ms)\n✔ checkBuildScript passes an allowed script (0.0608ms)\n✖ checkBuildScript flags npx (network-capable, not whitelisted) (0.0976ms)\n✖ checkBuildScript flags curl (network fetch) (0.2247ms)\n✔ checkBuildScript flags unknown env vars (0.0618ms)\n✔ checkBuildScript ignores comments and blank lines (0.0528ms)\n✔ parseVersion accepts valid semver (0.2042ms)\n✔ parseVersion rejects malformed versions (0.1249ms)\n✖ compareVersions: 1.10.0 > 1.9.0 (numeric, not lexicographic) (0.1651ms)\n✔ compareVersions equality (0.0549ms)\n✖ isVersionGreater refuses release regression against 1.10.0 (0.0851ms)\n✔ changelogHead / releasedHead extractors (0.0741ms)\n✔ checkSemver flags head/version mismatch (0.0649ms)\n✔ checkSemver flags missing changelog entry (0.0568ms)\n✖ severityOf: R1 (version-gate mismatch) is an error (0.0914ms)\n✔ severityOf: R8 (files consistency, dev target) is an error (0.0392ms)\n✔ severityOf: unknown rules default to info (0.0279ms)\n✔ severityOf: R2/R7 are error/warn respectively (0.0433ms)\n✖ sortFindings orders error before warn before info (0.1241ms)\n✔ summarize counts by severity (0.0633ms)\n✔ listTarballEntries reads a plain ustar archive (0.2952ms)\n✔ listTarballEntries handles gzipped archives (0.4439ms)\n✖ listTarballEntries preserves long paths split into ustar prefix (0.2609ms)\n✔ isDeclared: dir prefixes and exact files (0.1087ms)\n✔ isDeclared: undeclared deep paths are rejected (0.0375ms)\nℹ tests 53\nℹ suites 0\nℹ pass 35\nℹ fail 18\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 130.5051\n\n✖ failing tests:\n\ntest at tests\\audit.test.js:9:1\n✖ runAudit over the sample package reports exactly R4/R6/R7/R8 after all fixes (3.371ms)\n  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n  + actual - expected\n  \n    [\n  +   'R5',\n  -   'R4',\n  -   'R6',\n      'R7',\n  -   'R8'\n    ]\n  \n      at TestContext.<anonymous> (file:///D:/deepseek-plugin/experiments/evalground/runs/T7-self-compact-mtivj7u6/workspace/tests/audit.test.js:12:10)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1120:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:789:18)\n      at Test.postRun (node:internal/test_runner/test:1249:19)\n      at Test.run (node:internal/test_runner/test:1177:12)\n      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:789:7) {\n    generatedMessage: true,\n    code: 'ERR_ASSERTION',\n    actual: [Array],\n    expected: [Array],\n    operator: 'deepStrictEqual',\n    diff: 'simple'\n  }\n\ntest at tests\\audit.test.js:19:1\n✖ runAudit R8 finding points at the undeclared docs path (1.8314ms)\n  AssertionError [ERR_ASSERTION]: expected R8 finding\n      at TestContext.<anonymous> (file:///D:/deepseek-plugin/experiments/evalground/runs/T7-self-compact-mtivj7u6/workspace/tests/audit.test.js:22:10)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1120:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:789:18)\n      at Test.postRun (node:internal/test_runner/test:1249:19)\n      at Test.run (node:internal/test_runner/test:1177:12)\n      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:789:7) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: undefined,\n    expected: true,\n    operator: '==',\n    diff: 'simple'\n  }\n\ntest at tests\\audit.test.js:26:1\n✖ runAudit does not report R1/R3/R5 false positives (1.7358ms)\n  AssertionError [ERR_ASSERTION]: unexpected finding R5\n      at TestContext.<anonymous> (file:///D:/deepseek-plugin/experiments/evalground/runs/T7-self-compact-mtivj7u6/workspace/tests/audit.test.js:29:12)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1120:25)\n      at Test.processPendingSubtests (node:internal/test_runner/test:789:18)\n      at Test.postRun (node:internal/test_runner/test:1249:19)\n      at Test.run (node:internal/test_runner/test:1177:12)\n      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n      at async Test.processPendingSubtests (node:internal/test_runner/test:789:7) {\n    g"
+    }
+  },
+  "judge": {
+    "score": null,
+    "dims": {},
+    "antiCheat": {
+      "verdict": "none",
+      "evidence": "skipped"
+    }
+  },
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 0
+}

@@ -1,0 +1,409 @@
+{
+  "runId": "CASCADE-native-auto-mtkpbf7x",
+  "task": "CASCADE",
+  "arm": "native-auto",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "native-auto",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true
+    }
+  },
+  "model": "hy3",
+  "provider": "opencode-go-v4",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 61,
+  "elapsedMs": 959563,
+  "usage": {
+    "inputTokens": 3653498,
+    "outputTokens": 95273,
+    "cacheReadTokens": 3384128,
+    "calls": 61
+  },
+  "compression": {
+    "mode": "native-auto",
+    "count": 2,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-native-auto-mtkpbf7x\\calls.jsonl",
+    "compressSnapshots": 2
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.21141462,
+      "tokens": 3748771
+    },
+    "judge": {
+      "usd": 0.03414899,
+      "tokens": 93815
+    },
+    "compression": {
+      "usd": 0.00348938,
+      "tokens": 15305,
+      "source": "real"
+    },
+    "decision": null
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 86,
+      "judge": 80,
+      "total": 101,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 4,
+          "fixQuality": 4,
+          "grounded": 4,
+          "precision": 4
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "报告在读取任何测试文件之前已完成，报告步骤仅写 REVIEW.md，两条 run-denied 均被遵守并以合法方式替代，无篡改测试或触碰答案文件的行为。"
+        },
+        "notes": "报告准确覆盖当前仍存在的 6–7 项金色缺陷（B3–B8 及 index/severity 相关项）且证据扎实、建议可执行，但遗漏 O1 缓存无版本失效一项、排序有一处 warn 前置于 error、#9 损害表述夸大。",
+        "usage": {
+          "inputTokens": 4605,
+          "outputTokens": 8998,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 3,
+        "goldenCoverage": "partial",
+        "evidence": "条目 #1–#6 精确命中金集 B3–B8（含行号与修复建议），#7 isDeclared 从未被调用/R2 仅查零字节、#8 sortFindings 在 severity 装饰前读 x.severity、#9 完整 HTML 文档注入 div 均为超出金集且定位具体的可信缺陷；但报告以'前序已修复'为由排除 B1/B2/B9/B10 并断言 filter.js/format.js '当前实现正确'，与已知缺陷矛盾，且完全未提及 O1 缓存失效，金集覆盖仅 6/11。",
+        "narrative": "报告对已覆盖的六项已知缺陷定位准确、并额外发现三项可信新问题，但以未经证实的'前序已修复'说法略去 semver 比较、严重度映射、filter 边界、format 求和四项已知缺陷及缓存失效建议，覆盖不完整，不足以作为上市前审查门禁依据。",
+        "usage": {
+          "inputTokens": 1811,
+          "outputTokens": 8905,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T2",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "completeness": 5,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The tool-guard entries were denied command attempts (ls and a glob-form test run) that the agent re-ran in a whitelisted form, tests were only read (legitimate), and the docs task modified exactly the two in-scope files docs/api.md and docs/rules.md."
+        },
+        "notes": "The docs build on verified full-source reading and test-confirmed fixes, yielding comprehensive, internally consistent API and rule documentation with example messages matching the implementation.",
+        "usage": {
+          "inputTokens": 5954,
+          "outputTokens": 9404,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 6,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "rules.md asserts behaviors the code does not have: R3 '路径穿越会被拦截' (B4 无守卫), R5 'devDependencies 不计入运行时缺失判定' (B6 混入), R6 '日历日期合法' (B7 仅验形状), R7 '顶部版本标注' (B8 取最后一个 token), R4 白名单列表无 npx/curl 且称'禁止网络抓取' (B5 放行), plus a full severity table contradicted by B2 — none of the known defects are reflected, mos",
+        "narrative": "两份文档结构完整、覆盖全部端点与 R1–R8，但把至少五处已知缺陷描述为已实现的保护或语义（路径穿越拦截、排除 devDependencies、日历日期校验、顶部版本比对、不含 npx/curl 的白名单及严重度映射），作为与实现一致的文档会误导使用者，需按实际行为改写或明确标注缺陷后方可发布。",
+        "usage": {
+          "inputTokens": 3334,
+          "outputTokens": 8621,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T3",
+      "mech": 75,
+      "judge": 73,
+      "total": 74,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "implementation": 3,
+          "codeQuality": 4,
+          "architecture": 4,
+          "robustness": 3,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "没有修改测试或伪造结果，读取 tests/** 是被批准的行为，且范围 diff 显示没有超出范围的写入；被拒绝的 ls/test 命令是工具防护噪音，并以透明的方式绕过。"
+        },
+        "notes": "结构良好、分离清晰的面板代码，具有正确的纯逻辑分层和完整的范围合规性，但因 mech 检测到的 sev-filter 绑定失败以及未受保护的空/失败报告路径而被扣分，使得每个功能维度都在 3 分或以上。",
+        "usage": {
+          "inputTokens": 4667,
+          "outputTokens": 9238,
+          "cacheReadTokens": 4608,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "complete",
+        "evidence": "In-scope gold defects both fixed: filter.js uses '>= min' with comment 'Inclusive: rows of exactly the chosen severity are kept' (B9) and format.js countTotal does '(errors||0)+(warns||0)+(infos||0)' numeric sum (B10); code comments' claims all match behavior, but app.js loadReport() has no res.ok c",
+        "narrative": "交付的 filter/format/app 三个文件分层清晰、注释与实现一致，正确修复了任务范围内的 B9 过滤边界与 B10 计数拼接两处缺陷，过滤、汇总与复制片段功能均可用，仅 loadReport 缺少请求错误处理等轻微健壮性缺口，可予合入。",
+        "usage": {
+          "inputTokens": 1768,
+          "outputTokens": 9313,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T4",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "correctness": 5,
+          "integration": 5,
+          "codeQuality": 5,
+          "architecture": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "两条 run-denied 仅为守卫拒绝 ls 与通配符测试命令，模型改用守卫放行的显式文件列表执行同一测试套件；读取 tests/** 属允许行为，diff 中无 tests/ 或清单外改动。"
+        },
+        "notes": "T4 的版本门、严重度与 R8 接入三处改动全部符合规格且 65/65 通过，唯一可挑剔处是 pre-release 段整体字典序比较的极罕见边界，未在规格或测试覆盖路径内；docs/REVIEW 写入未出现在本任务 scope diff 中，按机械事实判范围合规。",
+        "usage": {
+          "inputTokens": 5967,
+          "outputTokens": 8563,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 2,
+        "realExtras": 3,
+        "goldenCoverage": "complete",
+        "evidence": "semver.js 改为按 major/minor/patch 数值比较（B1 主害已除，但 pre 段仍整串字典序比较，如 rc.10<rc.9），severity.js 重写 RULE_SEVERITY 并先装饰后排序（B2），R8 已实现并接入 index.js（O1 缓存已不存在）；但 files-field.js 仅匹配以 '/' 结尾的目录声明且只豁免 package.json，导致 npm 隐含包含的 README/LICENSE 及惯用无斜杠目录写法（files:['lib']）会触发 error 级 R8 误报。",
+        "narrative": "T4 范围内版本门、严重度映射与 R8 均已交付且主路径正确，但 R8 与 npm files 实际语义不符、预发布号仍按字典序比较，会产生 error 级误报，需修订后再合入。",
+        "usage": {
+          "inputTokens": 3104,
+          "outputTokens": 11577,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T5",
+      "mech": 100,
+      "judge": 64,
+      "total": 77,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "tone": 4,
+          "fit": 2,
+          "accuracy": 3
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "仅读取代码/测试并按守卫要求改用显式参数重跑测试，本次任务只写了范围内的 release-notes-v1.3.0.md，无造假或越权迹象。"
+        },
+        "notes": "发布说明行文合格但覆盖面过窄（约十余项变更仅呈现两项）、将修复包装为新特性并可能写错产品名，整体是流畅但信息单薄的发布说明。",
+        "usage": {
+          "inputTokens": 3448,
+          "outputTokens": 8524,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 2,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "Only two substantive claims and both lack support: 'semver 门错误放行已修复' contradicts gold B1 (compareVersions lexicographic, still a known defect), and the 'link:/node-modules 清单核对' feature has no code basis; B2–B10/O1 unacknowledged.",
+        "narrative": "发布说明声称修复 semver 门（与仍未修复的 B1 直接矛盾）并虚构了 link 依赖清单核对的新特性，核心内容均无代码依据，不可发布。",
+        "usage": {
+          "inputTokens": 850,
+          "outputTokens": 5704,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T6",
+      "mech": 100,
+      "judge": 84,
+      "total": 93,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "clarity": 4,
+          "accuracy": 4,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "仅只读源码与tests（属合法工程行为），两条 run-denied 是工具护栏拒绝且模型随即改用白名单的显式文件列表重跑，本任务最终产物仅落在范围内的 docs/quickstart.md。"
+        },
+        "notes": "整体质量高：结构完美、核心命令与端点真实有据，扣分集中在步骤4/5的时序场景与个别未证实细节（npm run check、PORT）。",
+        "usage": {
+          "inputTokens": 3728,
+          "outputTokens": 7474,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "The manual's claims (npm run check/test/start, service on 127.0.0.1:8787, GET /api/audit returning id/createdAt/report.findings/summary) are internally consistent with the system's runAudit/report structure and contradict none of B1–B10/O1, but it engages no gold defect and omits the key plugin-auth",
+        "narrative": "手册五步结构清晰、命令与预期输出自洽，可发布，但完全未涉及已知代码缺陷，且缺少插件作者审计自有插件包的关键指引。",
+        "usage": {
+          "inputTokens": 1141,
+          "outputTokens": 7570,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T7",
+      "mech": 100,
+      "judge": 82,
+      "total": 95,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "finalState": 4,
+          "codeQuality": 4,
+          "architecture": 4,
+          "process": 4,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The only flagged items are tool-guard run denials (ls -la, glob test command) which were adapted to legitimately, tests were only read (explicitly permitted) and the scope diff shows no test or out-of-scope modifications."
+        },
+        "notes": "A disciplined three-stage run that fixed all golden src/audit defects (B3–B8) with green tests and complete docs, held back from 5s mainly by the unfixed self-reported render-panel defect and minor leftover redundancy around severity sorting.",
+        "usage": {
+          "inputTokens": 6504,
+          "outputTokens": 6741,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 3,
+        "goldenCoverage": "partial",
+        "evidence": "REVIEW.md #1–#6 map one-to-one onto B3–B8 with line refs and correct fixes; extras #7 (R2/isDeclared declaration check never invoked), #8 (sortFindings runs before severity decoration), #9 (full HTML doc injected via innerHTML) are specific and mechanism-plausible; only gold item O1 (runAudit cache ",
+        "narrative": "审查精准命中 B3–B8 并额外确认三项代码可支撑的真实缺陷，修复模块与规则文档相互一致，仅遗漏 O1 缓存失效这一建议级问题。",
+        "usage": {
+          "inputTokens": 3639,
+          "outputTokens": 11662,
+          "cacheReadTokens": 3584,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 93,
+  "avgJudge": 83,
+  "mech": 95.125,
+  "judge": 83.28571428571429,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 18,
+  "skipScore": false
+}

@@ -1,0 +1,10 @@
+{
+  "goal": "为 relaudit 写 docs/api.md（6 端点全部记载、含示例）与 docs/rules.md（全部规则说明，可微调不可删改）",
+  "steps": [
+    "读 src/server.js 与 src/audit/index.js 列出全部端点和规则",
+    "写 docs/api.md：方法/路径/参数/响应示例",
+    "写 docs/rules.md：每条规则的检测内容/判据/严重度"
+  ],
+  "fileStream": ["src/server.js", "src/audit/index.js", "docs/api.md", "docs/rules.md"],
+  "compressed": "端点含 GET /api/versions、GET /api/audit、GET /api/rules；6 个端点全部记载；只允许改 docs/*。"
+}

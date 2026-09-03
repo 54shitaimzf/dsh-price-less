@@ -1,0 +1,118 @@
+{
+  "runId": "T4-manual-habit-mtjdixal",
+  "task": "T4",
+  "arm": "manual-habit",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "manual-habit",
+    "trigger": null,
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true
+    }
+  },
+  "model": "hy3",
+  "provider": "opencode-go-v4",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 16,
+  "elapsedMs": 162750,
+  "usage": {
+    "inputTokens": 179350,
+    "outputTokens": 10324,
+    "cacheReadTokens": 130688,
+    "calls": 16
+  },
+  "prefixStats": {
+    "prefixTokens": 0,
+    "tailTokens": 0,
+    "cacheReadTokens": 0,
+    "derivedCacheRead": 0,
+    "tracked": false
+  },
+  "compression": {
+    "mode": "manual-habit",
+    "count": 2,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "cost": {
+    "usd": 0.017375,
+    "usage": {
+      "inputTokens": 179350,
+      "outputTokens": 10324,
+      "cacheReadTokens": 130688,
+      "calls": 16
+    }
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.01737468,
+      "tokens": 189674
+    },
+    "judge": null,
+    "compression": {
+      "usd": 0.0033749,
+      "tokens": 12755,
+      "source": "real"
+    },
+    "decision": null
+  },
+  "track": {
+    "mech": 60,
+    "judge": 40,
+    "human": 0
+  },
+  "total": 60,
+  "mech": {
+    "score": 100,
+    "passed": true,
+    "checks": [
+      {
+        "check": "tests-subset",
+        "pass": true,
+        "detail": "exit=0 pass=18"
+      },
+      {
+        "check": "allowed-scope",
+        "pass": true,
+        "detail": "all diffs in scope"
+      }
+    ],
+    "violations": [
+      "tool-guard:compression-failed:manual-habit:native section 1 wrong/missing (expected \"Primary Request and Intent\", got \"(none)\");native section 2 wrong/missing (expected \"Key Technical Concepts\", got \"(none)\");native section 3 wrong/missing (expected \"Files and Code\", got \"(none)\");native section 4 wrong/missing (expected \"Errors and Fixes\", got \"(none)\");native section 5 wrong/missing (expected \"Pending Jobs\", got \"(none)\");native section 6 wrong/missing (expected \"Current Work\", got \"(none)\");native section 7 wrong/missing (expected \"Next Step\", got \"(none)\");native section 8 wrong/missing (expected \"Critical Context\", got \"(none)\")"
+    ],
+    "diff": {
+      "modified": [
+        "src/audit/index.js",
+        "src/audit/semver.js",
+        "src/audit/severity.js"
+      ],
+      "added": [
+        "src/audit/files-field.js"
+      ],
+      "deleted": []
+    },
+    "testResult": {
+      "exit": 0,
+      "pass": 18,
+      "fail": 0,
+      "output": "✔ checkFilesField flags tarball entries not declared in files (0.764ms)\n✔ checkFilesField flags declared files missing from the tarball (0.1165ms)\n✔ checkFilesField flags declared directories that are absent (0.112ms)\n✔ checkFilesField passes a fully declared tarball (0.4022ms)\n✔ parseVersion accepts valid semver (0.2337ms)\n✔ parseVersion rejects malformed versions (0.107ms)\n✔ compareVersions: 1.10.0 > 1.9.0 (numeric, not lexicographic) (0.0896ms)\n✔ compareVersions equality (0.0587ms)\n✔ isVersionGreater refuses release regression against 1.10.0 (0.1256ms)\n✔ changelogHead / releasedHead extractors (0.3425ms)\n✔ checkSemver flags head/version mismatch (0.1412ms)\n✔ checkSemver flags missing changelog entry (0.0561ms)\n✔ severityOf: R1 (version-gate mismatch) is an error (0.0369ms)\n✔ severityOf: R8 (files consistency, dev target) is an error (0.026ms)\n✔ severityOf: unknown rules default to info (0.0366ms)\n✔ severityOf: R2/R7 are error/warn respectively (0.0267ms)\n✔ sortFindings orders error before warn before info (6.3667ms)\n✔ summarize counts by severity (0.2022ms)\nℹ tests 18\nℹ suites 0\nℹ pass 18\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 25.7249\n\n"
+    }
+  },
+  "judge": {
+    "score": null,
+    "dims": {},
+    "antiCheat": {
+      "verdict": "none",
+      "evidence": "skipped"
+    }
+  },
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 0
+}

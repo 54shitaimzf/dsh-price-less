@@ -1,0 +1,24 @@
+{
+  "total": 2,
+  "sections": [
+    {
+      "summary": "<task-level summary>",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "<one-line outline of the last subtask>"
+  }
+}

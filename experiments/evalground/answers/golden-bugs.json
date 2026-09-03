@@ -1,0 +1,130 @@
+{
+  "$schema": "golden bug list for the relaudit fixture (T1 review ground truth). Locations are repo-relative (fixture copy is the run workspace root).",
+  "bugs": [
+    {
+      "id": "B1",
+      "rule": "R1",
+      "file": "src/audit/semver.js",
+      "location": "compareVersions()",
+      "title": "semver 字典序比较",
+      "severity": "error",
+      "impact": "1.10.0 被判小于 1.9.0：版本门放行回归/拦截正常升级",
+      "detect": "函数体直接字符串比较（String(a) > String(b)）",
+      "fix": "按 major/minor/patch 数值段比较（parseVersion 已存在）"
+    },
+    {
+      "id": "B2",
+      "rule": "R1(this context)",
+      "file": "src/audit/severity.js",
+      "location": "RULE_SEVERITY",
+      "title": "严重度映射错误",
+      "severity": "error",
+      "impact": "版本门不匹配仅按 warn 报出；未知规则落 info，真实问题被埋进报告底部",
+      "detect": "RULE_SEVERITY['R1'] === 'warn'；缺省分支 ?? 'info'",
+      "fix": "R1 → 'error'；未知规则保持 info 兜底"
+    },
+    {
+      "id": "B3",
+      "rule": "R2",
+      "file": "src/audit/tarball.js",
+      "location": "listTarballEntries() 的 ustar prefix 拼接",
+      "title": "长文件名前缀被丢弃",
+      "severity": "error",
+      "impact": "路径含深目录/长目录名的产物条目只返回裸文件名，未声明文件漏报（样例包 docs/ 条目即此类）",
+      "detect": "prefix（偏移 345）读出后未与 name 拼接",
+      "fix": "entries.push({ name: prefix === '' ? name : `${prefix}/${name}`, size })"
+    },
+    {
+      "id": "B4",
+      "rule": "R3",
+      "file": "src/audit/files.js",
+      "location": "checkLib() 的 resolved 校验",
+      "title": "main 逃逸包目录无守卫",
+      "severity": "warn",
+      "impact": "main 指向包外（如 ../../evil.js）时审计静默通过",
+      "detect": "只 resolve 不校验 resolved 在 pkgDir 内",
+      "fix": "resolved.startsWith(path.resolve(pkgDir) + path.sep) 否则报错"
+    },
+    {
+      "id": "B5",
+      "rule": "R4",
+      "file": "src/audit/sandbox.js",
+      "location": "ALLOWED_COMMANDS",
+      "title": "npx/curl 被白名单放行",
+      "severity": "warn",
+      "impact": "构建脚本可联网抓取/执行任意包，沙箱规则形同虚设（样例包 build.sh 含 npx 未被报）",
+      "detect": "ALLOWED_COMMANDS 含 'npx' 与 'curl'",
+      "fix": "从白名单移除两者"
+    },
+    {
+      "id": "B6",
+      "rule": "R5",
+      "file": "src/audit/deps.js",
+      "location": "checkDeps() 的 declared 合并",
+      "title": "devDependencies 混入运行时依赖",
+      "severity": "warn",
+      "impact": "构建产物里没有的 dev 依赖被报为运行时缺失，样式化误报（样例包 typescript 即中招）",
+      "detect": "declared = { ...dependencies, ...devDependencies }",
+      "fix": "只取 pkg.dependencies"
+    },
+    {
+      "id": "B7",
+      "rule": "R6",
+      "file": "src/audit/changelog.js",
+      "location": "checkChangelog() 日期校验",
+      "title": "日历日期只验形状不验范围",
+      "severity": "warn",
+      "impact": "2026-13-05 / 2025-09-32 等非法日期通过（样例包 CHANGELOG 即含 2026-13-05）",
+      "detect": "仅正则匹配，无 month∈[1,12]/day∈[1,31] 校验（isValidDate 存在但未被调用）",
+      "fix": "调用 isValidDate(year, month, day)"
+    },
+    {
+      "id": "B8",
+      "rule": "R7",
+      "file": "src/audit/consistency.js",
+      "location": "checkConsistency() 的 token 选取",
+      "title": "README 版本比对取最后一个 token",
+      "severity": "warn",
+      "impact": "顶部徽章过期时（后续章节提到当前版本）比对仍通过（样例包 README 即此情形）",
+      "detect": "tokens[tokens.length - 1]",
+      "fix": "tokens[0]（顶部首个版本 token 才是徽章）"
+    },
+    {
+      "id": "B9",
+      "rule": "公开前端",
+      "file": "public/filter.js",
+      "location": "applyFilter()",
+      "title": "过滤级别边界用严格大于",
+      "severity": "error",
+      "impact": "minSeverity='warn' 时丢掉 warn 行、='error' 时返回空集（连 error 都被丢弃）：面板过滤在边界上整体失效",
+      "detect": "`(SEVERITY_ORDER[row.severity] ?? 0) > min`（应为 >=）",
+      "fix": "改为 `>=`；对非法 minSeverity 回退 'info' 做防御"
+    },
+    {
+      "id": "B10",
+      "rule": "公开前端",
+      "file": "public/format.js",
+      "location": "countTotal()",
+      "title": "计数先拼接再数值相加",
+      "severity": "warn",
+      "impact": "2 error + 1 warn + 4 info 统计成 25 而非 7：面板\"共 N 条\"错误，误导审查结论",
+      "detect": "`Number(String(counts.errors) + String(counts.warns)) + counts.infos`",
+      "fix": "改为 Number 逐项相加 `Number(counts.errors) + Number(counts.warns) + Number(counts.infos)`"
+    }
+  ],
+  "observation": {
+    "id": "O1",
+    "rule": "观察点",
+    "file": "src/audit/index.js",
+    "location": "runAudit() 缓存无版本失效",
+    "title": "审计结果缓存无版本失效键（审查建议级）",
+    "severity": "info",
+    "impact": "同一包不同版本可能命中旧审计结论",
+    "detect": "报告对象以 auditedAt 标记但无 pkgVersion+规则集版本指纹"
+  },
+  "reviewScoring": {
+    "description": "T1 mech: 对 REVIEW.md 做命中/误报对表。每命中一条 golden bug 记 1 分（含位置识别：文件+函数名或行号 + 损害描述命中即可；允许用「接近描述」由 judge 补判），误报（不在 golden 且无真实依据的条目）扣分",
+    "hitBand": "≥5 命中 & 误报 ≤2 → 机械分 100；每少 1 命中 −15；每 1 误报 −10；下限 0",
+    "locationMatch": "报告须给出 文件:函数/行号；只给规则名不给位置不记命中"
+  }
+}

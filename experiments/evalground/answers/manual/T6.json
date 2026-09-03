@@ -1,0 +1,11 @@
+{
+  "goal": "为初次使用插件作者写 5 步上手手册 docs/quickstart.md（每步：做什么/预期看到/常见问题）",
+  "steps": [
+    "读 package.json 与 src/server.js 确认真实命令与端点",
+    "写 5 个 ### 步骤 N：<标题>",
+    "每步引用真实命令（npm test/npm run check/npm run start）与端点（127.0.0.1:8787、/api/audit）",
+    "核字数 300–700"
+  ],
+  "fileStream": ["package.json", "src/server.js", "docs/quickstart.md"],
+  "compressed": "严禁杜撰命令/参数/端点；字数 300–700；只允许写 docs/quickstart.md。"
+}

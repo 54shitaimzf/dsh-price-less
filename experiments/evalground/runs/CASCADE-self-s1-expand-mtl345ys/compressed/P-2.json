@@ -1,0 +1,44 @@
+{
+  "total": 4,
+  "sections": [
+    {
+      "summary": "Fix semver compareVersions (numeric), severity R1→error, implement R8 files-field check, wire into runAudit; 18/18 target tests pass.",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "Fix semver compareVersions (numeric) and severity R1→error, implement new R8 files-field rule, wire into runAudit.",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "src/audit/index.js",
+          "change": "Fix defect or implement R8 files-field rule (see refs)",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "src/audit/index.js",
+              "lineRange": "1-86",
+              "symbol": null,
+              "content": "/**\n * Audit assembler: runs R1–R8 over a package directory, decorates findings\n * with rule code + severity, and summarizes by severity.\n */\n\nimport fs from 'node:fs'\nimport path from 'node:path'\nimport { checkSemver } from './semver.js'\nimport { listTarballEntries } from './tarball.js'\nimport { checkLib } from './files.js'\nimport { checkBuildScript } from './sandbox.js'\nimport { checkDeps } from './deps.js'\nimport { checkChangelog } from './changelog.js'\nimport { checkConsistency } from './consistency.js'\nimport { checkFilesField } from './files-field.js'\nimport { severityOf, sortFindings, summarize } from './severity.js'\n\nexport function readJson(file) {\n  return JSON.parse(fs.readFileSync(file, 'utf8'))\n}\n\n/**\n * Run the full audit over one package directory.\n * @param {string} pkgDir absolute path to the package (its package.json sits there).\n * @param {object} [opts] { versionsPath, tarballPath }\n */\nexport function runAudit(pkgDir, opts = {}) {\n  const versionsFile = opts.versionsPath ?? path.join(pkgDir, '..', 'data', 'versions.json')\n  const tarballFile = opts.tarballPath ?? path.join(pkgDir, 'dist', 'relaudit-plugin-1.3.0.tgz')\n\n  const pkg = readJson(path.join(pkgDir, 'package.json'))\n  const changelogText = fs.existsSync(path.join(pkgDir, 'CHANGELOG.md'))\n    ? fs.readFileSync(path.join(pkgDir, 'CHANGELOG.md'), 'utf8')\n    : ''\n  const readmeText = fs.existsSync(path.join(pkgDir, 'README.md'))\n    ? fs.readFileSync(path.join(pkgDir, 'README.md'), 'utf8')\n    : ''\n  const buildScript = fs.existsSync(path.join(pkgDir, 'scripts', 'build.sh'))\n    ? fs.readFileSync(path.join(pkgDir, 'scripts', 'build.sh'), 'utf8')\n    : ''\n  const nodesFile = path.join(pkgDir, 'node-modules.json')\n  const nodes = fs.existsSync(nodesFile) ? readJson(nodesFile) : []\n  const versions = fs.existsSync(versionsFile) ? readJson(versionsFile) : { releases: [] }\n  const tarballEntries = fs.existsSync(tarballFile)\n    ? listTarballEntries(fs.readFileSync(tarballFile))\n    : []\n\n  const raw = [\n    ...checkSemver(pkg, changelogText, versions.releases ?? []),\n    ...checkTarball(tarballEntries),\n    ...checkLib(pkgDir, pkg),\n    ...checkBuildScript(buildScript),\n    ...checkDeps(pkg, nodes),\n    ...checkChangelog(changelogText),\n    ...checkConsistency(pkg, readmeText),\n    ...checkFilesField(pkg, tarballEntries),\n  ]\n\n  const findings = sortFindings(raw.map(f => ({ ...f, rule: f.code }))) // severity added below\n  const decorated = findings.map(f => ({ rule: f.rule, severity: severityOf(f.rule), message: f.message, file: f.file }))\n  return {\n    pkg: pkg.name,\n    version: pkg.version,\n    auditedAt: new Date().toISOString(),\n    findings: decorated,\n    summary: summarize(decorated),\n  }\n}\n\nfunction checkTarball(entries) {\n  const findings = []\n  if (entries.length === 0) {\n    findings.push({ code: 'R2', message: '产物 tarball 为空或不可解析', file: 'dist/' })\n    return findings\n  }\n  for (const entry of entries) {\n    // PLANTED BUG surface for R2: entries whose name lost its prefix can never\n    // be matched by isDeclared, so undeclared deep paths are reported as empty\n    // dirs — see tarball.js. The R2 finding below therefore fires only for\n    // obvious corruption; long-name truncation is the hidden defect.\n    if (entry.size === 0 && !entry.name.endsWith('/')) {\n      findings.push({ code: 'R2', message: `产物条目异常: ${entry.name}`, file: entry.name })\n    }\n  }\n  return findings\n}"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/semver.test.js tests/severity.test.js tests/files-field.test.js",
+          "result": "pass",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "Two defects fixed (semver numeric compare, R1→error) and R8 implemented + wired into runAudit; 18/18 target tests pass.",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "Run node --test on semver/severity/files-field → 18/18 pass."
+  }
+}

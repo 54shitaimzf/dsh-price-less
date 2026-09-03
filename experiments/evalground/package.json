@@ -1,0 +1,20 @@
+{
+  "name": "evalground",
+  "private": true,
+  "type": "module",
+  "description": "Eval ground: relaudit fixture + fixed tasks + mech/judge/human scoring + silent runner",
+  "scripts": {
+    "ground:check": "node lib/ground-check.mjs",
+    "ground:reset": "node scripts/reset.mjs",
+    "ground:assert": "node lib/assert.mjs",
+    "ground:verify": "node lib/verify.mjs",
+    "human:sheets": "node scripts/human-sheets.mjs",
+    "human:review": "node lib/review.mjs",
+    "run-one": "node bin/run-one.mjs",
+    "run-all": "node bin/run-all.mjs",
+    "rejudge": "node bin/rejudge.mjs",
+    "batch-report": "node scripts/batch-report.mjs",
+    "score": "node lib/score.mjs",
+    "make-tgz": "node scripts/make-tgz.mjs"
+  }
+}

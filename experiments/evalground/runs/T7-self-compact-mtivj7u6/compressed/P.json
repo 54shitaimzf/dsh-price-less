@@ -1,0 +1,10 @@
+{
+  "goal": "g1",
+  "steps": [
+    "c1"
+  ],
+  "fileStream": [
+    "f1"
+  ],
+  "compressed": "cc1"
+}

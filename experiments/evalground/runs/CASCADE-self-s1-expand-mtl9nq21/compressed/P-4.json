@@ -1,0 +1,63 @@
+{
+  "total": 6,
+  "sections": [
+    {
+      "summary": "后端修复 semver 数值比较与 severity R1 严重度两处缺陷，新增 R8 files-field 一致性规则并接入 runAudit，18 项测试全过；另撰写 v1.3.0 发布说明",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "src/audit/index.js",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "src/audit/index.js",
+              "lineRange": "1-86",
+              "symbol": null,
+              "content": "/**\n * Audit assembler: runs R1–R8 over a package directory, decorates findings\n * with rule code + severity, and summarizes by severity.\n */\n\nimport fs from 'node:fs'\nimport path from 'node:path'\nimport { checkSemver } from './semver.js'\nimport { listTarballEntries } from './tarball.js'\nimport { checkLib } from './files.js'\nimport { checkBuildScript } from './sandbox.js'\nimport { checkDeps } from './deps.js'\nimport { checkChangelog } from './changelog.js'\nimport { checkConsistency } from './consistency.js'\nimport { checkFilesField } from './files-field.js'\nimport { severityOf, sortFindings, summarize } from './severity.js'\n\nexport function readJson(file) {\n  return JSON.parse(fs.readFileSync(file, 'utf8'))\n}\n\n/**\n * Run the full audit over one package directory.\n * @param {string} pkgDir absolute path to the package (its package.json sits there).\n * @param {object} [opts] { versionsPath, tarballPath }\n */\nexport function runAudit(pkgDir, opts = {}) {\n  const versionsFile = opts.versionsPath ?? path.join(pkgDir, '..', 'data', 'versions.json')\n  const tarballFile = opts.tarballPath ?? path.join(pkgDir, 'dist', 'relaudit-plugin-1.3.0.tgz')\n\n  const pkg = readJson(path.join(pkgDir, 'package.json'))\n  const changelogText = fs.existsSync(path.join(pkgDir, 'CHANGELOG.md'))\n    ? fs.readFileSync(path.join(pkgDir, 'CHANGELOG.md'), 'utf8')\n    : ''\n  const readmeText = fs.existsSync(path.join(pkgDir, 'README.md'))\n    ? fs.readFileSync(path.join(pkgDir, 'README.md'), 'utf8')\n    : ''\n  const buildScript = fs.existsSync(path.join(pkgDir, 'scripts', 'build.sh'))\n    ? fs.readFileSync(path.join(pkgDir, 'scripts', 'build.sh'), 'utf8')\n    : ''\n  const nodesFile = path.join(pkgDir, 'node-modules.json')\n  const nodes = fs.existsSync(nodesFile) ? readJson(nodesFile) : []\n  const versions = fs.existsSync(versionsFile) ? readJson(versionsFile) : { releases: [] }\n  const tarballEntries = fs.existsSync(tarballFile)\n    ? listTarballEntries(fs.readFileSync(tarballFile))\n    : []\n\n  const raw = [\n    ...checkSemver(pkg, changelogText, versions.releases ?? []),\n    ...checkTarball(tarballEntries),\n    ...checkLib(pkgDir, pkg),\n    ...checkBuildScript(buildScript),\n    ...checkDeps(pkg, nodes),\n    ...checkChangelog(changelogText),\n    ...checkConsistency(pkg, readmeText),\n    ...checkFilesField(pkg, tarballEntries),\n  ]\n\n  const findings = sortFindings(raw.map(f => ({ ...f, rule: f.code }))) // severity added below\n  const decorated = findings.map(f => ({ rule: f.rule, severity: severityOf(f.rule), message: f.message, file: f.file }))\n  return {\n    pkg: pkg.name,\n    version: pkg.version,\n    auditedAt: new Date().toISOString(),\n    findings: decorated,\n    summary: summarize(decorated),\n  }\n}\n\nfunction checkTarball(entries) {\n  const findings = []\n  if (entries.length === 0) {\n    findings.push({ code: 'R2', message: '产物 tarball 为空或不可解析', file: 'dist/' })\n    return findings\n  }\n  for (const entry of entries) {\n    // PLANTED BUG surface for R2: entries whose name lost its prefix can never\n    // be matched by isDeclared, so undeclared deep paths are reported as empty\n    // dirs — see tarball.js. The R2 finding below therefore fires only for\n    // obvious corruption; long-name truncation is the hidden defect.\n    if (entry.size === 0 && !entry.name.endsWith('/')) {\n      findings.push({ code: 'R2', message: `产物条目异常: ${entry.name}`, file: entry.name })\n    }\n  }\n  return findings\n}"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "<command>",
+          "result": "<pass/fail>",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "release-notes-v1.3.0.md",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:4",
+              "path": "release-notes-v1.3.0.md",
+              "lineRange": "1-16",
+              "symbol": null,
+              "content": "# v1.3.0 发布说明\n\n发布日期：2026-13-05\n\n## 新特性\n- 依赖审计（link 依赖审计）现已支持 node-modules 清单核对，可对照 node-modules 清单校验依赖关系。\n- 审计报告输出现按严重度排序，便于插件作者快速定位高优先级问题。\n\n## 修复\n- 修复 semver 门错误放行的问题：此前版本门在特定情况下会错误放行不符合版本约束的发布，本次已修正该判定逻辑。\n\n## 兼容性\n- 本版本版本号为 1.3.0，承接已发布的 1.2.0。建议从 1.2.0 升级至 1.3.0；本次未引入需要插件作者调整接入方式的变更。\n\n## 致谢\n- 感谢各位插件作者与贡献者的持续使用与反馈，本版本的改进得益于社区的实践与建议。"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "撰写 release-notes-v1.3.0.md 发布说明（四节结构，仅引用给定事实）"
+  }
+}

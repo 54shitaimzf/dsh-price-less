@@ -1,0 +1,33 @@
+{
+  "total": 2,
+  "sections": [
+    {
+      "summary": "为 dsh-sample-plugin v1.3.0 撰写发布说明，仅产出 release-notes-v1.3.0.md",
+      "subtasks": [
+        {
+          "type": "impl",
+          "path": "release-notes-v1.3.0.md",
+          "change": "新增 release-notes-v1.3.0.md：v1.3.0 发布说明，四节结构，仅引用给定事实",
+          "refs": [
+            {
+              "refKey": "sub:0",
+              "path": "release-notes-v1.3.0.md",
+              "lineRange": "1-21",
+              "symbol": null,
+              "content": "# v1.3.0 发布说明\n\n本文面向 dsh-sample-plugin 的插件作者，说明 1.3.0 版本的主要变更。\n\n## 新特性\n\n- **link 依赖审计支持 node-modules 清单核对**：审计逻辑现已支持对 link 类型依赖进行 node-modules 清单核对，帮助插件作者在本地开发链路中更早地发现依赖清单不一致的问题。\n\n## 修复\n\n- **semver 门错误放行**：修复了 semver 门在某些情况下错误放行不符合版本约束的发布的问题。该修复对应 CHANGELOG 中记录的 semver 门错误放行条目，确保发布前的版本校验严格生效。\n\n## 兼容性\n\n- **审计报告输出按严重度排序**：审计报告的输出现已按严重度排序。该调整为非破坏性变更，不影响既有接口与字段，仅改变输出的排列顺序，便于插件作者快速定位高严重度问题。\n\n从已发布版本 1.2.0 升级到 1.3.0 无需额外迁移步骤。\n\n## 致谢\n\n感谢所有参与 1.3.0 版本反馈与验证的插件作者与贡献者。"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "撰写 v1.3.0 发布说明文档"
+  }
+}

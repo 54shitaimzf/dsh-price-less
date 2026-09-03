@@ -1,0 +1,18 @@
+{
+  "source": "datasets/claudeset_shard.jsonl (real Claude Code sessions, hand-labeled intent flips)",
+  "space": "U-index: 0-based ordinal among exchanges carrying a user message",
+  "labeler": "human (probe19 hand-label, coarse standard)",
+  "note": "Migrated verbatim from scripts/embed_probe20.mjs EVAL block. coarse = 明显主要意图反转起点 U；single = 单意图会话（可作负样本）。",
+  "sessions": [
+    { "id": "0ff3015a-27cb-43e3-acb7-b06f7bd54de7", "proj": "mails", "U": 83, "coarse": [1, 4, 8, 12, 20, 38, 60, 71, 80], "single": false },
+    { "id": "3de11a0d-f417-4dce-a910-2fab07164b16", "proj": "afriland-audio", "U": 92, "coarse": [2, 4, 6, 8, 29, 55, 90], "single": false },
+    { "id": "30a284c6-aa90-41f3-af9c-5be45369baf9", "proj": "CEKEMA", "U": 44, "coarse": [1, 2, 3, 16, 22, 30, 40, 41], "single": false },
+    { "id": "74d9a434-eb7b-424a-b781-067668c0987f", "proj": "dataclaw", "U": 27, "coarse": [2, 3, 8, 11, 13, 20, 22], "single": false },
+    { "id": "e385bda2-accf-466d-8b51-5dfb0e856c69", "proj": "cdomain-mcp", "U": 22, "coarse": [1, 8, 9, 17], "single": false },
+    { "id": "9c2090f7-4d7d-47a7-8f93-ef75bc9b75cd", "proj": "home-wifi-huawei", "U": 42, "coarse": [1, 7, 8, 22, 27], "single": false },
+    { "id": "50a530d3-9a34-4b18-8296-f9e8b37abcaa", "proj": "withdraw-validator", "single": true, "coarse": [] },
+    { "id": "66439e33-4d07-44f9-9028-b5e514fcf8ea", "proj": "consulte-session", "single": true, "coarse": [] },
+    { "id": "16a37d85-6c68-4e32-8499-a7ce34cae9dc", "proj": "curl-collection", "single": true, "coarse": [] },
+    { "id": "6a1db62e-2b0d-4c61-bba7-3ec95362ea89", "proj": "afriland-service-logic", "single": true, "coarse": [] }
+  ]
+}

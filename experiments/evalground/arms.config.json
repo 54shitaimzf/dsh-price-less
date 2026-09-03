@@ -1,0 +1,29 @@
+{
+  "_meta": {
+    "methodology": "四旋钮方法论（A1 范围 / A2 处理）+ task=架构单位，见 EXPERIMENT.md（设计级单一事实源）。最终协议 = 2 对照（native-auto / manual-habit）+ 4 实验臂（A1×A2 网格 self-s{1,2}-{orig,expand}）；实验侧 = 用插件机制逐槽替换原生机制（触发/范围/保留/产物），对照组 = 完整原生原样（严格原生 = 含 task 头锚定）。无压缩条件已取消（无对照意义）；历史 V1/V2/V3/X 系列臂与 self-compact（= self-s2-orig 等价）已于 2026-09 清理。",
+    "ptc-compressor": "压缩器 = PTC 式：模型写程序（不调工具），worker_threads 运行时执行，输出结构/指针/压缩比全部代码化；展开（A2 方案1）= harness 侧 resolve；S1 保尾 = 引用化保尾（refs+outline，无原文）；压缩后压缩比检查（有效≤0.5、>0.75 fail-lazy）。",
+    "default-arm": "scores.config.json 的 baseline = native-auto（无压缩基线已取消）"
+  },
+  "trigger": { "tokenThreshold": 8000 },
+  "contextWindow": 256000,
+  "truncatePct": 0.8,
+  "compressionDomain": 50000,
+  "compressor": {
+    "ratioEffective": 0.5,
+    "ratioHardFail": 0.75,
+    "promptRatioBudget": 0.45,
+    "retainCap": 2000,
+    "maxRetainRefs": 8,
+    "outlineTokenBudget": 40,
+    "minRegionTokens": 3000,
+    "codeRun": { "maxWallMs": 30000, "maxOutputBytes": 262144 }
+  },
+  "arms": {
+    "native-auto":   { "assembly": "obj-P",     "compression": "native-auto",  "trigger": null,                "ledger": { "execution": true, "compression": true }, "note": "对照 A：DSH-native 自动压缩（严格原生：范围=移植 selectCompactableRange 头锚定含 task=surface.slice(1)，稳定前缀仅 [system]；产物=原生 8段 <compacted-summary>；保留 'merge into consolidated' 重凝缩条款=原样呈现的漂移源）。标定到能触发 + assertCompressionFired 防退化。" },
+    "manual-habit":  { "assembly": "obj-P",     "compression": "manual-habit", "trigger": null,                "ledger": { "execution": true, "compression": true }, "note": "对照 B:模仿人类压缩习惯。触发器=硬编码规则(大文件读取完成/通过 run/50% 压力)，远早于自动压缩~95%；保留集=objective+改过路径+未解决失败+架构决策，注入压缩器 focus directive；产物=8段结构。无 token 判定成本(纯规则)。" },
+    "self-s1-orig":   { "assembly": "obj-P",     "compression": "task-boundary", "trigger": null,                "a1": "s1", "a2": "keep-original", "ledger": { "execution": true, "compression": true, "decision": true }, "note": "A1×A2 网格 [A1-S1 引用化保尾 × A2 方案0]：PTC 压缩器；保留=最后一个子 task 的 refs+outline（无原文，下次压缩即删）；产物=总-分 sections+引用坐标。对 native-auto 换 1 槽 = E3 保留。" },
+    "self-s1-expand": { "assembly": "obj-P",     "compression": "task-boundary", "trigger": null,                "a1": "s1", "a2": "expand",       "ledger": { "execution": true, "compression": true, "decision": true }, "note": "A1×A2 网格 [A1-S1 引用化保尾 × A2 方案1]：refs+outline 保留（下次压缩即删）+ harness 侧展开。" },
+    "self-s2-orig":   { "assembly": "obj-P",     "compression": "task-boundary", "trigger": null,                "a1": "s2", "a2": "keep-original", "ledger": { "execution": true, "compression": true, "decision": true }, "note": "A1×A2 网格 [A1-S2 闭合即全压 × A2 方案0 保留原始]：PTC 压缩器（写程序）；无保留；产物=总-分 sections+引用坐标。对 native-auto 换 1 槽 = E3 保留。（原 self-compact 臂与其等价，已合并至此。）" },
+    "self-s2-expand": { "assembly": "obj-P",     "compression": "task-boundary", "trigger": null,                "a1": "s2", "a2": "expand",       "ledger": { "execution": true, "compression": true, "decision": true }, "note": "A1×A2 网格 [A1-S2 闭合即全压 × A2 方案1 展开]：展开=harness 侧 resolve（refs.content），模型从不嵌入内容。对 native-auto 换 1 槽 = E4 产物。" }
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "total": 14,
+  "sections": [
+    {
+      "summary": "<task-level summary>",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "REVIEW.md",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "REVIEW.md",
+              "lineRange": "1-21",
+              "symbol": "relaudit"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "<command>",
+          "result": "<pass/fail>",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/rules.md",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:5",
+              "path": "docs/rules.md",
+              "lineRange": "1-69",
+              "symbol": null
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/index.html",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:8",
+              "path": "public/index.html",
+              "lineRange": "1-223",
+              "symbol": "doctype"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "<command>",
+          "result": "<pass/fail>",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/index.html",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:11",
+              "path": "public/index.html",
+              "lineRange": "1-224",
+              "symbol": "doctype"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "<command>",
+          "result": "<pass/fail>",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ]
+}

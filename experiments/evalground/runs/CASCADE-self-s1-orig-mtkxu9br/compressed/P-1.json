@@ -1,0 +1,150 @@
+{
+  "total": 20,
+  "sections": [
+    {
+      "summary": "relaudit audit: api question, code review, docs, frontend panel, backend R8 rule",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/semver.test.js tests/severity.test.js tests/files-field.test.js",
+          "result": "pass (18/18)",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "REVIEW.md: 14 issues (8 error/4 warn/2 info); render-panel.js clean",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "REVIEW.md",
+          "change": "fix compareVersions numeric + R1=error; add checkFilesField (R8) and wire into runAudit",
+          "refs": [
+            {
+              "refKey": "sub:5",
+              "path": "REVIEW.md",
+              "lineRange": "1-25",
+              "symbol": "relaudit"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "REVIEW.md: 14 issues (8 error/4 warn/2 info); render-panel.js clean",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/rules.md",
+          "change": "fix compareVersions numeric + R1=error; add checkFilesField (R8) and wire into runAudit",
+          "refs": [
+            {
+              "refKey": "sub:8",
+              "path": "docs/rules.md",
+              "lineRange": "1-91",
+              "symbol": null
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "REVIEW.md: 14 issues (8 error/4 warn/2 info); render-panel.js clean",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/index.html",
+          "change": "fix compareVersions numeric + R1=error; add checkFilesField (R8) and wire into runAudit",
+          "refs": [
+            {
+              "refKey": "sub:11",
+              "path": "public/index.html",
+              "lineRange": "1-224",
+              "symbol": "doctype"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/semver.test.js tests/severity.test.js tests/files-field.test.js",
+          "result": "pass (18/18)",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/semver.test.js tests/severity.test.js tests/files-field.test.js",
+          "result": "pass (18/18)",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "REVIEW.md: 14 issues (8 error/4 warn/2 info); render-panel.js clean",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "answer GET /api/rules count = 8 (R1-R8)",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "src/audit/index.js",
+          "change": "fix compareVersions numeric + R1=error; add checkFilesField (R8) and wire into runAudit",
+          "refs": [
+            {
+              "refKey": "sub:17",
+              "path": "src/audit/index.js",
+              "lineRange": "1-82",
+              "symbol": null
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/semver.test.js tests/severity.test.js tests/files-field.test.js",
+          "result": "pass (18/18)",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "REVIEW.md: 14 issues (8 error/4 warn/2 info); render-panel.js clean",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "backend: fix semver compareVersions + R1 severity, implement R8 files-field rule, wire into runAudit; 18/18 tests pass"
+  }
+}

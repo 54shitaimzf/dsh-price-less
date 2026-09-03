@@ -1,0 +1,10 @@
+{
+  "goal": "审查 relaudit 的 src/audit/ 正确性缺陷，输出问题清单到 REVIEW.md（表格：编号/位置/损害/修复建议/严重度）",
+  "steps": [
+    "只读审查 src/audit/ 全部规则模块与错误路径",
+    "对照 golden 语义核实每条缺陷（不臆造）",
+    "按模板写 REVIEW.md，格式与严重度分级"
+  ],
+  "fileStream": ["src/audit/semver.js", "src/audit/severity.js", "src/audit/tarball.js", "src/audit/files.js", "src/audit/deps.js"],
+  "compressed": "本步只写 REVIEW.md，不改任何代码；严重度用 高/中/低；不得杜撰规则号或文件路径。"
+}

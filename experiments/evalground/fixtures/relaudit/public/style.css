@@ -1,0 +1,16 @@
+body { font-family: system-ui, sans-serif; margin: 24px; color: #1c2733; }
+h1 { font-size: 20px; }
+#summary-cards { display: flex; gap: 12px; margin: 12px 0; }
+.card { border: 1px solid #ccc; border-radius: 8px; padding: 8px 16px; min-width: 80px; }
+.card .count { font-size: 22px; font-weight: 700; }
+.card-error { border-color: #d33; } .card-error .count { color: #d33; }
+.card-warn { border-color: #e9a; } .card-warn .count { color: #b60; }
+.card-info { border-color: #88c; } .card-info .count { color: #48c; }
+table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+th, td { border: 1px solid #dde; padding: 6px 10px; text-align: left; font-size: 13px; }
+.row-error td { background: #fdf2f2; }
+.row-warn td { background: #fff8ee; }
+.row-info td { background: #f4f7fd; }
+#summary-text { margin-left: 16px; font-size: 13px; color: #556; }
+#rule-groups { margin-left: 12px; font-size: 13px; color: #456; }
+.copy { font-size: 12px; }

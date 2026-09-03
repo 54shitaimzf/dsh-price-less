@@ -1,0 +1,21 @@
+{
+  "source": "C:/Users/Administrator/.dsh/sessions (local DSH archives)",
+  "space": "U-index: 0-based ordinal among append user/message events (any source kind, exactly what the fold sees)",
+  "labeler": "ai-draft (v2: corrected after review), pending human review",
+  "note": "v2 修正：c3801781 按 probe19 coarse 标准并非单意图——U16（AI缓存问答→设计自有插件）、U36（设计→创建插件项目并落实文档）为明显意图反转。子代理 fork 会话（155957c4/e80a8ed9/bb6d3110）仅 1 条真实用户消息（其余为注入），按单意图负样本保留。",
+  "sessions": [
+    { "id": "155957c4-1f0a-4c8e-af2c-abfa9d121ce6", "U": 4, "coarse": [], "single": true },
+    { "id": "e80a8ed9-6e0a-4a4a-a7bf-924b9fe2b6a8", "U": 4, "coarse": [], "single": true },
+    { "id": "bb6d3110-72ac-44e1-8573-ddc8fac1edc2", "U": 4, "coarse": [], "single": true },
+    {
+      "id": "session-c3801781-574c-4d99-8c1a-8ca31d63861f",
+      "U": 106,
+      "coarse": [16, 36],
+      "single": false,
+      "flipEvidence": [
+        { "u": 16, "text": "codex claude等是如何进行压缩的呢？我打算做一款全面token节约+效率提升工具…", "why": "AI 缓存问答 → 自主工具设计" },
+        { "u": 36, "text": "先给我创建一个标准符合契约的插件项目，然后将我的几个插件与原则与目的和指标落实为项目文档", "why": "设计讨论 → 创建项目与落实文档" }
+      ]
+    }
+  ]
+}

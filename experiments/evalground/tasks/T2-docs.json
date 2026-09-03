@@ -1,0 +1,50 @@
+{
+  "id": "T2",
+  "title": "完善 API 与规则文档",
+  "type": "docs",
+  "weight": 15,
+  "track": { "mech": 55, "judge": 45, "human": 0 },
+  "prompt": "你是技术文档工程师。当前工作区是插件发布审计器 relaudit。请补全两份文档（只允许修改 docs/api.md 与 docs/rules.md，不得改代码/测试）：\n\n1. docs/api.md：补全全部接口。以 src/server.js 中的路由实现为准，逐条写明：方法、路径、参数说明、响应示例。至少覆盖：GET /api/versions、GET /api/audit、GET /api/audit/:id、GET /api/rules、GET /api/runs、GET /（报告面板页）。\n2. docs/rules.md：完整说明 R1–R8 每条规则：检测什么、判据、严重度。以 src/audit/ 实现与 docs/rules.md 已有框架为准，保留已有内容、补全 R8 且不编造不存在的规则。\n\n要求：字段名/端点名必须与代码一致；Markdown 语法合法；文档准确、可执行。\n\n最后一条消息以 DONE 开头。",
+  "accept": {
+    "checks": [
+      { "type": "docs-coverage", "file": "docs/api.md", "patterns": [
+        "GET /api/versions", "GET /api/audit", "GET /api/audit/:id", "GET /api/rules", "GET /api/runs", "GET /"
+      ] },
+      { "type": "docs-coverage", "file": "docs/api.md", "patterns": ["releases", "findings", "summary"] },
+      { "type": "docs-coverage", "file": "docs/rules.md", "patterns": [
+        "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"
+      ] },
+      { "type": "docs-coverage", "file": "docs/rules.md", "patterns": ["严重度"] },
+      { "type": "allowed-scope", "paths": ["docs/api.md", "docs/rules.md"] }
+    ]
+  },
+  "rubric": {
+    "dims": [
+      { "id": "completeness", "name": "完整性（覆盖全部接口与规则）", "weight": 0.4, "bands": [
+        ["5", "6 接口 × 方法/参数/示例 + R1–R8 逐条判据与严重度全部到位"],
+        ["4", "覆盖完整，个别示例欠规范"],
+        ["3", "接口覆盖完整但规则说明有 1-2 条简略"],
+        ["2", "缺 1-2 个接口或规则"],
+        ["1", "缺 3 项及以上"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "accuracy", "name": "与代码一致性（字段/端点/判据不编造）", "weight": 0.4, "bands": [
+        ["5", "全部与 src/server.js 与 src/audit/ 对齐，无编造"],
+        ["4", "轻微措辞歧义但不误导"],
+        ["3", "1-2 处字段/参数与代码不符"],
+        ["2", "多处细节与实现不符"],
+        ["1", "存在编造端点或规则"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "structure", "name": "结构清晰度（标题/层级/示例可执行）", "weight": 0.2, "bands": [
+        ["5", "层级清晰，每接口有请求/响应示例，可直接照着调用"],
+        ["4", "结构良好，少量可再精简"],
+        ["3", "结构可用但示例不全"],
+        ["2", "层级混乱或重复"],
+        ["1", "无结构，流水账"],
+        ["0", "无有效产出"]
+      ] }
+    ],
+    "antiCheat": true
+  }
+}

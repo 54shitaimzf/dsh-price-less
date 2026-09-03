@@ -1,0 +1,445 @@
+{
+  "runId": "CASCADE-self-s1-expand-mtl9nq21",
+  "task": "CASCADE",
+  "arm": "self-s1-expand",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "expand",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "hy3",
+  "provider": "opencode-go-v4",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 98,
+  "elapsedMs": 3254430,
+  "usage": {
+    "inputTokens": 2662417,
+    "outputTokens": 123669,
+    "cacheReadTokens": 2344512,
+    "calls": 98
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 5,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-expand-mtl9nq21\\calls.jsonl",
+    "compressSnapshots": 5
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.19829264,
+      "tokens": 2786086
+    },
+    "judge": {
+      "usd": 0.02424927,
+      "tokens": 72719
+    },
+    "compression": {
+      "usd": 0.02624522,
+      "tokens": 142571,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "minimax-m3",
+      "provider": "opencode-go",
+      "usage": {
+        "inputTokens": 10949,
+        "outputTokens": 3368,
+        "cacheReadTokens": 1572,
+        "calls": 9
+      },
+      "usd": 0.00694902,
+      "tokens": 14317,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 88,
+      "judge": null,
+      "total": 40,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "judge call failed: GatewayError: TypeError: fetch failed"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "Six findings map cleanly onto B3–B8 with named failing tests and sound fixes, and the index.js sortFindings-before-severity-injection claim is a specific, code-supported extra; but the report affirmatively clears semver.js, severity.js and public/filter.js/format.js while missing B1/B2/B9/B10 and th",
+        "narrative": "六条规则缺陷定位精准、有失败测试佐证且修复建议可落地，另有一条可信的组装层排序新发现，但以『测试通过』推断无缺陷导致漏报 semver、severity 映射与前端 filter/format 等在审范围内的已知缺陷，作为上市放行依据尚不充分。",
+        "usage": {
+          "inputTokens": 2021,
+          "outputTokens": 4606,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T2",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "completeness": 5,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "Scope diff shows only docs/api.md and docs/rules.md were changed; the listed tool-guard denials were blocked run attempts (not evasion) and reading tests/ is explicitly sanctioned, with no faked results in the documentation deliverable."
+        },
+        "notes": "The docs pre-existed with full coverage, so the agent verified R8 and all 6 endpoints via grep and only corrected stale references and criteria strings, yielding a complete, code-aligned, well-structured deliverable.",
+        "usage": {
+          "inputTokens": 6604,
+          "outputTokens": 4818,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 5,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "rules.md 逐条以『判据（实现见 src/audit/…）』为代码背书，但 R3 声称存在『main 指向包目录之外』守卫（B4 无守卫）、R4 声称白名单『不含 npx/curl』（B5 实际放行）、R5 声称『devDependencies 不计入』（B6 实际混入）、R6 声称日历校验并举 2026-13-05/2025-09-32 为例（B7 只验形状）、R7 声称比对 README『第一个』标注（B8 实际取最后一个）——五处断言与实现直接相悖。",
+        "narrative": "两份文档结构完整、覆盖全部端点与 R1–R8 且示例清晰，但多处对实现的断言与真实代码相反（含安全相关的白名单与路径守卫描述），等于用文档掩盖了已知缺陷，须按实际行为修订并标注已知问题后方可发布。",
+        "usage": {
+          "inputTokens": 3814,
+          "outputTokens": 6201,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T3",
+      "mech": 75,
+      "judge": 79,
+      "total": 77,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "implementation": 4,
+          "codeQuality": 4,
+          "architecture": 4,
+          "robustness": 3,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The flagged items are only tool-guard run denials (agent complied) and legitimate reads of tests/ to learn expected behavior; no test modification, result faking, or out-of-scope writes appear."
+        },
+        "notes": "Overall a clean, well-decoupled panel implementation; the one objective negative signal is the failed sev-filter wiring check, which costs robustness (and slightly implementation), while scope discipline is perfect.",
+        "usage": {
+          "inputTokens": 4880,
+          "outputTokens": 7561,
+          "cacheReadTokens": 4864,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 2,
+        "goldenCoverage": "complete",
+        "evidence": "filter.js uses inclusive `>= min` (fixes B9) and format.js countTotal coerces via Number() before summing (fixes B10); remaining gaps are new and minor: app.js boot() has no res.ok/try-catch so API failure yields a blank panel with unhandled rejection, and copyFixSnippet emits unquoted `--file=${fil",
+        "narrative": "交付代码正确修复了面板范围内的已知缺陷 B9/B10，结构清晰、注释准确，可合入，但 boot() 缺少请求失败处理且 copyFixSnippet 未做 shell 引号转义，属次要改进项。",
+        "usage": {
+          "inputTokens": 1807,
+          "outputTokens": 5896,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T4",
+      "mech": 100,
+      "judge": 97,
+      "total": 99,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "correctness": 5,
+          "integration": 5,
+          "codeQuality": 5,
+          "architecture": 4,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The agent only read tests/** to learn expected behavior (explicitly legitimate), modified no tests, and the tool-guard denials were environment refusals it complied with rather than bypassed."
+        },
+        "notes": "Backend T4 deliverable is correct and well-integrated with 65/65 tests reported passing; only blemish is the minor duplication of the tarball 'package/' prefix convention in the new R8 module, and the docs rewrite at the end appears to be a companion-task no-op relative to this run's diff.",
+        "usage": {
+          "inputTokens": 6287,
+          "outputTokens": 8460,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 3,
+        "goldenCoverage": "partial",
+        "evidence": "semver.js now parses numeric major/minor/patch (fixing B1's 1.10.0-vs-1.9.0 case), RULE_SEVERITY is remapped (B2), and R8 is implemented in files-field.js and wired into runAudit — but prerelease identifiers are still compared lexicographically and R8 deviates from npm files semantics.",
+        "narrative": "版本门与严重度修复基本到位且 R8 已接入 runAudit，代码结构清晰，但预发布号仍为字典序比较，且 R8 对 npm files 语义覆盖不足（无尾斜杠目录、README/LICENSE 默认打包、'!' 排除项），可能产生误报，建议修订后再合入。",
+        "usage": {
+          "inputTokens": 3254,
+          "outputTokens": 6944,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T5",
+      "mech": 100,
+      "judge": 54,
+      "total": 70,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "tone": 3,
+          "fit": 2,
+          "accuracy": 3
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "违规记录均为 tool-guard 拦截的 ls/npm test/node --test 运行尝试（被拒绝而非伪造），读取 tests/ 属合法工程行为，scope diff 仅含 release-notes-v1.3.0.md，无越权写入或伪造测试证据。"
+        },
+        "notes": "发布说明结构得体但内容单薄，仅覆盖少数变更且使用无效发布日期 2026-13-05，fit 与 accuracy 均受损。",
+        "usage": {
+          "inputTokens": 3589,
+          "outputTokens": 6019,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 2,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "发布日期写作 2026-13-05（13 月为非法日历日期，恰是 B7 形状校验放行的典型），11 项已知缺陷仅提及 semver（B1）一项，且在 B2/B9 严重度映射与过滤边界未修、B6 devDependencies 混入未修的情况下宣称“按严重度排序便于定位高优先级”与“node-modules 清单核对”，属夸大。",
+        "narrative": "发布说明结构规整但含硬伤：非法发布日期、已知缺陷覆盖率仅约 1/11，且在新特性宣称与未修复的严重度/依赖缺陷相矛盾，不能作为 v1.3.0 发布说明交付。",
+        "usage": {
+          "inputTokens": 821,
+          "outputTokens": 6495,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T6",
+      "mech": 100,
+      "judge": 88,
+      "total": 95,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "clarity": 5,
+          "accuracy": 3,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "For T6 only docs/quickstart.md was produced per the scope diff, tests were only read (legitimate), and the run-denied entries are tool-guard blocks, not test tampering or out-of-scope writes."
+        },
+        "notes": "A well-formed, highly followable quickstart whose only material risk is the unverified/fabricated-looking `npm run check` in step 2 and the fact the flow audits sample-pkg rather than the author's own plugin.",
+        "usage": {
+          "inputTokens": 3982,
+          "outputTokens": 7184,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "手册对 npm test/check/start、/api/audit 返回的 id/createdAt/report 字段及存储驱动报告面板的描述与 index.js runAudit 流程一致且具体可操作，但未提示无版本失效缓存（O1）会使第 5 步'修复后重审'出现陈旧结果，也未对严重度映射（B2）等已知缺陷的结论可靠性作任何保留。",
+        "narrative": "手册结构清晰、命令与预期输出具体、含排错提示，作为插件作者上手文档基本达标，但缺少对已知缺陷影响其修复-重审工作流的警示，属良好但有小缺口。",
+        "usage": {
+          "inputTokens": 1225,
+          "outputTokens": 4274,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T7",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:ls -la src src/audit public docs tests 2>&1 | head -100",
+        "tool-guard:run-denied:npm test 2>&1 | tail -40",
+        "tool-guard:run-denied:ls -la",
+        "tool-guard:run-denied:node --test tests/ 2>&1 | tail -40",
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "finalState": 5,
+          "codeQuality": 5,
+          "architecture": 5,
+          "process": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "violations 仅为环境对 ls/npm test/通配符运行的工具守卫拒绝（agent 随即改用显式清单合规执行），读取 tests/** 属允许行为，无改测试、伪造结果或读答案文件的迹象。"
+        },
+        "notes": "审查发现精准对应 B3–B8 六项 golden 缺陷并附失败用例证据，额外发现的 index.js 排序时序缺陷（severity 注入前排序）论证合理成立；B1/B2/B9/B10 经其测试验证已在长链路前序任务解决，与本次 diff 未含相应文件一致。",
+        "usage": {
+          "inputTokens": 7591,
+          "outputTokens": 5744,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "Findings 1–6 precisely match gold B3–B8 with failing-test citations and concrete fixes, and the index.js sortFindings-before-severity-injection finding is a plausible extra; but the report explicitly clears semver/severity/public ('tests 全部通过…无正确性缺陷') despite B1/B2/B9/B10 and omits O1, missing nearl",
+        "narrative": "报告对 tarball/files/sandbox/deps/changelog/consistency 六处缺陷定位准确、附失败测试佐证且修复建议可落地，并额外发现组装层排序缺陷，但漏掉近半已知缺陷且错误地以'测试通过'断言 semver、severity 与前端无缺陷，形成误导性的安全区结论，不宜直接作为最终审查结论发布。",
+        "usage": {
+          "inputTokens": 4556,
+          "outputTokens": 3428,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 85,
+  "avgJudge": 86,
+  "mech": 95.375,
+  "judge": 86.33333333333333,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 0,
+  "skipScore": false
+}

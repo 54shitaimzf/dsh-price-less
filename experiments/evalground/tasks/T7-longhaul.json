@@ -1,0 +1,64 @@
+{
+  "id": "T7",
+  "title": "长链路：审查 → 修复 → 补文档（三消息）",
+  "type": "longhaul",
+  "weight": 0,
+  "track": { "mech": 70, "judge": 30, "human": 0 },
+  "messages": [
+    "第一步（只读诊断）：你是资深审查员。当前工作区是插件发布审计器 relaudit。请审查 src/audit/ 与 public/、src/render-panel.js 的正确性缺陷，把问题清单写到 REVIEW.md（格式：| 编号 | 位置 | 损害 | 修复建议 | 严重度 |）。本步骤只写 REVIEW.md，不改任何代码。完成后以 DONE 开头报告条目数。",
+    "第二步（修复）：基于你上一步的清单，在 src/audit/ 中修复全部 7 个缺陷并实现新规则 R8（新建 src/audit/files-field.js，导出 checkFilesField(pkg, entries)，规则：tarball 条目须由 files 声明（package.json/目录除外）、声明目录须存在于产物、声明文件不可缺失；并在 src/audit/index.js 的 runAudit 接入），同时在 public/ 修复 filter.js 级别过滤（>= 而非 >）与 format.js 计数相加（数值相加而非字符串拼接）并补上 groupByRule 与 copyFixSnippet 导出。不得修改 tests/ 与 package.json。用 node --test --test-isolation=none tests/*.test.js 验证全部通过。完成后以 DONE 开头报告测试结果。（产品约束：面板交付形态为单文件离线工具——file:// 双击即用、不得引入外部资源或出现依赖接口回填的「加载中」等待态；脚本保持静态可解析的顶层声明，不得使用 import.meta、动态 import() 等依赖服务器/打包器才能生效的机制。）",
+    "第三步（补文档）：在 docs/rules.md 补全 R8 的说明（检测什么/判据/严重度），其余内容只可微调不可删改；在 docs/api.md 确保 6 个端点全部记载。完成后以 DONE 开头。"
+  ],
+  "accept": {
+    "checks": [
+      { "type": "tests-subset", "files": ["ALL"], "allGreen": true },
+      { "type": "pattern", "path": "docs/rules.md", "regex": "R8", "count": "gte", "value": 2 },
+      { "type": "docs-coverage", "file": "docs/api.md", "patterns": ["GET /api/versions", "GET /api/audit", "GET /api/rules"] }
+    ]
+  },
+  "rubric": {
+    "dims": [
+      { "id": "finalState", "name": "最终状态符合规格（全绿+文档）", "weight": 0.4, "bands": [
+        ["5", "全部测试通过 + 文档齐全 + 未动 tests/"],
+        ["4", "全绿且文档基本齐全"],
+        ["3", "全绿但文档缺一项"],
+        ["2", "部分缺陷未修（测试未全绿）"],
+        ["1", "方向错误"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "codeQuality", "name": "代码规范性/可读性（跨文件一致性/命名/注释）", "weight": 0.2, "bands": [
+        ["5", "修复与新增代码命名注释清晰、与既有风格一致、读起来像成熟团队产物"],
+        ["4", "整体规范，个别命名/注释小瑕疵"],
+        ["3", "可读但存在杂糅（如长函数、注释缺失、风格不统一）"],
+        ["2", "可运行但结构混乱、命名误导"],
+        ["1", "几乎不可读/全是魔法常量"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "architecture", "name": "架构设计/解耦与复用（规则可插拔/模块边界）", "weight": 0.15, "bands": [
+        ["5", "新规则 R8 与既有规则机制一致可插拔，无重复逻辑，模块边界清晰"],
+        ["4", "边界基本清晰，轻微耦合或少量复制"],
+        ["3", "新规则与既有机制存在重复或纠缠"],
+        ["2", "改动破坏了既有模块边界或引入全局状态"],
+        ["1", "硬编码绕过既有机制"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "process", "name": "流程纪律（诊断先行、每步自述、不跳跃）", "weight": 0.15, "bands": [
+        ["5", "先诊断后修复，步骤清晰，无跳过"],
+        ["4", "流程基本正确，个别步骤夹带"],
+        ["3", "先改后诊或步骤边界模糊"],
+        ["2", "跳跃式修复导致返工"],
+        ["1", "无视流程"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "scope", "name": "范围纪律", "weight": 0.1, "bands": [
+        ["5", "未动允许清单外文件"],
+        ["4", "轻微擦边"],
+        ["3", "动了辅助文件"],
+        ["2", "改了测试"],
+        ["1", "为过测改测试"],
+        ["0", "无有效产出"]
+      ] }
+    ],
+    "antiCheat": true
+  }
+}

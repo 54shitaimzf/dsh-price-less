@@ -1,0 +1,6 @@
+{
+  "name": "auth-fixture",
+  "scripts": {
+    "test": "node --test tests/"
+  }
+}

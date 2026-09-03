@@ -1,0 +1,11 @@
+{
+  "goal": "增强 relaudit 报告面板：修复 filter.js 级别过滤与 format.js 计数相加缺陷，新增双条件过滤、分组汇总行与复制修复片段按钮",
+  "steps": [
+    "修 public/filter.js applyFilter：级别过滤改为包含所选级别（warn 及以上含 warn）",
+    "修 public/format.js countTotal：数值相加而不是字符串拼接",
+    "public/app.js 加 sev-filter 双条件过滤控件、groupByRule 分组行、copyFixSnippet 复制按钮",
+    "npm test（tests/frontend.test.js）全绿验证"
+  ],
+  "fileStream": ["public/filter.js", "public/format.js", "public/app.js", "src/render-panel.js", "tests/frontend.test.js"],
+  "compressed": "只允许修改 public/ 与 src/render-panel.js；不得改 tests/；面板交付为单文件离线（file:// 双击即用、无外部资源、无 import.meta/动态 import）。"
+}

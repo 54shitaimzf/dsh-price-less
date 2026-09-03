@@ -1,0 +1,59 @@
+{
+  "id": "T4",
+  "title": "修复版本门与严重度 + 新规则 R8（后端开发）",
+  "type": "backend",
+  "weight": 30,
+  "track": { "mech": 60, "judge": 40, "human": 0 },
+  "prompt": "你是后端工程师。当前工作区是插件发布审计器 relaudit。请完成以下工作（只允许修改 src/audit/，不得改 tests/、public/、package.json）：\n\n1. 修复两个已有缺陷：\n   - src/audit/semver.js 的 compareVersions：当前按字符串字典序比较，1.10.0 被误判小于 1.9.0；应改为按 major/minor/patch 数值段比较（parseVersion 已在同一文件）。\n   - src/audit/severity.js 的严重度映射：版本门不匹配（R1）应判为 error，当前标成 warn；未知规则保留 info 兜底。\n2. 实现新规则 R8（产物 files 一致性）：\n   - 新建 src/audit/files-field.js，导出纯函数 checkFilesField(pkg, entries)：\n     * tarball 中每个条目（除 package.json 与目录）必须被 package.json 的 files 字段声明（目录前缀匹配或精确文件名匹配），否则报「产物条目 <path> 未在 files 字段声明」；\n     * files 中声明的每个目录必须在 tarball 中有条目（条目名为 package/<dir> 或以之为前缀）；\n     * files 中声明的每个非目录文件必须在 tarball 中存在（package/<file>），否则报「声明文件 <file> 在产物中缺失」。\n   - 在 src/audit/index.js 的 runAudit 中接入该规则（加入 findings 列表）。\n\n验收以 tests/ 中三个测试文件为准（不要改它们）：node --test tests/semver.test.js tests/severity.test.js tests/files-field.test.js 必须全部通过。\n\n最后一条消息以 DONE 开头，并说明测试结果。",
+  "accept": {
+    "checks": [
+      { "type": "tests-subset", "files": ["tests/semver.test.js", "tests/severity.test.js", "tests/files-field.test.js"], "allGreen": true },
+      { "type": "allowed-scope", "paths": ["src/audit/"] }
+    ]
+  },
+  "rubric": {
+    "dims": [
+      { "id": "correctness", "name": "正确性（修复与实现符合规格）", "weight": 0.35, "bands": [
+        ["5", "三处改动全部符合规格，无多余行为变化"],
+        ["4", "符合规格，实现风格小瑕疵"],
+        ["3", "规格基本满足但存在边界遗漏（如空 files、前缀长度）"],
+        ["2", "部分规格未满足或新增了错误行为"],
+        ["1", "改动方向错误"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "integration", "name": "接入与兼容（R8 接入 assemble 且不破坏既有）", "weight": 0.2, "bands": [
+        ["5", "R8 正确接入 runAudit，severity 映射一致，无重复/遗漏"],
+        ["4", "接入正确，轻微冗余"],
+        ["3", "接入但未参与汇总或严重度不一致"],
+        ["2", "接入导致报告结构变化/字段不一致"],
+        ["1", "未接入或硬编码绕过"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "codeQuality", "name": "代码规范性/可读性（命名/注释/结构清晰）", "weight": 0.2, "bands": [
+        ["5", "命名与注释清晰、职责单一、读起来像成熟团队产物"],
+        ["4", "整体规范，个别命名/注释小瑕疵"],
+        ["3", "可读但存在杂糅（如长函数、注释缺失）"],
+        ["2", "可运行但结构混乱、命名误导"],
+        ["1", "几乎不可读/全是魔法常量"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "architecture", "name": "架构设计/解耦与复用（模块边界与复用）", "weight": 0.15, "bands": [
+        ["5", "规则模块边界清晰、可独立测试、无明显重复"],
+        ["4", "边界基本清晰，轻微耦合或少量复制"],
+        ["3", "存在跨模块耦合或重复逻辑"],
+        ["2", "新规则与既有机制纠缠、难独立演进"],
+        ["1", "硬编码/全局状态滥用"],
+        ["0", "无有效产出"]
+      ] },
+      { "id": "scope", "name": "范围纪律（仅 src/audit/）", "weight": 0.1, "bands": [
+        ["5", "严格限制在允许路径"],
+        ["4", "轻微擦边（如移动文件）无影响"],
+        ["3", "改到允许清单外辅助文件"],
+        ["2", "修改 tests/ 或 package.json"],
+        ["1", "为通过测试而改写测试"],
+        ["0", "无有效产出"]
+      ] }
+    ],
+    "antiCheat": true
+  }
+}

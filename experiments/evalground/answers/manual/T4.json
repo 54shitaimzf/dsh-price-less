@@ -1,0 +1,11 @@
+{
+  "goal": "修复 relaudit 版本门与严重度缺陷并新增规则 R8（tarball 条目须由 files 声明、声明目录须存在、声明文件不可缺失）",
+  "steps": [
+    "读 src/audit/semver.js 修复版本比较缺陷（pre-release/边界）",
+    "读 src/audit/severity.js 修复严重度映射缺陷",
+    "新建 src/audit/files-field.js 导出 checkFilesField(pkg, entries) 并在 runAudit 接入",
+    "node --test tests/ 全绿验证"
+  ],
+  "fileStream": ["src/audit/semver.js", "src/audit/severity.js", "src/audit/files-field.js", "src/audit/index.js"],
+  "compressed": "不得修改 tests/ 与 package.json；R8 规则细节：tarball 条目须由 files 声明（package.json/目录除外）、声明目录须存在于产物、声明文件不可缺失。"
+}

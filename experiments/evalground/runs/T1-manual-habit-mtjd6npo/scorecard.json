@@ -1,0 +1,142 @@
+{
+  "runId": "T1-manual-habit-mtjd6npo",
+  "task": "T1",
+  "arm": "manual-habit",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "manual-habit",
+    "trigger": null,
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true
+    }
+  },
+  "model": "hy3",
+  "provider": "opencode-go-v4",
+  "judgeModel": "glm-5.3-flash",
+  "finished": true,
+  "steps": 11,
+  "elapsedMs": 96226,
+  "usage": {
+    "inputTokens": 75886,
+    "outputTokens": 12171,
+    "cacheReadTokens": 41664,
+    "calls": 11
+  },
+  "prefixStats": {
+    "prefixTokens": 0,
+    "tailTokens": 0,
+    "cacheReadTokens": 0,
+    "derivedCacheRead": 0,
+    "tracked": false
+  },
+  "compression": {
+    "mode": "manual-habit",
+    "count": 0,
+    "degenerate": true
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "cost": {
+    "usd": 0.013308,
+    "usage": {
+      "inputTokens": 75886,
+      "outputTokens": 12171,
+      "cacheReadTokens": 41664,
+      "calls": 11
+    }
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.0133085,
+      "tokens": 88057
+    },
+    "judge": {
+      "usd": 0.00366925,
+      "tokens": 9995
+    },
+    "compression": null,
+    "decision": null
+  },
+  "track": {
+    "mech": 45,
+    "judge": 55,
+    "human": 0
+  },
+  "total": 102,
+  "mech": {
+    "score": 100,
+    "passed": true,
+    "checks": [
+      {
+        "check": "file-exists",
+        "pass": true,
+        "detail": "REVIEW.md"
+      },
+      {
+        "check": "report-match",
+        "pass": true,
+        "detail": "hits=11/11 fp=0 → 100% coverage"
+      },
+      {
+        "check": "allowed-scope",
+        "pass": true,
+        "detail": "all diffs in scope"
+      }
+    ],
+    "violations": [
+      "tool-guard:run-denied:ls -la src/ src/audit/ public/ 2>&1 | head -50",
+      "tool-guard:compression-degenerate:manual-habit:never-compressed"
+    ],
+    "diff": {
+      "modified": [],
+      "added": [
+        "REVIEW.md"
+      ],
+      "deleted": []
+    },
+    "testResult": null
+  },
+  "judge": {
+    "score": 93,
+    "dims": {
+      "prioritization": 4,
+      "fixQuality": 5,
+      "grounded": 5,
+      "precision": 5
+    },
+    "calibrationSuspect": false,
+    "antiCheat": {
+      "verdict": "none",
+      "evidence": "The only logged violations are a guard-denied read-only `ls` attempt (blocked, then the agent used allowed glob/grep/read tools) and a compression-habit flag; no test/answer-file access, no code modification, and only REVIEW.md was written in scope."
+    },
+    "notes": "Strong read-only review covering all golden defects B1–B10 with precise, code-grounded fixes (only suggestion-level O1 cache-invalidation missed), docked solely for module-ordered presentation instead of strict severity ordering.",
+    "usage": {
+      "inputTokens": 3795,
+      "outputTokens": 6200,
+      "cacheReadTokens": 0,
+      "totalTokens": 9995
+    },
+    "raw": "{\"dims\": {\"prioritization\": {\"score\": 4, \"why\": \"Severity assignments are largely sound and errors are explicitly grouped in the summary, but the table is ordered by module rather than strict error→warn→info (warn #3 sits among errors, #9/#11 after warns) and #3 is arguably a conservative level, matching the band-4 anchor.\"}, \"fixQuality\": {\"score\": 5, \"why\": \"Every suggestion is pinned to a function/line with concrete conservative expressions (prefix+name rebuild, tokens[0][0].slice(1), >= swap, numeric addition), all directionally correct including the #3-before-#2 sequencing note, meeting the flawless anchor.\"}, \"grounded\": {\"score\": 5, \"why\": \"All ten golden defects B1–B10 are covered with file+function/line+damage descriptions matching ground truth, and the extra findings (#3 isDeclared dead path, #10 sort-before-decorate, #13/#14 dead code) are corroborated by the targeted greps shown in the transcript.\"}, \"precision\": {\"score\": 5, \"why\": \"No fabricated entries, damage claims are quantified and factually consistent (e.g., Number(\\\"21\\\")+4=25, \\\"1.9.0\\\">\\\"1.10.0\\\" under lexicographic order), and the report honestly declares render-panel.js defect-free rather than padding findings.\"}}, \"antiCheat\": {\"verdict\": \"none\", \"evidence\": \"The only logged violations are a guard-denied read-only `ls` attempt (blocked, then the agent used allowed glob/grep/read tools) and a compression-habit flag; no test/answer-file access, no code modification, and only REVIEW.md was written in scope.\"}, \"notes\": \"Strong read-only review covering all golden defects B1–B10 with precise, code-grounded fixes (only suggestion-level O1 cache-invalidation missed), docked solely for module-ordered presentation instead of strict severity ordering.\"}"
+  },
+  "subjectivity": {
+    "overallQuality": 4,
+    "wouldShip": 1,
+    "overReport": 1,
+    "realExtras": 1,
+    "goldenCoverage": "partial",
+    "evidence": "Accurately reports all ten B-defects with correct mechanisms and fixes (e.g., #12's '21'+4=25 concat, #7's 2026-13-05, #11's `>` vs `>=`), but omits gold item O1 (runAudit cache lacking version-invalidation); #3's claim that R2 does no declaration checking contradicts #2's own harm premise that decl",
+    "narrative": "该报告精准覆盖全部十项已知缺陷并给出可执行修复与正确机理，仅遗漏缓存失效建议项（O1），且第3条与第2条前提自相矛盾、涉嫌过度断言，整体属高质量但有轻微瑕疵的上市前审查报告。",
+    "usage": {
+      "inputTokens": 2409,
+      "outputTokens": 11602,
+      "cacheReadTokens": 0,
+      "totalTokens": 14011
+    }
+  },
+  "penalties": [],
+  "beyondGolden": 6
+}

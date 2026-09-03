@@ -1,0 +1,8 @@
+{
+  "sessions": [
+    {"id": "0f280768", "proj": "mm-payment", "U": 67, "coarse": [15, 17, 29, 33, 66]},
+    {"id": "f27271c8", "proj": "stt-sidecar", "U": 38, "coarse": [10, 32]},
+    {"id": "6c9f211a", "proj": "mail-migrat", "U": 31, "coarse": [10, 14]},
+    {"id": "d60f170d", "proj": "nextcloud", "U": 24, "coarse": [6, 8]}
+  ]
+}

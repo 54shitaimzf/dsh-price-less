@@ -1,0 +1,38 @@
+{
+  "taskId": "AUDIT",
+  "source": "premark",
+  "cost": {
+    "usage": {
+      "inputTokens": 40,
+      "outputTokens": 0,
+      "cacheReadTokens": 0,
+      "calls": 3
+    },
+    "usd": 0.0004,
+    "model": "m",
+    "provider": "p"
+  },
+  "boundaries": [
+    {
+      "segmentIndex": 0,
+      "taskId": "a0",
+      "startSeq": 0,
+      "endSeq": 0,
+      "status": "closed"
+    },
+    {
+      "segmentIndex": 1,
+      "taskId": "a1",
+      "startSeq": 1,
+      "endSeq": 1,
+      "status": "closed"
+    },
+    {
+      "segmentIndex": 2,
+      "taskId": "a2",
+      "startSeq": 2,
+      "endSeq": 2,
+      "status": "active"
+    }
+  ]
+}

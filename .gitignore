@@ -12,5 +12,6 @@ reports/
 experiments/evalground/runs/**/calls.jsonl
 experiments/evalground/runs/**/transcript.jsonl
 experiments/evalground/runs/**/compress-snapshots.jsonl
+experiments/evalground/runs/**/workspace/
 experiments/evalground/batches/
 experiments/evalground/.scratch/
