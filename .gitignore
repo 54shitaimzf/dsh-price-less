@@ -5,3 +5,12 @@ lib/
 .pnpm-store/
 docs.zip
 *.log
+
+# 实验产物：原始大件不入库（账本小件 scorecard/boundaries/audit 仍提交）
+reports/
+.zcode/
+experiments/evalground/runs/**/calls.jsonl
+experiments/evalground/runs/**/transcript.jsonl
+experiments/evalground/runs/**/compress-snapshots.jsonl
+experiments/evalground/batches/
+experiments/evalground/.scratch/
