@@ -1,0 +1,145 @@
+{
+  "runId": "CASCADE-self-s1-orig-mtlwulff",
+  "task": "CASCADE",
+  "arm": "self-s1-orig",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "deepseek-v4-flash-vision-exp",
+  "provider": "deepseek",
+  "judgeModel": "deepseek-v4-flash-vision-exp",
+  "finished": true,
+  "steps": 28,
+  "elapsedMs": 203856,
+  "usage": {
+    "inputTokens": 421444,
+    "outputTokens": 22116,
+    "cacheReadTokens": 400384,
+    "calls": 28
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 0,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-orig-mtlwulff\\calls.jsonl",
+    "compressSnapshots": 0
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.02203245,
+      "tokens": 443560
+    },
+    "judge": {
+      "usd": 0.01019458,
+      "tokens": 18163
+    },
+    "compression": {
+      "usd": 0.00095446,
+      "tokens": 6832,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "deepseek-v4-flash-vision-exp",
+      "provider": "deepseek",
+      "usage": {
+        "inputTokens": 1049,
+        "outputTokens": 229,
+        "cacheReadTokens": 0,
+        "calls": 1
+      },
+      "usd": 0.00038192,
+      "tokens": 1278,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 94,
+      "judge": 74,
+      "total": 101,
+      "finished": true,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 3,
+          "fixQuality": 5,
+          "grounded": 3,
+          "precision": 3
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "仅写入 REVIEW.md，未修改代码/测试/数据文件，阅读测试推断预期行为属合法工程取证。"
+        },
+        "notes": "报告覆盖了大多数关键缺陷，修复建议可执行性强，但存在少量误报/依据不足和严重度排序瑕疵。",
+        "usage": {
+          "inputTokens": 4075,
+          "outputTokens": 14088,
+          "cacheReadTokens": 0,
+          "calls": 1
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 6,
+        "goldenCoverage": "partial",
+        "evidence": "Covers all known rule-level defects B1-B10, adds specific code-supported extras (R-06/R-10/R-11/R-13/R-15/R-16), but omits advisory O1 cache-version invalidation.",
+        "narrative": "报告证据充分、覆盖全面，补充了多项真实缺陷；仅遗漏缓存失效这一建议级问题，整体可接受。",
+        "usage": {
+          "inputTokens": 2587,
+          "outputTokens": 10368,
+          "cacheReadTokens": 0,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 101,
+  "avgJudge": 74,
+  "mech": 97,
+  "judge": 74,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 18,
+  "skipScore": false
+}

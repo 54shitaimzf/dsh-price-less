@@ -1,0 +1,91 @@
+{
+  "runId": "CASCADE-self-s1-orig-mtlwszja",
+  "task": "CASCADE",
+  "arm": "self-s1-orig",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "deepseek-v4-flash-vision-exp",
+  "provider": "deepseek",
+  "judgeModel": "deepseek-v4-flash-vision-exp",
+  "finished": true,
+  "steps": 9,
+  "elapsedMs": 21851,
+  "usage": {
+    "inputTokens": 32470,
+    "outputTokens": 2154,
+    "cacheReadTokens": 26368,
+    "calls": 9
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 0,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 204800,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-orig-mtlwszja\\calls.jsonl",
+    "compressSnapshots": 0
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.00294866,
+      "tokens": 34624
+    },
+    "judge": null,
+    "compression": null,
+    "decision": {
+      "source": "premark",
+      "model": "deepseek-v4-flash-vision-exp",
+      "provider": "deepseek",
+      "usage": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "calls": 0
+      },
+      "usd": 0,
+      "tokens": 0,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    }
+  ],
+  "total": 100,
+  "avgJudge": 0,
+  "mech": 100,
+  "judge": 0,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 0,
+  "skipScore": false
+}

@@ -1209,6 +1209,15 @@ cacheHitRate(热)       87%            91%        +4pp
 >   （Δ −6 而非 −17）、avgJudge 75→**76**（Δ −7）；正式批次以 3 复现公式为准，F7 按复现频率裁定
 >   （≥2/3 系统性 → 任务提示澄清，不动机械规则）。
 
+## 29. 账本快照 v0.9.0-transport：opencode 网关退役 → DeepSeek 官方 API 直连（实验域，2026-09-03）
 
+**改前状态**：传输 = opencode zen 网关（`https://opencode.ai/zen/go/v1`，OPENCODE_GO_API_KEY）；executor hy3 / judge glm-5.3-flash / decision minimax-m3。历史 9 个 CASCADE run 账本见 §24–§28（opencode 时代批次，封存不重跑）。
 
+**改动**：gateway 默认 `https://api.deepseek.com`；凭据链 `EVAL_GROUND_API_KEY → DEEPSEEK_API_KEY`（homedir yaml）；scores.config executor=judge=decision=deepseek-v4-flash-vision-exp（provider deepseek）；判别器预设 V2（deepseek-official）；pricing 补 canonical 行（谷时记账基准 0.22/0.66/0.007 USD/M，官方 RMB 谷时价折算，峰值 2x 行保留）。插件产品面同步：DISC_PRESETS_V2 / DISC_CAPABILITIES_V2、config 默认 deepseek、client 预设路由更新。
 
+**改后实测**（2026-09-03，首批真实调用）：
+- 冒烟：`/models` 200（vision-exp 逐字在列）；chat 接受 `max_completion_tokens`；reasoning_content 返回（len 184/131）；共享前缀二连调 cached_tokens 0→640（缓存可观测，官方无 F6 式长固化时序问题——待批次复核）。
+- `CASCADE-self-s1-orig-mtlwszja`（--tasks=T0，9 步 21.9s）：finished=true、total=100（T0 无 rubric → judge null 属设计内）；usage 32470 in / 2154 out / **cacheRead 26368（81% 命中）**；costs.execution=$0.00295；compression count=0（单任务无边界的正确行为）；hard-truncate 0。
+- `CASCADE-self-s1-orig-*`（--tasks=T0,T1，双任务激活边界压缩 + judge）：见 scorecard 账本（runs/）。
+
+**门禁**：ground:assert 全绿（更新后 O2=api.deepseek.com）；插件 build（host+client）✓；vitest 153/153 ✓（vitest.config.ts 排除 experiments/ 沙箱内容——评测评断言走 ground:assert，不混入插件测试面）。

@@ -258,7 +258,7 @@ DSH-native 的参数（`retainRatio`、`thresholdRatio`）是**相对窗口**的
 ## 6. 判别器约定（全局对照-边界 / self 共用边界来源）
 
 **复用插件输入域已写好的最优策略**，不在 evalground 重设计：
-- **模型**：`opencode-go@minimax-m3`（预设 `minimax`：综合最优——准确率与切换召回双高 + 成本中档）
+- **模型**：`deepseek-official@deepseek-v4-flash-vision-exp`（**2026-09 传输层切换后的当前默认**，presets V2；V1 = `opencode-go@minimax-m3` 随网关退役封存——其历史评测结论只适用于旧批次）
 - **判据**：prompt **v2.2**（生产固化，与 `datasets/prompt-discriminator-v2.2.txt` 逐字节同源），排除式规则：
   - 先决排除（判 continue）：追问/澄清/报错/汇报/工具输出/讲解/方案设计/观点讨论（言说层）、收尾清理（收尾层）、无法确定
   - new_task 检查（命中任一即 new_task）：**宣布/承诺/命令链**、**换意图**、**换对象**（文件/项目/产物变化）、**换域**、**换形态**（说→做）、**中止重开**
@@ -412,6 +412,16 @@ checkpoint 单一 `<compacted-summary>` 节点。见 `tests/assert-cascade-loop.
 - **F8（机制级缺陷已修复——PTR 门坐标粒度冲突；2026-09-04 定位并修复，全离线验证）**：s1-expand 3 复现中 `CASCADE-self-s1-expand-mtlejbtj` **4 次压缩被打回**（seg2–5 各一次，全部 `duplicate ref to truth:write:41`，白烧 ~$0.031、该 rep 压缩覆盖 2/6——但 fail-lazy 保住质量，rep 得 93 与 native-auto 持平）。**根因是机制缺陷而非模型波动**（修正此前"模型行为异常"类归因）：①`pointerOfWrite` 坐标 =（path + 写入时行数 + 首函数名），同文件**等长重写**两次的坐标逐字节相同（实证：该 run `docs/api.md '1-161' ×2`、`docs/rules.md '1-113' ×2`；`clusterSubtasks` 不合并被 verify/read 簇隔开的同文件两次写 → 2 个 edit subtask 各产一个同坐标 ref）；②`verifyRefGroundTruth` 用 find-first + used Set 执行"一条 truth 至多引用一次"，把两个**真实且不同**的写事件折叠到同一条 truth → 必判 duplicate → 误杀；③**失败放大器**：打回后 `st.segmentEntriesStart` 不前移（成功才推进），后续每段的压缩上下文重新呈现同一碰撞 → 4 连败全死在同一坐标。**修复（三层）**：门改 `auditRefs` **坐标组配额制**（`lib/compressor-io.mjs`——每个坐标的引用数上限 = 该坐标真实记录数，消费序 = recordIdx 序，确定性）；编造型 ref（无落点）仍**整程序拒绝**（反幻觉硬线未松），超额型 ref **确定性剪除**（`lib/compress.mjs` 原位移除 + `prunedRefs` 账目，product 存活，凑数经济上一无所获）；A2 expand 同目标**只 resolve/内联一次**（`lib/compress.mjs` enrichRefs resolve 缓存 + `lib/assemble.mjs` 渲染 `→同` 指针去重）。提示词同步换措辞（"cite where owned, harness collapses"）。**回归证明**：`tests/fixtures/template-battery-multiwrite` 复现碰撞形状（两条 truth 同坐标 `1-6/checkAuth`、refKey 不同），MW-1..7 离线断言——旧门红（2 合法 ref → `duplicate ref to truth:write:5`），新门绿；全量 `ground:assert` 0 失败。**批次声明**：既有 run 原样入账，4 次失败按**机制归因**分层解释（不计入 A1/S1 机制效率账、不归模型波动）；修复后重跑 = **新批次并标注**（template.sha256 自动留痕）；`compression-failed` 字符串非评分输入（score penalties 表不含），无需 re-score 回填。
 
 ---
+
+## 批次声明：评测模型与传输层切换（2026-09-03）
+
+**opencode zen 网关整体退役 → DeepSeek 官方 API 直连**（`https://api.deepseek.com`，key 在 homedir yaml `DEEPSEEK_API_KEY`，不进仓库）。scores.config.json 单一事实源：executor = judge = decision = `deepseek-v4-flash-vision-exp`（provider `deepseek`）；判别器默认 `deepseek-official@deepseek-v4-flash-vision-exp`（presets V2，`lib/boundary-mark.mjs` 同步）。
+
+按 AGENTS.md 硬规则 **换评测模型 = 整批重跑并标注**：
+- 切换前全部 9 个 CASCADE run（native-auto/manual-habit/self-*，runs/ 内 scorecard 账本）= **opencode 时代历史批次**，其绝对分与相对 Δ 只在批次内有效，**不与新批次混用、不重跑、不回填**；若采信入对照表须由主线在 manifest `adopted[]` 显式批准。
+- 新批次（DeepSeek 直连）起算批号；成本记账基准 = 谷时价（`datasets/model-pricing.json` canonical 行，0.22/0.66/0.007 USD 每百万 = 官方 RMB 谷时价折算，峰值 2x 另有行）。
+- 官方 API 实测（2026-09-03 冒烟）：`/models` 200；`max_completion_tokens` 接受；thinking 返回 `reasoning_content`（多轮需回传，gateway 已处理）；`prompt_tokens_details.cached_tokens` 可读（共享前缀二连调 0→640 命中）。F6 的"缓存固化时序"发现属 opencode 时代传输层，DeepSeek 直连下需在新批次重新观测，不能直接沿用。
+- **首批模型行为样本（记档，不重跑）**：`CASCADE-self-s1-orig-mtlwulff`（T0,T1）压缩调用 1 次 → deepseek **拒写压缩程序**（"tools.* bindings 不在我的运行时…我不会编造"——模型看到会话工具白名单无 PTC bindings，接地本能触发拒绝），机械门禁将其判 invalid-program fail-lazy、账本照记（6832 tokens/$0.00095）、run 继续 finished=true。**定性：模型行为样本，非机制/传输缺陷**（hy3/glm 时代同提示词常态合规）；处理按 F7 先例——单样本不修提示词，新批次 3 复现若系统性（≥2/3）再议压缩指令的"执行环境声明"强化（属 treatment 版本变更，须主线批准）。同 run 其余链路全绿：28 调用零 400（reasoning 回传兼容官方 API）、缓存命中 95%、judge/四账本真实入账。
 
 ## 对齐记录（方法论来源，防再漂移）
 
