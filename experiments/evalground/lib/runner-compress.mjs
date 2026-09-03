@@ -235,8 +235,10 @@ export async function taskBoundaryStep(ctx, stageIndex) {
         append({ type: 'gateway-error', message: `task-boundary compression failed: ${(res.problems ?? []).join('; ')}` })
         // Cost discipline: failed PTC call (bad program / gate reject) is still a
         // real billed LLM call — land its usage so the compression ledger counts it.
-        append({ type: 'compress', mode: 'task-boundary', ok: false, segmentIndex: segAt.segmentIndex, problems: (res.problems ?? []).slice(0, 3), inputTokens: res.usage?.inputTokens ?? regionTokens, outputTokens: res.usage?.outputTokens ?? 0, cacheReadTokens: res.usage?.cacheReadTokens ?? 0 })
-        logger(`task-boundary compression FAILED — continuing with full context`)
+        // F9: `refusal` types model refusals separately from program errors so the
+        // batch ledger can observe refusal-rate vs program-error-rate.
+        append({ type: 'compress', mode: 'task-boundary', ok: false, segmentIndex: segAt.segmentIndex, refusal: res.refusal === true, problems: (res.problems ?? []).slice(0, 3), inputTokens: res.usage?.inputTokens ?? regionTokens, outputTokens: res.usage?.outputTokens ?? 0, cacheReadTokens: res.usage?.cacheReadTokens ?? 0 })
+        logger(`task-boundary compression FAILED${res.refusal ? ' (model refusal)' : ''} — continuing with full context${res.refusal ? ' refusal=1' : ''}`)
       }
     }
   }

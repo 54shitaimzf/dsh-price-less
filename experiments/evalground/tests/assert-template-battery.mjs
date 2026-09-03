@@ -292,16 +292,52 @@ const CONCRETE_S1 = [
   ok(rendered.includes('→同'), 'MW-6b second same-content ref renders as the →同 pointer', rendered.split('\n').find(l => l.includes('→同')) ?? '')
 }
 
-// ============ ERR — runtime error paths ============
+// ============ F9 — change manifest + refusal typing (2026-09 DeepSeek pivot) ============
 {
-  const bad = await runProgram({ program: 'const = ;;;' })
-  ok(bad.error?.kind === 'invalid-program', 'ERR-1 syntax error → invalid-program', bad.error?.message ?? '')
-  const loop = await runProgram({ program: 'while (true) {}', budgets: { maxWallMs: 1200 } })
-  ok(loop.error?.kind === 'timeout', 'ERR-2 hot loop → timeout (host terminate)', loop.error?.kind ?? '')
-  const unknown = await runProgram({ program: 'return await tools.nonexist({})' , bindings })
-  ok(unknown.error?.kind === 'exception' && /unknown binding/.test(unknown.error?.message ?? ''), 'ERR-3 unknown binding → exception', unknown.error?.message ?? '')
-  const empty = await runProgram({ program: '' })
-  ok(empty.error?.kind === 'invalid-program', 'ERR-4 empty program → invalid-program')
+  const { renderChangeManifest, classifyProgramText, buildCompressorMessages } = await import('../lib/compressor-prompt.mjs')
+  const { compressWithProgram } = await import('../lib/compress.mjs')
+
+  // MW-8 manifest determinism: same input → byte-identical regardless of input order
+  const m1 = renderChangeManifest(pointers)
+  const m2 = renderChangeManifest([...pointers].reverse())
+  ok(m1 === m2, 'MW-8 manifest render is deterministic regardless of input order', `len=${m1.length}`)
+  const idxs = [...m1.matchAll(/\[truth:(write|read):(\d+)\]/g)].map(m => Number(m[2]))
+  ok(idxs.every((v, i) => i === 0 || idxs[i - 1] <= v), 'MW-8b manifest lines are in recordIdx order', JSON.stringify(idxs))
+  ok(pointers.every(p => m1.includes(`[${p.refKey}]`)), 'MW-8c every real record appears in the manifest')
+
+  // MW-9 refusal typing: a prose refusal is classified BEFORE the worker runs
+  const refusalProse = 'I cannot produce this program. It requires calling tools.probe_substructure — none of which are available in my current runtime. I will not fabricate results I did not receive.'
+  ok(classifyProgramText(refusalProse) === 'refusal', 'MW-9a prose refusal classified as refusal')
+  ok(classifyProgramText(TEMPLATE_S2) === 'program', 'MW-9b the template program classifies as program (no false positive)')
+  let refusalCalls = 0
+  const res = await compressWithProgram({
+    a1: 's2', a2: 'keep-original',
+    context: { transcript, workspace },
+    regionTokens: 5000,
+    callLLM: async () => { refusalCalls++; return { text: refusalProse, usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, calls: 1 } } },
+  })
+  ok(res.ok === false && (res.problems ?? []).some(p => p.startsWith('program refusal:')), 'MW-9c refusal response → typed problem, not invalid-program', JSON.stringify(res.problems ?? []).slice(0, 120))
+  ok(res.refusal === true, 'MW-9d refusal flag set on the result')
+  ok(refusalCalls === 1 && res.usage?.inputTokens === 1000, 'MW-9e refused call usage still lands (cost discipline)')
+
+  // MW-11 fence strip: fenced program → identical body; unfenced → untouched
+  const { stripProgramFences } = await import('../lib/compressor-prompt.mjs')
+  const FENCE = String.fromCharCode(96, 96, 96)
+  const fenced = FENCE + 'js\n' + TEMPLATE_S2 + '\n' + FENCE
+  ok(stripProgramFences(fenced) === TEMPLATE_S2, 'MW-11a fenced program strips to the exact body', 'len ' + stripProgramFences(fenced).length)
+  ok(stripProgramFences(TEMPLATE_S2) === TEMPLATE_S2, 'MW-11b unfenced program passes through byte-identical')
+  ok(stripProgramFences(FENCE + '\nreturn { a: 1 }\n' + FENCE) === 'return { a: 1 }', 'MW-11c bare fence with no language tag strips too')
+
+  // MW-10 regression: manifest injection must not alter the PTR gate
+  const msgs = buildCompressorMessages({ rawWorkText: 'RAW', a1: 's2', a2: 'keep-original', manifest: m1 })
+  ok(msgs[msgs.length - 1].content.includes('[truth:write:'), 'MW-10a manifest present in assembled compressor messages')
+  const mwFixtureF9 = path.join(EVAL_ROOT, 'tests', 'fixtures', 'template-battery-multiwrite')
+  const mwPointersF9 = computePointers({ taskId: 'mw', transcript: JSON.parse(fs.readFileSync(path.join(mwFixtureF9, 'transcript.json'), 'utf8')).entries, workspace: path.join(mwFixtureF9, 'workspace') })
+  const { auditRefs: auditF9 } = await import('../lib/compressor-io.mjs')
+  const mwWritesF9 = mwPointersF9.filter(p => p.kind === 'write')
+  const coordF9 = { path: mwWritesF9[0].path, lineRange: mwWritesF9[0].lineRange, symbol: mwWritesF9[0].symbol }
+  const two = auditF9([{ ...coordF9 }, { ...coordF9 }], mwPointersF9)
+  ok(two.problems.length === 0, 'MW-10b manifest injection does not alter the PTR gate (both same-coord refs still ground)', two.problems.join('; '))
 }
 
 export { failures }

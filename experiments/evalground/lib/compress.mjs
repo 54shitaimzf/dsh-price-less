@@ -18,7 +18,7 @@ import { MANUAL_DIR } from './paths.mjs'
 import { runProgram } from './code-run.mjs'
 import { makeCompressorBindings, computePointers, auditRefs, rawEchoMarkers, findRawEcho } from './compressor-io.mjs'
 import { validateProductSchema, checkRatio, checkRetention, collectRefs, productCompressedTokens, DEFAULT_RATIO, DEFAULT_RETENTION } from './compressor-validate.mjs'
-import { buildCompressorInstruction } from './compressor-prompt.mjs'
+import { buildCompressorInstruction, renderChangeManifest, classifyProgramText, stripProgramFences } from './compressor-prompt.mjs'
 
 export const PRODUCT_SCHEMA = ['goal', 'steps', 'fileStream', 'compressed']
 
@@ -382,7 +382,12 @@ export async function compressWithProgram(opts) {
   const markers = rawEchoMarkers(context)
   const pointers = computePointers(context)
   const instruction = buildCompressorInstruction({ a1, a2 })
-  const messages = [...(prefix ?? []), { role: 'user', content: instruction }]
+  // F9 L2: the model SEES the complete real record set up front (same source
+  // the PTR gate audits against) — appended to the instruction message tail
+  // (stable head, varying tail; the request still starts with the routed
+  // prefix, so provider cache alignment is preserved).
+  const manifest = renderChangeManifest(pointers)
+  const messages = [...(prefix ?? []), { role: 'user', content: `${instruction}\n\n${manifest}` }]
 
   let call
   try {
@@ -390,7 +395,13 @@ export async function compressWithProgram(opts) {
   } catch (e) {
     return { product: null, ok: false, problems: [`compressor call failed: ${e.message}`], usage: null }
   }
-  const program = String(call?.text ?? '')
+  const program = stripProgramFences(String(call?.text ?? ''))
+  // F9 L3: refusal typing BEFORE the worker — a prose refusal used to die at
+  // type-strip as a generic invalid-program; type it so the ledger can observe
+  // refusal-rate separately. Success-path M1 invariant untouched.
+  if (classifyProgramText(program) === 'refusal') {
+    return { product: null, ok: false, refusal: true, problems: ['program refusal: non-program response (model declined to author the program)'], usage: call.usage, program }
+  }
   const run = await runProgram({ program, bindings, budgets: codeRunCfg })
   if (run.error) {
     return { product: null, ok: false, problems: [`program ${run.error.kind}: ${run.error.message}`], usage: call.usage, program }

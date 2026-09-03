@@ -53,4 +53,22 @@ ok(!INSTR.includes('You are now acting as a compaction engine'), 'PC-22 instruct
 // --- system persona ---
 ok(COMPRESSOR_SYSTEM.includes('You are a context compressor') && COMPRESSOR_SYSTEM.includes('NOT the executor'), 'PC-23 fixed compressor persona (system, byte-stable)')
 
+// --- V2: execution environment declaration + change-manifest reference (F9) ---
+const { COMPRESSOR_PROMPT_VERSION, buildCompressorMessages, renderChangeManifest } = await import('../lib/compressor-prompt.mjs')
+ok(COMPRESSOR_PROMPT_VERSION === 2, 'PC-24a instruction version bumped to 2 (F9 environment + manifest)')
+ok(INSTR.includes('does NOT run in this chat') && INSTR.includes('sandboxed worker'), 'PC-24 execution environment declared (program runs in the harness worker, not this chat)')
+ok(INSTR.includes('belongs to the EXECUTOR'), 'PC-24b executor tool-whitelist separation stated (the refusal root cause)')
+ok(INSTR.includes('CHANGE MANIFEST'), 'PC-25 instruction references the change manifest as the citation ground truth')
+ok(INSTR.includes('Never invent coordinates outside the manifest'), 'PC-25b manifest-bounded coordinate rule present')
+const MANIFEST = renderChangeManifest([
+  { kind: 'write', refKey: 'truth:write:3', recordIdx: 3, path: 'src/auth.js', lineRange: '1-6', symbol: 'checkAuth' },
+  { kind: 'read', refKey: 'truth:read:0', recordIdx: 0, path: 'src/auth.js', lineRange: null, symbol: null },
+])
+ok(MANIFEST.includes('- [truth:write:3] write src/auth.js:1-6 (checkAuth)') && MANIFEST.includes('- [truth:read:0] read src/auth.js'), 'PC-26a manifest renders records deterministically (refKey + kind + coords + symbol)')
+ok(renderChangeManifest([]).includes('(no change records)'), 'PC-26b empty manifest renders an explicit empty line')
+const msgs = buildCompressorMessages({ rawWorkText: 'RAW', a1: 's1', a2: 'expand', manifest: MANIFEST })
+const lastMsg = msgs[msgs.length - 1]
+ok(lastMsg.role === 'user' && lastMsg.content.includes('CHANGE MANIFEST') && lastMsg.content.includes('[truth:write:3]'), 'PC-26c manifest rides the FINAL instruction message (head stable, tail varies)')
+ok(lastMsg.content.indexOf('WRITE ONE PROGRAM') < lastMsg.content.indexOf('CHANGE MANIFEST'), 'PC-26d stable instruction head precedes the manifest tail')
+
 export { failures }
