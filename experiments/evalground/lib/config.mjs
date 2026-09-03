@@ -26,6 +26,24 @@ export function loadArmsConfig(force = false) {
   return _arms
 }
 
+/**
+ * Judge protocol resolution (2026-09 judge-protocol v2): scores.config.json
+ * `judge` is the single source {model, provider, samples, effort}; opts may
+ * override per-run (CLI --samples etc., recorded on the scorecard). `effort:
+ * 'none'` resolves to undefined — the wire NEVER sends reasoning_effort in
+ * that case (config absence and explicit 'none' are the same behavior).
+ */
+export function resolveJudgeProtocol(config, opts = {}) {
+  const j = config?.judge ?? {}
+  const effort = opts.judgeEffort ?? j.effort ?? 'none'
+  return {
+    model: opts.judgeModel ?? j.model ?? '',
+    provider: opts.judgeProvider ?? j.provider ?? '',
+    samples: Math.max(1, Number(opts.samples ?? j.samples ?? 1)),
+    effort: effort === 'none' ? undefined : effort,
+  }
+}
+
 const KNOWN_STAGES = ['execution', 'judge', 'compression', 'decision']
 // boolean toggles allowed inside a ledger block
 const KNOWN_LEDGER_FLAGS = ['cacheReadHonored']

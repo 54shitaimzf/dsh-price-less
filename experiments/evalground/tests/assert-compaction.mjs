@@ -332,13 +332,17 @@ const ok = (cond, label, extra = '') => {
   }
   const JUDGE_JSON = '{"dims":{},"antiCheat":{"verdict":"none","evidence":""},"notes":"ok"}'
   const SUBJ_JSON = '{"overallQuality":3,"wouldShip":1,"overReport":0,"realExtras":0,"goldenCoverage":"partial","evidence":"ok","narrative":"ok"}'
+  // judge protocol v2 (scores.config judge.samples=3): each task's judge makes
+  // 3 SAMPLE calls (identical JSON → median trivially that value) before the
+  // subjective audit — the fixture mirrors the production default path.
+  const JU = (i, o) => ({ text: JUDGE_JSON, usage: { inputTokens: i, outputTokens: o, cacheReadTokens: 0 } })
   const script = [
     { text: 'DONE T1', usage: { inputTokens: 100, outputTokens: 10, cacheReadTokens: 0 } },
     { text: TEMPLATE_S2, usage: { inputTokens: 900, outputTokens: 300, cacheReadTokens: 0 } },
     { text: 'DONE T2', usage: { inputTokens: 110, outputTokens: 10, cacheReadTokens: 0 } },
-    { text: JUDGE_JSON, usage: { inputTokens: 200, outputTokens: 40, cacheReadTokens: 0 } },   // judge T1
+    JU(200, 40), JU(200, 40), JU(200, 40),                                    // judge T1 ×3 samples
     { text: SUBJ_JSON, usage: { inputTokens: 12, outputTokens: 3, cacheReadTokens: 0 } },      // subjective T1
-    { text: JUDGE_JSON, usage: { inputTokens: 220, outputTokens: 44, cacheReadTokens: 0 } },   // judge T2
+    JU(220, 44), JU(220, 44), JU(220, 44),                                    // judge T2 ×3 samples
     { text: SUBJ_JSON, usage: { inputTokens: 14, outputTokens: 4, cacheReadTokens: 0 } },      // subjective T2
   ]
   const g = createScriptedGateway({ script })
@@ -360,9 +364,9 @@ const ok = (cond, label, extra = '') => {
   // NOT leak in (it is outside the judge ledger in both run-one and cascade).
   const j = b.scorecard.costs.judge
   ok(j !== null, 'CJ5 cascade judge ledger non-null (was null)', JSON.stringify(j))
-  ok(j.tokens === (200 + 40) + (220 + 44), 'CJ6 judge tokens = sum of per-task judge usage (subjective excluded)', JSON.stringify(j))
+  ok(j.tokens === ((200 + 40) + (220 + 44)) * 3, 'CJ6 judge tokens = sum of per-task judge SAMPLES (subjective excluded)', JSON.stringify(j))
   const cfg = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, 'scores.config.json'), 'utf8'))
-  const expUsd = costUsd({ inputTokens: 200 + 220, outputTokens: 40 + 44, cacheReadTokens: 0 }, priceOf(cfg.judge.model, cfg.judge.provider))
+  const expUsd = costUsd({ inputTokens: (200 + 220) * 3, outputTokens: (40 + 44) * 3, cacheReadTokens: 0 }, priceOf(cfg.judge.model, cfg.judge.provider))
   ok(j.usd !== null && Math.abs(j.usd - Number(expUsd.toFixed(8))) < 1e-12, 'CJ7 judge USD = production formula on the aggregated usage', JSON.stringify(j))
   // CJ8 regression guard for the 2026-09 pilot bug: the cascade scoring loop
   // MUST pass the RESOLVED judge model (config default) — not an undefined
@@ -371,7 +375,7 @@ const ok = (cond, label, extra = '') => {
   // probe of the injected gateway's request log).
   const cfgJ = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, 'scores.config.json'), 'utf8'))
   const judgeCalls = g.log.filter(r => { const first = r.req?.messages?.[0]?.content ?? ''; return typeof first === 'string' && first.includes('blind evaluator') })
-  ok(judgeCalls.length === 2 && judgeCalls.every(r => r.req.model === cfgJ.judge.model),
+  ok(judgeCalls.length === 6 && judgeCalls.every(r => r.req.model === cfgJ.judge.model),
     'CJ8 judge calls carry the RESOLVED config model (not undefined)', `${judgeCalls.map(r => String(r.req.model)).join(',')}`)
 
   // cleanup: ONLY this test's own run dir + the CASCADE boundary mark (see the

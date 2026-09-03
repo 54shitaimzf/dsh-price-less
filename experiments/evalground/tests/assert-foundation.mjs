@@ -108,6 +108,25 @@ const ok = (cond, label, extra = '') => {
   const p2 = priceOf('deepseek-v4-flash', 'deepseek-v4')
   ok(p2 && p2.id.includes('-peak'), 'W14 v4 route resolves peak tier row', p2?.id)
   ok(loadPricing().models.length > 0, 'W15 pricing table loaded')
+
+  // W16/W17 — judge protocol v2 wiring (2026-09): effort passthrough + config default
+  const { resolveJudgeProtocol } = await import('../lib/config.mjs')
+  const { judgeTask } = await import('../lib/judge.mjs')
+  const cfg = loadScoresConfig()
+  const proto = resolveJudgeProtocol(cfg, {})
+  ok(proto.model === cfg.judge.model && proto.provider === cfg.judge.provider, 'W16a judge protocol resolves model/provider from scores.config', JSON.stringify({ model: proto.model, provider: proto.provider }))
+  ok(Number.isInteger(proto.samples) && proto.samples >= 1, 'W16b judge samples resolves to an integer ≥ 1', String(proto.samples))
+  ok(resolveJudgeProtocol({ judge: { effort: 'none' } }, {}).effort === undefined, 'W16c effort none → wire sends NO reasoning_effort')
+  ok(resolveJudgeProtocol({}, { judgeEffort: 'low' }).effort === 'low', 'W16d opts.judgeEffort overrides config')
+  ok(resolveJudgeProtocol({ judge: { samples: 3 } }, {}).samples === 3 && resolveJudgeProtocol({ judge: { samples: 3 } }, { samples: 1 }).samples === 1, 'W16e config samples default; opts.samples overrides')
+  const taskJ = loadTask('T1')
+  const seen = []
+  const fakeCall = async (call) => { seen.push(call.reasoningEffort); return { text: JSON.stringify({ dims: Object.fromEntries(taskJ.rubric.dims.map(d => [d.id, { score: 4, why: 'x' }])), antiCheat: { verdict: 'none', evidence: 'ok' }, notes: 'fine' }), usage: { inputTokens: 10, outputTokens: 10, cacheReadTokens: 0 } } }
+  const tmpDir = path.join(EVAL_ROOT, `.tmp-w16-judge-${Date.now()}`)
+  fs.mkdirSync(tmpDir, { recursive: true })
+  await judgeTask({ task: taskJ, mech: { checks: [], violations: [] }, diff: [], runDir: tmpDir, workspace: tmpDir, provider: 'deepseek', model: 'm', judgeEffort: 'low', callLLM: fakeCall })
+  await judgeTask({ task: taskJ, mech: { checks: [], violations: [] }, diff: [], runDir: tmpDir, workspace: tmpDir, provider: 'deepseek', model: 'm', judgeEffort: undefined, callLLM: fakeCall })
+  ok(seen[0] === 'low' && seen[1] === undefined, 'W16f judgeTask forwards judgeEffort to the gateway call (and omits when undefined)', JSON.stringify(seen))
 }
 
 // ============ U. A4: transcript schema + digest contract ============

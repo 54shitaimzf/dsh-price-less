@@ -10,6 +10,13 @@ import { loadGoldenBugs } from './mech.mjs'
 
 const defaultCallLLM = createGateway().chatCall
 
+/** Judge prompt version (2026-09): v2 adds the cross-dimension SCORING
+ * DISCIPLINE block (evidence-first / tie-break-low / consistency / neutrality).
+ * It removes the ambiguity-driven variance component; the thinking-mode
+ * sampling floor is NOT addressed by prompts (measured separately, see
+ * reports/judge-stability-deepseek-2026-09.md). */
+export const JUDGE_PROMPT_VERSION = 2
+
 export function artifactFor(taskId, workspace) {
   const rel = {
     'T1': 'REVIEW.md',
@@ -42,7 +49,7 @@ function goldenRefBlock() {
   }
 }
 
-export function buildJudgePrompt(task, mech, diff, transcript, runId) {
+export function buildJudgePrompt(task, mech, diff, transcript, runId, { discipline = true } = {}) {
   const rubric = task.rubric
   if (!rubric || rubric.dims.length === 0) return null
   const dimSpec = rubric.dims.map(d => {
@@ -50,6 +57,13 @@ export function buildJudgePrompt(task, mech, diff, transcript, runId) {
     return `- ${d.id}「${d.name}」 (weight ${d.weight}):\n${anchors}`
   }).join('\n')
   const golden = goldenRefBlock()
+  const SCORING_DISCIPLINE = [
+    'SCORING DISCIPLINE (v2 — applies to EVERY dimension, no exceptions):',
+    '1. EVIDENCE FIRST: before scoring a dimension, quote or point to the SPECIFIC artifact line/behavior that justifies the score. No evidence → you cannot justify the score; re-read the artifact.',
+    '2. TIE-BREAK LOW: if the evidence fits two adjacent bands equally, pick the LOWER band and say so in `why` (removes coin-flip drift).',
+    '3. CONSISTENCY: your `notes` and per-dim `why` must agree with the scores — praise with a low score (or vice versa) is a scoring error; re-read the anchor wording.',
+    '4. NEUTRALITY: never reward verbosity, style, or volume of findings; score ONLY against the anchor wording. Finding extra real defects does not raise unrelated dimensions.',
+  ].join('\n')
   return [
     'You are a blind evaluator for a software task. The strategy/label of the run is HIDDEN from you; judge ONLY against the dimensions and anchors below.',
     '',
@@ -57,6 +71,7 @@ export function buildJudgePrompt(task, mech, diff, transcript, runId) {
     '',
     'FIXED RUBRIC DIMENSIONS (score each dimension an integer 0–5 where 5 = BEST (flawless) and 0 = WORST (no output); read the anchor wording for each band):\n' + dimSpec,
     '',
+    ...(discipline ? [SCORING_DISCIPLINE, ''] : []),
     ...(golden ? ['GOLDEN DEFECT REFERENCE (partial ground truth — it may UNDER-cover real defects, so evaluate each EXTRA finding on its own code merits; use it to judge `grounded`/`precision`):', golden, ''] : []),
     '',
     'MECHANICAL FACTS:',
@@ -134,7 +149,7 @@ async function judgeOnce(opts) {
   }
   const normalize = (obj) => obj.dims && typeof obj.dims === 'object' ? obj : { ...obj, dims: obj }
   process.env.JUDGE_WORKSPACE = workspace
-  const prompt = buildJudgePrompt(task, mech, diff, transcriptDigest(runDir), path.basename(runDir))
+  const prompt = buildJudgePrompt(task, mech, diff, transcriptDigest(runDir), path.basename(runDir), { discipline: opts.judgePromptVersion !== 1 })
   if (!prompt) return { score: null, skipped: true }
   let out
   try {
@@ -142,7 +157,7 @@ async function judgeOnce(opts) {
     // reasoning tokens consume max_tokens, so a tight cap yields finish=length
     // with empty content (seen on T4/T7 judge prompts). Give 8000 output
     // tokens: 3–5k reasoning + ~1k JSON content comfortably fits.
-    out = await callLLM({ provider: opts.provider, model: opts.model, messages: [{ role: 'user', content: prompt }], maxTokens: 8000, timeoutMs: 600000 })
+    out = await callLLM({ provider: opts.provider, model: opts.model, messages: [{ role: 'user', content: prompt }], maxTokens: 8000, timeoutMs: 600000, reasoningEffort: opts.judgeEffort })
     addUsage(out.usage)
   } catch (error) {
     return { score: null, dims: {}, antiCheat: { verdict: 'none', evidence: `judge call failed: ${String(error)}` }, skipped: true, error: String(error), usage: usageAgg.calls > 0 ? usageAgg : null }

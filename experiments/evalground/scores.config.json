@@ -9,7 +9,7 @@
   },
   "baseline": "native-auto",
   "executor": { "provider": "deepseek", "model": "deepseek-v4-flash-vision-exp" },
-  "judge": { "provider": "deepseek", "model": "deepseek-v4-flash-vision-exp" },
+  "judge": { "provider": "deepseek", "model": "deepseek-v4-flash-vision-exp", "samples": 3, "effort": "low" },
   "modelSwitch": {
     "date": "2026-09-03",
     "note": "opencode zen (hy3/glm-5.3-flash) → DeepSeek official API (deepseek-v4-flash-vision-exp, executor=judge=decision). Transport = https://api.deepseek.com direct. Per AGENTS.md hard rule: model switch = whole batch re-run; all pre-pivot runs (opencode era) are a separate historical batch and never mix with new-batch numbers.",

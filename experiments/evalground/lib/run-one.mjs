@@ -61,7 +61,7 @@ export function taskFinalText(entries, taskId) {
  * @param {object} o { workspace, runDir, runner, transcriptWindow, callLLM, judgeModel, judgeProvider, samples, noJudge, subjectiveModel }
  */
 export async function scoreOne(task, o) {
-  const { workspace, runDir, runner, transcriptWindow = [], callLLM, judgeModel, judgeProvider, samples, noJudge } = o
+  const { workspace, runDir, runner, transcriptWindow = [], callLLM, judgeModel, judgeProvider, samples, judgeEffort, noJudge } = o
   // Per-task runner view: `answer-contains` reads finalText; we substitute the
   // task's OWN final text so cascade runs don't leak across tasks. Violations
   // carry over (they are global tool-guard evidence from the shared run).
@@ -73,7 +73,7 @@ export async function scoreOne(task, o) {
     transcriptText: JSON.stringify(transcriptWindow),
   })
   const judge = noJudge ? { score: null, dims: {}, antiCheat: { verdict: 'none', evidence: 'skipped' } }
-    : await judgeTask({ task, mech, diff: mech.diff, runDir, workspace, provider: judgeProvider, model: judgeModel, samples: o.samples, callLLM })
+    : await judgeTask({ task, mech, diff: mech.diff, runDir, workspace, provider: judgeProvider, model: judgeModel, samples: o.samples, judgeEffort: o.judgeEffort, callLLM })
   const subjectivity = noJudge ? null
     : await subjectiveAudit({ task, runDir, workspace, provider: judgeProvider, model: judgeModel, callLLM }).catch(() => null)
   const assembled = assemble(task, mech, judge, null, [], subjectivity)
@@ -128,7 +128,7 @@ export async function runOne(task, opts) {
     transcriptText: JSON.stringify(runner.transcript ?? []),
   })
   const judge = opts.noJudge ? { score: null, dims: {}, antiCheat: { verdict: 'none', evidence: 'skipped' } }
-    : await judgeTask({ task, mech, diff: mech.diff, runDir, workspace, provider: judgeProvider, model: judgeModel, samples: opts.samples, callLLM: opts.callLLM })
+    : await judgeTask({ task, mech, diff: mech.diff, runDir, workspace, provider: judgeProvider, model: judgeModel, samples: opts.samples, judgeEffort: opts.judgeEffort, callLLM: opts.callLLM })
   // subjective (senior-reviewer) audit — human-adjacent quality layer; blind,
   // never raises/blocks. On failure subjectivity stays null (run still scores).
   const subjectivity = opts.noJudge ? null

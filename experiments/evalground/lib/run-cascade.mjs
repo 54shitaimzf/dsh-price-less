@@ -18,6 +18,7 @@ import { createWorkspace } from './workspace.mjs'
 import { runSession } from './runner.mjs'
 import { readAll } from './transcript.mjs'
 import { getArm } from './arm-spec.mjs'
+import { resolveJudgeProtocol } from './config.mjs'
 import {
   priceOf,
   makeRunLogger,
@@ -152,8 +153,9 @@ export async function runCascade(opts) {
   // judge/subjective call silently failed (offline mocks don't validate the
   // model string, so the assertion suite never caught it). First exposed by
   // the 2026-09 pilot.
-  const judgeModel = opts.judgeModel ?? CONFIG.judge.model
-  const judgeProvider = opts.judgeProvider ?? CONFIG.judge.provider
+  const judgeProto = resolveJudgeProtocol(CONFIG, opts)
+  const judgeModel = judgeProto.model
+  const judgeProvider = judgeProto.provider
   if (opts.skipScore !== true) {
     for (const task of tasks) {
       const s = await scoreOne(task, {
@@ -162,7 +164,8 @@ export async function runCascade(opts) {
         callLLM,
         judgeModel,
         judgeProvider,
-        samples: opts.samples,
+        samples: judgeProto.samples,
+        judgeEffort: judgeProto.effort,
         noJudge: opts.noJudge,
       })
       taskBreakdown.push({
