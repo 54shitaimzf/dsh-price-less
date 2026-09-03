@@ -1,10 +1,11 @@
 node_modules/
-lib/
+/lib/
 *.tsbuildinfo
 *.tgz
 .pnpm-store/
 docs.zip
 *.log
+.tmp-*/
 
 # 实验产物：原始大件不入库（账本小件 scorecard/boundaries/audit 仍提交）
 reports/
