@@ -5,15 +5,18 @@
  * 平面: L0（确定性数据表；模型只负责判定语义，不负责选择）
  * 回退链步数: 0（常量表，无 LLM 参与）
  *
- * 版本协议: DISC_PRESETS_V1 / DISC_CAPABILITIES_V1（docs/09；单一事实源 =
+ * 版本协议: DISC_PRESETS_V2 / DISC_CAPABILITIES_V2（docs/09；单一事实源 =
  * 本文件 + reports/phase-b-effort-support.md 账本，两处同源不许漂移）。
+ * V2（2026-09）: opencode zen 网关整体退役，预设收敛到 DeepSeek 官方 API
+ * （provider 'deepseek-official'，DSH 底座真实注册 id；模型 deepseek-v4-flash-
+ * vision-exp）。V1（minimax/hy3/v4-low，opencode-go 路由）随批次历史封存。
  *
  * 数据来源（全部为已落盘实测账本，非推测）:
  * - 模型效果: reports/phase-b-v22.md（52 条 DSH 真实会话样本，三模型三意图面板）
  * - 综合成本: reports/phase-b-total-cost.md（饱和成本/错误机会成本/双判否决）
- * - 思考强度支持（本轮）: reports/phase-b-effort-support.md——官方 API 文档 +
+ * - 思考强度支持: reports/phase-b-effort-support.md——官方 API 文档 +
  *   声明路径实测（low≈58 字符 vs max≈262 字符思考，6 样本分布稳定）；
- *   GLM 经网关实测无效；gateway 对 minimax/hy3/qwen/mimo 无 effort 转译分支。
+ *   官方 API 原生 thinking 支持 low/high/max（实测账本 + 官方文档双证）。
  *
  * 诚实边界:
  * - effort 只列"显式发送且实测改变模型行为"的档位；'off' 退化为"不发送
@@ -21,7 +24,7 @@
  * - 未验证组合不传参（确定性优先：宁可默认档，不发伪参数）。
  */
 
-export type DiscPresetId = 'minimax' | 'hy3' | 'v4-low'
+export type DiscPresetId = 'deepseek' | 'deepseek-low'
 
 /** 判别器调用参数（materialize 后的最终形状）。 */
 export interface DiscCallConfig {
@@ -44,43 +47,29 @@ export interface DiscPreset {
 }
 
 /**
- * 模型预设表 v1（版本化；改数据 = 升版本，禁止原地改）。
+ * 模型预设表 v2（版本化；改数据 = 升版本，禁止原地改）。
  *
- * 全局默认 = 'minimax'（综合最优：准确率与切换召回双高 + 成本中间档；
- * 详见 reports/phase-b-total-cost.md 最终推荐）。
+ * 全局默认 = 'deepseek'（官方 API 直连；2026-09 传输层切换后的当前主档）。
  */
 export const DISC_PRESETS: Record<DiscPresetId, DiscPreset> = {
-  minimax: {
-    name: 'MiniMax M3（推荐默认）',
-    pitch: '综合最优：语义判定精度与任务切换召回双高，成本居中；判别器主判。',
+  deepseek: {
+    name: 'DeepSeek V4 Flash Vision Exp（推荐默认）',
+    pitch: '官方 API 直连：官方判别口径与实验批次一致；不显式传思考档位（模型默认档）。',
     config: {
-      provider: 'opencode-go',
-      model: 'minimax-m3',
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash-vision-exp',
       promptVersion: 'v2.2',
       temperature: 0,
       maxTokens: 400,
       effort: 'none',
     },
   },
-  hy3: {
-    name: 'Hy3（零误切）',
-    pitch: '每判成本最低、误切最少（保守型产品推荐）；任务切换召回弱于默认档。',
+  'deepseek-low': {
+    name: 'DeepSeek V4 Flash Vision Exp · low（低思考档）',
+    pitch: '显式低思考档（官方 API 原生支持 low/high/max）；判别输出更精简，适合高频判定场景。',
     config: {
-      provider: 'opencode-go',
-      model: 'hy3',
-      promptVersion: 'v2.2',
-      temperature: 0,
-      maxTokens: 200,
-      effort: 'none',
-    },
-  },
-  'v4-low': {
-    name: 'DeepSeek V4 Flash · low（平衡档）',
-    pitch: '思考强度压至最低（实测低档 58 字符 vs 满档 262），切换召回优于 hy3；'
-      + '每判成本约 2.2 倍默认档（峰值计价），仅作自选。',
-    config: {
-      provider: 'opencode-go-v4',
-      model: 'deepseek-v4-flash',
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash-vision-exp',
       promptVersion: 'v2.2',
       temperature: 0,
       maxTokens: 400,
@@ -90,12 +79,13 @@ export const DISC_PRESETS: Record<DiscPresetId, DiscPreset> = {
 }
 
 /** 默认预设（全局默认配置 = 综合最好）。 */
-export const DEFAULT_DISC_PRESET: DiscPresetId = 'minimax'
+export const DEFAULT_DISC_PRESET: DiscPresetId = 'deepseek'
 
 /**
- * 判别调用单价表 v1（USD / 1M tokens；来源 = reports/phase-b-total-cost.md 账本，
- * 与本文件预设的 provider@model 对齐）。缺失条目 → 成本记 null（诚实：无可信单价不算）。
- * 注意 v4 走网关=峰值 2x 计价（此表用 off-peak 价；网关计价在账本另注）。
+ * 判别调用单价表 v2（USD / 1M tokens；DeepSeek 官方定价 api-docs.deepseek.com，
+ * 2026-09 核对：vision-exp 与 v4-flash 同价，空闲时段 = 高峰半价）。
+ * 与本文件预设的 provider@model 对齐。缺失条目 → 成本记 null（诚实：无可信单价不算）。
+ * 记账基准 = off-peak；高峰（工作日 9-12/14-18 北京时间）为 2x = 0.44 / 1.32 / 0.014。
  */
 export interface DiscPricing {
   inputUsdPerM: number
@@ -104,10 +94,8 @@ export interface DiscPricing {
 }
 
 export const DISC_PRICING: Readonly<Record<string, DiscPricing>> = {
-  'opencode-go@minimax-m3': { inputUsdPerM: 0.30, outputUsdPerM: 1.20, cacheReadUsdPerM: 0.06 },
-  'opencode-go@hy3': { inputUsdPerM: 0.14, outputUsdPerM: 0.58, cacheReadUsdPerM: 0.035 },
-  // off-peak；峰值（网关 2x）为 0.44 / 1.32 / 0.014——账本另有峰值口径。
-  'opencode-go-v4@deepseek-v4-flash': { inputUsdPerM: 0.22, outputUsdPerM: 0.66, cacheReadUsdPerM: 0.007 },
+  'deepseek-official@deepseek-v4-flash-vision-exp': { inputUsdPerM: 0.22, outputUsdPerM: 0.66, cacheReadUsdPerM: 0.007 },
+  'deepseek-official@deepseek-v4-flash': { inputUsdPerM: 0.22, outputUsdPerM: 0.66, cacheReadUsdPerM: 0.007 },
 }
 
 /** 成本分解（细项 USD；billed input = 未缓存输入 + 缓存读，各自单价）。 */
@@ -165,11 +153,6 @@ export interface DiscModelCapability {
  * 3. 'off' 不在能力表——DSH 侧 off=省略参数，不是关闭思考。
  */
 export const DISC_CAPABILITIES: Readonly<Record<string, DiscModelCapability>> = {
-  'opencode-go-v4@deepseek-v4-flash': {
-    effortLevels: ['low', 'high', 'max'],
-    verifiedBy: 'measured',
-    note: '声明路径 + 网关转译实测生效；low 档思考约压缩至 1/4。off 值会报错（网关透传，上游不认）。',
-  },
   'deepseek-official@deepseek-v4-flash': {
     effortLevels: ['low', 'high', 'max'],
     verifiedBy: 'official-api',
@@ -180,24 +163,8 @@ export const DISC_CAPABILITIES: Readonly<Record<string, DiscModelCapability>> = 
     verifiedBy: 'official-api',
     note: '官方 API（当前主模型档位）。',
   },
-  'opencode-go-glm53@glm-5.3-flash': {
-    effortLevels: [],
-    verifiedBy: 'none',
-    note: '声明路径实测 max/默认/off 思考长度无差异——网关未转译 GLM 或模型对档位不敏感；不传。',
-  },
-  'opencode-go-glm53@glm-5.3': {
-    effortLevels: [],
-    verifiedBy: 'none',
-    note: '同 glm-5.3-flash（未单独实测，按同一网关分支结论处理）。',
-  },
-  // 发现路径（opencode-go）：DSH 对无声明模型不发送推理参数；minimax-m3 虽被
-  // pi-ai 内置目录标记档位（off/minimal/low/medium/high，resolveModelInfo 可见），
-  // 但网关无 minimax 转译分支且模型直出（无 thinking 流）——实测层仍判不支持。
-  'opencode-go@*': {
-    effortLevels: [],
-    verifiedBy: 'none',
-    note: '动态发现目录：无手工声明（大部分模型 DSH 视为非推理）；minimax-m3 有 pi-ai 内置声明但网关未实测转译、直出型无需求；不发送。',
-  },
+  // 发现路径：DSH 对无声明模型不发送推理参数（sanitizeEffort 两层交集兜底）——
+  // 能力表外的 provider@model 组合一律不传 effort（默认档，安全）。
 }
 
 /**

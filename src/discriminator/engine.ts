@@ -451,7 +451,7 @@ export class DiscriminatorEngine {
       sources.push({
         kind: 'capability',
         id: `${call.provider}@${call.model}`,
-        version: 'DISC_CAPABILITIES-v1',
+        version: 'DISC_CAPABILITIES-v2',
         fingerprint: (verified ?? []).join(',') || '(none)',
       })
 

@@ -32,7 +32,7 @@ export interface EconomyCardSettingsShape {
   overflowRecovery?: boolean
   discriminator?: {
     mode?: 'off' | 'observe' | 'active'
-    preset?: 'minimax' | 'hy3' | 'v4-low'
+    preset?: 'deepseek' | 'deepseek-low'
     provider?: string
     model?: string
     temperature?: number
@@ -221,7 +221,7 @@ export const CLIENT_DEFAULTS = {
   overflowRecovery: true,
   discriminator: {
     mode: 'off',
-    preset: 'minimax',
+    preset: 'deepseek',
     maxConcurrency: 4,
     timeoutMs: 15000,
     cacheLimit: 1024,
@@ -313,9 +313,8 @@ export function splitRouteKey(key: string): { provider: string; model: string } 
  * 恒显示于模型路由下拉（即使不在配置目录里），保证"跟随预设/预设模型"始终可选。
  */
 export const MODEL_PRESET_ROUTES: EconomySelectOption[] = [
-  { value: routeKey('opencode-go', 'minimax-m3'), label: 'opencode-go：minimax-m3', group: '内置预设', tone: 'business', pitch: '综合最优：判得准、成本低；判别器主判（推荐默认）。' },
-  { value: routeKey('opencode-go', 'hy3'), label: 'opencode-go：hy3', group: '内置预设', tone: 'business', pitch: '每判成本最低、误切最少；求稳对话用。' },
-  { value: routeKey('opencode-go-v4', 'deepseek-v4-flash'), label: 'opencode-go-v4：deepseek-v4-flash', group: '内置预设', tone: 'business', pitch: 'DeepSeek V4 Flash：思考强度压至最低（实测 low 约 1/4 篇幅）；切换召回更优、成本约 2.2 倍默认档。' },
+  { value: routeKey('deepseek-official', 'deepseek-v4-flash-vision-exp'), label: 'deepseek-official：deepseek-v4-flash-vision-exp', group: '内置预设', tone: 'business', pitch: '官方 API 直连：判别口径与实验批次一致（推荐默认）。' },
+  { value: routeKey('deepseek-official', 'deepseek-v4-flash'), label: 'deepseek-official：deepseek-v4-flash', group: '内置预设', tone: 'business', pitch: '官方 API 直连：同价文本档（无图像输入）。' },
 ]
 
 /** 由配置 catalog（groups）构造模型路由选项；与预设路由合并成单一选择列表。 */
@@ -363,7 +362,7 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   'discriminator.preset': {
     label: '预设',
     hint: '一键套用一套判据、模型与思考强度的组合。',
-    docs: '预设决定 "用什么判据、哪个模型、多强思考" 这一整套搭配。新手选 minimax 即可；hy3 求稳、v4-low 平衡档。想单独覆盖某个参数，去 "模型与调优/高级" 组。',
+    docs: '预设决定 "用什么判据、哪个模型、多强思考" 这一整套搭配。新手选 deepseek 默认档即可；deepseek-low 为显式低思考档。想单独覆盖某个参数，去 "模型与调优/高级" 组。',
   },
   'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般不需要单独填，用下方 "模型" 路由下拉即可。' },
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。一般用 "模型" 路由下拉选择，会自动同时设好服务商与模型，避免两者不匹配。' },
@@ -477,10 +476,9 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
         { value: 'active', label: 'active：发 verdict 驱动编排', tone: 'business' },
       ], { visibility: 'core', default: 'off', deflabel: '（默认）' }),
       economySelectField('discriminator.preset', [
-        { value: 'minimax', label: 'minimax（默认）：综合最优', tone: 'business' },
-        { value: 'hy3', label: 'hy3：零误切优先', tone: 'success' },
-        { value: 'v4-low', label: 'v4-low：平衡档', tone: 'warn' },
-      ], { visibility: 'core', default: 'minimax', deflabel: '（默认）' }),
+        { value: 'deepseek', label: 'deepseek（默认）：官方直连', tone: 'business' },
+        { value: 'deepseek-low', label: 'deepseek-low：低思考档', tone: 'success' },
+      ], { visibility: 'core', default: 'deepseek', deflabel: '（默认）' }),
       economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
       economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
     ],

@@ -82,7 +82,7 @@ describe('溯源图基元', () => {
   })
 
   it('缓存键含配置面（配置变即键变）', () => {
-    const base = { sessionId: 's1', seq: 7, provider: 'opencode-go', model: 'minimax-m3', promptVersion: 'v2.2', text: '继续' }
+    const base = { sessionId: 's1', seq: 7, provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp', promptVersion: 'v2.2', text: '继续' }
     const a = makeJudgeCacheKey(base)
     const b = makeJudgeCacheKey({ ...base, text: '继续' })
     const c = makeJudgeCacheKey({ ...base, promptVersion: 'v2.1' })
@@ -116,7 +116,7 @@ describe('溯源图基元', () => {
       mode: 'observe' as const,
       trigger: 'llm' as const,
       verdict: 'continue' as const,
-      call: materializeDiscCallConfig('minimax', undefined),
+      call: materializeDiscCallConfig('deepseek', undefined),
       requestedEffort: 'none' as const,
       sentEffort: 'none' as const,
       window: { anchorChars: 10, patchCount: 2, targetChars: 20, targetExcerpt: '' },
@@ -127,7 +127,7 @@ describe('溯源图基元', () => {
     }
     const restored = JSON.parse(serializeJudgeRecord(record))
     expect(restored.judgeId).toBe('j:s:1')
-    expect(restored.call.provider).toBe('opencode-go')
+    expect(restored.call.provider).toBe('deepseek-official')
     expect(restored.sources).toEqual([])
   })
 })
@@ -188,10 +188,10 @@ describe('窗口与模板（v6 冻结口径）', () => {
 
 describe('自适应链（presets 纯函数）', () => {
   it('materialize：undefined 覆盖被过滤（不冲掉预设值）', () => {
-    const out = materializeDiscCallConfig('minimax', { effort: undefined, temperature: 0 })
+    const out = materializeDiscCallConfig('deepseek', { effort: undefined, temperature: 0 })
     expect(out.effort).toBe('none')
     expect(out.temperature).toBe(0)
-    expect(out.provider).toBe('opencode-go')
+    expect(out.provider).toBe('deepseek-official')
   })
 
   it('sanitizeEffort：两层交集（运行时许可 ∩ 实测验证层）', () => {
@@ -209,29 +209,29 @@ describe('自适应链（presets 纯函数）', () => {
     expect(sanitizeEffort(['off', 'minimal', 'low', 'medium', 'high'], 'medium', [])).toBe('none')
   })
 
-  it('默认预设 = minimax（全局默认配置）', () => {
-    expect(DEFAULT_DISC_PRESET).toBe('minimax')
+  it('默认预设 = deepseek（全局默认配置）', () => {
+    expect(DEFAULT_DISC_PRESET).toBe('deepseek')
   })
 
   it('estimateJudgeCost：单价 × 用量（含缓存读折扣）', () => {
-    const pricing = DISC_PRICING['opencode-go@minimax-m3']
+    const pricing = DISC_PRICING['deepseek-official@deepseek-v4-flash-vision-exp']
     expect(pricing).toBeDefined()
     const cost = estimateJudgeCost(
       { inputTokens: 1000, outputTokens: 500, cacheReadTokens: 2000 },
       pricing,
     )
-    // 1000×0.30/1M + 500×1.20/1M + 2000×0.06/1M = 0.00030 + 0.00060 + 0.00012 = 0.00102
+    // 1000×0.22/1M + 500×0.66/1M + 2000×0.007/1M = 0.00022 + 0.00033 + 0.000014 = 0.000564
     expect(cost).not.toBeNull()
-    expect(cost!.usd).toBeCloseTo(0.00102, 8)
-    expect(cost!.inputUsd).toBeCloseTo(0.00030, 8)
-    expect(cost!.outputUsd).toBeCloseTo(0.00060, 8)
-    expect(cost!.cacheReadUsd).toBeCloseTo(0.00012, 8)
+    expect(cost!.usd).toBeCloseTo(0.000564, 8)
+    expect(cost!.inputUsd).toBeCloseTo(0.00022, 8)
+    expect(cost!.outputUsd).toBeCloseTo(0.00033, 8)
+    expect(cost!.cacheReadUsd).toBeCloseTo(0.000014, 8)
   })
 
   it('estimateJudgeCost：无 usage / 无单价 → null（不猜价）', () => {
-    expect(estimateJudgeCost(undefined, DISC_PRICING['opencode-go@minimax-m3'])).toBeNull()
+    expect(estimateJudgeCost(undefined, DISC_PRICING['deepseek-official@deepseek-v4-flash-vision-exp'])).toBeNull()
     expect(estimateJudgeCost({ inputTokens: 100 }, undefined)).toBeNull()
-    expect(estimateJudgeCost({ inputTokens: 100, outputTokens: 50 }, DISC_PRICING['deepseek-official@deepseek-v4-flash'])).toBeNull()
+    expect(estimateJudgeCost({ inputTokens: 100, outputTokens: 50 }, DISC_PRICING['no-such-provider@no-model'])).toBeNull()
   })
 
   it('成本字段随记录序列化（plain JSON + cost 快照）', () => {
@@ -243,18 +243,18 @@ describe('自适应链（presets 纯函数）', () => {
       mode: 'observe' as const,
       trigger: 'llm' as const,
       verdict: 'new-task' as const,
-      call: materializeDiscCallConfig('minimax', undefined),
+      call: materializeDiscCallConfig('deepseek', undefined),
       requestedEffort: 'none' as const,
       sentEffort: 'none' as const,
       window: { anchorChars: 0, patchCount: 0, targetChars: 1, targetExcerpt: '' },
       modelView: null,
       llm: { status: 'ok' as const, latencyMs: 5, usage: { inputTokens: 500, outputTokens: 80, cacheReadTokens: 0 } },
-      cost: estimateJudgeCost({ inputTokens: 500, outputTokens: 80, cacheReadTokens: 0 }, DISC_PRICING['opencode-go@minimax-m3']),
+      cost: estimateJudgeCost({ inputTokens: 500, outputTokens: 80, cacheReadTokens: 0 }, DISC_PRICING['deepseek-official@deepseek-v4-flash-vision-exp']),
       errors: [],
       sources: [],
     }
     const restored = JSON.parse(serializeJudgeRecord(record))
-    expect(restored.cost.usd).toBeCloseTo(0.000246, 8) // 500×0.30 + 80×1.20 / 1M
+    expect(restored.cost.usd).toBeCloseTo(0.0001628, 8) // 500×0.22 + 80×0.66 / 1M
   })
 })
 
@@ -268,7 +268,7 @@ describe('台账（JudgeJournal）', () => {
       mode: 'observe' as const,
       trigger,
       verdict,
-      call: materializeDiscCallConfig('minimax', undefined),
+      call: materializeDiscCallConfig('deepseek', undefined),
       requestedEffort: 'none' as const,
       sentEffort: 'none' as const,
       window: { anchorChars: 0, patchCount: 0, targetChars: 1, targetExcerpt: '' },

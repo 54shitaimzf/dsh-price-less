@@ -68,21 +68,20 @@ describe('默认解析与深度工具', () => {
 
 describe('模型路由', () => {
   it('routeKey / splitRouteKey 往返', () => {
-    const key = routeKey('opencode-go', 'minimax-m3')
-    expect(key).toBe('opencode-go\u0000minimax-m3')
-    expect(splitRouteKey(key)).toEqual({ provider: 'opencode-go', model: 'minimax-m3' })
+    const key = routeKey('deepseek-official', 'deepseek-v4-flash-vision-exp')
+    expect(key).toBe('deepseek-official\u0000deepseek-v4-flash-vision-exp')
+    expect(splitRouteKey(key)).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp' })
     expect(splitRouteKey('')).toEqual({ provider: '', model: '' })
   })
 
   it('buildModelRouteOptions：预设三源恒显示 + 配置目录合并', () => {
     const groups = [
-      { id: 'opencode-go', name: 'OpenCode Go', models: [{ id: 'hy3', name: 'Hy3' }] },
+      { id: 'deepseek-official', name: 'DeepSeek Official', models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }] },
     ]
     const options = buildModelRouteOptions(groups)
-    expect(options.some(o => o.value === routeKey('opencode-go', 'minimax-m3'))).toBe(true)
-    expect(options.some(o => o.value === routeKey('opencode-go', 'hy3'))).toBe(true)
-    expect(options.some(o => o.value === routeKey('opencode-go-v4', 'deepseek-v4-flash'))).toBe(true)
-    expect(options.some(o => o.label === 'OpenCode Go：Hy3')).toBe(true)
+    expect(options.some(o => o.value === routeKey('deepseek-official', 'deepseek-v4-flash-vision-exp'))).toBe(true)
+    expect(options.some(o => o.value === routeKey('deepseek-official', 'deepseek-v4-flash'))).toBe(true)
+    expect(options.some(o => o.label === 'DeepSeek Official：DeepSeek V4 Flash')).toBe(true)
   })
 })
 

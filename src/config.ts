@@ -11,7 +11,7 @@
  *
  * v0.2.0-s8：新增判别器模型配置区（discriminator）——preset 一键应用（枚举选择即
  * 套用内置预设）+ 高级手动覆盖 + 能力矩阵约束（reports/phase-b-effort-support.md）；
- * 全局默认 = 'minimax'（综合最优，reports/phase-b-total-cost.md）。
+ * 全局默认 = 'deepseek'（官方 API 直连；2026-09 传输层切换，presets V2）。
  *
  * v0.4.0：判别器接入主循环（docs/07 §18）——判别器配置区扩展为运行时形态：
  * mode（off/observe/active，**默认 off = 不挂载**：零成本，observe/active 由用户显式开启）
@@ -26,8 +26,8 @@ import z from 'schemastery'
 export interface DiscriminatorConfig {
   /** 运行模式：off=不挂载（**默认**，零成本）；observe=只读观测（只记账零行为影响）；active=额外发 verdict 事件。 */
   mode: 'off' | 'observe' | 'active'
-  /** 预设（一键应用）：minimax（默认，综合最优）/ hy3（零误切）/ v4-low（平衡档）。 */
-  preset: 'minimax' | 'hy3' | 'v4-low'
+  /** 预设（一键应用）：deepseek（默认，官方 API 直连）/ deepseek-low（低思考档）。 */
+  preset: 'deepseek' | 'deepseek-low'
   /** 判据版本（默认 v2.2，定稿；未注册版本运行时回退 v2.2 并记录）。 */
   promptVersion: 'v1' | 'v2' | 'v2.1' | 'v2.2'
   /** 高级覆盖：provider（不填 = 跟随预设；能力矩阵外的组合不发送无效参数）。 */
@@ -102,7 +102,7 @@ export const Config = z.object({
   taskDigestJournalPath: z.string().default(''),
   discriminator: z.object({
     mode: z.union(['off', 'observe', 'active'] as const).default('off'),
-    preset: z.union(['minimax', 'hy3', 'v4-low'] as const).default('minimax'),
+    preset: z.union(['deepseek', 'deepseek-low'] as const).default('deepseek'),
     promptVersion: z.union(['v1', 'v2', 'v2.1', 'v2.2'] as const).default('v2.2'),
     provider: z.string().min(1),
     model: z.string().min(1),
@@ -140,7 +140,7 @@ export const CONFIG_DEFAULTS = {
   taskDigestJournalPath: '',
   discriminator: {
     mode: 'off',
-    preset: 'minimax',
+    preset: 'deepseek',
     promptVersion: 'v2.2',
     maxConcurrency: 4,
     timeoutMs: 15000,
