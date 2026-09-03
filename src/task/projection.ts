@@ -1,68 +1,48 @@
 /**
- * task 记忆投影单元：纯同步 fold，从 session 日志事件重建 task 状态机。
+ * task 段记忆投影单元：纯同步 fold，从 session 日志事件重建段状态机。
  *
- * 模块: task 状态机投影单元（contextEconomyTask）
- * 平面: L0（事件观测 + 纯规则 fold）——L1 语义经 voteTable 注入（fold 无 IO/无模型调用）
- * 回退链步数: 2（代码分支：T0/T1 信号）→ 3（机械字符匹配：'/task'、路径签名）
- *            → 4（语义票：turn/end 查 voteTable，'off' 档降级机械，见 docs/11）
- * 审查清单: 信号取自会话日志确定性事件；**不读 event.time（时间戳非判据）**；
+ * 模块: task 段状态机投影单元（contextEconomyTask）
+ * 平面: L0（事件观测 + 纯规则 fold）——边界来源 = 显式指令（/task，回退链第 1 步）
+ *       + 判别器语义票（v0.8.0 接入：fold 消费会话日志 verdict 事件做段内切分）
+ * 回退链步数: 1（用户可控指令：显式 /task）→ 2（判别器语义票：段内切分）
+ * 审查清单: 数据取自会话日志确定性事件；**不读 event.time（时间戳非判据）**；
  *           apply 纯同步/无副作用/状态 plain JSON；无兴趣事件返回同一引用
- *           （Object.is 门控）；语义票表只读注入（投票方=指挥半边，见 orchestrator）；
+ *           （Object.is 门控）；v0.2.0-s6 语义票、v0.3.0 机械判定层（T1 信号合议/
+ *           簇迁移/todo 信号）已先后移除——fold 不含任何模型/文件 IO；
+ *           v0.8.0：语义票合议 = verdict(会话日志事件) + T0 优先（同 seq no-op）
+ *           + fail-lazy（过期/不可定位/no-op 同引用）；
  *           模块自证附于本注释；无 harness 环境可测。
- * 度量: roundsPerTask / taskSwitchRate / taskDefinitionBytes（docs/07）
+ * 度量: segmentsPerSession / taskSwitchRate / taskDefinitionBytes（docs/07）
  */
 
 import { z } from 'zod'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import {
   classifyExplicitUserMessage,
-  decideBoundaryWithSemantic,
-  evaluateClusterShift,
   extractTaskName,
-  fileDirKey,
-  filePathInfo,
-  hasLexicalBoundaryHint,
-  isTodoAllCompleted,
   makeTaskId,
   touchTaskSurface,
   userMessageText,
-  isUserCorrection,
-  type SemanticMode,
-  type SignalName,
-} from './boundary.ts'
+} from './explicit.ts'
+import { applyCompactionSummary, applyReplace } from './compaction.ts'
+import './events.ts' // SessionEventMap 声明合并（'context-economy/judge-verdict' 事件类型）
 import {
   TASK_PROJECTION_KEY,
   type ContextEconomyTaskState,
-  type SemanticVoteTable,
   type TaskProjectionDefinition,
   type TaskRecord,
 } from './types.ts'
 
 /** 状态 schema（zod；validate 持久化 checkpoint 行——`ver` 门后的输入边界）。 */
-const signalNameSchema = z.enum([
-  'file-cluster-shift',
-  'user-correction',
-  'todo-completed',
-  'lexical-hint',
-  'implicit-start',
-])
-
 const taskRecordSchema = z.object({
   taskId: z.string(),
   startSeq: z.number().int().nonnegative(),
   lastSurfaceSeq: z.number().int().nonnegative(),
-  kind: z.enum(['explicit', 'signals']),
-  evidence: z.array(z.string()),
   summary: z.string().nullable(),
   status: z.enum(['active', 'closed']),
   anchorText: z.string(),
 })
-
-const lastUserMsgSchema = z.object({
-  seq: z.number().int().nonnegative(),
-  text: z.string(),
-}).nullable()
 
 const currentRefSchema = z.object({
   taskId: z.string(),
@@ -74,38 +54,24 @@ const stateSchema = z.object({
   tasks: z.array(taskRecordSchema),
   current: currentRefSchema.nullable(),
   surfaceIndex: z.record(z.string(), z.number().int().nonnegative()),
-  /** 当前 turn 内待转正的候选信号（分数制；同信号只记一次，turn 作用域）。 */
-  pendingEvidence: z.array(signalNameSchema),
-  /** 本 task 内已见目录集合（文件簇，规范化）。 */
-  seenDirs: z.array(z.string()),
-  /** 正在累积的簇迁移候选目录名（null = 无候选）。 */
-  pendingDir: z.string().nullable(),
-  /** 累计到的连续新目录文件数。 */
-  pendingDirCount: z.number().int().nonnegative(),
   lastBoundarySeq: z.number().int().nonnegative().nullable(),
   compactedTaskIds: z.array(z.string()),
   lastBoundary: z.object({
     taskId: z.string(),
-    kind: z.enum(['explicit', 'signals']),
-    evidence: z.array(z.string()),
   }).nullable(),
-  lastUserMsg: lastUserMsgSchema,
 }).strict()
 
 /** 空日志初始状态。 */
-function init(): ContextEconomyTaskState {
+function init(_header: SessionHeader): ContextEconomyTaskState {
+  // header 为 harness 契约形参：本 fold 的状态完全由日志事件重建，
+  // 不依赖会话元数据（header 仅占位，当前不读取）。
   return {
     tasks: [],
     current: null,
     surfaceIndex: {},
-    pendingEvidence: [],
-    seenDirs: [],
-    pendingDir: null,
-    pendingDirCount: 0,
     lastBoundarySeq: null,
     compactedTaskIds: [],
     lastBoundary: null,
-    lastUserMsg: null,
   }
 }
 
@@ -122,28 +88,14 @@ function updateTask(state: ContextEconomyTaskState, task: TaskRecord): ContextEc
   }
 }
 
-/** 追加候选信号（按名去重：同一信号在同一 turn 内只记一次）。 */
-function addSignal(state: ContextEconomyTaskState, signal: SignalName): ContextEconomyTaskState {
-  if (state.pendingEvidence.includes(signal)) return state
-  return { ...state, pendingEvidence: [...state.pendingEvidence, signal] }
-}
-
-/** 批量追加候选信号（按名去重）。 */
-function addSignals(state: ContextEconomyTaskState, signals: SignalName[]): ContextEconomyTaskState {
-  let next = state
-  for (const signal of signals) next = addSignal(next, signal)
-  return next
-}
-
 /**
- * 转正边界：关闭当前 task（如有）、开新 task（kind 归因），更新指针。
- * 这是唯一会改变 tasks/current 的地方。新 task 清空簇上下文。
+ * 转正边界：关闭当前段（如有）、开新段，更新指针。
+ * 这是唯一会改变 tasks/current 的地方。新段清空残留边界标记。
+ * 边界来源 = 显式指令（kind 由事件 reason/日志审计，状态表不存机械证据）。
  */
 function commitBoundary(
   state: ContextEconomyTaskState,
   seq: number,
-  kind: 'explicit' | 'signals',
-  evidence: string[],
   anchorText: string,
   explicitName?: string,
 ): ContextEconomyTaskState {
@@ -158,8 +110,6 @@ function commitBoundary(
     taskId,
     startSeq: seq,
     lastSurfaceSeq: seq,
-    kind,
-    evidence,
     summary: null,
     status: 'active',
     anchorText,
@@ -168,20 +118,15 @@ function commitBoundary(
     ...state,
     tasks: [...tasks, newTask],
     current: { taskId, startSeq: seq, lastSurfaceSeq: seq },
-    pendingEvidence: [],
-    seenDirs: [],
-    pendingDir: null,
-    pendingDirCount: 0,
     lastBoundarySeq: seq,
-    lastBoundary: { taskId, kind, evidence },
+    lastBoundary: { taskId },
   }
 }
 
-/** 显式闭合当前 task（不产生新 task）。 */
+/** 显式闭合当前段（不产生新段）。 */
 function closeCurrent(
   state: ContextEconomyTaskState,
   seq: number,
-  evidence: string[],
 ): ContextEconomyTaskState {
   const current = state.current
   if (current === null) return state
@@ -192,13 +137,12 @@ function closeCurrent(
     ...state,
     tasks,
     current: null,
-    pendingEvidence: [],
     lastBoundarySeq: seq,
-    lastBoundary: { taskId: current.taskId, kind: 'explicit', evidence },
+    lastBoundary: { taskId: current.taskId },
   }
 }
 
-/** 新 surface 事件进入当前 task：推进 current 与 surfaceIndex。 */
+/** 新 surface 事件进入当前段：推进 current 与 surfaceIndex。 */
 function advanceSurface(
   state: ContextEconomyTaskState,
   seq: number,
@@ -223,52 +167,85 @@ function surfacePosition(state: ContextEconomyTaskState, seq: number): number {
   return maxPos + 1
 }
 
-/** 文件目录访问：簇迁移候选评估 + 加入 seenDirs。 */
-function applyDirAccess(
-  state: ContextEconomyTaskState,
-  dir: string,
-): { next: ContextEconomyTaskState; shifted: boolean } {
-  const { next: clusterCtx, shifted } = evaluateClusterShift(
-    { seenDirs: state.seenDirs, pendingDir: state.pendingDir, pendingDirCount: state.pendingDirCount },
-    dir,
-  )
-  // 触发迁移时：该目录已"进入"簇（加进 seenDirs，重置候选）。
-  const seenDirs = shifted
-    ? [...clusterCtx.seenDirs, dir]
-    : clusterCtx.seenDirs
-  const next: ContextEconomyTaskState = {
-    ...state,
-    seenDirs,
-    pendingDir: shifted ? null : clusterCtx.pendingDir,
-    pendingDirCount: shifted ? 0 : clusterCtx.pendingDirCount,
-    pendingEvidence: shifted ? addSignal(state, 'file-cluster-shift').pendingEvidence : state.pendingEvidence,
-  }
-  return { next, shifted }
+/** 运行时选项（createTaskProjection 捕获）。v0.3.0：机械判定层已退役，
+ * 判定来源 = 显式指令（本轮）；判别器接口（语义判定）接入时在此扩展选项。 */
+export interface ProjectionRuntimeOptions {
+  /** 预留：无机械选项。 */
+  _?: never
 }
 
-/** 运行时选项（createTaskProjection 捕获；折叠对 (选项, 状态, 事件) 三者纯函数）。
- * votes 为可选的运行时语义票表——fold 只读，不持有会话外引用。
+/**
+ * 语义票合议（v0.8.0）：verdict=new-task → 在当前活动段内按目标 seq 切分——
+ * 旧段闭合于其前一条 surface 事件，新段以判定消息为段头开启（锚 = 判定原文）。
+ * 不变式（fail-lazy：证据不足/过期一律 no-op，绝不改写闭段历史）：
+ * - 无当前段 / 目标 seq 不在当前段范围（[startSeq, lastSurfaceSeq]）→ no-op；
+ * - 目标 seq 不在 surface（被替换/压缩移除）→ no-op；
+ * - 目标 seq == 当前段 startSeq（T0 显式 / 隐式开段已是权威边界）→ no-op；
+ * - 位置语义：段头（锚）消息**无 surfaceIndex 条目**（v4 既有——commitBoundary
+ *   不写位置），目标位置为 0 ⇒ 其直接前驱 = 当前段锚（startSeq）；
+ *   位置 > 0 ⇒ 由 surfaceIndex 反查 pos-1 的 seq（位置唯一且单调）；
+ * - verdict=continue 在调用侧短路（同引用返回）。
  */
-export interface ProjectionRuntimeOptions {
-  /** 语义票档位。 */
-  mode: SemanticMode
-  /** 语义漂移阈值（cosine 低于该值 = 语义离开当前 task）。 */
-  threshold: number
-  /** 语义票表（mode 'on' 时必填；null 票 = 机械降级）。 */
-  votes?: SemanticVoteTable
+function applySemanticVerdict(
+  state: ContextEconomyTaskState,
+  targetSeq: number,
+  anchorText: string,
+): ContextEconomyTaskState {
+  const current = state.current
+  if (current === null) return state
+  if (targetSeq < current.startSeq || targetSeq > current.lastSurfaceSeq) return state
+  if (targetSeq === current.startSeq) return state
+  const pos = state.surfaceIndex[String(targetSeq)]
+  if (pos === undefined) return state
+  // 定位旧段最后一条 surface 事件（目标的前驱）。
+  let prevSeq: number
+  if (pos === 0) {
+    prevSeq = current.startSeq // 目标 = 段内首条非锚消息：前驱 = 段锚
+  } else {
+    let found: number | undefined
+    for (const [seqStr, position] of Object.entries(state.surfaceIndex)) {
+      if (position === pos - 1) {
+        found = Number(seqStr)
+        break
+      }
+    }
+    if (found === undefined) return state
+    prevSeq = found
+  }
+
+  const taskId = makeTaskId(targetSeq)
+  const tasks = state.tasks.map(task => (
+    task.taskId === current.taskId
+      ? { ...task, status: 'closed' as const, lastSurfaceSeq: prevSeq }
+      : task
+  ))
+  const newTask: TaskRecord = {
+    taskId,
+    startSeq: targetSeq,
+    lastSurfaceSeq: current.lastSurfaceSeq,
+    summary: null,
+    status: 'active',
+    anchorText,
+  }
+  return {
+    ...state,
+    tasks: [...tasks, newTask],
+    current: { taskId, startSeq: targetSeq, lastSurfaceSeq: current.lastSurfaceSeq },
+    lastBoundarySeq: targetSeq,
+    lastBoundary: { taskId },
+  }
 }
 
 /**
  * 纯状态转移：前态 + 一个已提交事件 → 后态。
  * 规则（全部无副作用、不读 event.time；无兴趣事件返回同一引用）：
- * - user/message（surface append）→ T0 显式边界 / 当前 task 推进 + lexical/correction 候选；
+ * - user/message（surface append）→ T0 显式边界（open/close）/ 隐式开段 / 段推进；
  * - user/message surface replace → surfaceIndex 重映射 + 受影响 task 标记；
- * - tool/call → 文件目录访问：簇迁移候选；
- * - todo/write → 全完成候选（弱信号）；
- * - turn/end → 分数制合议 + 语义票转正，或 fail-lazy 丢弃；
- * - compaction/summary → 摘要提取归入所属 task。
+ * - context-economy/judge-verdict（语义票，v0.8.0）→ new-task 段内切分；
+ * - compaction/summary → 摘要提取归入所属 task；
+ * - 其余事件（tool/todo/turn 等）→ 不参与段判定（返回同一引用）。
  */
-function makeApply(options: ProjectionRuntimeOptions) {
+function makeApply(): (state: ContextEconomyTaskState, event: SessionEvent) => ContextEconomyTaskState {
   return function apply(state: ContextEconomyTaskState, event: SessionEvent): ContextEconomyTaskState {
   switch (event.type) {
     case 'user/message': {
@@ -277,66 +254,24 @@ function makeApply(options: ProjectionRuntimeOptions) {
         return applyReplace(state, event, surfaceOp)
       }
       const text = userMessageText(event)
-      // 记录最近用户消息（语义票与隐式锚的输入；replace 语义事件不更新）。
-      let next: ContextEconomyTaskState = { ...state, lastUserMsg: { seq: event.seq, text } }
       const explicit = classifyExplicitUserMessage(text)
       if (explicit === 'open') {
-        return commitBoundary(next, event.seq, 'explicit', ['user:/task'], text, extractTaskName(text))
+        return commitBoundary(state, event.seq, text, extractTaskName(text))
       }
       if (explicit === 'close') {
-        return closeCurrent(next, event.seq, ['user:/task-close'])
+        return closeCurrent(state, event.seq)
       }
-      if (next.current === null) {
-        // 会话首条（或关闭后）非显式消息：隐式开新 task（evidence 标记 implicit-start）。
-        next = commitBoundary(next, event.seq, 'signals', ['implicit-start'], text)
-      } else {
-        next = advanceSurface(next, event.seq)
+      if (state.current === null) {
+        // 会话首条（或闭合后）非显式消息：隐式开新段（锚 = 段头原文）。
+        return commitBoundary(state, event.seq, text)
       }
-      const signals: SignalName[] = []
-      if (isUserCorrection(text)) signals.push('user-correction')
-      if (hasLexicalBoundaryHint(text)) signals.push('lexical-hint')
-      return addSignals(next, signals)
+      return advanceSurface(state, event.seq)
     }
 
-    case 'tool/call': {
-      const info = filePathInfo(event)
-      if (info === null) return state
-      const dir = fileDirKey(info)
-      return applyDirAccess(state, dir).next
-    }
-
-    case 'todo/write': {
-      if (!isTodoAllCompleted(event)) return state
-      return addSignal(state, 'todo-completed')
-    }
-
-    case 'turn/start':
-      // 信号作用域 = 一个 turn：新 turn 开始即重置候选（防跨 turn 信号误合议）。
-      return state.pendingEvidence.length === 0 ? state : { ...state, pendingEvidence: [] }
-
-    case 'turn/end': {
-      const pending = state.pendingEvidence as SignalName[]
-      // 语义票：mode 'on' 时无论机械信号与否都查票（embedding 主判据 = 抓无机械信号的
-      // 正常新指令换向）；票来自 voteTable（异步写入先于 turn/end 落定）。
-      const semantic = options.mode === 'off' || state.lastUserMsg === null
-        ? null
-        : options.votes === undefined ? null : (() => {
-          const score = options.votes.scoreOf(state.lastUserMsg!.seq)
-          return score === null ? null : { score }
-        })()
-      const verdict = decideBoundaryWithSemantic(pending, semantic, {
-        mode: options.mode,
-        threshold: options.threshold,
-      })
-      if (verdict === 'boundary') {
-        const evidence = semantic !== null && semantic.score < options.threshold
-          ? [...pending, `semantic:${semantic.score.toFixed(3)}`]
-          : pending
-        const anchor = state.lastUserMsg !== null ? state.lastUserMsg.text : ''
-        return commitBoundary(state, event.seq, 'signals', evidence, anchor)
-      }
-      if (pending.length === 0) return state
-      return { ...state, pendingEvidence: [] }
+    case 'context-economy/judge-verdict': {
+      // 语义票合议（v0.8.0）：仅 new-task 生效；continue / 过期 / 不可定位 → 同引用。
+      if (event.data.verdict !== 'new-task') return state
+      return applySemanticVerdict(state, event.data.seq, event.data.anchorText)
     }
 
     case 'compaction/summary':
@@ -348,67 +283,16 @@ function makeApply(options: ProjectionRuntimeOptions) {
   }
 }
 
-/** 压缩替换事件：重映射 surfaceIndex，并把"范围与替换区间相交的 task"标记 closed。 */
-function applyReplace(
-  state: ContextEconomyTaskState,
-  event: SessionEvent<'user/message'>,
-  surfaceOp: { op: 'replace'; start: number; end: number },
-): ContextEconomyTaskState {
-  const { start, end } = surfaceOp
-  const nextSurfaceIndex: Record<string, number> = {}
-  let replacementPos = surfacePosition(state, start)
-  for (const [seqStr, pos] of Object.entries(state.surfaceIndex)) {
-    const seq = Number(seqStr)
-    if (seq >= start && seq <= end) {
-      replacementPos = Math.min(replacementPos, pos)
-      continue
-    }
-    nextSurfaceIndex[seqStr] = pos
-  }
-  nextSurfaceIndex[String(event.seq)] = replacementPos
-
-  const tasks = state.tasks.map(task => {
-    const overlaps = Number(start) <= task.lastSurfaceSeq && Number(end) >= task.startSeq
-    return overlaps ? { ...task, status: 'closed' as const } : task
-  })
-  const newlyClosed = tasks.filter(task => task.status === 'closed').map(task => task.taskId)
-  return {
-    ...state,
-    tasks,
-    surfaceIndex: nextSurfaceIndex,
-    compactedTaskIds: [...new Set([...state.compactedTaskIds, ...newlyClosed])],
-  }
-}
-
-/** 压缩摘要事件：提取 summary 文本，按 shadowedSeqs 归属到 task。 */
-function applyCompactionSummary(
-  state: ContextEconomyTaskState,
-  event: SessionEvent<'compaction/summary'>,
-): ContextEconomyTaskState {
-  const summaryText = event.data.summary
-    .map(block => (block.type === 'text' ? block.text : ''))
-    .join('')
-    .trim()
-  if (summaryText.length === 0) return state
-  const tasks = state.tasks.map(task => {
-    const belongs = event.data.shadowedSeqs.some(seq => (
-      seq >= task.startSeq && seq <= task.lastSurfaceSeq
-    ))
-    return belongs ? { ...task, summary: summaryText, status: 'closed' as const } : task
-  })
-  return { ...state, tasks }
-}
-
 /** 注册到投影 registry 的定义工厂（types.ts 的 satisfies 校验入口）。 */
-export function createTaskProjection(options: ProjectionRuntimeOptions): TaskProjectionDefinition {
+export function createTaskProjection(_options: ProjectionRuntimeOptions = {}): TaskProjectionDefinition {
   return {
     key: TASK_PROJECTION_KEY,
-    stateVersion: 3,
+    stateVersion: 5,
     stateSchema,
     init,
-    apply: makeApply(options),
+    apply: makeApply(),
   } satisfies TaskProjectionDefinition
 }
 
-/** 默认投影定义（'off' 档：纯机械——与 v2 行为一致；测试/无配置场景用）。 */
-export const taskProjectionDefinition = createTaskProjection({ mode: 'off', threshold: 0.5 })
+/** 默认投影定义（显式指令 + 语义票合议 + 隐式开段——与 v5 行为一致；测试/无配置场景用）。 */
+export const taskProjectionDefinition = createTaskProjection()

@@ -1,23 +1,15 @@
 /**
  * 投影 fold 单测（无 harness：纯 node 构造 SessionEvent 序列，不启动 DSH）。
- * 覆盖：T0 显式、簇迁移→分数合议→转正、fail-lazy、replace 重映射、摘要归档、
- * 契约守卫（同引用/stateSchema/stateVersion）、无时间戳依赖。
+ * 覆盖：T0 显式边界、隐式开段/段推进、fail-lazy（无判定即惰性）、replace 重映射、
+ * 摘要归档、契约守卫（同引用/stateSchema/stateVersion）、无时间戳依赖。
+ * v0.3.0：机械判定层（T1 信号/簇迁移/分数合议）已退役——正常新指令不再触发边界，
+ * 边界来自显式指令（判别器语义票 v0.8.0 接入：verdict 会话事件 → 段内切分）。
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { createTaskProjection, taskProjectionDefinition } from '../src/task/projection.js'
-import type { SemanticVoteTable } from '../src/task/types.js'
+import { taskProjectionDefinition } from '../src/task/projection.js'
 
 const stateSchema = taskProjectionDefinition.stateSchema
-
-/** 简单内存语义票表（测试注入用）。 */
-function tableOf(entries: Record<number, number>): SemanticVoteTable {
-  const votes = new Map(Object.entries(entries).map(([seq, score]) => [Number(seq), score]))
-  return {
-    scoreOf: messageSeq => votes.get(messageSeq) ?? null,
-    set: (messageSeq, score) => { if (!votes.has(messageSeq)) votes.set(messageSeq, score) },
-  }
-}
 
 /** 纯函数 replay：按序 fold（模拟 registry 的 drive）。 */
 function fold(events: SessionEvent[]) {
@@ -53,36 +45,6 @@ function user(text: string, surface: 'append' | 'replace' = 'append', replaceSpa
   return event
 }
 
-function toolCall(name: string, args: Record<string, unknown>) {
-  const seq = nextSeq()
-  return {
-    type: 'tool/call' as const,
-    seq,
-    time: 0,
-    data: { turn: 1, step: 1, callId: `c-${seq}`, name, arguments: JSON.stringify(args) },
-  }
-}
-
-function turnEnd() {
-  const seq = nextSeq()
-  return {
-    type: 'turn/end' as const,
-    seq,
-    time: 0,
-    data: { turn: 1, reason: { kind: 'completed' } },
-  }
-}
-
-function todoAllCompleted() {
-  const seq = nextSeq()
-  return {
-    type: 'todo/write' as const,
-    seq,
-    time: 0,
-    data: { todos: [{ content: 'a', status: 'completed' }, { content: 'b', status: 'completed' }] },
-  }
-}
-
 function compactionSummary(shadowedSeqs: number[], text: string) {
   const seq = nextSeq()
   return {
@@ -105,110 +67,79 @@ function resetSeq() {
   seqCounter = 0
 }
 
+/** 语义票会话事件（log-only non-surface；data.seq = 目标用户消息 seq）。 */
+function verdict(targetSeq: number, v: 'new-task' | 'continue' = 'new-task', anchorText = '') {
+  const seq = nextSeq()
+  return {
+    type: 'context-economy/judge-verdict' as const,
+    seq,
+    time: 0,
+    data: { judgeId: `j:s1:${targetSeq}`, seq: targetSeq, verdict: v, anchorText },
+  }
+}
+
 beforeEach(() => resetSeq())
 
 describe('T0 显式边界', () => {
-  it('user /task 直接开新 task（explicit），簇上下文重置', () => {
+  it('user /task 直接开新段，旧段闭合，锚 = 段头原文', () => {
     const events = [
       user('帮我读文件'),
-      toolCall('read', { file_path: 'src/a.ts' }),
-      toolCall('read', { file_path: 'src/b.ts' }),
       user('/task 重构'),
     ]
     const state = fold(events)
     expect(state.tasks).toHaveLength(2)
     expect(state.tasks[0]!.status).toBe('closed')
-    expect(state.tasks[1]!.kind).toBe('explicit')
     expect(state.tasks[1]!.taskId).toBe('task-重构')
+    expect(state.tasks[1]!.anchorText).toBe('/task 重构')
     expect(state.current?.taskId).toBe('task-重构')
-    expect(state.lastBoundary?.kind).toBe('explicit')
-    expect(state.seenDirs).toEqual([]) // 新 task 簇重置
+    expect(state.lastBoundary).toEqual({ taskId: 'task-重构' })
   })
 
-  it('/task close 显式闭合，不产生新 task', () => {
+  it('/task close 显式闭合，不产生新段', () => {
     const state = fold([user('/task 修 bug'), user('开始干'), user('/task close')])
     expect(state.tasks).toHaveLength(1)
     expect(state.tasks[0]!.status).toBe('closed')
     expect(state.current).toBeNull()
   })
-})
 
-describe('T1 簇迁移 → 分数合议 → 转正', () => {
-  it('file-cluster-shift（弱）+ user-correction（强）→ 边界转正', () => {
-    const events: SessionEvent[] = [
-      user('帮我做 A'),
-      toolCall('read', { file_path: 'src/a.ts' }),
-      toolCall('read', { file_path: 'src/b.ts' }),
-      toolCall('read', { file_path: 'src/c.ts' }),
-      toolCall('read', { file_path: 'rust/x.rs' }),
-      toolCall('read', { file_path: 'rust/y.rs' }),
-      toolCall('read', { file_path: 'rust/z.rs' }),
-      user('先别动手，方向不对，重新来'), // 用户方向否决（强）
-      turnEnd(),
-    ]
-    const state = fold(events)
+  it('闭合后再来普通消息 → 隐式开新段', () => {
+    const state = fold([user('/task 修 bug'), user('/task close'), user('现在做别的')])
     expect(state.tasks).toHaveLength(2)
-    expect(state.tasks[1]!.evidence).toContain('user-correction')
-    expect(state.tasks[1]!.kind).toBe('signals')
-  })
-
-  it('仅 file-cluster-shift（弱）不单独触发——需用户方向否定（fail-lazy）', () => {
-    const events: SessionEvent[] = [
-      user('帮我做 A'),
-      toolCall('read', { file_path: 'src/a.ts' }),
-      toolCall('read', { file_path: 'src/b.ts' }),
-      toolCall('read', { file_path: 'src/c.ts' }),
-      toolCall('read', { file_path: 'rust/x.rs' }),
-      toolCall('read', { file_path: 'rust/y.rs' }),
-      toolCall('read', { file_path: 'rust/z.rs' }),
-      user('继续读文件'), // 无否决
-      turnEnd(),
-    ]
-    const state = fold(events)
-    expect(state.tasks).toHaveLength(1)
-    expect(state.tasks[0]!.status).toBe('active')
-    expect(state.current).not.toBeNull()
-  })
-
-  it('仅切换到新目录少数文件 → 不触发（fail-lazy 维持当前 task）', () => {
-    const events: SessionEvent[] = [
-      user('帮我做 A'),
-      toolCall('read', { file_path: 'src/a.ts' }),
-      toolCall('read', { file_path: 'rust/x.rs' }), // 单文件新目录
-      toolCall('read', { file_path: 'src/b.ts' }),  // 回到 src
-      turnEnd(),
-    ]
-    const state = fold(events)
-    expect(state.tasks).toHaveLength(1)
-    expect(state.tasks[0]!.status).toBe('active')
-    expect(state.current).not.toBeNull()
-  })
-
-  it('todo 完成（弱信号）+ lexical（弱信号）→ 不转正', () => {
-    const events: SessionEvent[] = [
-      user('做任务'),
-      todoAllCompleted(),
-      user('接下来继续当前工作'), // lexical hint? '接下来' 命中
-      turnEnd(),
-    ]
-    const state = fold(events)
-    // 弱信号组合 0.5+0.5=1.0 < 1.5 → fail-lazy
-    expect(state.tasks).toHaveLength(1)
-    expect(state.current).not.toBeNull()
+    expect(state.tasks[1]!.status).toBe('active')
+    expect(state.tasks[1]!.anchorText).toBe('现在做别的')
   })
 })
 
-describe('fail-lazy', () => {
-  it('证据不足（无信号）→ turn/end 不动，维持当前 task', () => {
+describe('隐式开段 / 段推进（机械信号已退役）', () => {
+  it('首条普通消息 → 隐式开段（anchorText = 段头原文）', () => {
+    const state = fold([user('帮我全面审视一下项目架构')])
+    expect(state.tasks).toHaveLength(1)
+    expect(state.tasks[0]!.anchorText).toBe('帮我全面审视一下项目架构')
+    expect(state.current).not.toBeNull()
+  })
+
+  it('后续普通消息（含方向否决措辞）→ 留在当前段（机械信号不再触发边界）', () => {
     const events: SessionEvent[] = [
       user('帮我做 A'),
-      toolCall('read', { file_path: 'src/a.ts' }),
-      turnEnd(),
+      user('先别动手，方向不对，重新来'), // 旧 user-correction 措辞：v0.3.0 退役后不产生边界
+      user('好的，继续'),
     ]
     const state = fold(events)
     expect(state.tasks).toHaveLength(1)
     expect(state.tasks[0]!.status).toBe('active')
     expect(state.current).not.toBeNull()
+  })
+
+  it('tool/todo/turn 事件不参与段判定（返回同一引用）', () => {
+    const meh: SessionEvent[] = [
+      { type: 'tool/call', seq: nextSeq(), time: 0, data: { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{}' } },
+      { type: 'todo/write', seq: nextSeq(), time: 0, data: { todos: [{ content: 'a', status: 'completed' }] } },
+      { type: 'turn/end', seq: nextSeq(), time: 0, data: { turn: 1, reason: { kind: 'completed' } } },
+    ]
+    const state = taskProjectionDefinition.init()
+    for (const e of meh) {
+      expect(taskProjectionDefinition.apply(state, e)).toBe(state)
+    }
   })
 })
 
@@ -239,87 +170,98 @@ describe('压缩摘要归档', () => {
   })
 })
 
-describe('实测回归样本（card-b5f9 真实会话提炼）', () => {
-  it('T2 战斗界面：用户方向否决（"先别动手，完全不够放开"）→ 命中边界', () => {
-    const events: SessionEvent[] = [
-      user('现在R12执行完毕……再次为我进行一次计划R12的落地'),
-      toolCall('read', { file_path: 'src/ui/battle.ts' }),
-      toolCall('edit', { file_path: 'src/ui/battle.ts' }),
-      toolCall('read', { file_path: 'src/ui/selector.ts' }),
-      user('先别动手，我觉得你完全不够放开，思路太笨了。为什么不把选择器做成拟物筹码？'),
-      user('好的，就这么修复吧'),
-      turnEnd(),
-    ]
-    const state = fold(events)
-    // 用户否决（强）+ 文件探索（弱）→ 边界成立
+describe('语义票合议（v0.8.0：verdict → 段内切分）', () => {
+  it('new-task 切分：旧段闭合于前一条 surface，新段锚 = verdict 原文', () => {
+    const state = fold([user('帮我读文件'), user('现在重构接口'), verdict(2, 'new-task', '现在重构接口')])
     expect(state.tasks).toHaveLength(2)
-    expect(state.tasks[1]!.evidence).toContain('user-correction')
+    expect(state.tasks[0]!.status).toBe('closed')
+    expect(state.tasks[0]!.lastSurfaceSeq).toBe(1)
+    expect(state.tasks[1]!.taskId).toBe('task-2')
+    expect(state.tasks[1]!.anchorText).toBe('现在重构接口')
+    expect(state.tasks[1]!.status).toBe('active')
+    expect(state.current).toEqual({ taskId: 'task-2', startSeq: 2, lastSurfaceSeq: 2 })
+    expect(state.lastBoundarySeq).toBe(2)
+    expect(state.lastBoundary).toEqual({ taskId: 'task-2' })
   })
 
-  it('T6 架构审查：正常新指令（"帮我全面审视"）不触发当前强信号（已知局限，记录之）', () => {
-    const events: SessionEvent[] = [
-      user('帮我全面审视一下当前项目的架构是否干净，边界清晰，组件复用度，可维护性高，并为我报告'),
-      toolCall('read', { file_path: 'src/main.ts' }),
-      toolCall('read', { file_path: 'src/ui/app.ts' }),
-      turnEnd(),
-    ]
-    const state = fold(events)
-    // 当前机械强信号=user-correction；正常新指令无否决词 → 不判边界（fail-lazy 保守）
-    // 这是已知局限（正常新指令漏检），固化防止未来无意识"变好"或"倒退"。
+  it('verdict 迟到（后续消息已入旧段）→ 尾部随新段迁移', () => {
+    const state = fold([
+      user('帮我读文件'),
+      user('现在重构接口'),
+      user('先看下依赖'),
+      verdict(2, 'new-task', '现在重构接口'),
+    ])
+    expect(state.tasks[0]!.status).toBe('closed')
+    expect(state.tasks[0]!.lastSurfaceSeq).toBe(1)
+    expect(state.tasks[1]!.taskId).toBe('task-2')
+    expect(state.tasks[1]!.lastSurfaceSeq).toBe(3) // '先看下依赖'（seq 3）归入新段
+    expect(state.current).toEqual({ taskId: 'task-2', startSeq: 2, lastSurfaceSeq: 3 })
+  })
+
+  it('verdict 早到 vs 迟到 → 边界事实一致（切分锚定不随折叠时序偏置）', () => {
+    // 用显式 seq 构造（两份日志 seq 空间独立、完全对称）：
+    // 早到 = verdict 落在后续消息之前；迟到 = verdict 落在后续消息之后。
+    const m = (s: number, text: string): SessionEvent => ({
+      type: 'user/message', seq: s, time: 0,
+      data: { content: [{ type: 'text', text }], source: { kind: 'human' }, id: `m-${s}`, role: 'user' },
+    })
+    const v = (s: number, target: number, anchor: string): SessionEvent => ({
+      type: 'context-economy/judge-verdict', seq: s, time: 0,
+      data: { judgeId: `j:s1:${target}`, seq: target, verdict: 'new-task', anchorText: anchor },
+    })
+    const early = fold([m(1, '帮我读文件'), m(2, '现在重构接口'), v(3, 2, '现在重构接口'), m(4, '先看下依赖')])
+    const late = fold([m(1, '帮我读文件'), m(2, '现在重构接口'), m(3, '先看下依赖'), v(4, 2, '现在重构接口')])
+    const facts = (s: typeof early) => ({
+      tasks: s.tasks.map(t => ({ status: t.status, anchor: t.anchorText })),
+      currentAnchor: s.current
+        ? s.tasks.find(t => t.taskId === s.current!.taskId)?.anchorText
+        : null,
+      boundary: s.lastBoundary,
+    })
+    expect(facts(early)).toEqual(facts(late))
+    expect(early.lastBoundarySeq).toBe(2)
+    expect(early.tasks[1]!.lastSurfaceSeq).toBe(4)
+    expect(late.tasks[1]!.lastSurfaceSeq).toBe(3)
+  })
+
+  it('T0 权威 / 同 seq 不可切：verdict 落在段起 seq → no-op（同引用）', () => {
+    const events = [user('/task 重构')]
+    const before = fold(events)
+    const after = taskProjectionDefinition.apply(before, verdict(1, 'new-task', '/task 重构'))
+    expect(after).toBe(before)
+  })
+
+  it('verdict=continue → no-op（同引用）', () => {
+    const before = fold([user('帮我读文件'), user('继续做')])
+    const after = taskProjectionDefinition.apply(before, verdict(2, 'continue', ''))
+    expect(after).toBe(before)
+  })
+
+  it('过期 verdict（目标在已闭合段）→ no-op（同引用）', () => {
+    const before = fold([
+      user('帮我读文件'), // 1 → task-1
+      user('继续做'),    // 2
+      user('/task close'), // 3 闭合
+      user('换件事做'),  // 4 隐式开 task-4
+    ])
+    const after = taskProjectionDefinition.apply(before, verdict(2, 'new-task', '继续做'))
+    expect(after).toBe(before)
+  })
+
+  it('不可定位 verdict（目标已被 replace 移出 surface）→ no-op（同引用）', () => {
+    const stateBefore = fold([
+      user('帮我读文件'),                 // seq 1, pos 0
+      user('继续做'),                     // seq 2, pos 1
+      user('压缩替换', 'replace', { start: 1, end: 2 }), // seq 3, pos 0；seq 1/2 移出 surface
+    ])
+    const after = taskProjectionDefinition.apply(stateBefore, verdict(1, 'new-task', '帮我读文件'))
+    expect(after).toBe(stateBefore)
+  })
+
+  it('未装配判别器（无 verdict 事件）→ 行为与 v4 一致（fold 纯惰性）', () => {
+    const state = fold([user('帮我读文件'), user('继续做')])
     expect(state.tasks).toHaveLength(1)
-  })
-})
-
-describe('语义票（embedding 档，回退链第 4 步）', () => {
-  function foldWith(votes: SemanticVoteTable, mode: 'off' | 'on', threshold: number, events: SessionEvent[]) {
-    const projection = createTaskProjection({ mode, threshold, votes })
-    let state = projection.init()
-    for (const event of events) state = projection.apply(state, event)
-    return state
-  }
-
-  it('语义漂移（score < threshold）→ 转正，证据含 semantic 标注', () => {
-    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
-    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.41 }), 'on', 0.5, msgs)
-    expect(state.tasks).toHaveLength(2)
-    expect(state.tasks[1]!.evidence).toContain('semantic:0.410')
-    expect(state.tasks[1]!.anchorText).toContain('全面审视')
-  })
-
-  it('语义同任务（score ≥ threshold）→ 不转正（fail-lazy 保守）', () => {
-    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
-    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.72 }), 'on', 0.5, msgs)
-    expect(state.tasks).toHaveLength(1)
-  })
-
-  it('无票（embedding 失败/未算）→ 机械底线，不因语义缺位误转正', () => {
-    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
-    const state = foldWith(tableOf({}), 'on', 0.5, msgs)
-    expect(state.tasks).toHaveLength(1)
-  })
-
-  it('机械强信号（user-correction）在语义同任务时仍保留兜底', () => {
-    const msgs: SessionEvent[] = [user('先别动手，完全不够放开，思路太笨了'), turnEnd()]
-    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.88 }), 'on', 0.5, msgs)
-    expect(state.tasks).toHaveLength(2)
-    expect(state.tasks[1]!.evidence).toContain('user-correction')
-  })
-
-  it("'off' 档忽略语义票（纯机械，票再漂移也不转正）", () => {
-    const msgs: SessionEvent[] = [user('帮我全面审视一下当前项目的架构是否干净，边界清晰'), turnEnd()]
-    const state = foldWith(tableOf({ [msgs[0]!.seq]: 0.10 }), 'off', 0.5, msgs)
-    expect(state.tasks).toHaveLength(1)
-  })
-
-  it('多 turn：票作用于"上一 turn 边界后"的新锚（锚文本随 task 更新）', () => {
-    const s1 = user('帮我复查一下 R12 的落地效果')
-    const e1 = turnEnd()
-    const s2 = user('帮我全面审视一下当前项目的架构是否干净，边界清晰')
-    const e2 = turnEnd()
-    // 第一 turn：高相似（同任务）不转正；第二 turn：漂移 → 转正，锚 = 第二消息。
-    const state = foldWith(tableOf({ [s1.seq]: 0.68, [s2.seq]: 0.41 }), 'on', 0.5, [s1, e1, s2, e2])
-    expect(state.tasks).toHaveLength(2)
-    expect(state.tasks[1]!.anchorText).toContain('全面审视')
+    expect(state.tasks[0]!.status).toBe('active')
   })
 })
 
@@ -340,8 +282,8 @@ describe('契约守卫', () => {
     expect(() => stateSchema.parse(state)).not.toThrow()
   })
 
-  it('stateVersion 为非负整数且 =3（v3: 语义票 + 锚文本/最近消息，旧 checkpoint 行失效）', () => {
+  it('stateVersion = 5（v5: 语义票合议接入——verdict 会话事件 → 段内切分；旧 checkpoint 失效）', () => {
     expect(Number.isSafeInteger(taskProjectionDefinition.stateVersion)).toBe(true)
-    expect(taskProjectionDefinition.stateVersion).toBe(3)
+    expect(taskProjectionDefinition.stateVersion).toBe(5)
   })
 })

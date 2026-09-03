@@ -1,0 +1,18 @@
+{
+  // client 半边类型检查（无产物：构建由 tsdown 直接打 client/index.ts → lib/client.js）。
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "types": []
+  },
+  "include": ["client"]
+}

@@ -1,5 +1,5 @@
 /**
- * 图谱更新 hook（占位）：task 边界/压缩发生时发信号，不做任何知识写入。
+ * 图谱更新 hook（占位）：task 段边界/压缩发生时发信号，不做任何知识写入。
  *
  * 模块: 图谱更新 hook（占位）
  * 平面: L0（事件发射，无计算）
@@ -14,7 +14,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { TaskBoundarySignal, TaskCompactedSignal } from './events.ts'
 
 /**
- * 发射 task 边界信号（图谱更新占位——当前仅 ctx.emit + logger，不写存储）。
+ * 发射 task 段边界信号（图谱更新占位——当前仅 ctx.emit + logger，不写存储）。
  * @param ctx - 插件上下文（emit/log）。
  * @param session - 会话（取 sessionId）。
  * @param signal - 边界信号。
@@ -22,7 +22,7 @@ import type { TaskBoundarySignal, TaskCompactedSignal } from './events.ts'
 export function emitTaskBoundary(ctx: Context, session: Session, signal: TaskBoundarySignal): void {
   ctx.emit('context-economy/task-boundary', signal)
   ctx.logger.info(
-    `task-memory: boundary ${signal.kind} task=${signal.taskId} evidence=[${signal.evidence.join(',')}]`,
+    `task-memory: boundary task=${signal.taskId} session=${signal.sessionId}`,
   )
 }
 
