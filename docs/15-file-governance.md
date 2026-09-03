@@ -56,10 +56,10 @@ L2 架构设计:   模块职责 · 接口落点 · 关键设计决策       → 
 ```
 查询意图(embedding 或关键词) → 匹配层(精确关键词/路径前缀优先,embedding 补位)
   → 意图节点 + 映射坐标        → 返回 { file, symbols, lineRange }
-embeddingTier:'off' → 机械等价(关键词 + 路径前缀 + 符号名表 + Jaccard),无需向量
+embedding 端口为空壳(v0.2.0-s6,未接入) → 机械等价(关键词 + 路径前缀 + 符号名表 + Jaccard),无需向量
 ```
 
-检索是逐层命中、机械优先：先发查询（embedding 或关键词），到匹配层时**精确关键词/路径前缀优先**、embedding 补位，命中意图节点和它的**映射坐标**，返回 `{ file, symbols, lineRange }`。`embeddingTier:'off'` 时（向量档关着），就用**机械等价物**替代——关键词 + 路径前缀 + 符号名表 + Jaccard，完全不需要向量。
+检索是逐层命中、机械优先：先发查询（embedding 或关键词），到匹配层时**精确关键词/路径前缀优先**、embedding 补位，命中意图节点和它的**映射坐标**，返回 `{ file, symbols, lineRange }`。embedding 端口目前是空壳（v0.2.0-s6 未接入，主插件不再携带模型/vendor），故检索走**机械等价物**——关键词 + 路径前缀 + 符号名表 + Jaccard，无需向量；将来接入 `EmbeddingPort` 实现后 embedding 补位生效。
 
 ### 1.4 写入（主插件 task 周期执行）
 

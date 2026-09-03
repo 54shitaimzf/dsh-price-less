@@ -1,8 +1,14 @@
 # 00 · 系统导览与公共契约
 
-> 系统形态：**主插件（底座 + 数据面）+ 五个能力域**。能力域文档：02 压缩域 / 03 输入域 / 04 提示词产品域 /
+> 系统形态：**主插件（底座 + 数据面）+ 能力域**。能力域文档：02 压缩域 / 03 输入域 / 04 提示词产品域 /
 > 13 编排域 / 15 文件与寻址域。
 > 本文登记所有公共件（配置、事件、状态、预算、度量、命令、宪法指针）；细节一律回指域文档。
+>
+> **⚠️ 状态说明（v0.8.0）**：本文同时含**已落地**与**设计蓝图**内容——✅ = 代码已实现
+> （`src/` 真实存在）；📐 = 蓝图（域文档设计，代码未实现，勿当现状）。已落地能力域：
+> **输入域（03，判别器语义判定）**、**压缩域（02，原生压缩驱动）**、主插件底座；
+> 提示词产品域（04）/编排域（13）/文件与寻址域（15）为设计蓝图。
+> 另：docs/14 = **评估档案**（"完美转发"提案，数据驱动暂缓立项——reports/probe-parrot.md）。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -12,63 +18,70 @@
 
 我们的主线只有一条：**把内容分好层，能确定算出来的绝不麻烦模型，能提前钉死的绝不临时搜索，能用版本号复用的绝不重新生成**。关键是"隐藏层 P"（提前拼好的公共前缀包：文件流内容+压缩摘要+任务目标；对象不是文本，不进对话历史）和"可见层提示词产物"（模板 + 锚定段）是**同一份数据的两个出口**——同一个版本源，永远不许漂移。
 
-收益是量化的：压缩域给历史瘦身、输入域判好 task 边界、提示词域把意图钉成坐标（**映射坐标**）、文件与寻址域让读文件又省又稳，每处都有明确预算。代价是复杂度：这些机制大多有一道开关（sub1–sub4 + intentMapping，见 docs/12 §5），关闭就走"笨但确定"的原始路径；每一层该不该开、阈值调多少，下文各域文档逐一交代。
+收益是量化的：压缩域给历史瘦身、输入域（✅ 已落地）用判别器判好 task 边界、提示词域/文件域/编排域（📐 蓝图）把意图钉成坐标、让读文件又省又稳。代价是复杂度：已落地机制都有明确开关（当前真实字段：`sub2IntentMapping`/`taskCompression`/`overflowRecovery`/`compressionDriver`/`discriminator.*`，见 docs/12 §5），每层该不该开、阈值调多少，各域文档逐一交代。
 
 ## 1. 系统形态（一图）
 
 ```
 主插件（docs/12）：恢复编排 · 原生接入统一入口 · 内建守卫 · 公共前缀 P 服务
                   · 意图映射表更新(task 周期) · L3 差分写(task 结束证据) · 能力域装配
- ├─ 压缩域    （02） 会话历史体积管理（执行侧）：归档/压缩/摘要区
- ├─ 输入域    （03） task 生命周期发现：机械信号 + 少量 embedding 加权 → 边界事件 + task 定义
- ├─ 提示词产品域（04） 意图强调与模板产品：三级意图 + 映射坐标 → 可见提示词产物
- ├─ 编排域    （13） task 内可并行子目标的上下文压缩执行（默认关）
- └─ 文件与寻址域（15） 寻址参考（意图→坐标，隐式）+ 文件工具治理：页式/快照/CAS/页预算/深度冻结
+ ├─ 压缩域    （02）✅ 会话历史体积管理（执行侧）：原生压缩驱动 + 溢出接管
+ ├─ 输入域    （03）✅ task 生命周期发现：判别器语义判定（L0 快路径 + LLM 主路径）
+ ├─ 提示词产品域（04） 📐 意图强调与模板产品：三级意图 + 映射坐标 → 可见提示词产物
+ ├─ 编排域    （13） 📐 task 内可并行子目标的上下文压缩执行（默认关）
+ └─ 文件与寻址域（15） 📐 寻址参考（意图→坐标，隐式）+ 文件工具治理：页式/快照/CAS/页预算/深度冻结
 ```
 
 > 图里每个方块都是一个能力域（负责一类"跟 token 相关的活"）。主插件是那个"底座 + 数据面"：它统一接入、内建**守卫**（运行时警察：超预算裁剪、字节不符拒绝、补丁不规范拦截、绕过回退链禁入），并向外提供 **P**（提前拼好的公共前缀包：文件流内容+压缩摘要+任务目标；对象不是文本，不进对话历史）。五个能力域各自解决一个副作用。
 
 ## 2. 公共配置
 
-**全部公共配置（归属列 = 本配置项的主人；装配开关见 docs/12 §5）**：
+**✅ 已落地配置（全部真实存在于 `src/config.ts`；装配开关详见 docs/12 §5）**：
 
 | 配置项 | 默认 | 归属（是谁的主人，干什么用） |
 |---|---|---|
-| `sub4Orchestrator` | false | 编排域：并行子目标编排开关（默认关，用户显式触发才走） |
-| `maxParallel` | 4 | 编排域：task 内可并行子任务的个数上限 |
-| `intentMapping` | true | 文件与寻址域：寻址参考（意图映射表）子开关——关掉只走机械寻址 |
-| `thresholdRatio` | 0.8 | 压缩域：压力触发阈值——tokenMeter 达到上下文窗口的 80% 就开压 |
-| `retainRatio` | 0.16 | 压缩域：保留预算比例——压缩后留住当前 task 尾部的 16% |
-| `digestBudgetRatio` | 0.2 | 压缩域：摘要区上限——摘要占上下文窗口的 20% |
-| `patchWriteOverlap` / `patchEmbeddingThreshold` | 0.5 / 0.4 | 压缩域：修补识别参数——判断"当前工作是不是在延续旧任务" |
-| `taskSilenceMs` | 600000 | 输入域：漂移检测基线——静默多久才可能判为任务切换 |
-| `todoCompletedRatio` | 0.8 | 输入域：Tier1 签名——todo 完成率达到 80% 视为任务收尾信号 |
-| `toolJaccardThreshold` | 0.2 | 输入域：工具签名——工具用法相似度的阈值 |
-| `taskEmbeddingThreshold` | 0.5 | 输入域：语义票——向量相似度判定阈值 |
-| `goalBoundary` | 'create' | 输入域：goal 事件贡献级别——goal 是 create 时才算边界 |
-| `planExitIsBoundary` | false | 输入域：退出 plan 是否算 task 边界 |
-| `anchorBudgetTokens` | 2048 | 提示词产品域：锚定段预算（原 mappingBudgetTokens 语义迁移）——可见提示词产物里"意图段+映射坐标段"的字数上限 |
-| `filePageChars` | 2048 | 文件与寻址域：页大小——每一页最多字符数 |
-| `filePageBudget` | 8 | 文件与寻址域：每文件页数上限 |
-| `fileAutoInject` | false | 文件与寻址域：高置信自动引入开关（docs/15 §2）——命中坐标且够置信时把内容页直接卷进 P |
-| `fileInjectConfidence` | 0.8 | 文件与寻址域：自动引入置信度阈值（证据加权分 0–1） |
-| `embeddingTier` | 'off' | 共享（docs/11 选型）：向量档位——off 时用关键词/路径前缀等机械等价物替代 |
-| `embeddingDimension` | 128 | 共享：向量维度 |
-| `embeddingModelPath` | '' | 共享：向量模型路径 |
+| `sub2IntentMapping` | true | 输入域：指挥半边总开关（关 = 投影仍挂，orchestrator 不挂；判别器由 `discriminator.mode` 独立控制） |
+| `taskCompression` | true | 压缩域：task 结束触发压缩 |
+| `overflowRecovery` | true | 压缩域：上下文溢出接管 |
+| `compressionDriver` | 'native' | 压缩域：压缩驱动（换自研实现即换值） |
+| `discriminator.mode` | 'off' | 输入域判别器：off（默认，不挂载）/ observe（只记账）/ active（发 verdict） |
+| `discriminator.preset` | 'minimax' | 输入域判别器：预设一键应用（minimax 综合最优 / hy3 零误切 / v4-low 平衡档） |
+| `discriminator.promptVersion` | 'v2.2' | 输入域判别器：判据版本（生产锁定 v2.2） |
+| `discriminator.provider/model/temperature/maxTokens/effort` | 跟随预设 | 输入域判别器：高级覆盖（能力矩阵外组合不发送无效参数） |
+| `discriminator.maxConcurrency/timeoutMs/cacheLimit/journalLimit/historyWindow/messageExcerptChars` | 4/15000/1024/256/2/80 | 输入域判别器：运行时容错参数（docs/03 §7） |
+
+**📐 设计蓝图配置（未落地——对应能力域未实现，勿当现状）**；历史：`taskEmbeddingThreshold`/
+`embeddingTier`/`embeddingDimension`/`embeddingModelPath` 已随 v0.2.0-s6 移除，embedding 降级为
+`EmbeddingPort` 零成本空壳（`src/task/embedding.ts`）。
+
+| 配置项 | 默认 | 归属（蓝图设计值） |
+|---|---|---|
+| `sub4Orchestrator` | false | 编排域：并行子目标编排开关 |
+| `thresholdRatio` | 0.8 | 压缩域：压力触发阈值 |
+| `retainRatio` | 0.16 | 压缩域：保留预算比例 |
+| `digestBudgetRatio` | 0.2 | 压缩域：摘要区上限 |
+| `anchorBudgetTokens` | 2048 | 提示词产品域：锚定段预算 |
+| `filePageChars` / `filePageBudget` / `fileAutoInject` / `fileInjectConfidence` | — | 文件与寻址域（蓝图） |
 
 ## 3. 公共事件谱（log-only，可回放）
 
 > 下面的每个事件都是"log-only 事件"（只记日志、可回放、不触发副作用）：它只是把发生过的事情记录成一行日志，不影响任何人，但事后能**按事件顺序重放把状态重建回来**。所有人靠这些日志恢复现场。
 
-- 输入域：`task-boundary {taskId, kind, signals[]}`、`task-binding {sourceTaskId, kind, signals[]}`；
-- 压缩域：随 DSH `compaction/*` 事务（括号协议由既有引擎保证）；
-- 主插件：`mapping/updated`、`mapping/stale`、`restore/step`、`restore/degraded`、`restore/done`、`guard/violation {guard, module, detail}`；
-- 提示词产品域：`anchor/created {taskId, version, bytes, templateId}`；
-- 文件与寻址域：`file-stream/paged`、`file-stream/snapshotted`、`file-stream/pruned {path, vN, pagesBefore, pagesAfter}`、`file-stream/injected {path, vN, bytes, confidence}`；
-- 编排域：`pipeline/split`、`pipeline/dispatch`、`pipeline/merge`、`pipeline/fallback`、`pipeline/complete`；
-- 消费的确定性信号源：`plan/mode`、`todo/write`、`goal/change`、`tool/call`、`tool/result`、`user/message`、审批事件、`step/start`/`step/end`、`assistant/message`(usage)、`request/header`、`agent/pre-step`、`agent/request-error`。
+- 输入域 ✅：`task-boundary {taskId}`（投影边界事实，log-only）、`task-compacted`（orchestrator）、
+  `judge-recorded`（判别记录全量）、`judge-error`（错误链）、
+  `judge-verdict`（active 模式边界信号——**v0.8.0 起双通道**：cordis 事件 + 会话日志事件，
+  已接入投影合议为段内切分，docs/03 §5）；
+- 压缩域 ✅：随 DSH `compaction/*` 事务（括号协议由既有引擎保证）；
+- 📐 蓝图事件（域未实现）：`mapping/updated`、`mapping/stale`、`restore/*`、`guard/violation`、
+  `anchor/created`、`file-stream/*`、`pipeline/*`；
+- 消费的确定性信号源（已落地代码实际消费）：`user/message`（判别器 + 投影）、`agent/pre-step`
+  与 `agent/request-error`（orchestrator 压缩/溢出）；`plan/mode`/`todo/write`/`goal/change`/`tool/*`
+  等其余信号源为机械时代/蓝图用途（当前不消费）。
 
 ## 4. 公共状态与恢复
+
+> ⚠️ 本节约全部为📐 蓝图（L3 存储/意图映射表/文件快照均未落地）——已落地的"状态"只有
+> 投影段状态机（`src/task/projection.ts`，纯 fold 从会话日志重建）。
 
 - L3 知识：偏好 / 映射 / **工作摘要（按 task 归档）**，版本协议与一致性见 [docs/09](09-state-store.md)；意图定义唯一在文件与寻址域（docs/15）；
 - 意图映射表：分层意图（项目/框架/架构）↔ 代码实现坐标——存储复用 docs/09 协议；**写入侧在主插件（task 周期）**，结构规格 docs/15；
@@ -76,6 +89,8 @@
 - 恢复契约（docs/12 §2）：L3 → task 表（**事件 fold 重建**——按事件顺序重放日志重建任务表）→ 文件快照（hash）→ 管道中间态（丢弃），单项失败单项**降级**（某个能力没触发就用更笨但确定的方法兜底）。
 
 ## 5. 公共预算
+
+> ⚠️ 以下为📐 蓝图（锚定段未落地）；已落地预算 = 判别器容错上限（`timeoutMs`/`queue cap`，docs/03 §7）。
 
 - **锚定段预算**：`anchorBudgetTokens`（默认 2048）约束提示词产物中"意图段 + 映射坐标段"（docs/04）的总量——锚定段是可见产物的一部分，超出就裁剪降级；
 - 布局：锚定段在提示词产物内（用户可见、可编辑），随产物入历史；意图映射表为锚定提供数据，不单独进请求。
@@ -88,14 +103,20 @@
 
 ## 7. 公共度量字段
 
-统一口径（细节 [docs/07](07-metrics.md)）：`roundsPerTask`、`tokensPerRound` 五分解、`toolCallsPerTask`、`parallelRate`、
-`reDiscoveryTokens`、`compoundedVolume`、`firstTurnSuccess`、`costPerSuccessfulTask`；
-本套件专属：`anchorBytes`/`anchorHits`（锚定段）、`filePagesPerRead`/`fileBytesInjected`/`fileReReadBytes`（文件与寻址域）、`injectedBytesInjected`/`injectedBytesUsed`（文件与寻址域自动引入，命中率 = used÷injected）、
-`pipelineInvokeRate`/`pipelineFallbackRate`/`pipelineSuccessRate`（编排域）、`templateEmbedRate`（采用层）、
-`parallelWidth`/`ownershipMissRate`/`handoffWaitTurns`（并行契约）、`mappingHit`/`mappingFindTurns`/`mappingStaleRate`（文件与寻址域寻址参考）、
-`violationRate`（守卫）、`restoreDegraded`（恢复降级）。
+**✅ 已落地指标（定义与观测方式见 [docs/07 §0.5](07-metrics.md)）**：
+- 通用（会话日志回放，DSH 事件）：`roundsPerTask`、`tokensPerRound`、`toolCallsPerTask`、
+  `reDiscoveryTokens`、`compoundedVolume`、`costPerSuccessfulTask`；
+- 投影侧：`segmentsPerSession` / `taskSwitchRate` / `taskDefinitionBytes`；
+- 判别器侧：`judgeCount` / `judgeErrorRate` / `judgeCacheHitRate` / `judgeLatencyMs` /
+  `judgeLLMUsage` / `judgeNewTaskRate` / `l0CaptureRate` / `l0Leak`（台账统计 + 日志行）。
+
+**📐 蓝图度量（域未实现）**：`anchorBytes`/`anchorHits`（04）、`filePagesPerRead`/`fileBytesInjected`/
+`fileReReadBytes`（15）、`pipelineInvokeRate`/`pipelineFallbackRate`/`pipelineSuccessRate`（13）、
+`mappingHit`/`mappingFindTurns`/`mappingStaleRate`（15）、`violationRate`/`restoreDegraded`（守卫/恢复）。
 
 ## 8. 公共命令面
+
+> /task 系列 = 真实（`src/task/explicit.ts` 前缀识别 + 投影边界）；`/optimize-prompt`、`/run-task-pipeline` = 📐 蓝图。
 
 边界系（判界引擎消费；`/task` 系列归属输入域，注册见 docs/10 §1.1）：`/task <描述>`、`/task close`、`/task`、`/plan`、`/goal`；
 非边界系：`/compact`、`/feedback`；
@@ -110,6 +131,8 @@
 ## 10. 交互矩阵（谁供应、谁消费）
 
 > 一张清单：某种数据/机制，由哪个域**生产/供应**、由哪个域**消费/使用**。加粗的是那个数据/机制的"主人"（写的那一侧）；"—"表示这个域跟它不沾边。
+> **⚠️ 本表含蓝图域（04/13/15 📐 未实现）与蓝图机制（L3/映射表/文件流/锚定/守卫）——仅输入域、压缩域
+> 执行侧、task 边界事件为已落地（✅）；其余单元格是设计，不是现状。**
 
 | 数据/机制 | 主插件 | 压缩域 | 输入域 | 提示词域 | 编排域 | 文件与寻址域 |
 |---|---|---|---|---|---|---|
@@ -149,9 +172,8 @@
 | **门控** | 用户显式触发才跑，否则不启用 |
 | **冷/热缓存** | 清缓存后首跑（冷）与连续跑（热） |
 | **配对实验** | 同一任务开关两态各跑一遍，用差值说话 |
-| **T0/T1/T2 信号** | 用户显式命令 / 机械信号 / 语义相似度票 |
-| **2-of-3 合议** | 三个机械信号里至少两个成立才判边界 |
-| **embeddingTier:'off'** | 向量档关着，用关键词/前缀/符号名表替代 |
+| **T0/T1 信号** | 用户显式命令（T0）/ 判别器语义票（v0.3.0 机械层退役，v0.4.0 接入——docs/07 §18） |
+| **2-of-3 合议** | （已退役，v0.3.0 机械层删除——历史概念） |
 | **fail-lazy** | 证据不足就维持当下，宁晚切任务不乱切 |
 | **深度冻结** | 历史深处的文件内容永远别删，删了缓存断裂 |
 | **装配** | 把各域按开关装进主插件 |
