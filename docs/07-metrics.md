@@ -1258,3 +1258,9 @@ cacheHitRate(热)       87%            91%        +4pp
 - `CASCADE-native-auto-mtnay1ej`：finished=True、98 步、27.0 分钟、**总 90 / judge 均分 83**、$0.254（谷时）。**两次压缩全部成功**（`fired=pressure`，range [1..97] 与 [1..102]，均 ≈90K wire 输入、缓存命中 99.5%、输出 2,510/1,694），压缩后上下文 12.4K——全程峰值 ≤100K 真实 wire，`maxCompressions=2` 首次用满且零失败、零空摘要。T1/T3/T5 的 mech 扣分均为 run-denied 测试命令守卫（全 run 恒有，非压缩相关）。
 - **三代 native 基线对照**：shakedown（旧估计器）触发 32K wire、净减 2%、峰值 233K；F10 纯估计（mtn7l9mm）触发 ~170K wire、净减 86%、1 成功 1 失败；**F10a 锚定（本 run）触发 ~100K 真实、净减 87%、双成功**——触发语义落到设计点。
 - **批次地位**：本 run = native-auto 臂的批次基线（F10a 触发语义）；mtn7l9mm/mtn5s2tk/mtn2wwpf/mtm4ovi3 全部降级为各自标定时代的机制证据，**不进批次对照**。
+
+**§29.7 追记（2026-09-05）：F10a 下 manual-habit 对照（mtnd4kzy）——两对照首组同语义数据**
+
+- `CASCADE-manual-habit-mtnd4kzy`：finished=True、118 步、22.7 分钟、**总 96 / judge 均分 93**、$0.243。两次压缩全成功：`pressure-50` @~58K（域 50%，wire 锚定）与 `passing-run` @~47K（事件规则），输入 48.1K/37.5K、缓存 98.4%/97.5%。
+- **机制对照（vs native mtnay1ej）**：manual 触发更早更小段（58K/47K vs 100K/100K），但 `maxCompressions=2` 在第 3 段耗尽 → 后 5 任务裸涨至 **129K 峰值（反超 native 的 100K）**——"习惯早压 + 硬帽"的固有权衡首次定量显形。
+- **质量/成本（单 rep，不作结论）**：总 96 vs 90、judge 93 vs 83、成本 $0.243 vs $0.254——方向上 manual 占优，配对结论待 3 reps。
