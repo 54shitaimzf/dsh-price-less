@@ -228,8 +228,15 @@ function assertImmutability(snaps, label) {
   ok(tc.length > 0 && tc.every(e => e.retain === true) && tc.some(e => e.retainedTokens > 0), 'S1-2 A1-S1 引用化保尾: every compact retains (refs+outline)', JSON.stringify(tc[0] ?? {}))
   const snaps = res.compressSnapshots ?? []
   ok(snaps.some(s => s.after.some(m => typeof m.content === 'string' && m.content.includes('[热桥接 retain]'))), 'S1-3 retain bridge node rendered into the context')
-  // deleted at the NEXT compaction: the next snapshot's BEFORE has no retain node
-  ok(snaps.length >= 2 && snaps.slice(1).every(s => !s.before.some(m => typeof m.content === 'string' && m.content.includes('[热桥接 retain]'))), 'S1-4 old retain bridge DELETED at the next compaction (never re-fed)', `snaps=${snaps.length}`)
+  // F11a one-shot lifecycle (post cache-alignment fix): the OLD bridge is still
+  // in the surface DURING the compressor call — snapshot.before legitimately
+  // contains it, because the replay must stay a byte-aligned super-prefix of
+  // the last routed request (measured mtng8ctd: aligned seg3 96% cache hit vs
+  // bridge-spliced seg4 1,024 tok head-only). The invariants that matter:
+  // at most ONE live bridge at any moment (the old one is spliced out right
+  // after the call, before the new one is attached) — never re-fed twice.
+  const bridgeCount = (msgs) => msgs.filter(m => typeof m.content === 'string' && m.content.includes('[热桥接 retain]')).length
+  ok(snaps.length >= 2 && snaps.every(s => bridgeCount(s.before) <= 1 && bridgeCount(s.after) <= 1), 'S1-4 at most one live retain bridge at any time (one-shot lifecycle)', `snaps=${snaps.length}`)
   assertImmutability(snaps, 'S1-5')
 }
 
