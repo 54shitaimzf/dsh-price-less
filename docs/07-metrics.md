@@ -1264,3 +1264,11 @@ cacheHitRate(热)       87%            91%        +4pp
 - `CASCADE-manual-habit-mtnd4kzy`：finished=True、118 步、22.7 分钟、**总 96 / judge 均分 93**、$0.243。两次压缩全成功：`pressure-50` @~58K（域 50%，wire 锚定）与 `passing-run` @~47K（事件规则），输入 48.1K/37.5K、缓存 98.4%/97.5%。
 - **机制对照（vs native mtnay1ej）**：manual 触发更早更小段（58K/47K vs 100K/100K），但 `maxCompressions=2` 在第 3 段耗尽 → 后 5 任务裸涨至 **129K 峰值（反超 native 的 100K）**——"习惯早压 + 硬帽"的固有权衡首次定量显形。
 - **质量/成本（单 rep，不作结论）**：总 96 vs 90、judge 93 vs 83、成本 $0.243 vs $0.254——方向上 manual 占优，配对结论待 3 reps。
+
+**§29.8 追记（2026-09-05）：F11 设计 R 热尾首战——self-s1-orig 首跑（mtng8ctd，step-cap 截断）**
+
+- `CASCADE-self-s1-orig-mtng8ctd`：**151 步触发 maxSteps=150 截断（finished=False，T7 收尾被切）**、35.9 分钟、**总 97 / mech 96.5 / judge 均分 89**、beyondGolden +24、$0.377（execution 0.243 + compression 0.075 + judge 0.057 + decision 0.002，谷时）。任务分：T0 100 / T1 123 / T2 96 / T3 73（implementation 2/5，截断前最弱）/ T4 93 / T5 90 / T6 100 / T7 98。
+- **F11 设计 R 全链路首次实战验证**：①7 段 task-boundary 压缩 = 6 成功 + 1 失败（seg2 `program invalid-program` 语法错，fail-lazy 继续全上下文）+ 1 skip（seg6 区域 1,473 tok 太小，正确跳过）；②热尾逐字装配确认：P-1 `retain.detail.verifications` 含 `npm run check` EXIT=1 的真实 stderr 原文（harness 提取，模型零转写）；P-3 空细节正确（该段 0 次 `run` 调用，提取器只扫 run 结果、未误收源码 "error" 标识符）；③一次性热尾生命周期确认（每次边界丢上一段 bridge）；④段间 refs=[] 恒空——模型未发 retain 坐标，S1 退化为 outline+verbatim 细节（功能无损但引用化打折，待 reps 观察）。
+- **本臂代价首现**：重读率 68%（100/147 冗余读）vs native 59% / manual 54%；步数 151 vs 98/118——与"压缩换低上下文 → 需更多重读"的方向一致（单 rep 不作结论）。执行器峰值 123K wire（native 100K / manual 129K）——边界之间自然长得更高，task-boundary 语义的固有形态。
+- **缓存结构观测点（E3 成本）**：task-boundary 压缩请求重放的是**实时表面**（每次压缩后被 P 产品替换），后续压缩只能命中 COMPRESSOR_SYSTEM 头部 1-2.5K（seg4-7 实测），seg3 的 96% 命中是重建前原始历史恰好与 executor 缓存同前缀的异常值——与 native/manual 臂"重放真前缀→98%+命中"结构性不同，压缩成本占比升至 20%。executor 自身请求仍 99%+ 命中（123K 输入 122K 缓存），全调用综合 93.6%。
+- **批次地位**：本 run = self-s1-orig 臂 rep1，**含截断（T7 部分）与 seg2 压缩失败，配对统计时标注**；native/manual 两对照同语义可比。三臂单 rep 全景：native 90（98 步）/ manual 96（118 步）/ **self-s1-orig 97（151 步，截断）**。
