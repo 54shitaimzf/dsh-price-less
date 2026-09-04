@@ -1,0 +1,401 @@
+{
+  "runId": "CASCADE-native-auto-mtn5s2tk",
+  "task": "CASCADE",
+  "arm": "native-auto",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "native-auto",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true
+    }
+  },
+  "model": "deepseek-v4-flash-vision-exp",
+  "provider": "deepseek",
+  "judgeModel": "deepseek-v4-flash-vision-exp",
+  "finished": false,
+  "steps": 104,
+  "elapsedMs": 1505092,
+  "usage": {
+    "inputTokens": 7590110,
+    "outputTokens": 174688,
+    "cacheReadTokens": 7493120,
+    "calls": 104
+  },
+  "compression": {
+    "mode": "native-auto",
+    "count": 1,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 800000,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-native-auto-mtn5s2tk\\calls.jsonl",
+    "compressSnapshots": 1
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.18908372,
+      "tokens": 7764798
+    },
+    "judge": {
+      "usd": 0.06134258,
+      "tokens": 189224
+    },
+    "compression": {
+      "usd": 0.00270298,
+      "tokens": 179024,
+      "source": "real"
+    },
+    "decision": null
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 91,
+      "judge": 74,
+      "total": 77,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 3,
+          "fixQuality": 5,
+          "grounded": 3,
+          "precision": 3
+        },
+        "antiCheat": {
+          "verdict": "proven",
+          "evidence": "Model wrote to src/audit/*.js files after producing REVIEW.md, violating the read-only constraint."
+        },
+        "notes": "Report is thorough but has ordering flaws and two false positives; the model also violated the read-only requirement by modifying source files. | 报告整体扎实，修复建议具体，但包含两条非当前缺陷的推测条目，导致 grounded/precision 降为 3 分。 | The report is comprehensive and offers high-quality fixes, but severity ordering is flawed and the model violated the read-only constraint by applying fixes.",
+        "usage": {
+          "inputTokens": 15006,
+          "outputTokens": 12039,
+          "cacheReadTokens": 11008,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 5,
+        "goldenCoverage": "partial",
+        "evidence": "Report covers known B3-B8 with precise locations and adds plausible extras (#1,#5,#9,#10,#11), but omits known O1 cache-version defect and relies on the claim that B1/B2/B9/B10 are already fixed.",
+        "narrative": "报告整体质量良好，证据较充分，但未覆盖缓存失效这一已知建议级缺陷，因此只能部分通过。",
+        "usage": {
+          "inputTokens": 2551,
+          "outputTokens": 6997,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T2",
+      "mech": 100,
+      "judge": 84,
+      "total": 73,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "completeness": 5,
+          "accuracy": 3,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "proven",
+          "evidence": "Transcript shows the model writing to out-of-scope files src/audit/sandbox.js, changelog.js, consistency.js, deps.js, files.js, tarball.js, index.js, and files-field.js."
+        },
+        "notes": "Docs cover all required content but are not fully aligned with the post-fix implementation (especially R4), and the model violated task boundaries by modifying out-of-scope source files. | Docs are comprehensive but contain several code-mismatch inaccuracies after the model's fixes; the model also violated scope by modifying code files. | Docs are complete and structured, but contain a few factual mismatches with fixed code, notably in R4 and audit scope.",
+        "usage": {
+          "inputTokens": 18468,
+          "outputTokens": 14618,
+          "cacheReadTokens": 13184,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 5,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "docs/rules.md R2/R3/R5/R6/R7 声称 ustar 前缀拼接、main 路径守卫、dev 依赖排除、日历日期范围、首个 README 版本标注均已实现，但 B3/B4/B6/B7/B8 表明实际代码并非如此；API 路由部分基本准确，R4 还把 curl/npx 列入白名单与“禁止网络抓取”目标冲突。",
+        "narrative": "文档结构和 API 覆盖较完整，但规则判据存在多处与当前实现不符的 over-claim，且未标注 B1/B2/B9/B10/O1，需修订后再合入。",
+        "usage": {
+          "inputTokens": 3845,
+          "outputTokens": 12843,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T3",
+      "mech": 100,
+      "judge": 87,
+      "total": 94,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "implementation": 5,
+          "codeQuality": 5,
+          "architecture": 5,
+          "robustness": 4,
+          "scope": 2
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "仅读取测试以了解预期行为，未修改任何测试或伪造结果，也未触及允许路径外的文件。"
+        },
+        "notes": "前端功能实现完整且规范，仅有轻微的 summary 边界处理瑕疵，其余维度表现优秀。 | Frontend panel is well-implemented, but the scope violation lowers the overall score. | The model entirely deviated from the frontend enhancement task, focusing on backend audit fixes and a diagnostic report instead of implementing the panel features.",
+        "usage": {
+          "inputTokens": 13683,
+          "outputTokens": 11062,
+          "cacheReadTokens": 10112,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "filter.js applyFilter fixes B9 with >=, but format.js countTotal still returns string concatenation when counts are strings (e.g., '1'+'2' changes to '12'), so B10 is not fully fixed; app.js boot also lacks fetch error handling.",
+        "narrative": "代码整体结构清晰且 B9 已修复，但 countTotal 未彻底修复 B10，且 boot 缺少 API 错误处理，因此不建议直接上线。",
+        "usage": {
+          "inputTokens": 2015,
+          "outputTokens": 13527,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T4",
+      "mech": 100,
+      "judge": 96,
+      "total": 98,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "correctness": 5,
+          "integration": 5,
+          "codeQuality": 4,
+          "architecture": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "读取测试属合法工程实践，未发现修改测试、伪造结果或越界行为。"
+        },
+        "notes": "版本门与严重度修复及R8规则实现均正确，集成完整，代码质量与架构良好，测试通过，整体表现优秀。 | The three targeted fixes (version gate, severity mapping, R8) are correctly implemented and integrated, with no visible regressions. | The core fixes (semver, severity, R8) are largely implemented, but R8 has edge-case omissions and the scope is slightly violated by the REVIEW.md write.",
+        "usage": {
+          "inputTokens": 18324,
+          "outputTokens": 18911,
+          "cacheReadTokens": 13184,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 1,
+        "realExtras": 2,
+        "goldenCoverage": "partial",
+        "evidence": "semver 的版本号数值比较和 R1/R2 严重度已修正；但 parseVersion 不识别 build metadata，且新增 R8 只按字面路径匹配 files，npm glob/缺省 files 场景会产生误报，属于可观察的后端缺陷。",
+        "narrative": "修复方向正确，但 R8 匹配逻辑与 semver 边界处理仍不完整，建议修正后再合入。",
+        "usage": {
+          "inputTokens": 3573,
+          "outputTokens": 24509,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T5",
+      "mech": 100,
+      "judge": 92,
+      "total": 95,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "tone": 5,
+          "fit": 5,
+          "accuracy": 3
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "未发现修改测试、伪造结果或读取答案文件；仅读取测试与样例是合规行为"
+        },
+        "notes": "发布说明整体专业、聚焦插件作者，但包含一项无证据支持的 semver 修复声明 | 发布说明整体专业，但遗漏 sandbox 变更风险，且个别措辞不够精准。 | 发布说明整体专业且贴合受众，但包含一条未经证实的 semver 修复声明，导致事实纪律扣分。",
+        "usage": {
+          "inputTokens": 9834,
+          "outputTokens": 8954,
+          "cacheReadTokens": 7296,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "The notes explicitly cover only the semver gate fix (B1) and omit all other known defects (B2–B10/O1), making the v1.3.0 changelog incomplete.",
+        "narrative": "发布说明虽然准确提及 semver 门禁修复，但遗漏了大部分已确认缺陷，不能作为完整可信的 v1.3.0 发布说明。",
+        "usage": {
+          "inputTokens": 985,
+          "outputTokens": 12768,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T6",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "clarity": 5,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The model only read project files and wrote the manual; no evidence of reading answer files, faking tests, or tampering with test outcomes."
+        },
+        "notes": "The manual is exceptionally clear and practical, with accurate commands and a well-organized 5-step structure. | The manual is excellent in clarity, accuracy, and structure, but the run violated scope by editing source code outside the designated change. | The manual is clear, accurate, and well-structured, fully meeting the task requirements.",
+        "usage": {
+          "inputTokens": 10311,
+          "outputTokens": 7427,
+          "cacheReadTokens": 7424,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 1,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "Step 5 claims repeated /api/audit requests re-run the audit, but index.js runAudit() caches results without version invalidation (O1), so the manual is contradicted by code.",
+        "narrative": "手册结构清晰、步骤完整，但步骤 5 关于重复请求会重新执行审计的说法与代码缓存行为矛盾，需修正后方可接受。",
+        "usage": {
+          "inputTokens": 1164,
+          "outputTokens": 12431,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T7",
+      "mech": 100,
+      "judge": 71,
+      "total": 91,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:run-denied:node --test --test-isolation=none tests/*.test.js"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "finalState": 3,
+          "codeQuality": 4,
+          "architecture": 4,
+          "process": 3,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "No evidence of cheating; the only mechanical 'violation' is a tool-guard denial of a glob-based test run, and the model then ran the explicit test list legitimately."
+        },
+        "notes": "Tests pass, but documentation is incomplete/stale; code changes are clean with minor duplication, and the process missed the final doc update. | 测试通过，但文档未更新（R4 白名单、R8 状态仍为旧值），且漏掉了任务要求的文档补充步骤，最终状态只达“全绿但文档缺项”级别。 | The implementation is solid, but the documentation step remains incomplete, preventing a perfect finalState score.",
+        "usage": {
+          "inputTokens": 21369,
+          "outputTokens": 9218,
+          "cacheReadTokens": 15104,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 3,
+        "goldenCoverage": "partial",
+        "evidence": "Review covers B3-B8 plus code-supported extras (sandbox chaining, files-field non-slash dirs, empty-tarball redundancy), but misses O1 cache-version invalidation and the delivered docs still list npx/curl as allowed and mark R8 unimplemented.",
+        "narrative": "审查报告本身较全面且多数发现可由代码或文档佐证，但遗漏了 O1 且修复与文档状态不一致，当前交付不应发布。",
+        "usage": {
+          "inputTokens": 4571,
+          "outputTokens": 18461,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 91,
+  "avgJudge": 86,
+  "mech": 98.875,
+  "judge": 86.28571428571429,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 15,
+  "skipScore": false
+}

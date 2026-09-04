@@ -1240,3 +1240,10 @@ cacheHitRate(热)       87%            91%        +4pp
 - S1 保留桥从纯指针卡（refs+outline）升级为**高保真热尾**：模型只写 outline+refs，harness 门后确定性附①逐字末次验证②逐字失败行③retain 引用展开内容；渲染总帽 5000 token（用户批准），超限确定性裁剪。产品 schema 与五道门零改动（提取全部 POST-gate）。
 - **批次声明：COMPRESSOR_PROMPT_VERSION = 3**——S1 臂新 run 与 v2 指令时代 S1 run 不混批。设计意图：S1 vs S2 从"测近因显著性（预期零效应）"改为"测高保真热尾 vs 无保留对下个任务开局质量的差异"。
 - 回归：RD-1~10 + PC 更新 + E0 全量绿（纯离线，¥0）；插件本体未动。
+
+**§29.4 追记（2026-09-05）：F10 标定下 native-auto 正式基线（mtn7l9mm）+ 两个 run 级发现**
+
+- **基线**：`CASCADE-native-auto-mtn7l9mm` finished=True、97 步、25.2 分钟、总 90 / judge 均分 84、$0.253（谷时）。压缩两次触发均 ≈169.6K wire 输入、缓存命中 99.8%；成功压缩净减 170K→22.9K（−86.5%）。
+- **发现 1（估计器盲区，记 F10a）**：`estimateMessagesTokens` 只数 content，不数 `reasoning_content`（thinking 回显）+ `tool_calls`——本 run 估计 81K 时 wire 已 162K（比率随会话成分浮动）。"100K 触发"实际落在估计空间（wire ≈170K）。安全性无损（1M 窗/800K 阀），但触发与选范围用了两把不一致的尺（`native-range.msgTokens` 计 tool_calls）。批 2 前统一。
+- **发现 2（25 分钟默认墙钟）**：`runner.mjs` 默认 `timeoutMs=25min`，F10 下全套件超时——首批入口必须显式传 `--timeoutMs`（本基线 90min）。另首个截断 run `mtn5s2tk`（finished=false）留档作超时证据。
+- **发现 3（native 压缩器空摘要失败，fail-lazy 生效）**：首次压缩调用模型输出 5,240 token 但 content 为空（thinking + 工具模式干扰：M5 缓存对齐要求回放执行器 tool schema，模型偶发顺应 schema 发 tool call 而非摘要）。validateNativeSummary 拒绝 → violation 落 T3 窗（mech 50）→ 下轮重触发成功。代价 ≈$0.004（99.8% 缓存命中使失败重试近乎免费）。
