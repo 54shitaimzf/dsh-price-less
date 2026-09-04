@@ -51,7 +51,7 @@ function runFailed(result) {
  *   domain     — task-scale compression window (tokens) for the pressure rule.
  * @returns {null | {trigger, reason}} the human-habit trigger that fired.
  */
-export function detectHumanTrigger({ messages, transcript, domain }) {
+export function detectHumanTrigger({ messages, transcript, domain, currentTokens }) {
   const entries = Array.isArray(transcript) ? transcript : []
   // R1 bulk-read-done: a read tool returned a large payload (its info is now in
   // context; the raw bulk is compressible / offload-able). `resultLen` is the
@@ -79,9 +79,11 @@ export function detectHumanTrigger({ messages, transcript, domain }) {
     }
   }
   // R3 pressure-50: context is at ~50% of the task-scale window (human compacts
-  // BEFORE the dumb zone, not at auto-compaction's ~95%).
+  // BEFORE the dumb zone, not at auto-compaction's ~95%). F10a: when the caller
+  // supplies the wire-anchored size (exact usage anchor + delta), prefer it —
+  // the raw char estimate misses reasoning echo and tool_calls.
   if (domain > 0) {
-    const tokens = estimateMessagesTokens(messages)
+    const tokens = currentTokens ?? estimateMessagesTokens(messages)
     if (tokens >= domain * PRESSURE_RATIO) {
       return { trigger: 'pressure-50', reason: `${tokens} tokens >= ${Math.round(domain * PRESSURE_RATIO)} (${Math.round(PRESSURE_RATIO * 100)}% of ${domain})` }
     }

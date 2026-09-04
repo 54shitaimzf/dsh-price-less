@@ -79,3 +79,21 @@ export function shouldTrigger(thresholdTokensOverride) {
   const t = thresholdTokensOverride ?? triggerConfig().tokenThreshold
   return (roundTokens) => roundTokens >= t
 }
+/**
+ * Current context size in wire tokens (F10a). Anchored on the last routed
+ * request's EXACT usage (`st.lastPromptTokens` — provider-tokenizer truth:
+ * system + tools + messages + reasoning echo), plus the assistant turn's exact
+ * generated size (`st.lastCompletionTokens` — reasoning + content + tool args
+ * as metered), plus a chars-estimate of ONLY the new messages since that
+ * request (tool results — small; error bounded and re-anchored every step).
+ * Cold path (first request / just after a rebuild reset / missing usage):
+ * full char estimate — biased for one iteration, then re-anchored exactly.
+ */
+export function contextWireTokens(st, messages) {
+  const sendLen = st.lastPromptMsgCount
+  if (st.lastPromptTokens > 0 && Number.isInteger(sendLen) && sendLen >= 0 && sendLen <= messages.length) {
+    return st.lastPromptTokens + (st.lastCompletionTokens ?? 0)
+      + estimateMessagesTokens(messages.slice(sendLen + 1))
+  }
+  return estimateMessagesTokens(messages)
+}

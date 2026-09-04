@@ -8,7 +8,7 @@
 import { createGateway, GatewayError } from './gateway.mjs'
 import { assembleInit } from './assemble.mjs'
 import { append as tappend } from './transcript.mjs'
-import { accountPrefix, trimPrompt, estimateMessagesTokens } from './prefix.mjs'
+import { accountPrefix, trimPrompt, contextWireTokens, estimateMessagesTokens } from './prefix.mjs'
 import { triggerConfig, contextConfig } from './arm-spec.mjs'
 import { loadBoundaries } from './boundaries.mjs'
 import { wholeSurfaceStep, taskBoundaryStep } from './runner-compress.mjs'
@@ -56,8 +56,7 @@ async function tryCall(tools, name, args) {
   }
 }
 
-/**
- * Split a message list into a COLD head (to compress) and a RECENT tail (kept
+/** Split a message list into a COLD head (to compress) and a RECENT tail (kept
  * verbatim — DSH-native 近因尾). The tail = the most recent `retainTokens`-worth
  * of messages, walked from the end. `retainTokens<=0` → no tail (whole = cold,
  * A1-S2 闭合即全压). The cold head is a PREFIX of the full list (cache-reuse).
@@ -125,7 +124,7 @@ export async function runSession(opts) {
   //                    dropped at the NEXT compaction (never re-fed, never re-compressed).
   //   segmentEntriesStart — transcript index at the last compaction (the closed segment's
   //                    raw entries are the bindings' data plane).
-  const st = { compressCount: 0, degenerateCount: 0, lastPromptTokens: 0, sectionCount: 0, retainNode: null, segmentEntriesStart: 0 }
+  const st = { compressCount: 0, degenerateCount: 0, lastPromptTokens: 0, lastCompletionTokens: 0, lastPromptMsgCount: null, sectionCount: 0, retainNode: null, segmentEntriesStart: 0 }
   // — Compression-domain calibration (task-boundary arms): the compression window
   // is a task-scale quantity, retaim/threshold derived from it, INDEPENDENT of the
   // hard-truncate safety valve above. Boundary marks (preprocessing output) identify
@@ -218,7 +217,7 @@ export async function runSession(opts) {
     // can never overflow the model window. This is lossy (drops the oldest
     // history) so it must only fire as a last-resort guard; under the floor it
     // is a no-op and leaves `messages` byte-identical to an unguarded run.
-    if (estimateMessagesTokens(messages) >= truncateFloor && messages.length > 2) {
+    if (contextWireTokens(st, messages) >= truncateFloor && messages.length > 2) {
       const keep = messages.slice(0, 2) // [system, task] — stable prefix, cache-friendly
       // keep the newest messages, dropping the oldest, until under the floor
       let tail = messages.slice(2)
@@ -229,6 +228,11 @@ export async function runSession(opts) {
       messages.length = 0
       messages.push(...keep, ...tail)
       truncateCount++
+      // F10a: the rebuild invalidates the send-time anchor (indices shifted) —
+      // drop to the cold path; the next routed request re-anchors exactly.
+      st.lastPromptTokens = 0
+      st.lastCompletionTokens = 0
+      st.lastPromptMsgCount = null
       append({ type: 'hard-truncate', floor: truncateFloor, keptTail: tail.length })
       logger(`hard-truncate #${truncateCount} at floor=${truncateFloor} (dropped oldest history; tail=${tail.length})`)
     }
@@ -245,7 +249,17 @@ export async function runSession(opts) {
     usage.outputTokens += call.usage.outputTokens ?? 0
     usage.cacheReadTokens += call.usage.cacheReadTokens ?? 0
     usage.calls++
-    st.lastPromptTokens = call.usage.inputTokens ?? st.lastPromptTokens
+    // F10a wire anchor: the last ROUTED request's usage is the exact provider-
+    // tokenizer size of everything sent (system+tools+messages, reasoning echo
+    // included). msgCount is the send-time length — the assistant turn (counted
+    // exactly by completionTokens) and any tool results after it are the delta.
+    // Coupled update: if usage is missing, keep the older anchor AND the older
+    // msgCount so the delta spans back to the last real measurement.
+    if (call.usage?.inputTokens) {
+      st.lastPromptTokens = call.usage.inputTokens
+      st.lastCompletionTokens = call.usage.outputTokens ?? 0 // gateway usage field is outputTokens (completion on the wire)
+      st.lastPromptMsgCount = messages.length
+    }
     if (prefixMode !== 'none') {
       const acc = accountPrefix(messages, call.usage)
       prefixStats.prefixTokens += acc.prefixTokens

@@ -129,6 +129,65 @@ const ok = (cond, label, extra = '') => {
   ok(seen[0] === 'low' && seen[1] === undefined, 'W16f judgeTask forwards judgeEffort to the gateway call (and omits when undefined)', JSON.stringify(seen))
 }
 
+// ============ W18 — F10a wire-anchored context size ============
+{
+  const { contextWireTokens, estimateMessagesTokens } = await import('../lib/prefix.mjs')
+  const msgs = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'task instruction text' },
+    { role: 'assistant', content: '', tool_calls: [{ id: '1', type: 'function', function: { name: 'read', arguments: '{"path":"a.js"}' } }], reasoning_content: 'thinking...' },
+    { role: 'tool', tool_call_id: '1', content: 'x'.repeat(150) },
+  ]
+
+  // cold path: no anchor → full char estimate
+  const cold = contextWireTokens({ lastPromptTokens: 0, lastCompletionTokens: 0, lastPromptMsgCount: null }, msgs)
+  ok(cold === estimateMessagesTokens(msgs), 'W18a cold path (no anchor) = full char estimate', cold)
+
+  // anchored: exact prompt + exact completion + delta estimate of messages AFTER the sent set
+  const st = { lastPromptTokens: 1000, lastCompletionTokens: 200, lastPromptMsgCount: 2 }
+  // sent = msgs[0..1]; delta = tool result only (msgs[3]); assistant turn is counted by completionTokens
+  const want = 1000 + 200 + estimateMessagesTokens([msgs[3]])
+  ok(contextWireTokens(st, msgs) === want, 'W18b anchored = prompt + completion + delta estimate (assistant not double-counted)', contextWireTokens(st, msgs))
+
+  // stale anchor (indices shifted by a rebuild) → cold fallback, never negative/garbage
+  const stale = contextWireTokens({ lastPromptTokens: 5000, lastCompletionTokens: 50, lastPromptMsgCount: 50 }, msgs)
+  ok(stale === estimateMessagesTokens(msgs), 'W18c stale anchor (rebuild shifted indices) falls back to cold path')
+
+  // boundary: anchor at current length → delta only from slice(len+1) = nothing new
+  const atEnd = contextWireTokens({ lastPromptTokens: 700, lastCompletionTokens: 30, lastPromptMsgCount: msgs.length }, msgs)
+  ok(atEnd === 730, 'W18d anchor at send-time length counts zero delta', atEnd)
+}
+
+
+// ============ W19 — F10a real-data accuracy (replayed from run mtn7l9mm) ============
+{
+  const { contextWireTokens } = await import('../lib/prefix.mjs')
+  // W19 — F10a real-data accuracy fixture (extracted from run mtn7l9mm's
+  // calls.jsonl: exact anchor st + delta messages + the ACTUAL next request's
+  // provider-metered inputTokens). Pins the wire-anchor formula's real-world
+  // error to ≤15% per step — a regression guard on trigger-point accuracy.
+  const fxPath = path.join(EVAL_ROOT, 'tests', 'fixtures', 'wire-anchor', 'replay.json')
+  ok(fs.existsSync(fxPath), 'W19a real-replay fixture exists', fxPath)
+  if (fs.existsSync(fxPath)) {
+    const steps = JSON.parse(fs.readFileSync(fxPath, 'utf8'))
+    ok(steps.length >= 4, 'W19b fixture carries representative steps', steps.length)
+    for (const s of steps) {
+      // rebuild a virtual list: anchor prefix is not needed — the formula only
+      // reads st + messages.slice(sendLen+1); pass a synthetic list whose tail
+      // is the real delta and whose length satisfies the anchor invariant.
+      const head = Math.max(0, s.st.lastPromptMsgCount)
+      const virtual = [...Array(head).fill({ role: 'user', content: '' }), ...s.deltaMsgs]
+      const predicted = contextWireTokens(s.st, virtual)
+      const errTokens = Math.abs(predicted - s.actual)
+      const errPct = errTokens / s.actual * 100
+      // trigger-scale honesty: at the 100K trigger the error must be relative-noise
+      // (≤15%); on tiny early steps the absolute error is what matters (≤1000 tok
+      // ≈ ±1% of the threshold — one step of tool results).
+      ok(errTokens <= 1000 || errPct <= 15, `W19c step#${s.srcStep ?? '?'} within noise of provider-metered wire`, `pred=${predicted} actual=${s.actual} err=${errTokens}tok/${errPct.toFixed(2)}%`)
+    }
+  }
+}
+
 // ============ U. A4: transcript schema + digest contract ============
 {
   const { append, readAll, summarize, digest, validateEntry, ENTRY_TYPES } = await import('../lib/transcript.mjs')

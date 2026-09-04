@@ -1247,3 +1247,8 @@ cacheHitRate(热)       87%            91%        +4pp
 - **发现 1（估计器盲区，记 F10a）**：`estimateMessagesTokens` 只数 content，不数 `reasoning_content`（thinking 回显）+ `tool_calls`——本 run 估计 81K 时 wire 已 162K（比率随会话成分浮动）。"100K 触发"实际落在估计空间（wire ≈170K）。安全性无损（1M 窗/800K 阀），但触发与选范围用了两把不一致的尺（`native-range.msgTokens` 计 tool_calls）。批 2 前统一。
 - **发现 2（25 分钟默认墙钟）**：`runner.mjs` 默认 `timeoutMs=25min`，F10 下全套件超时——首批入口必须显式传 `--timeoutMs`（本基线 90min）。另首个截断 run `mtn5s2tk`（finished=false）留档作超时证据。
 - **发现 3（native 压缩器空摘要失败，fail-lazy 生效）**：首次压缩调用模型输出 5,240 token 但 content 为空（thinking + 工具模式干扰：M5 缓存对齐要求回放执行器 tool schema，模型偶发顺应 schema 发 tool call 而非摘要）。validateNativeSummary 拒绝 → violation 落 T3 窗（mech 50）→ 下轮重触发成功。代价 ≈$0.004（99.8% 缓存命中使失败重试近乎免费）。
+
+**§29.5 追记（2026-09-05）：F10a wire 锚定触发**
+
+- 触发/截断阀从全量字符估计改为**锚点 + 增量**：`contextWireTokens` = 上次请求精确 usage（provider tokenizer，含 reasoning/tool schema）+ assistant 回合精确生成量 + 新增 tool 结果的字符估计；每步重锚定、误差不累积；重建后锚点重置一轮。硬截断阀与 manual-habit pressure-50 同步接线。
+- 口径：生产 run-cascade 走 wire 锚定（"100K 触发"从此是真实 wire 空间）；离线测试 `calibrated` 覆写保持纯估计。回归 W18a~d + E0 563 PASS + vitest 153 全绿，¥0。

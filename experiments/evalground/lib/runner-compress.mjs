@@ -24,7 +24,7 @@ import { compressOnce, compressWithProgram, enrichRefs, productPath, frameNative
 import { makeCompressorBindings } from './compressor-io.mjs'
 import { attachRetainDetail } from './retain-detail.mjs'
 import { renderProduct, renderSection, renderRetain } from './assemble.mjs'
-import { estimateMessagesTokens, shouldTrigger } from './prefix.mjs'
+import { contextWireTokens, estimateMessagesTokens, shouldTrigger } from './prefix.mjs'
 import { calibrateThresholds, compressionDomain } from './arm-spec.mjs'
 import { selectCompactableRange } from './native-range.mjs'
 import { detectHumanTrigger, extractFocusSet, buildFocusDirective } from './manual-habit.mjs'
@@ -45,15 +45,17 @@ export async function wholeSurfaceStep(ctx) {
     const calib = opts.calibrated ?? calibrateThresholds()
     const domain = opts.compressionDomain ?? compressionDomain()
     let fired = null
-    // Trigger on the CURRENT message estimate only. The estimator is wire-calibrated
-    // (CHARS_PER_TOKEN 1.5 ≈ provider tokenizer, 2026-09 batch measurement); the old
-    // `lastPromptTokens + estimate` form double-counted the context once the
-    // estimator became accurate (lastPromptTokens already IS the last request's size).
-    const roundTokens = estimateMessagesTokens(messages)
+    // F10a: production triggers on the WIRE-anchored size (exact usage anchor +
+    // small delta estimate). Offline tests that force triggers pass
+    // `opts.calibrated` and keep the pure message estimate (scripted usage is
+    // tiny; the anchor would never reach the forced threshold).
+    const roundTokens = opts.calibrated
+      ? estimateMessagesTokens(messages)
+      : contextWireTokens(st, messages)
     if (ctx.nativeAuto) {
       if (roundTokens >= calib.thresholdTokens) fired = { trigger: 'pressure', roundTokens }
     } else {
-      const at = detectHumanTrigger({ messages, transcript: ctx.transcript, domain })
+      const at = detectHumanTrigger({ messages, transcript: ctx.transcript, domain, currentTokens: roundTokens })
       if (at) fired = { ...at, roundTokens }
     }
     if (fired) {
@@ -94,6 +96,11 @@ export async function wholeSurfaceStep(ctx) {
           const rebuilt = [...messages.slice(0, start), cpMsg, ...messages.slice(end + 1)]
           messages.length = 0
           messages.push(...rebuilt)
+          // F10a: the rebuild invalidates the send-time anchor — cold path
+          // until the next routed request re-anchors exactly.
+          st.lastPromptTokens = 0
+          st.lastCompletionTokens = 0
+          st.lastPromptMsgCount = null
           compressSnapshots.push({ range: { start, end }, before, after: JSON.parse(JSON.stringify(messages)) })
           st.compressCount++
           append({ type: 'compress', mode: compressionMode, inputTokens: res.usage?.inputTokens ?? estimateMessagesTokens([cpMsg]), outputTokens: res.usage?.outputTokens ?? null, cacheReadTokens: res.usage?.cacheReadTokens ?? 0, range: { start, end } })
@@ -135,6 +142,10 @@ export async function wholeSurfaceStep(ctx) {
         const pUser = { role: 'user', content: '# 压缩上下文（历史已整理，勿重复执行已完成步骤）\n' + renderProduct(res.product) }
         messages.length = 0
         messages.push(...keep, pUser)
+        // F10a: rebuild invalidates the wire anchor (same as the native path).
+        st.lastPromptTokens = 0
+        st.lastCompletionTokens = 0
+        st.lastPromptMsgCount = null
         st.compressCount++
         append({ type: 'compress', mode: compressionMode, inputTokens: res.usage?.inputTokens ?? estimateMessagesTokens([pUser]), outputTokens: res.usage?.outputTokens ?? null, cacheReadTokens: res.usage?.cacheReadTokens ?? 0 })
         logger(`compressed ${st.compressCount}/${maxCompressions} (${compressionMode}) at roundTokens≈${roundTokens}`)

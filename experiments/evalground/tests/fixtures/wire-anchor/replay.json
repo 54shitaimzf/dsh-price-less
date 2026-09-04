@@ -1,0 +1,91 @@
+[
+ {
+  "st": {
+   "lastPromptTokens": 88695,
+   "lastCompletionTokens": 135,
+   "lastPromptMsgCount": 113
+  },
+  "deltaMsgs": [
+   {
+    "role": "tool",
+    "tool_call_id": "call_00_qrd7qMb7EjEbQwCydmaX3635",
+    "content": "OK exit=0\n✔ SEVERITY_ORDER ranks error > warn > info (1.0113ms)\n✔ applyFilter with minSeverity warn includes warn AND error rows (0.459ms)\n✔ applyFilter with minSeverity error includes only errors (0.0979ms)\n✔ applyFilter with rulePrefix narrows by rule prefix (0.0595ms)\n✔ countTotal sums numerically (no string concatenation) (0.0796ms)\n✔ formatCounts renders per-severity labels (0.0611ms)\n✔ severityLabel maps to Chinese labels (0.06ms)\n✔ groupByRule groups rows per rule, ordered by severity desc (0.1191ms)\n✔ copyFixSnippet emits the fixed command snippet (0.084ms)\n✔ renderPanelHtml renders summary cards and finding rows (0.3302ms)\nℹ tests 10\nℹ suites 0\nℹ pass 10\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 100.336\n"
+   }
+  ],
+  "actual": 89073,
+  "srcStep": 34
+ },
+ {
+  "st": {
+   "lastPromptTokens": 5986,
+   "lastCompletionTokens": 390,
+   "lastPromptMsgCount": 29
+  },
+  "deltaMsgs": [
+   {
+    "role": "tool",
+    "tool_call_id": "call_00_stmsa9sFfgedV9hFPikm8387",
+    "content": "/**\n * Audit assembler: runs R1–R7 over a package directory, decorates findings\n * with rule code + severity, and summarizes by severity.\n * (R8 产物文件一致性 is a development target — see docs/rules.md.)\n */\n\nimport fs from 'node:fs'\nimport path from 'node:path'\nimport { checkSemver } from './semver.js'\nimport { listTarballEntries } from './tarball.js'\nimport { checkLib } from './files.js'\nimport { checkBuildScript } from './sandbox.js'\nimport { checkDeps } from './deps.js'\nimport { checkChangelog } from './changelog.js'\nimport { checkConsistency } from './consistency.js'\nimport { severityOf, sortFindings, summarize } from './severity.js'\n\nexport function readJson(file) {\n  return JSON.parse(fs.readFileSync(file, 'utf8'))\n}\n\n/**\n * Run the full audit over one package directory.\n * @param {string} pkgDir absolute path to the package (its package.json sits there).\n * @param {object} [opts] { versionsPath, tarballPath }\n */\nexport function runAudit(pkgDir, opts = {}) {\n  const versionsFile = opts.versionsPath ?? path.join(pkgDir, '..', 'data', 'versions.json')\n  const tarballFile = opts.tarballPath ?? path.join(pkgDir, 'dist', 'relaudit-plugin-1.3.0.tgz')\n\n  const pkg = readJson(path.join(pkgDir, 'package.json'))\n  const changelogText = fs.existsSync(path.join(pkgDir, 'CHANGELOG.md'))\n    ? fs.readFileSync(path.join(pkgDir, 'CHANGELOG.md'), 'utf8')\n    : ''\n  const readmeText = fs.existsSync(path.join(pkgDir, 'README.md'))\n    ? fs.readFileSync(path.join(pkgDir, 'README.md'), 'utf8')\n    : ''\n  const buildScript = fs.existsSync(path.join(pkgDir, 'scripts', 'build.sh'))\n    ? fs.readFileSync(path.join(pkgDir, 'scripts', 'build.sh'), 'utf8')\n    : ''\n  const nodesFile = path.join(pkgDir, 'node-modules.json')\n  const nodes = fs.existsSync(nodesFile) ? readJson(nodesFile) : []\n  const versions = fs.existsSync(versionsFile) ? readJson(versionsFile) : { releases: [] }\n  const tarballEntries = fs.existsSync(tarballFile)\n    ? listTarballEntries(fs.readFileSync(tarballFile))\n    : []\n\n  const raw = [\n    ...checkSemver(pkg, changelogText, versions.releases ?? []),\n    ...checkTarball(tarballEntries),\n    ...checkLib(pkgDir, pkg),\n    ...checkBuildScript(buildScript),\n    ...checkDeps(pkg, nodes),\n    ...checkChangelog(changelogText),\n    ...checkConsistency(pkg, readmeText),\n  ]\n\n  const findings = sortFindings(raw.map(f => ({ ...f, rule: f.code }))) // severity added below\n  const decorated = findings.map(f => ({ rule: f.rule, severity: severityOf(f.rule), message: f.message, file: f.file }))\n  return {\n    pkg: pkg.name,\n    version: pkg.version,\n    auditedAt: new Date().toISOString(),\n    findings: decorated,\n    summary: summarize(decorated),\n  }\n}\n\nfunction checkTarball(entries) {\n  const findings = []\n  if (entries.length === 0) {\n    findings.push({ code: 'R2', message: '产物 tarball 为空或不可解析', file: 'dist/' })\n    return findings\n  }\n  for (const entry of entries) {\n    // PLANTED BUG surface for R2: entries whose name lost its prefix can never\n    // be matched by isDeclared, so undeclared deep paths are reported as empty\n    // dirs — see tarball.js. The R2 finding below therefore fires only for\n    // obvious corruption; long-name truncation is the hidden defect.\n    if (entry.size === 0 && !entry.name.endsWith('/')) {\n      findings.push({ code: 'R2', message: `产物条目异常: ${entry.name}`, file: entry.name })\n    }\n  }\n  return findings\n}\n"
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_01_3DyeRFCmYszU92AzPke07824",
+    "content": "/**\n * Severity classification for audit findings.\n *\n * NOTE(planted bug): R1 is mapped to 'warn' (version-gate mismatch is an error)\n * and unknown rules fall back to 'info', so real problems surface near the\n * bottom of a sorted report.\n */\n\nexport const SEVERITY_ORDER = Object.freeze({ info: 0, warn: 1, error: 2 })\n\nconst RULE_SEVERITY = Object.freeze({\n  R1: 'warn', // PLANTED BUG: should be 'error'\n  R2: 'error',\n  R3: 'warn',\n  R4: 'warn',\n  R5: 'warn',\n  R6: 'warn',\n  R7: 'warn',\n  R8: 'error',\n})\n\nexport function severityOf(ruleId) {\n  return RULE_SEVERITY[ruleId] ?? 'info'\n}\n\n/** Sort findings: error > warn > info, then by rule id. */\nexport function sortFindings(findings) {\n  return [...findings].sort((x, y) => {\n    const d = (SEVERITY_ORDER[y.severity] ?? 0) - (SEVERITY_ORDER[x.severity] ?? 0)\n    if (d !== 0) return d\n    return String(x.code ?? x.rule ?? '').localeCompare(String(y.code ?? y.rule ?? ''))\n  })\n}\n\nexport function summarize(findings) {\n  const errors = findings.filter(f => f.severity === 'error').length\n  const warns = findings.filter(f => f.severity === 'warn').length\n  const infos = findings.filter(f => f.severity === 'info').length\n  return { errors, warns, infos, total: findings.length }\n}\n"
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_02_epypbhjNFrklXNdT0gX82890",
+    "content": "/**\n * R1 semver gate: package.json.version vs CHANGELOG head vs released versions.\n *\n * NOTE(planted bug): compareVersions compares strings lexicographically, so\n * \"1.10.0\" < \"1.9.0\" is judged incorrectly and version gates can silently pass.\n */\n\n/** Parse \"1.2.3\" into numeric segments; non-numeric segments compare as strings. */\nexport function parseVersion(version) {\n  const m = String(version).trim().match(/^(\\d+)\\.(\\d+)\\.(\\d+)(?:-([0-9A-Za-z.-]+))?$/)\n  if (m === null) return null\n  return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]), pre: m[4] ?? null }\n}\n\n/** Compare two semver strings. Returns 1 / 0 / -1. */\nexport function compareVersions(a, b) {\n  // PLANTED BUG: lexicographic string comparison.\n  if (String(a) > String(b)) return 1\n  if (String(a) < String(b)) return -1\n  return 0\n}\n\nexport function isVersionGreater(a, b) {\n  return compareVersions(a, b) > 0\n}\n\n/** Extract the latest released version from CHANGELOG text (\"## [1.3.0] - date\"). */\nexport function changelogHead(text) {\n  const m = String(text).match(/^##\\s*\\[?([0-9]+\\.[0-9]+\\.[0-9]+)\\]?/m)\n  return m ? m[1] : null\n}\n\n/** Extract the latest released version from versions.json releases list. */\nexport function releasedHead(releases) {\n  if (!Array.isArray(releases) || releases.length === 0) return null\n  return String(releases[releases.length - 1])\n}\n\n/**\n * R1 finding set: pkg.version must equal changelog head and be greater than\n * the latest released version.\n */\nexport function checkSemver(pkg, changelogText, releases) {\n  const findings = []\n  const head = changelogHead(changelogText)\n  const released = releasedHead(releases)\n  if (head === null) {\n    findings.push({ code: 'R1', message: 'CHANGELOG 无可解析的版本条目' })\n  } else if (head !== pkg.version) {\n    findings.push({ code: 'R1', message: `CHANGELOG 头版本 ${head} ≠ package.json 版本 ${pkg.version}` })\n  }\n  if (released !== null && !isVersionGreater(pkg.version, released)) {\n    findings.push({ code: 'R1', message: `package.json 版本 ${pkg.version} 未大于最近发布 ${released}` })\n  }\n  return findings\n}\n"
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_03_XyYHbieHTgMTqXb1ay9f8517",
+    "content": "/**\n * R2 tarball structure: minimal ustar reader (zero-dependency) that lists the\n * entries of a .tgz/.tar.gz buffer.\n *\n * NOTE(planted bug): the ustar prefix field (offset 345) is ignored, so any\n * entry whose path is split into prefix+name is returned with its truncated\n * basename only — the auditor then misses undeclared files deep in subdirs.\n */\n\nimport { gunzipSync } from 'node:zlib'\n\nconst BLOCK = 512\n\nfunction cstr(bytes) {\n  const end = bytes.indexOf(0)\n  const slice = end === -1 ? bytes : bytes.subarray(0, end)\n  return slice.toString('utf8')\n}\n\nfunction octal(bytes) {\n  const text = cstr(bytes).trim()\n  return text === '' ? 0 : parseInt(text, 8)\n}\n\n/** List tar entries of a possibly gzipped ustar archive buffer. */\nexport function listTarballEntries(buffer) {\n  const buf = buffer[0] === 0x1f && buffer[1] === 0x8b ? gunzipSync(buffer) : buffer\n  const entries = []\n  let off = 0\n  while (off + BLOCK <= buf.length) {\n    const name = cstr(buf.subarray(off, off + 100))\n    const prefix = cstr(buf.subarray(off + 345, off + 345 + 155)) // PLANTED BUG: prefix ignored below\n    const size = octal(buf.subarray(off + 124, off + 136))\n    const type = String.fromCharCode(buf[off + 156] ?? 0x30)\n    if (name === '' && size === 0) break // end-of-archive\n    if (name !== '' && (type === '0' || type === '\\u0000')) {\n      // PLANTED BUG: should be `prefix === '' ? name : prefix + '/' + name`\n      entries.push({ name, size })\n    }\n    off += BLOCK + Math.ceil(size / BLOCK) * BLOCK\n  }\n  return entries\n}\n\n/** Whether a tarball entry path is declared by the package `files` field. */\nexport function isDeclared(entryName, files) {\n  // entryName is 'package/...' — strip the first path segment.\n  const rel = entryName.replace(/^package\\//, '')\n  for (const f of files) {\n    const dir = f.endsWith('/') ? f : null\n    if (dir !== null && rel.startsWith(dir)) return true\n    if (dir === null && rel === f) return true\n  }\n  return rel === 'package.json' ? true : false // package.json is always included\n}\n"
+   }
+  ],
+  "actual": 9000,
+  "srcStep": 9
+ },
+ {
+  "st": {
+   "lastPromptTokens": 1938,
+   "lastCompletionTokens": 239,
+   "lastPromptMsgCount": 12
+  },
+  "deltaMsgs": [
+   {
+    "role": "tool",
+    "tool_call_id": "call_00_po69jjG0j9aZqqKYuaZO1652",
+    "content": "# relaudit API\n\n> 服务：`npm run start` 后监听 127.0.0.1:8787。所有接口返回 JSON。\n\n## GET /api/versions\n\n返回已发布版本列表。\n\n```json\n{ \"releases\": [\"1.2.0\"] }\n```\n\n## 待补全\n\n- GET /api/audit\n- GET /api/audit/:id\n- GET /api/rules\n- GET /api/runs\n- GET /（报告面板页）\n"
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_01_2wbCsPsUUCWuA5tNDtVT4653",
+    "content": "import { test } from 'node:test'\nimport assert from 'node:assert/strict'\nimport fs from 'node:fs'\nimport path from 'node:path'\nimport { createApp } from '../src/server.js'\n\nconst tmp = fs.mkdtempSync(path.join(process.cwd(), '.tmp-api-'))\n\nfunction withServer(fn) {\n  return async () => {\n    const app = createApp({ storeDir: tmp, pkgDir: path.join(process.cwd(), 'sample-pkg') })\n    const server = await app.listen(0) // ephemeral port\n    const base = `http://127.0.0.1:${server.address().port}`\n    try { await fn(base) } finally { server.close() }\n  }\n}\n\ntest('GET /api/versions returns released list', withServer(async (base) => {\n  const res = await fetch(`${base}/api/versions`)\n  assert.equal(res.status, 200)\n  const body = await res.json()\n  assert.ok(Array.isArray(body.releases))\n}))\n\ntest('GET /api/rules lists R1..R8', withServer(async (base) => {\n  const res = await fetch(`${base}/api/rules`)\n  const body = await res.json()\n  const ids = body.rules.map(r => r.id)\n  for (const id of ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8']) {\n    assert.ok(ids.includes(id), `missing rule ${id}`)\n  }\n}))\n\ntest('GET /api/audit returns a report with findings + summary', withServer(async (base) => {\n  const res = await fetch(`${base}/api/audit`)\n  assert.equal(res.status, 200)\n  const run = await res.json()\n  assert.ok(run.id && run.report)\n  assert.ok(Array.isArray(run.report.findings))\n  assert.equal(typeof run.report.summary.total, 'number')\n  assert.equal(run.report.pkg, 'dsh-sample-plugin')\n}))\n\ntest('GET /api/audit/:id returns the stored run', withServer(async (base) => {\n  const run = await (await fetch(`${base}/api/audit`)).json()\n  const got = await (await fetch(`${base}/api/audit/${run.id}`)).json()\n  assert.equal(got.id, run.id)\n}))\n\ntest('GET /api/audit/:id for unknown id returns 404', withServer(async (base) => {\n  const res = await fetch(`${base}/api/audit/run-nope`)\n  assert.equal(res.status, 404)\n}))\n\ntest('GET / serves the panel page', withServer(async (base) => {\n  const res = await fetch(`${base}/`)\n  assert.equal(res.status, 200)\n  const html = await res.text()\n  assert.ok(html.includes('id=\"app\"'))\n  assert.ok(html.includes('app.js'))\n}))\n"
+   },
+   {
+    "role": "tool",
+    "tool_call_id": "call_02_JeV4po3X4X5cXTwINU8K1778",
+    "content": "[]"
+   }
+  ],
+  "actual": 2967,
+  "srcStep": 4
+ },
+ {
+  "st": {
+   "lastPromptTokens": 68159,
+   "lastCompletionTokens": 5440,
+   "lastPromptMsgCount": 81
+  },
+  "deltaMsgs": [
+   {
+    "role": "tool",
+    "tool_call_id": "call_00_kcwGpLaGmOdXBPa9pkVk9450",
+    "content": "OK wrote docs/rules.md (5967 bytes)"
+   }
+  ],
+  "actual": 73621,
+  "srcStep": 95
+ }
+]
