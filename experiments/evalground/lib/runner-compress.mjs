@@ -24,7 +24,7 @@ import { compressOnce, compressWithProgram, enrichRefs, productPath, frameNative
 import { makeCompressorBindings } from './compressor-io.mjs'
 import { attachRetainDetail } from './retain-detail.mjs'
 import { renderProduct, renderSection, renderRetain } from './assemble.mjs'
-import { contextWireTokens, estimateMessagesTokens, shouldTrigger } from './prefix.mjs'
+import { boundaryRegion, contextWireTokens, estimateMessagesTokens, shouldTrigger } from './prefix.mjs'
 import { calibrateThresholds, compressionDomain } from './arm-spec.mjs'
 import { selectCompactableRange } from './native-range.mjs'
 import { detectHumanTrigger, extractFocusSet, buildFocusDirective } from './manual-habit.mjs'

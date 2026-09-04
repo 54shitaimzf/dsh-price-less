@@ -408,6 +408,12 @@ const CONCRETE_S1 = [
   ok(JSON.stringify(boundaryRegion([sysN, secN, raw1], 1, null)) === JSON.stringify([raw1]), 'TB-3 no bridge → region identical to the legacy slice(1+sectionCount)')
   ok(boundaryRegion(surf, 1, { role: 'user', content: 'other node' }).length === 3, 'TB-4 identity match — only the exact bridge node is excluded')
   ok(JSON.stringify(boundaryRegion(surf, 1, bridgeN)) === JSON.stringify([raw1, raw2]), 'TB-5 region deterministic (same input byte-equal)')
+
+  // TB-6 module-load smoke: runner-compress must import cleanly (it pulls the
+  // whole compress stack). No suite imported it before, so a missing import
+  // survived E0 and only exploded at the first live task boundary (mtnk8ssk).
+  const rc = await import('../lib/runner-compress.mjs')
+  ok(typeof rc.taskBoundaryStep === 'function' && typeof rc.wholeSurfaceStep === 'function', 'TB-6 runner-compress module loads with both step exports')
 }
 
 export { failures }
