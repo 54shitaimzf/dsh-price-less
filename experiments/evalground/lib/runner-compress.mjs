@@ -178,24 +178,36 @@ export async function taskBoundaryStep(ctx, stageIndex) {
   const segAt = segs.find(b => b.startSeq === nextSeq)
   if (segAt && segAt.startSeq > 0) {
     const roundTokens = estimateMessagesTokens(messages) // diagnostic only (not a gate)
-    // M4: drop the S1 hot-bridge node FIRST (it is transient — the design
-    // says: deleted on the next compaction; never re-fed, never re-compressed).
-    if (st.retainNode) {
-      const ri = messages.indexOf(st.retainNode)
-      if (ri >= 0) messages.splice(ri, 1)
-      st.retainNode = null
-      logger('task-boundary: dropped previous A1-S1 retain bridge (transient, one-shot)')
-    }
+    // M4: the previous S1 hot-bridge is TRANSIENT — deleted on the next
+    // compaction, never compressed into a product. The splice happens AFTER the
+    // compressor call below, not here: while the bridge is still in `messages`
+    // the replay stays a byte-aligned super-prefix of the last routed request
+    // (the property the comment below promises → provider cache reuse). Splicing
+    // first diverges the replay at the bridge position and drops compressor
+    // cache hits to the ~1-2K head (measured mtng8ctd: bridge-spliced seg4 hit
+    // 1,024 tok vs bridge-free seg3 hit 96%). The bridge is kept out of the
+    // compression REGION by identity filter in boundaryRegion() — it is never
+    // product material.
+    const bridgeToDrop = st.retainNode
+    st.retainNode = null
     // The closed segment's raw work = the messages AFTER the immutable section
-    // nodes. Compressor input = the CURRENT messages (they carry the segment's
-    // closing DONE too): the newest bytes are only the last reply, so the input
-    // is still a super-set-prefix of the last routed request → provider cache
-    // reuse; and the model sees the segment's closing statement (it is part of
-    // the raw work). NOT a slice that would break the prefix near the sections.
-    const region = messages.slice(1 + st.sectionCount)
+    // nodes (minus any pending bridge). Compressor input = the CURRENT messages
+    // (they carry the segment's closing DONE too): the newest bytes are only the
+    // last reply, so the input is still a super-set-prefix of the last routed
+    // request → provider cache reuse; and the model sees the segment's closing
+    // statement (it is part of the raw work). NOT a slice that would break the
+    // prefix near the sections.
+    const region = boundaryRegion(messages, st.sectionCount, bridgeToDrop)
     const before = JSON.parse(JSON.stringify(messages))
     if (region.length === 0) {
       logger(`task-boundary seg=${segAt.segmentIndex}: closed segment has no raw work; nothing to compress`)
+      // M4 (cont.): empty-region path still owes the one-shot drop (no compressor
+      // call happened, so there is nothing the replay needed the bridge for).
+      if (bridgeToDrop) {
+        const ri = messages.indexOf(bridgeToDrop)
+        if (ri >= 0) messages.splice(ri, 1)
+        logger('task-boundary: dropped previous A1-S1 retain bridge (transient, one-shot)')
+      }
     } else {
       const regionTokens = estimateMessagesTokens(region)
       const segmentEntries = transcript.slice(st.segmentEntriesStart)
@@ -210,6 +222,14 @@ export async function taskBoundaryStep(ctx, stageIndex) {
         context, callLLM, provider, model, regionTokens,
         ratioCfg: compGates.ratioCfg, retentionCfg: compGates.retentionCfg, codeRunCfg: compGates.codeRunCfg,
       })
+      // M4 (cont.): the compressor call is done — now drop the previous bridge,
+      // on BOTH ok and failure paths (lifecycle unchanged: one-shot per
+      // boundary). Only the replay above needed it, for cache alignment.
+      if (bridgeToDrop) {
+        const ri = messages.indexOf(bridgeToDrop)
+        if (ri >= 0) messages.splice(ri, 1)
+        logger('task-boundary: dropped previous A1-S1 retain bridge (transient, one-shot)')
+      }
       if (res.ok && res.product) {
         // A2 方案1: HARNESS-side expand — resolve every ref to its real content
         // (never model-authored; stored on refs for the renderer + audit).

@@ -97,3 +97,17 @@ export function contextWireTokens(st, messages) {
   }
   return estimateMessagesTokens(messages)
 }
+
+/**
+ * Closed-boundary compression REGION (task-boundary arms): everything after
+ * the immutable section nodes, minus any pending S1 retain bridge (identity
+ * match — the bridge is transient executor context and must never enter a
+ * compression product). The REPLAYED surface keeps the bridge so the
+ * compressor request stays a byte-aligned super-prefix of the last routed
+ * request (provider KV-cache reuse — measured: bridge-in-replay 96% hit vs
+ * bridge-spliced-before-replay ~1-2K head-only); only the region excludes it.
+ * Pure — no mutation.
+ */
+export function boundaryRegion(messages, sectionCount, bridgeNode) {
+  return messages.filter(m => m !== bridgeNode).slice(1 + sectionCount)
+}

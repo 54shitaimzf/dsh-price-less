@@ -390,6 +390,24 @@ const CONCRETE_S1 = [
   const s2p = { total: 1, sections: [{ summary: 's', subtasks: [] }] }
   await attachRetainDetail(s2p, { transcript: entries }, bindings)
   ok(s2p.retain === undefined, 'RD-10 S2 product untouched by attachRetainDetail')
+
+  // TB-* boundaryRegion (F11a fix): the pending S1 bridge must stay in the
+  // REPLAYED surface (byte-aligned super-prefix of the last routed request →
+  // provider cache reuse; measured mtng8ctd: bridge-spliced-before-replay hit
+  // 1,024 tok vs bridge-free 96%) while never entering the compression REGION.
+  const { boundaryRegion } = await import('../lib/prefix.mjs')
+  const sysN = { role: 'system', content: 'sys' }
+  const secN = { role: 'user', content: 'section-1' }
+  const bridgeN = { role: 'user', content: '[热桥接 retain] outline' }
+  const raw1 = { role: 'user', content: 'raw work 1' }
+  const raw2 = { role: 'assistant', content: 'done' }
+  const surf = [sysN, secN, bridgeN, raw1, raw2]
+  const tbRegion = boundaryRegion(surf, 1, bridgeN)
+  ok(tbRegion.length === 2 && tbRegion[0] === raw1 && tbRegion[1] === raw2, 'TB-1 region excludes the pending bridge, keeps post-section raw work')
+  ok(surf.length === 5 && surf[2] === bridgeN, 'TB-2 boundaryRegion is a pure read — bridge stays in the replayed surface (cache alignment)')
+  ok(JSON.stringify(boundaryRegion([sysN, secN, raw1], 1, null)) === JSON.stringify([raw1]), 'TB-3 no bridge → region identical to the legacy slice(1+sectionCount)')
+  ok(boundaryRegion(surf, 1, { role: 'user', content: 'other node' }).length === 3, 'TB-4 identity match — only the exact bridge node is excluded')
+  ok(JSON.stringify(boundaryRegion(surf, 1, bridgeN)) === JSON.stringify([raw1, raw2]), 'TB-5 region deterministic (same input byte-equal)')
 }
 
 export { failures }

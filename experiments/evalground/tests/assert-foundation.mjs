@@ -192,6 +192,9 @@ const ok = (cond, label, extra = '') => {
 {
   const { append, readAll, summarize, digest, validateEntry, ENTRY_TYPES } = await import('../lib/transcript.mjs')
   const tf = path.join(tmp, 'transcript.jsonl')
+  // Fixed shared path — clear leftovers from other suites (assert-cascade-loop
+  // appends here too) or a previous run, or U1/U2 count stale entries.
+  fs.rmSync(tf, { force: true })
 
   append(tf, { type: 'assistant', content: 'hi', toolCalls: null })
   append(tf, { type: 'tool', tool: 'read', arg: { path: 'a.js' }, result: 'x' })
