@@ -35,9 +35,17 @@ const ok = (cond, label, extra = '') => {
 // ============ DOMAIN. arm-spec config wiring ============
 {
   const { compressionDomain, calibrateThresholds } = await import('../lib/arm-spec.mjs')
+  const fs = await import('node:fs')
+  const path = await import('node:path')
   ok(typeof compressionDomain === 'function' && Number.isFinite(compressionDomain()) && compressionDomain() > 0, 'DOMAIN1 compressionDomain() from config', compressionDomain())
   const ct = calibrateThresholds()
   ok(ct.retainTokens < ct.thresholdTokens && ct.domain > 0, 'DOMAIN2 calibrateThresholds() sane', JSON.stringify(ct))
+  // F10 amend: absolute retainTokens/thresholdTokens in arms.config.json WIN over
+  // the ratio derivation — retention size is an absolute real-token design choice
+  // (DSH 本体 8K 量级), not a ratio of an arbitrarily chosen domain.
+  const cfg = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, 'arms.config.json'), 'utf8'))
+  ok(cfg.retainTokens === 10000 && cfg.thresholdTokens === 100000, 'DOMAIN3 absolute retain/threshold declared in config', `${cfg.retainTokens}/${cfg.thresholdTokens}`)
+  ok(ct.retainTokens === 10000 && ct.thresholdTokens === 100000, 'DOMAIN4 calibrateThresholds() consumes the absolutes (not 0.16×domain)', JSON.stringify(ct))
 }
 
 // ============ PREMARK. preprocessing: per-message discriminator cuts boundaries ============

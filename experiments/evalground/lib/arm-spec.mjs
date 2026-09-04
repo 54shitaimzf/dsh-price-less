@@ -66,8 +66,26 @@ export function compressionDomain() {
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : COMPRESSION_DOMAIN_DEFAULT
 }
 
-/** Calibrated retain/threshold for the compression domain (task-scale). */
+/** Calibrated retain/threshold for the compression domain (task-scale).
+ * Absolute `retainTokens`/`thresholdTokens` overrides in arms.config.json win
+ * when present (the design intent is ABSOLUTE real-token sizes — DSH 本体保留
+ * 8K 量级, not a ratio of an arbitrarily chosen domain); the ratio derivation
+ * from `compressionDomain` is the fallback. */
 export function calibrateThresholds(peakTokens) {
+  const { cfg } = resolve()
+  const abs = cfg.retainTokens ?? cfg.thresholdTokens
+  if (abs !== undefined) {
+    const retain = Math.floor(Number(cfg.retainTokens))
+    const threshold = Math.floor(Number(cfg.thresholdTokens))
+    if (!Number.isFinite(retain) || !Number.isFinite(threshold) || retain <= 0 || threshold <= 0) {
+      throw new Error(`arms.config.json absolute retainTokens/thresholdTokens must be positive numbers (got ${cfg.retainTokens}/${cfg.thresholdTokens})`)
+    }
+    if (retain >= threshold) {
+      throw new Error(`compression-domain invariant violated: retain(${retain}) must be < threshold(${threshold})`)
+    }
+    const domain = peakTokens ?? cfg.compressionDomain ?? COMPRESSION_DOMAIN_DEFAULT
+    return { domain: Math.floor(Number(domain)), retainTokens: retain, thresholdTokens: threshold, retainRatio: retain / threshold, thresholdRatio: 1 }
+  }
   return calibrate(peakTokens ?? compressionDomain())
 }
 
