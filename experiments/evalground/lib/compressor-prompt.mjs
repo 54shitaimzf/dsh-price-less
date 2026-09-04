@@ -25,11 +25,11 @@
  */
 import { BINDINGS_SDK, TEMPLATE_S1, TEMPLATE_S2 } from './sdk.mjs'
 
-/** Instruction version (F9, 2026-09): v2 adds the execution-environment
- * declaration (the DeepSeek refusal root cause: the model saw its executor
- * tool whitelist and refused to call bindings "not in its runtime") + the
- * change-manifest reference (coords are citation targets, visible up front). */
-export const COMPRESSOR_PROMPT_VERSION = 2
+/** Instruction version (F11, 2026-09): v3 redesigns the S1 hot tail (design R) —
+ * the model still returns outline+refs ONLY; the HARNESS attaches verbatim
+ * execution details + expanded ref content after the gates (5000-token cap).
+ * v2 remains the F9 environment-declaration + change-manifest release. */
+export const COMPRESSOR_PROMPT_VERSION = 3
 
 /** Fixed compressor persona (never interpolated — byte-stable). */
 export const COMPRESSOR_SYSTEM = [
@@ -40,8 +40,8 @@ export const COMPRESSOR_SYSTEM = [
 const MODE_LINES = {
   's2:keep-original': 'A1-S2 闭合即全压 × A2 方案0: do NOT retain anything; every subtask goes into sections; refs stay as COORDINATES (no expansion — return refs only).',
   's2:expand': 'A1-S2 闭合即全压 × A2 方案1: do NOT retain anything; every subtask goes into sections; the HARNESS will expand the refs — you return refs only, NEVER file content.',
-  's1:keep-original': 'A1-S1 保尾 × A2 方案0: retain the LAST subtask (a refs+outline passthrough, no raw text); refs stay as COORDINATES (return refs only).',
-  's1:expand': 'A1-S1 保尾 × A2 方案1: retain the LAST subtask (a refs+outline passthrough, no raw text); the HARNESS will expand refs — you return refs only, NEVER file content.',
+  's1:keep-original': 'A1-S1 保尾 × A2 方案0 (design R): retain the LAST subtask as a refs+outline passthrough — the HARNESS attaches the verbatim execution details and expands the refs itself; you NEVER transcribe outputs or embed file content (return refs only).',
+  's1:expand': 'A1-S1 保尾 × A2 方案1 (design R): retain the LAST subtask as a refs+outline passthrough — the HARNESS expands refs AND attaches the verbatim execution details; you NEVER transcribe outputs or embed file content (return refs only).',
 }
 
 const PROGRAM_CONTRACT = [
@@ -90,7 +90,7 @@ export function buildCompressorInstruction({ a1 = 's2', a2 = 'keep-original' } =
     '- Condense: the product-compressed tokens must be ≤45% of the region tokens (tools.estimate_tokens). Dense summary + typed outline, NOT a transcript.',
     '- Choose each subtask type from the raw work semantics; typeHint is only a hint.',
     `- A2 ${a2}: ${a2 === 'expand' ? 'the harness expands every ref AFTER the run — you return refs only, never embed content.' : 'keep refs as coordinates (path+lineRange+symbol), no expansion.'}`,
-    `- A1 ${a1}: ${a1 === 's1' ? 'attach retain = {refs, outline} for the LAST subtask only (refs ≤8, outline ≤40 tokens).' : 'no retain — omit the retain field.'}`,
+    `- A1 ${a1}: ${a1 === 's1' ? 'attach retain = {refs, outline} for the LAST subtask only (refs ≤8, outline ≤110 tokens — the harness attaches the verbatim execution details, you never transcribe outputs).' : 'no retain — omit the retain field.'}`,
     '- Output ONLY the program text (the async function body). Nothing else — no markdown fences, no explanation.',
   ].join('\n')
 }

@@ -1,9 +1,9 @@
 {
   "_meta": {
     "methodology": "四旋钮方法论（A1 范围 / A2 处理）+ task=架构单位，见 EXPERIMENT.md（设计级单一事实源）。最终协议 = 2 对照（native-auto / manual-habit）+ 4 实验臂（A1×A2 网格 self-s{1,2}-{orig,expand}）；实验侧 = 用插件机制逐槽替换原生机制（触发/范围/保留/产物），对照组 = 完整原生原样（严格原生 = 含 task 头锚定）。无压缩条件已取消（无对照意义）；历史 V1/V2/V3/X 系列臂与 self-compact（= self-s2-orig 等价）已于 2026-09 清理。",
-    "ptc-compressor": "压缩器 = PTC 式：模型写程序（不调工具），worker_threads 运行时执行，输出结构/指针/压缩比全部代码化；展开（A2 方案1）= harness 侧 resolve；S1 保尾 = 引用化保尾（refs+outline，无原文）；压缩后压缩比检查（有效≤0.5、>0.75 fail-lazy）。",
+    "ptc-compressor": "压缩器 = PTC 式：模型写程序（不调工具），worker_threads 运行时执行，输出结构/指针/压缩比全部代码化；展开（A2 方案1）= harness 侧 resolve；S1 保尾 = 设计R高保真热尾（F11：模型只写 outline+refs，harness 逐字附末次验证/失败行 + 展开引用内容，渲染总帽 5000 token，下次压缩即删）；压缩后压缩比检查（有效≤0.5、>0.75 fail-lazy）。",
     "default-arm": "scores.config.json 的 baseline = native-auto（无压缩基线已取消）",
-    "calibration-2026-09": "Recalibrated from the shakedown batch (CASCADE-native-auto-mtm2wwpf / manual-habit-mtm4ovi3): model window = 1M (contextWindow feeds ONLY the hard-truncate safety valve, never the compression trigger); CHARS_PER_TOKEN 4 -> 1.5 (wire-calibrated, median wire/est 2.7); trigger formula = pure message estimate (the old lastPromptTokens+estimate double-counted); compressionDomain 50000 -> 125000 => threshold = 0.8x = 100000 real tokens, retain = 0.16x = 20000 real tokens. Measured uncompressed peak was 233249 wire tokens (91% of the WRONG 256K assumption); native control compressed only ~5K of 233K. Rationale: compression trigger is task-scale by design (100K), the 1M window belongs to the safety valve only. AMEND (same day): retain is ABSOLUTE by design, not a ratio of the domain — retainTokens=10000 / thresholdTokens=100000 override the ratio derivation (DSH 本体保留 8K 量级; user decision '10K 足够'); calibrateThresholds() consumes the absolutes and validates retain < threshold; the 0.16/0.8 ratio path stays as fallback for config-free calibrate() calls."
+    "calibration-2026-09": "Recalibrated from the shakedown batch (CASCADE-native-auto-mtm2wwpf / manual-habit-mtm4ovi3): model window = 1M (contextWindow feeds ONLY the hard-truncate safety valve, never the compression trigger); CHARS_PER_TOKEN 4 -> 1.5 (wire-calibrated, median wire/est 2.7); trigger formula = pure message estimate (the old lastPromptTokens+estimate double-counted); compressionDomain 50000 -> 125000 => threshold = 0.8x = 100000 real tokens, retain = 0.16x = 20000 real tokens. Measured uncompressed peak was 233249 wire tokens (91% of the WRONG 256K assumption); native control compressed only ~5K of 233K. Rationale: compression trigger is task-scale by design (100K), the 1M window belongs to the safety valve only. AMEND (same day): retain is ABSOLUTE by design, not a ratio of the domain — retainTokens=10000 / thresholdTokens=100000 override the ratio derivation (DSH 本体保留 8K 量级; user decision '10K 足够'); calibrateThresholds() consumes the absolutes and validates retain < threshold; the 0.16/0.8 ratio path stays as fallback for config-free calibrate() calls. F11: S1 retain upgraded to design R (harness-verbatim detail, COMPRESSOR_PROMPT_VERSION=3, budget 5000 tok user-approved)."
   },
   "trigger": {
     "tokenThreshold": 8000
@@ -56,7 +56,7 @@
         "compression": true,
         "decision": true
       },
-      "note": "A1×A2 网格 [A1-S1 引用化保尾 × A2 方案0]：PTC 压缩器；保留=最后一个子 task 的 refs+outline（无原文，下次压缩即删）；产物=总-分 sections+引用坐标。对 native-auto 换 1 槽 = E3 保留。"
+      "note": "A1×A2 网格 [A1-S1 引用化保尾 × A2 方案0]：PTC 压缩器；保留=设计R高保真热尾：末子任务 outline+refs，harness 逐字附末次验证/失败+展开引用内容（5000 tok 帽，下次压缩即删）；产物=总-分 sections+引用坐标。对 native-auto 换 1 槽 = E3 保留。"
     },
     "self-s1-expand": {
       "assembly": "obj-P",

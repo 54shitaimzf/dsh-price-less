@@ -21,6 +21,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { compressOnce, compressWithProgram, enrichRefs, productPath, frameNativeSummary } from './compress.mjs'
+import { makeCompressorBindings } from './compressor-io.mjs'
+import { attachRetainDetail } from './retain-detail.mjs'
 import { renderProduct, renderSection, renderRetain } from './assemble.mjs'
 import { estimateMessagesTokens, shouldTrigger } from './prefix.mjs'
 import { calibrateThresholds, compressionDomain } from './arm-spec.mjs'
@@ -205,6 +207,16 @@ export async function taskBoundaryStep(ctx, stageIndex) {
           if (enrichProblems.length > 0) {
             logger(`task-boundary expand: ${enrichProblems.join('; ')}`)
           }
+        }
+        // Design R (F11): the S1 retain bridge gets its near-verbatim detail
+        // attached by the HARNESS — verbatim last-run results / failing lines
+        // + retain-ref content — budget-capped at RETAIN_DETAIL_TOKEN_BUDGET,
+        // trimmed deterministically. Runs BEFORE persist so P-<seg>.json
+        // audits exactly what the renderer emits.
+        if (res.product.retain) {
+          const bindings = makeCompressorBindings(context)
+          const detail = await attachRetainDetail(res.product, context, bindings)
+          if (detail.overBudget > 0) logger(`task-boundary retain detail trimmed (over by ${detail.overBudget} tok)`)
         }
         try { fs.writeFileSync(productPath(path.dirname(transcriptPath), `P-${segAt.segmentIndex}`), JSON.stringify(res.product, null, 2)) } catch (e) { logger(`persist product failed: ${e.message}`) }
         // Assemble: keep [system, ...old sections], append the NEW section node

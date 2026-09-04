@@ -340,4 +340,56 @@ const CONCRETE_S1 = [
   ok(two.problems.length === 0, 'MW-10b manifest injection does not alter the PTR gate (both same-coord refs still ground)', two.problems.join('; '))
 }
 
+// ============ F11 design R — harness-verbatim retain detail ============
+{
+  const { extractRetainDetail, attachRetainDetail, RETAIN_DETAIL_TOKEN_BUDGET } = await import('../lib/retain-detail.mjs')
+  const { renderRetain } = await import('../lib/assemble.mjs')
+  const { makeCompressorBindings } = await import('../lib/compressor-io.mjs')
+
+  // RD-1 deterministic extraction: same entries → byte-equal detail
+  const entries = [
+    { type: 'tool', tool: 'run', arg: 'node --test', result: 'ok 1 - a\n# pass 1\n# fail 0' },
+    { type: 'assistant', content: 'thinking...' },
+    { type: 'tool', tool: 'run', arg: 'npm test', result: '✗ tests/suite.js:12 expected 4 got 5\nnot ok 2 - b' },
+  ]
+  const d1 = extractRetainDetail(entries)
+  const d2 = extractRetainDetail(entries)
+  ok(JSON.stringify(d1) === JSON.stringify(d2), 'RD-1 extractRetainDetail deterministic (same input byte-equal)')
+  ok(d1.verifications.length === 2 && d1.verifications[1].command === 'npm test', 'RD-2 verifications = last run results, newest last', JSON.stringify(d1.verifications.map(v => v.command)))
+  ok(d1.failures.some(l => l.includes('✗')), 'RD-3 failing line extracted verbatim', JSON.stringify(d1.failures))
+  ok(extractRetainDetail([]).verifications.length === 0, 'RD-4 empty segment → empty detail')
+  ok(extractRetainDetail([{ type: 'tool', tool: 'read', arg: { path: 'x' }, result: 'content' }]).verifications.length === 0, 'RD-5 non-run tools excluded')
+
+  // RD-6 render: detail sections + expanded ref content; absent → coords only (backward compat)
+  const retainR = { outline: 'fixed semver compare', refs: [{ path: 'src/s.js', lineRange: '1-4', content: 'const A = 1' }], detail: d1 }
+  const rr = renderRetain(retainR)
+  ok(rr.includes('## 末次验证') && rr.includes('$ npm test') && rr.includes('not ok 2 - b'), 'RD-6 renderRetain emits verbatim detail blocks', rr.slice(0, 120))
+  ok(rr.includes('src/s.js:1-4→内容(const A = 1)'), 'RD-7 renderRetain expands resolved ref content', rr.split('\n')[1] ?? '')
+  ok(renderRetain({ outline: 'o', refs: [{ path: 'p.js' }] }).includes('引用: p.js'), 'RD-8 bare-coords retain renders unchanged (backward compat)')
+
+  // RD-9 budget: 5000 cap — oversized detail trimmed deterministically, product survives
+  ok(RETAIN_DETAIL_TOKEN_BUDGET === 5000, 'RD-9a user-approved budget = 5000 tokens', RETAIN_DETAIL_TOKEN_BUDGET)
+  const bigRun = { type: 'tool', tool: 'run', arg: 'big-suite', result: 'x'.repeat(20000) + '\n# fail 9' }
+  const productR = { total: 1, sections: [{ summary: 's', subtasks: [] }], retain: { outline: 'o', refs: [] } }
+  const wsDir = path.join(EVAL_ROOT, '.assert-tmp', 'rd-ws')
+  fs.mkdirSync(wsDir, { recursive: true })
+  fs.writeFileSync(path.join(wsDir, 'hot.js'), 'const hot = true\n')
+  const bindings = makeCompressorBindings({ workspace: wsDir, transcript: [bigRun] })
+  const retainProbe = JSON.parse(JSON.stringify(productR))
+  retainProbe.retain.refs = [{ path: 'hot.js', lineRange: '1-1' }]
+  const rep = await attachRetainDetail(retainProbe, { transcript: [bigRun] }, bindings)
+  const rendered = renderRetain(retainProbe.retain)
+  ok(rendered.includes('## 末次验证') && rendered.includes('const hot = true'), 'RD-9b-i rendered retain is a real render (detail + expanded ref present)', rendered.slice(0, 80))
+  ok(rep.overBudget === 0 && estimateTokens(rendered) <= RETAIN_DETAIL_TOKEN_BUDGET, 'RD-9b rendered retain within budget after deterministic trim', `${estimateTokens(rendered)}/${RETAIN_DETAIL_TOKEN_BUDGET}`)
+  const retainProbe2 = JSON.parse(JSON.stringify(productR))
+  retainProbe2.retain.refs = [{ path: 'hot.js', lineRange: '1-1' }]
+  const rep2 = await attachRetainDetail(retainProbe2, { transcript: [bigRun] }, makeCompressorBindings({ workspace: wsDir, transcript: [bigRun] }))
+  ok(renderRetain(retainProbe2.retain) === rendered && rep2.overBudget === rep.overBudget, 'RD-9c trim deterministic (same input same output)')
+
+  // RD-10 S2 untouched: no retain → attach is a no-op
+  const s2p = { total: 1, sections: [{ summary: 's', subtasks: [] }] }
+  await attachRetainDetail(s2p, { transcript: entries }, bindings)
+  ok(s2p.retain === undefined, 'RD-10 S2 product untouched by attachRetainDetail')
+}
+
 export { failures }

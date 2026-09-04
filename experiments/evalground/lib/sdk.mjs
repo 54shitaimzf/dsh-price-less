@@ -75,9 +75,11 @@ export const TEMPLATE_S2 = [
   'return { total: s.subtasks.length, sections: [{ summary: "<task-level summary>", subtasks }] }',
 ].join('\n')
 
-/** A1-S1: retain the LAST subtask as refs + one-line outline (no raw text). */
+/** A1-S1 (design R): retain the LAST subtask as refs + one-line outline. The
+ * HARNESS attaches the verbatim execution details and expands ref content
+ * after the gates — the program returns the pointer card, never raw text. */
 export const TEMPLATE_S1 = [
-  '// A1-S1 保尾 — retain the last subtask as refs + outline (no raw text)',
+  '// A1-S1 保尾 (design R) — last subtask as refs + outline; harness attaches details',
   'const s = await tools.probe_substructure({ taskRef: "task" })',
   'const subtasks = []',
   'for (const sub of s.subtasks) {',

@@ -45,9 +45,10 @@ ok(INSTR.includes('`total` = the number of subtasks'), 'PC-17 total=subtask coun
 ok(INSTR.includes('never re-summarize') && INSTR.includes('FROZEN'), 'PC-18 earlier sections FROZEN clause present')
 
 // --- modes ---
-ok(INSTR.includes('the HARNESS will expand'), 'PC-19 expand mode: harness-side expansion stated')
+ok(INSTR.includes('the HARNESS will expand') || INSTR.includes('the HARNESS expands refs'), 'PC-19 expand mode: harness-side expansion stated')
+ok(INSTR.includes('attaches the verbatim execution details'), 'PC-19b design R: S1 mode line states the harness attaches verbatim details (model never transcribes)')
 ok(INSTR_S2.includes('no retain — omit the retain field'), 'PC-20 s2: omit retain rule present')
-ok(INSTR.includes('retain = {refs, outline}') && INSTR.includes('refs ≤8') && INSTR.includes('outline ≤40 tokens'), 'PC-21 s1: retain shape + length gate stated')
+ok(INSTR.includes('retain = {refs, outline}') && INSTR.includes('refs ≤8') && INSTR.includes('outline ≤110 tokens'), 'PC-21 s1: retain shape + length gate stated (F10-calibrated 110)')
 ok(!INSTR.includes('You are now acting as a compaction engine'), 'PC-22 instruction is NOT the native summarizer instruction (product-structure separation)')
 
 // --- system persona ---
@@ -55,7 +56,7 @@ ok(COMPRESSOR_SYSTEM.includes('You are a context compressor') && COMPRESSOR_SYST
 
 // --- V2: execution environment declaration + change-manifest reference (F9) ---
 const { COMPRESSOR_PROMPT_VERSION, buildCompressorMessages, renderChangeManifest } = await import('../lib/compressor-prompt.mjs')
-ok(COMPRESSOR_PROMPT_VERSION === 2, 'PC-24a instruction version bumped to 2 (F9 environment + manifest)')
+ok(COMPRESSOR_PROMPT_VERSION === 3, 'PC-24a instruction version bumped to 3 (F11 design-R hot tail)')
 ok(INSTR.includes('does NOT run in this chat') && INSTR.includes('sandboxed worker'), 'PC-24 execution environment declared (program runs in the harness worker, not this chat)')
 ok(INSTR.includes('belongs to the EXECUTOR'), 'PC-24b executor tool-whitelist separation stated (the refusal root cause)')
 ok(INSTR.includes('CHANGE MANIFEST'), 'PC-25 instruction references the change manifest as the citation ground truth')

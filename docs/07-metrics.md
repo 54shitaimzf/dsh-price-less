@@ -1234,3 +1234,9 @@ cacheHitRate(热)       87%            91%        +4pp
 - **实测**：native `mtm2wwpf`（总96，$0.268）+ manual `mtm4ovi3`（总92，$0.219）全链路组装/账本/判分验证通过；native 真实上下文峰值 **233,249 wire tokens**（旧 256K 假设的 91%，险溢出），估计器（chars/4）对 wire 低估中位数 **2.7×**，保留尾名义 8K 实际圈住 ~28K，native 两次压缩净减仅 ~5K（2%）。
 - **修正**：`CHARS_PER_TOKEN` 4→1.5（wire 校准）；触发公式改纯消息估计（去双倍计数）；`contextWindow`→1M（安全阀专用，地板 800K 恢复活阀）；`compressionDomain` 50K→125K ⇒ **threshold=100K 真实**；retain 改**绝对覆写 10K 真实**（DSH 本体 8K 量级，比例派生降为 fallback）；outlineTokenBudget 40→110（保留原意图）。
 - **有效性**：shakedown 批 mech/judge/账本/组装结论有效；臂间压缩效率结论以重标定后批次为准（旧两对照降级为 shakedown 证据）。回归：E0 全量 + vitest 153 全绿。
+
+**§29.3 追记（2026-09-04）：F11 设计 R 热尾（S1 便利贴升级）**
+
+- S1 保留桥从纯指针卡（refs+outline）升级为**高保真热尾**：模型只写 outline+refs，harness 门后确定性附①逐字末次验证②逐字失败行③retain 引用展开内容；渲染总帽 5000 token（用户批准），超限确定性裁剪。产品 schema 与五道门零改动（提取全部 POST-gate）。
+- **批次声明：COMPRESSOR_PROMPT_VERSION = 3**——S1 臂新 run 与 v2 指令时代 S1 run 不混批。设计意图：S1 vs S2 从"测近因显著性（预期零效应）"改为"测高保真热尾 vs 无保留对下个任务开局质量的差异"。
+- 回归：RD-1~10 + PC 更新 + E0 全量绿（纯离线，¥0）；插件本体未动。

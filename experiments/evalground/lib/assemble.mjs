@@ -134,14 +134,30 @@ function renderBlockLine(b, a2, dedup) {
   return s
 }
 
-/** Render the A1-S1 transient hot-bridge node (refs + one-line outline, no raw). */
+/** Render the A1-S1 transient hot-bridge node (design R, F11): refs (expanded
+ * to content when the harness resolved them) + one-line outline + the
+ * harness-verbatim detail block (last run results / failing lines). Ref render
+ * reuses the section refText conventions; coords render bare when no content. */
 export function renderRetain(retain) {
   const refs = Array.isArray(retain?.refs) ? retain.refs : []
-  const bits = refs.map(r => `${r.path}${r.lineRange ? `:${r.lineRange}` : ''}${r.symbol ? `(${r.symbol})` : ''}`)
-  return [
+  const bits = refs.map(r => refText(r, 'expand', null))
+  const parts = [
     `[热桥接 retain] ${String(retain?.outline ?? '').trim()}`,
     bits.length > 0 ? `引用: ${bits.join('; ')}` : '',
-  ].filter(Boolean).join('\n') + '\n'
+  ].filter(Boolean)
+  const d = retain?.detail
+  if (d && Array.isArray(d.verifications) && d.verifications.length > 0) {
+    parts.push('## 末次验证（harness 逐字提取）')
+    for (const v of d.verifications) {
+      parts.push(`$ ${v.command}`)
+      parts.push(v.tail)
+    }
+  }
+  if (d && Array.isArray(d.failures) && d.failures.length > 0) {
+    parts.push('## 未解决失败（逐字）')
+    for (const f of d.failures) parts.push(f)
+  }
+  return parts.filter(p => p !== '').join('\n') + '\n'
 }
 
 /** Render an A2 方案1 information-block product (plan/impl/verify/wrap) into a
