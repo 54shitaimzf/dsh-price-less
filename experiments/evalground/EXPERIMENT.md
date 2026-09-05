@@ -279,6 +279,10 @@ DSH-native 的参数（`retainRatio`、`thresholdRatio`）是**相对窗口**的
   那是把 agent 内部的工具调用子步骤当成了 task 边界；真实判别器只判 `user/message`，T1 单消息 = 单段。
 - 数据标记（`boundaries/<id>.boundaries.json`）记录的就是**用户消息流**的切段结果 + 每次判定的真实成本。
 
+> **v7 范式（📐 设计蓝图，F12.0 前置改造，2026-09-05 定稿）**：task 内用户消息卷宗积累
+> （不积累历史判定、边界清空）+ 三分类输出扩展（动作/纯理解提问/验证提问）——
+> 详见 §10.0。v6 冻结口径在 v7 落地时作废，切换按批次纪律执行，前后 run 不混用。
+
 ---
 
 ## 7. 判定指标与公平性
@@ -421,6 +425,106 @@ checkpoint 单一 `<compacted-summary>` 节点。见 `tests/assert-cascade-loop.
 
 - **F10a（触发/截断阀改 wire 锚定——用户"为什么不全用精确值"质询驱动，2026-09-05）**：F10 基线（mtn7l9mm）实测暴露估计器盲区——`estimateMessagesTokens` 只数 content，不数 `reasoning_content`（thinking 回显）+ `tool_calls`，本 run 估计 81K 时 wire 已 162K，"100K 触发"实际落在 wire ~170K 且与选范围用的尺（`native-range.msgTokens` 计 tool_calls）不一致。**修正 = 锚点 + 增量**（用户直觉：大部分上下文可精确计算）：`contextWireTokens(st, messages)` = `lastPromptTokens`（上次路由请求的 provider tokenizer 精确值，reasoning/tool schema 全在内）+ `lastCompletionTokens`（assistant 回合的精确生成量）+ 仅新增消息的字符估计（tool 结果，误差小且每步被新 usage 重锚定、不跨步累积）。硬截断阀与 manual-habit 的 pressure-50 规则同步接线；压缩/截断重建消息表后锚点重置（冷路径一轮，下个请求即重锚）。**批次口径：`calibrated` 覆写（离线测试）保持纯估计路径**——脚本化 usage 极小，锚定永不达强制阈值；生产（run-cascade 无 calibrated）走 wire 锚定。回归：W18a~d + E0 全量（563 PASS）+ vitest 153 全绿，纯离线 ¥0。
 - **judge 协议 v2（`JUDGE_PROMPT_VERSION = 2`，2026-09-04 测量定版）**：单样本波动实测触目（同工件 n=5：v1 摆幅 27 分、sd 9.1——根因是 thinking 模式下 temp 0 无效、采样随机地板）。三杠杆解耦测量（`reports/judge-stability-deepseek-2026-09.md`，3 臂 × n=5）：①判分提示词硬化（**SCORING DISCIPLINE**：证据先行/并列档位取低/一致性/中性化）→ spread 27→19；②effort=low → spread 12 且输出 token −64%；③逐维中位数聚合（`judgeTask` samples 基建既有）。**锁定协议 = v2 + effort=low + samples=3**（预注册规则第 3 条：无臂达 samples=1 门槛）。成本核算：3×low 输出 ≈15K ≈ v1 单次 13.5K——**三倍评审 ≈ 原单次成本**（输入重复命中缓存），实测 `mtm09n7d` judge 账本 $0.0072 < 改造前 $0.0102。均值漂移 −0.2~−0.6（≤2 达标）；prioritization 维均值 3.0→2.0~2.4（纪律块收紧证据标准，v2 内自洽）。协议为批次级固定项。
+
+## 10. F12 上下文剪切层（判别器 v7 范式 · 提问剪切器 · 工具剪切器）
+
+> **状态（📐 设计蓝图，2026-09-05 定稿，未实现）**。定位 = 四层上下文防御的**第 1 层**
+> （块类型剪切，持续微削）；其上是 task 边界压缩（第 2 层，docs/02 §4.5）、溢出恢复
+> （第 3 层）、hard-truncate 保险丝（第 4 层）。
+> **设计总原则（时机经济学，用户洞察）**：断裂成本 = **剪点之后全部体积 × 全价**（一次性重算）。
+> 因此只有"断裂点贴近尾部"或"完整版从未入账"的剪除时机存在正收益；**中段独立剪除
+> 被该公式直接否定**（成本不降反增）。全层走官方缝（`tools/execute` around-wrapper、
+> `finalizeContent`、surfaceOp replace + sourceEventSeqs + 影子计价），零 hack。
+
+### 10.0 判别器 v7 范式（F12.0 前置改造，两剪切器共用）
+
+- **卷宗**：task 内用户消息原文逐条累积。判定 prompt = 卷宗 + 当前消息，append-only
+  → 判定前缀缓存命中，边际成本 ≈ 新消息 token。用户消息 = 稀疏高信号信道
+  （s1 run 实测：151 步仅数十条用户消息，卷宗全程 ~10K tok 量级）——**成本几乎不增的根据**。
+- **不积累历史判定**（用户定稿）：锚定偏置从根上消除——不给提示词"可推翻前判"的纪律
+  负担，结构性不喂。判定每条独立，视野共享。
+- **清空时机 = task 边界判定成立**：边界即连贯性的自然分界；新 task 新卷宗，
+  从首条消息重新积累。卷宗作用域天然有界、新鲜、无偏。
+- **三分类输出扩展**：**动作 / 纯理解提问 / 验证提问**——同一次 judge 调用加输出维度
+  （复用必经调用，边际成本 ≈ 0；搭便车原则，与对齐记录 14/§4.6 同源）。
+  L0 词表 → L1 缓存 → LLM 回退链不变。
+- **版本纪律**：v6 冻结口径（§6）作废 → v7 新批次；切换前后 run 不混用（AGENTS.md 硬规则）。
+- **消融设计（预注册）**：v6 基线 / v7a 累积卷宗 / v7b 累积+历史判定入卷宗（锚定偏置消融）/
+  v7c 批量判定（K 条一判，成本再降、延迟换）。判定维度：边界 F1、侧问判定准确率、
+  每任务判别成本、判定延迟。
+
+### 10.1 提问剪切器（语义半边）
+
+- **分类学与安全性质**：**纯理解提问**——闭合（答案已交付）、答案自含（结论天然落在
+  回答文本里）、可重推导（重问即恢复，误剪代价有上界）三性质齐备，是唯一可提前剪的类型。
+  **验证提问**——后续动作可能是对验证结果的修正（问答被动作消费，依赖边存在），剪除须谨慎。
+- **状态机**：纯理解提问入账 → 标记**可剪积压**（暂留上下文——答案未交付不能剪）→
+  跨 streak 持续累积 → **用户明确的动作到达 = 吸收证明**（提问是为了理解；
+  用户开始动手 = 理解已交付——行为替机制验证了吸收，无需任何吸收检查）
+  → 整串积压一次性冲刷剪除。
+- **剪除经济学**：冲刷时点 = 动作消息刚到达，剪点之后的尾巴 = 动作消息本身
+  → 断裂重算量极小；被移除的是整个积压。**断裂成本/收益比在此刻取极值**。
+- **验证类处置**：动作到达**不剪** → 判别器**组装额外提示词**（带动作上下文）
+  专项判定依赖边 → 确认无依赖则降级剪除；有依赖或存疑 → 转延迟观察窗
+  （前向引用：后续 K 条消息内指纹/实体零引用才剪）。
+- **延迟裁决原则（泛化形态）**：提问/求证凭闭合性可提前剪；其他一切类型的无关性
+  只能观察确认——候选标记 + 前向引用观察窗，把"对未来的预测"变成"对过去的观察"。
+- **替身**：一行 stub（"用户问过X，已解答"）——内容按定义无关，**无 LLM 摘要赎金**
+  （与 §4.5 digest 的成本结构本质不同：task 压缩最贵的摘要环节在此为零）。
+- **平衡约束**：剪除区间 = 完整问答交换单元（含其间工具对），过
+  `toolPairingBalancedBefore/After`；误剪反馈：用户重问被剪内容 = 误剪信号
+  （指纹可检出）→ 阈值修正依据，误判不再静默。
+
+### 10.2 工具剪切器（结构半边 · 工具耦合 + 集中执行）
+
+- **架构**：判断耦合出去（工具自声明），执行收拢回来（janitor 独占剪除权）——
+  工具提供线索，janitor 唯一持刀（同构 GC：对象不自我释放，收集器独占回收）。
+  每请求的 tools 数组（模型可见 schema）**不耦合**——请求缓存稳定性优先（plan-mode 先例）。
+- **ToolContextLifecycle 接口**（纯谓词零 LLM，宪法 L0）：
+  `referenceKeys(call)` 身份键（read_file→path、edit→path、grep→query）·
+  `rederiveCost` 重推导成本档（trivial/cheap/expensive）·
+  `supersededBy(call, laterEvent)` / `referencedBy(call, laterMessage)`。
+- **未声明工具三级回退**：自带策略 → 类别启发式 → 通用体积年龄规则
+  （MCP/第三方走兜底——耦合是已知工具的优化，不是未知工具的前提）。
+- **时机三档（时机即经济学）**：
+
+  | 档 | 时机 | 官方挂点 | 断裂成本 | 准入与动作 |
+  |---|---|---|---|---|
+  | T-entry | 写时整形（结果落账**前**） | `tools/execute` around-wrapper（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因 |
+  | T-loop | 思考后占位（模型消费完结果） | surfaceOp replace（pruner 同款） | 一次 + 短尾（剪点=刚消费完，尾巴极短） | 当次结论极短 + cmd/bash 类（**read 类排除**：喂后续编辑，剪=逼重读）；**必须 stub 占位替换而非移除**——保 tool_call 配对防 400 |
+  | T-boundary | 边界搭车 | task 压缩大 replace | 已付（搭车） | 老调用对唯一合法去处 |
+
+- **T0 超越规则**（最高置信，纯机械）：read@t1 被写@t2>t1 超越 → 旧读剪
+  （写即新真相；路径+时序判定，零内容解析——语言无关，"主流语言覆盖限制"不存在于元数据层）。
+- **落账安全双保险**（不证明"已吸收"，用保险替代证明）：
+  ① assistant 叙述文本 = 结论转写的免费证据（与存活后续文本做实体重叠检查）；
+  ② 重推导兜底（剪错 = 重跑一次，成本有上界——s1 的教训是剪了**不可重推导**的意图锚）。
+- **配对纪律**：整对剪（assistant tool_calls + tool/result）或占位替换保结构——
+  孤儿 tool_call = 400（配对完整性契约）。
+
+### 10.3 共享件与纪律
+
+- **官方挂点（零 hack）**：`tools/execute` around-wrapper / `tools/post-execute` /
+  `finalizeContent`（dsh-tools 流水线明文支持 around-dispatch wrappers + result
+  inspection + definition-owned content finalization）；surfaceOp replace +
+  sourceEventSeqs + `compaction/prune` 影子计价（tool-result-pruner 为在册范例，
+  base bundle 已演示该姿势）。
+- **剪除账本带策略版本号**（可复现）；误剪反馈（重问/重读检出）入账。
+- **宪法对位**：工具剪切 = L0 规则（能计算的用规则）；提问剪切 = 判别器同一次调用
+  扩展（复用必经调用）——两层各在回退链的正确层级，LLM 只出现在语义不可避免处。
+
+### 10.4 度量（docs/07 规划字段，落地时进 §1 完整表）
+
+`cutEvents{kind: question|tool}` · `cutTokensSaved` · `cutBreakCost` ·
+`cutMisfireDetected` · `questionBacklogDepth` · `toolPruneByClass` ·
+`judgeCtxTokens`（v7 卷宗体积）· `judgeVerdictDist{action|pureQ|verifyQ}`。
+全部可从会话日志回放计算（剪除 stub 的 `sourceEventSeqs` 溯源 + `compaction/prune` 影子价）。
+
+### 10.5 验证前置（实现前实证，半天级）
+
+- 现有 run 重读账本回归各工具类 `P(再需要)` 与重读触发距离 → 标定 T-loop/T-boundary 阈值常数；
+- 侧问内容重读率实证（预期 ≈0 → 提问剪切器经济性成立）；
+- v6/v7 消融按 §10.0 预注册执行。
 
 ## 批次声明：评测模型与传输层切换（2026-09-03）
 
