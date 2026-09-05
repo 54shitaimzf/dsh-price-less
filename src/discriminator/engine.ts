@@ -209,11 +209,12 @@ export class DiscriminatorEngine {
   handleSessionEvent(session: Session, event: SessionEvent): void {
     if (event.type !== 'user/message' || !isAppendUserMessage(event)) return
     // U 空间推进（append 任意 kind；判别面在其后按 kind 过滤——实验口径）。
-    // 计数**锚定会话日志**：首次见该会话时从 session.events 推导基数（重载/重启不丢、
+    // 计数**锚定会话日志**：首次见该会话时从会话日志快照推导基数（重载/重启不丢、
     // 不把新消息误判为首条漏判）；之后事件流内增量。
     let u = this.umIndex.get(session.id)
     if (u === undefined) {
-      const base = userIndexBefore(session.events, event.seq)
+      // harness 0.1.3：session.events 收编为 snapshotEvents()（无参 = 全量冻结快照）。
+      const base = userIndexBefore(session.snapshotEvents(), event.seq)
       u = base
     }
     this.umIndex.set(session.id, u + 1)
@@ -334,7 +335,7 @@ export class DiscriminatorEngine {
       anchor = task?.anchorText ?? ''
       try {
         history = collectHistoryTexts(
-          session.events,
+          session.snapshotEvents(),
           state.current.startSeq,
           event.seq,
           this.deps.config.historyWindow,

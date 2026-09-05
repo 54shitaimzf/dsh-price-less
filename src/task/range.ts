@@ -11,13 +11,17 @@
  */
 
 import { createRequire } from 'node:module'
-import type { Session } from '@deepseek-ai/dsh-session'
+// SessionSeq 构造器（运行时值导入）：0.1.3 起 harness 压缩 API 以品牌类型接收 seq，
+// 非负安全整数校验随构造进行；插件内部表示保持 number（与 zod 持久化 schema 同形），
+// 仅在产出 harness-ready 范围/调用原生 checker 时品牌化。
+import { SessionSeq, type Session } from '@deepseek-ai/dsh-session'
 import type { TaskRecord } from './types.ts'
 
-/** 一个可供压缩的闭合 surface 区间（start/end 为当前 surface 上的 seq）。 */
+/** 一个可供压缩的闭合 surface 区间（start/end 为当前 surface 上的 seq；
+ * 已品牌化为 harness SessionSeq——直接可传 compactRegion / 平衡校验器）。 */
 export interface CompressibleRange {
-  start: number
-  end: number
+  start: SessionSeq
+  end: SessionSeq
 }
 
 /** 提供的平衡校验器抽象（便于无 harness 单测注入 mock）。 */
@@ -36,8 +40,8 @@ export function createNativeBalanceChecker(): BalanceChecker {
     return mod
   }
   return {
-    balancedBefore: (session, seq) => load().toolPairingBalancedBefore(session, seq),
-    balancedAfter: (session, seq) => load().toolPairingBalancedAfter(session, seq),
+    balancedBefore: (session, seq) => load().toolPairingBalancedBefore(session, SessionSeq(seq)),
+    balancedAfter: (session, seq) => load().toolPairingBalancedAfter(session, SessionSeq(seq)),
   }
 }
 
@@ -86,5 +90,5 @@ export function selectCompressibleRange(
   }
 
   if (start > end) return null
-  return { start, end }
+  return { start: SessionSeq(start), end: SessionSeq(end) }
 }

@@ -80,7 +80,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
 
   // —— settings 注册：配置权威源 = settings scope（用户层 > 装配 base > schema 默认）。
   //    动态读取函数 configSource() 实时返回已解析值；onChange 在配置提交/脱离时触发
-  //    （installSettingsSection 首次注册也会触发一次 → 用于初始同步挂载）。
+  //    （installSection 首次注册也会触发一次 → 用于初始同步挂载）。
   //    注意：settings 服务未装配时静默跳过（源回退装配 base），插件行为不变。
   let configSource: () => ConfigShape
   let mounted: { discriminator: (() => void) | null; orchestrator: (() => void) | null } = {
