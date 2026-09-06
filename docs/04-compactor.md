@@ -153,8 +153,10 @@ token 数 + 回合生成量 + 仅新增消息的校准估计——每步被新 u
   版本重映射吸收漂移）+ 类型化摘要（信息块 schema）；
 - **只追加、不可变**：写入后永不在原位改写（改写断缓存前缀）；追加式链归档两形态
   （§3 机制 A）校验都要认；
-- **有界滑窗**：档案区字节超预算（`digestBudgetRatio` × 压缩域窗口）时把最早 N 条并成
-  阶段摘要（保留仍真的事实，丢弃过时的）——"累积 + 越界丢最老保最近"；
+- **有界硬帽**：档案区硬上限 15K token（绝对设计值，与 retainTokens / thresholdTokens
+  同哲学）——超限从最老档案条目起**整条机械截断**直至入限，`archiveTruncate{count,tokens}`
+  入账（[07](07-metrics.md) 压缩族）；**不合并、不重压**——合并即二次摘要（§0：摘要自带
+  信任，比原文更危险），截断是纯机械边界动作，被截条目仍可从档案快照回溯（[09 §5](09-state.md)）；
 - 档案落盘走 [09 §2](09-state.md) 版本协议（原子写 + source + 快照回滚），
   跨会话复用不重算（内容寻址缓存：span 哈希命中即复用）。
 
@@ -163,7 +165,7 @@ token 数 + 回合生成量 + 仅新增消息的校准估计——每步被新 u
 - 事件（log-only）：随 `compaction/*` 事务；`context-economy/task-digest-created` /
   `task-digest-cache-hit` / `task-deferred{reason}` / `pressure-fired` / `hard-truncate`。
 - 度量（定义见 [07](07-metrics.md)）：`compoundedVolume` · `reDiscoveryTokens` ·
-  `digestBytes` / `digestEntryCount` · `compressionCallCount` / `compressionCacheHitRate` ·
+  `digestBytes` / `digestEntryCount` · `archiveTruncate{count,tokens}` · `compressionCallCount` / `compressionCacheHitRate` ·
   `extraSearchCalls` · `hotTailTokens` / `hotTailDeclaredUnits` / `hotTailStopReason` /
   `hotTailSource{model|positional-fallback}` / `hotTailFloorFilled` · `pressureFireCount` /
   `pressureChainDepth` / `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` ·

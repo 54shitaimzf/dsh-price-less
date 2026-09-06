@@ -122,6 +122,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | `compression.boundary` | true | 压缩 | task 边界压缩 |
 | `compression.pressure` | true | 压缩 | 压力路径（`pressureRatio=0.4` × 压缩域窗口） |
 | `compressionDomain` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 压缩域标定（[04 §5](04-compactor.md) 硬规则；`retain < threshold` 校验强制） |
+| `archiveCapTokens` | 15K | 压缩 | 档案区硬上限；超限截断最老条目（[04 §6](04-compactor.md)） |
 
 关闭任一层其余功能完整；`cordis.patch.yml` 在 R4 加 compaction-basic `auto:false`。
 
@@ -148,8 +149,11 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | **R1 平台面** | platform 七端口（含 skills）+ settings 域 + `core/ledger` 空转（observe 只记账） | 账本字段能从 JSONL 回放；ignorable 断言过 |
 | **R2 判别域** | core/{units,dossier,judge,optimize,prefix} + domains/input + init 项目帧 + 星标按钮（H11） | 边界 F1 / 判别成本 / tableHitRate / optimizePromptTokens 入账；observe→active 门控可用；星标端到端（断面→预览→确认→回填） |
 | **R3 剪切域** | core/shear + domains/shear（工具剪切四档先行：T-entry + T0/T0-R；对话 run 次之） | cut*/shear*/tableRepair 字段入账；误剪反馈闭环；探针前置条件满足（[03 §8](03-shear.md)） |
-| **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织 | hotTail*/pressure* 入账；强制重读率 A/B；`auto:false` 协调生效 |
-| R5+ | 路线图条目（[00 §12](00-overview.md)） | 各条目自设门槛 |
+| **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织 | hotTail*/pressure*/archiveTruncate 入账；强制重读率 A/B；`auto:false` 协调生效 |
+| R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
+
+施工分解：R0–R4 细化为 P0–P21 工单（flash 级自主执行粒度，验收全机械），总纲与工单见
+[implement/00-master.md](implement/00-master.md)。
 
 ## 9. 结构验收（进 CI）
 

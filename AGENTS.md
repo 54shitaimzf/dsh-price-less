@@ -11,7 +11,7 @@ task 边界压缩+热尾 / 40% 压力路径 / 防溢出保险丝）+ 五条节�
 度量可视化按 `docs/11 §5` 接线）；机制实现按 `docs/11 §8` 搭建序（R0–R4）推进，
 核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace + sourceEventSeqs、
 自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。
-实验框架 `experiments/evalground/` 原样保留（活平台 + 全部 run 证据）。
+实验框架 `experiments/evalground/` **封存**（2026-09-06：旧管线依赖清退前生产 lib 编译产物，随残留清空中断，不再作为门禁；`runs/` 证据与 `datasets/` 资产只读保全，解封条件见 `evalground/SEALED.md`——R3/R4 门对照实验随机制落地重建实验面后组织）。
 
 ## Build
 

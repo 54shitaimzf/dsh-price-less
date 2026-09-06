@@ -1432,3 +1432,34 @@
   EXPERIMENT.md 回归实验方法学与观测协议。
 - **结构原则**：主文档集零历史词（无退役标注/无追记块/无状态混排）；历史与退役设计仅存于
   legacy.md 与本文件两处——此结构即本条目备查。
+
+---
+
+## 30. 账本快照 §30：边界档案 15K 硬帽截断定稿（滑窗合并废止）+ 判别器全量卷宗口径确认 + 清退残留清空 + 实验环境封存
+
+> **迁档注**：§29 追记结束后，本条起按 §29 尾部声明以 §30 编号续档（新快照自 §30 起在本文件追加）。
+
+- **用户裁决（三项，2026-09-06）**：① 边界档案区硬上限 **15K token**（绝对设计值，与
+  retainTokens/thresholdTokens 同哲学）——超限从最老条目整条机械截断直至入限，**不合并、
+  不重压**（合并即二次摘要，04 §0 信任问题；被截条目经档案快照可回溯，盘上在场），
+  `archiveTruncate{count,tokens}` 入账、`archiveCapTokens=15K` 进配置面；② 判别器逐消息
+  判定按正典渲染 **task 内全量卷宗 + 当前消息**（docs/02 §2/§3 为准）；③ 清退残留编译产物
+  （lib/discriminator 6 模块、lib/task 17 模块、lib/types 对应 .d.ts，含 v6 判别窗口实现）
+  **直接清空**；实验环境 evalground **封存**（18 文件 import 旧生产 lib——boundary-mark/
+  cascade + 9 个 assert 文件 + bin/scripts，ground:assert 随之停用；runs/datasets/
+  EXPERIMENT.md 只读保全，解封条件 = P10/P12+ 重建后按 docs/08 重注册，见
+  experiments/evalground/SEALED.md）。
+- **文档同步（无修补感重写，非追记补丁）**：docs/04 §6（有界滑窗→有界硬帽）/§7（度量清单
+  +archiveTruncate）、docs/00 §6 预算表（档案区行）、docs/05 §4 守卫表（预算守卫对象
+  +档案区）、docs/09 §2（边界档案版本事件：滑窗合并→超帽截断）、docs/11 §6（archiveCapTokens
+  行）/§8 R4 门（archiveTruncate 入账）、docs/01 §5 请求布局（滑窗→硬帽）、docs/06 §4/§7
+  （滑窗→硬帽截断走 bump 语义）、docs/10 §6 断言4（同）。
+- **在案冲突（消灭记录）**：v6 判别窗口（anchor ≤350 字符 / patch 350×2 / target ≤800，
+  曾存于 lib/discriminator/prompt.js 与 EXPERIMENT.md §6）与正典全量卷宗口径不一致——
+  实现残留随清空消灭；P10/P12 重建时以 docs/02 §2 为准，实验如需窗口化须先修订正典或注册
+  为显式消融臂。datasets/prompt-discriminator-v2.2.txt 模板本身（anchor/history/target
+  槽位）不与正典冲突（窗口帽在代码侧），作为版本化资产保留。
+- **后续计划修正**：docs/implement/00-master §2 禁区（experiments 封存语义 + SEALED.md
+  解封指针）、P12 行（LLM 主路径全量卷宗渲染显式化）、P19 行（15K 硬帽 + archiveTruncate
+  入账显式化）；AGENTS.md 现状行同步封存态。清空后验证：typecheck×2 + vitest 11/11 +
+  DSH_CHECKOUT build 全绿，lib/ 仅剩模板态产物（index/config/settings/client + types 三件）。
