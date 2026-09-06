@@ -20,6 +20,9 @@ import { registerContextEconomySettings } from './settings.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
 
+// 入口铁律（docs/11 §1）：host 半边导出 name/Config/apply——Config = schema + interface 同名双面。
+export { Config } from './config.ts'
+
 export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   ctx.logger.info('context-economy: applying (template state)')
 

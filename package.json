@@ -50,6 +50,8 @@
     "build:client": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:client": "tsc -p tsconfig.client.json --noEmit",
-    "test": "vitest run --pool=threads"
+    "test": "vitest run --pool=threads",
+    "assert": "node scripts/assert-structure.mjs",
+    "gate": "npm run typecheck && npm run typecheck:client && npm test && npm run assert"
   }
 }
