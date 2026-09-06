@@ -68,7 +68,7 @@
    事实名 `context-economy/task-boundary` 做**闭口计数**（每个 boundary 闭合一个 task，
    最后一个 task 到日志尾）。P8 落地段状态机后只换 `taskCount` 来源，fold 口径不变。
 3. **compoundedVolume 基线 = 无剪切/无压缩上界**：每个 `tool/result` 的文本 token 估算值 ×
-   其后 `step/start` 数（含当前 step，见 §3.3 公式）。机制工单（P15/P16/P19/P20）引入
+   其后 `step/start` 数（含当前 step，见 §3.3 公式）。机制工单（P15b/P16/P19/P20a）引入
    surface replace 影子价后再从本 fold 派生剪切后口径；本单先给可回放上界，不猜机制效果。
 4. **reDiscoveryTokens 基线 = 重复调用结果 token**：`name + '\0' + arguments` 完全相同的
    `tool/call` 再次出现时，其配对 `tool/result` 的文本 token 计入重发现。机械、可回放，
@@ -277,9 +277,9 @@ Node 内置模块 + `child_process.spawnSync`，只跑命令不替代测试。�
 | P8 分划单位 + 稳定前缀 | 段状态机产出 `task-boundary` 事实后，`foldCommon` 的 `taskCount` 来源从“事实闭口计数”切换为段状态机真实 task 数（fold 口径不变） |
 | P10 判据与对表 | `tableHitRate`/`judgeCount` 等机制字段经新 fold 扩展追加，通用族字段继续由本单 fold 计算 |
 | P11 星标断面 | `optimizePromptTokens` 入账走 facts → fold 扩展；通用族成本段不重算 |
-| P15/P16 剪切域 | `cutTokensSaved`/`cutBreakCost` 等字段作为本单 fold 的机制扩展层，`compoundedVolume` 基线被 surface replace 影子价修正 |
-| P19/P20 压缩域 | 压缩字段（`hotTail*`/`pressure*`/`archiveTruncate`）追加进 fold；成本恒等式分解继续用本单 `usage`/`cost` |
-| P21 恢复编排 + 全链验收 | 账本回放、恢复演练的 `restore/*` 事实灌入同一 fold；07 报表快照 = 本单 `formatLedgerReport` + 机制段扩展 |
+| P15b/P16 剪切域 | `cutTokensSaved`/`cutBreakCost` 等字段作为本单 fold 的机制扩展层，`compoundedVolume` 基线被 surface replace 影子价修正 |
+| P19/P20a/P20b 压缩域 | 压缩字段（`hotTail*`/`pressure*`/`archiveTruncate`/`hardTruncate*`）追加进 fold；成本恒等式分解继续用本单 `usage`/`cost` |
+| P21a/P21b 恢复编排 + 全链验收 | 账本回放、恢复演练的 `restore/*` 事实灌入同一 fold；07 报表快照 = 本单 `formatLedgerReport` + 机制段扩展 |
 
 ### 8.2 对后续计划的修正（已随本计划扩写先行回写 `docs/implement/00-master.md`）
 
@@ -290,10 +290,10 @@ Node 内置模块 + `child_process.spawnSync`，只跑命令不替代测试。�
 | P8 | P3,P4 | **P3,P4,P2** | `taskCount`/`task-boundary` 事实与 fold 口径来自 P2 |
 | P10 | P9,P5 | **P9,P5,P2** | `tableHitRate` 入账走 P2 fold 扩展面 |
 | P11 | P8,P9,P5 | **P8,P9,P5,P2** | `optimizePromptTokens` 入账走 P2 facts→fold |
-| P15 | P6,P7,P12 | **P6,P7,P12,P2** | `cutTokensSaved` 入账走 P2 fold 扩展面 |
+| P15b | P15a,P6,P7,P12 | **P15a,P6,P7,P12,P2** | `cutTokensSaved` 入账走 P2 fold 扩展面 |
 | P5 | P2 | 不变 | 已正确 |
 
-总纲 §3 依赖主干图已同步补注边：`P2 ─ P8 / P10 / P11 / P15`（文字注记，不影响 P0 的“各行依赖列构成 DAG”验收——新增边仍从较早节点指向较晚节点）。
+总纲 §3 依赖主干图已同步补注边：`P2 ─ P8 / P10 / P11 / P15b`（文字注记，不影响 P0 的“各行依赖列构成 DAG”验收——新增边仍从较早节点指向较晚节点）。
 
 ## 9. 汇报模板（本单最后一步）
 

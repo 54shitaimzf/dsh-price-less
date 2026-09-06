@@ -161,7 +161,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   model-invocable 目录快照、`skillCatalogContains` 引用守卫查表、`watchSkillCatalog`
   订阅 `skills/change` 热更新；不手写 `SKILL.md` 扫描。
 
-### 3.8 `tools/*` 事件（P7/P15 使用）
+### 3.8 `tools/*` 事件（P7/P15b 使用）
 
 - `tools/execute` 与 `tools/post-execute` 都是 waterfall：
   `packages/core/tools/src/index.ts:155-175`。

@@ -84,7 +84,7 @@ usage 聚合 → 07 字段全表。同输入同账（纯函数断言）。
    `event.surfaceOp`、docs/11 §2 允许 core 本地重声明；写侧归口由 `.append(` 规则 +
    P6 类型级测试承接（详见 §3.4）。
 3. **初始生产词汇表为空**：本单只落发射端口与类型派生机制，不发明正典外事件名；
-   `context-economy/*` 各类型由后续机制工单（P9 judge-*、P13 optimize-run、P19/P20 压缩域…）
+   `context-economy/*` 各类型由后续机制工单（P9 judge-*、P13 optimize-run、P19/P20a/P20b 压缩域…）
    经声明合并自行扩展。
 4. **peerDeps 增 `@deepseek-ai/dsh-session`**（docs/11 §1 R1 行所列 dsh-llm/dsh-tools 之外）：
    platform 层事件类型面必需（SessionEvent / SessionEventMap / cordis Events 合并）。范围声明
@@ -186,7 +186,7 @@ export function ceFactStats(): { emitErrors: number }
 6. **写三份 spec**（§5）→ `npm test` 绿。
 7. **注释残留修正**：`src/settings.ts` 头注失效符号（`sanitizeEffort`/`DISC_CAPABILITIES`）
    与失效节号（`docs/07 §18.1` → 现行 `docs/07 §0.5 指标一览`）；client/field-model.ts:19
-   同类失效引用**不动**（UI 壳零改动铁律，留 P14）。
+   同类失效引用**不动**（UI 壳零改动铁律，留 P14a）。
 8. 全链自验：`npm run gate` exit 0；`DSH_CHECKOUT=G:/deepseek-harness npm run build` exit 0。
 9. 对照 §5 清单逐条打勾，全部满足才进 §7。
 
@@ -232,7 +232,7 @@ export function ceFactStats(): { emitErrors: number }
 - 账本快照：**本单不需要**（无 docs/07 字段产出；H7 face 即回放原料，R 门快照随 R1 全段出）。
 - 上报事项：ignorable 写入通道缺口与处置（§2.4 决策点⑤）；`dev_self_test` 真机余项仍待用户择机执行（P0 §7 沿袭）。
 
-## 8. 对接面（P2–P21 如何消费本单）
+## 8. 对接面（P2–P21b 如何消费本单）
 
 1. **P2（度量底座）**：`core/ledger/` 以**本地重声明**消费 `metrics/session-event` 的
    `{ session, event }` 形状与 `METRICS_FACE_TYPES`（core 零 harness import）；

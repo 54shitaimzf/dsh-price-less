@@ -155,7 +155,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织 | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效 |
 | R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
 
-施工分解：R0–R4 细化为 P0–P21 工单（flash 级自主执行粒度，验收全机械），总纲与工单见
+施工分解：R0–R4 细化为 P0–P21b 工单（flash 级自主执行粒度，验收全机械），总纲与工单见
 [implement/00-master.md](implement/00-master.md)。
 
 ## 9. 结构验收（进 CI）

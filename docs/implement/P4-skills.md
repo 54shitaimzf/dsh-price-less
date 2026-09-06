@@ -28,7 +28,7 @@
 - **02 §2**：稳定前缀 = 技能目录（机械枚举，零 LLM）+ 项目最终目标（项目帧 vN）；技能目录取
   name / description / whenToUse；清单是查表产物，永远不靠模型回忆。
 - **05 §4 引用守卫**：优化产物中引用的技能/命令名必须在枚举目录中存在（查表）；违反动作 =
-  拒绝该引用（行级丢弃）。本单只提供查表谓词与快照，拒绝/记账动作归 P11/P14 域。
+  拒绝该引用（行级丢弃）。本单只提供查表谓词与快照，拒绝/记账动作归 P11/P14b 域。
 - **06 §4**：稳定前缀版本事件只有三种：技能装卸（目录变更，机械触发）、项目帧修订、压缩域
   档案变更；bump 理由枚举 `skill` 入账。本单只提供 `skills/change` 订阅端口，bump 执行归 P8。
 - **11 §2**：`platform/skills.ts` = H13 技能目录枚举 + watch（稳定前缀原料 + 引用守卫查表）；
@@ -245,9 +245,9 @@ issue；正样本 `src/platform/skills.ts` 与 `src/index.ts`（未来 `ctx.inje
 4. **快照只读**：`toSkillCatalogSnapshot` 输出全新对象；调用方不得原地修改快照/条目
    （P3 审查风险同构：按引用共享会绕过版本语义，P8 字节守卫兜底）。
 5. **fail-lazy 方向**：`skills` 服务缺失或 `snapshot/get` 失败 → `undefined` + warn（不抛出）；
-   引用守卫在目录缺失时 `skillCatalogContains` 返回 false——P11/P14 必须显式决定“目录不可用”
+   引用守卫在目录缺失时 `skillCatalogContains` 返回 false——P11/P14b 必须显式决定“目录不可用”
    时的产品策略（建议 fail-lazy 放行并记 `guard/violation` 之外的 `skillCatalogUnavailable` 诊断，
-   由 P11/P14 工单落账，P4 不建事件名）。
+   由 P11/P14b 工单落账，P4 不建事件名）。
 6. **不建会话事件**：P4 不声明任何 `context-economy/*` 事件类型；目录变更的度量
    `prefixRebuildCause{skill}` 由 P8 在 prefix 层入账。
 7. **停工上报触发器**：① §2.3 核验签名与设计不符；② build.sh 链接 `@deepseek-ai/dsh-skill`
@@ -271,8 +271,8 @@ issue；正样本 `src/platform/skills.ts` 与 `src/index.ts`（未来 `ctx.inje
 | P8 分划单位 + 稳定前缀 | `watchSkillCatalog` 订阅目录变更 → `prefixRebuildCause:'skill'` bump；`listSkillCatalog` 产出快照作为项目帧技能目录快照原料（P8 在 core 本地重声明同构类型，不 import platform） |
 | P11 星标断面 | `listSkillCatalog` 为引用守卫提供当前目录；`skillCatalogContains` 逐技能名查表 |
 | P13 命令面 + init 项目帧 | init 采集时经 P8/P11 使用同一目录快照，保持稳定前缀同源 |
-| P14 星标按钮 UI | 预览确认前跑引用守卫：`skillCatalogContains` 不命中 → 行级丢弃（P14 域记账，P4 只提供查表） |
-| P21 恢复编排 + 全链验收 | 恢复序中项目帧重建后，用 `listSkillCatalog` 重放目录快照（只读校验） |
+| P14b 星标 host 方法 + 时序 B | 预览确认前跑引用守卫：`skillCatalogContains` 不命中 → 行级丢弃（P14b 域记账，P4 只提供查表） |
+| P21a 恢复编排 | 恢复序中项目帧重建后，用 `listSkillCatalog` 重放目录快照（只读校验） |
 
 ### 8.2 对后续计划的修正（随本计划先行回写 `docs/implement/00-master.md`）
 
@@ -280,7 +280,7 @@ issue；正样本 `src/platform/skills.ts` 与 `src/index.ts`（未来 `ctx.inje
 |---|---|---|---|
 | P4 | P0 | 不变 | `platform/skills.ts` 不 import P1 `events.ts`（logger 走 `ctx.logger` 基线），也不碰 storage；P0 基线即可 |
 | P8 | P3,P4,P2 | 不变 | 已含 P4；P8 需在 core 本地重声明 `SkillCatalogEntry` 同构类型（禁止 core import platform，P2 模式） |
-| P11/P14 | — | 不变 | 引用守卫消费 P4 查表，但依赖列已通过 P8/P9/P13 传递；无需改行 |
+| P11/P14b | — | 不变 | 引用守卫消费 P4 查表，但依赖列已通过 P8/P9/P13 传递；无需改行 |
 
 总纲 §3 依赖主干图无需改边（P4 仍为 P0 后继、P8 前驱）。
 
@@ -303,5 +303,5 @@ issue；正样本 `src/platform/skills.ts` 与 `src/index.ts`（未来 `ctx.inje
 | D5 skill 概念收口 | `scripts/assert-structure.mjs` D5 | docs/11 §2；docs/13 §3.7 |
 | 自动化验收 | `scripts/verify-p4.mjs` | 总纲 §2 铁律 2 + §5 全机械验收 |
 
-4. **后续计划修正已回写**：§8.2 的 P4 依赖不变与 P8/P11/P14 消费方式是否已核对
+4. **后续计划修正已回写**：§8.2 的 P4 依赖不变与 P8/P11/P14b 消费方式是否已核对
    `docs/implement/00-master.md`。

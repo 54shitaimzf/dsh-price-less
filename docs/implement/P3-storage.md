@@ -18,7 +18,7 @@
 版本化写入（CAS）、快照回退（N=50）、审计读取；并在 `index.ts` 把事实镜像表接到
 `platform/ignorable-channel.ts` 的 `setFactMirror` 接线上（经 `logger.ts` 的
 `registerFactMirror` 单点，D3 边界不破）。本单**只建持久面、不发机制行为**：不订阅 pump、
-不新增配置、不建新会话事件类型、不启动恢复编排（恢复序归 P21）。
+不新增配置、不建新会话事件类型、不启动恢复编排（恢复序归 P21a）。
 
 ## 2. 输入
 
@@ -29,16 +29,16 @@
 - **09 §2 协议**：各实体独立版本号；`schemaVersion` 全局结构版本；每次写入必须带
   `source`（task ID + 事件类型 + 证据），无来源写入拒绝；差分写（本单按单实体单记录写，
   不整库升版）；同实体同轮只允许一次提交（进程内互斥——由 harness Domain 单写链承接）；
-  LLM 产物先版本化落盘再复用（P11/P14 消费本单时遵守）。
+  LLM 产物先版本化落盘再复用（P11/P14b 消费本单时遵守）。
 - **09 §4 恢复契约**：恢复序 项目帧→卷宗→边界档案→段状态机→度量缓存；每步 `restore/step`，
   失败 `restore/degraded`，完成 `restore/done`。**本单只提供恢复所需的读/回滚/审计原语，
-  不编排恢复序**（P21）。
+  不编排恢复序**（P21a）。
 - **09 §5 回滚与审计**：每次提交保留快照（最近 N=50 版）；回滚 = 恢复快照 + 版本指针回退，
   记 `source: rollback@<version>`；审计接口返回全部提交（version / source / Δ 条数）；
   任何版本不一致触发 `version-mismatch` 告警事件（log-only）。**本单不建该事件类型**：
-  P3 无 session 面（恢复时点才具备），`version-mismatch` 发射归 P21 恢复编排（见 §8.1）。
-- **09 §6 验收**：无 source 写入被拒；同版本各实体哈希一致；回放确定；恢复演练（P21）；
-  LLM 产物未落盘不被引用（P11/P14 验收）。
+  P3 无 session 面（恢复时点才具备），`version-mismatch` 发射归 P21a 恢复编排（见 §8.1）。
+- **09 §6 验收**：无 source 写入被拒；同版本各实体哈希一致；回放确定；恢复演练（P21a）；
+  LLM 产物未落盘不被引用（P11/P14b 验收）。
 - **11 §2**：`platform/storage.ts` = H10 storageDomain 封装（四实体表声明、版本化读写、CAS）；
   `core ↛ platform`；platform 是唯一 `ctx` 触点（index.ts 装配根除外）。
 - **11 §3**：durable 真源四实体；事实镜像表是通道缺失时的降级真源（[12 §3](../12-platform-capabilities.md)）。
@@ -126,7 +126,7 @@ export async function openContextEconomyStorage(
 | `dossier` | `entityEnvelopeSchema` | 卷宗 vN（body 由 P9 定义） |
 | `project_frame` | `entityEnvelopeSchema` | 项目帧 vN（body 由 P13 定义） |
 | `boundary_archive` | `entityEnvelopeSchema` | 边界档案 vN（body 由 P17/P19 定义） |
-| `optimize_artifact` | `entityEnvelopeSchema` | 优化产物 vN（body 由 P11/P14 定义） |
+| `optimize_artifact` | `entityEnvelopeSchema` | 优化产物 vN（body 由 P11/P14b 定义） |
 | `fact_mirror` | `factMirrorRecordSchema` | 事实镜像（[12 §3](../12-platform-capabilities.md) 降级真源） |
 | `entity_snapshots` | `entitySnapshotSchema` | 快照/审计（[09 §5](../09-state.md)） |
 
@@ -281,7 +281,7 @@ Node 内置模块 + `spawnSync`，只跑命令/扫描，不替代测试。流程
 ### 3.7 文档回写
 
 - `docs/implement/00-master.md`：P2 行标注已施工（commit `38e3af3`）；P3 行依赖列
-  `P0` → `P1,P2` 并链到本文件；P13/P14/P19/P21 行依赖列补 `P3`（理由见 §8.2）。
+  `P0` → `P1,P2` 并链到本文件；P13/P14b/P19/P21a 行依赖列补 `P3`（理由见 §8.2）。
 - `docs/implement/P2-ledger-base.md` 状态行：计划态 → 已施工（commit `38e3af3`）。
 
 ## 4. 实现要点（每步独立可验证；顺序执行）
@@ -331,7 +331,7 @@ Node 内置模块 + `spawnSync`，只跑命令/扫描，不替代测试。流程
    等价性由测试 type-level 断言证明。违反会引入 `platform → core` 反向依赖（模块树不许可的
    实现耦合）。
 2. **不建会话事件类型**：P3 不声明任何 `context-economy/*` SessionEventMap 合并；`version-mismatch`
-   发射归 P21（恢复时才有 session 面）。本单只接事实镜像，不发射事实。
+   发射归 P21a（恢复时才有 session 面）。本单只接事实镜像，不发射事实。
 3. **不改 `ignorable-channel.ts`**：探测/路由/降级语义 P1 已冻结；P3 只经 `logger.ts` 的
    `registerFactMirror` 接 `setFactMirror`。D3 边界不破。
 4. **CAS 读-改-写窗口**：`putEntity` 的 get 与 put 之间无 `await`（同步检查后立即入写链），
@@ -364,10 +364,10 @@ Node 内置模块 + `spawnSync`，只跑命令/扫描，不替代测试。流程
 | P9 卷宗 | `dossier` 表 append/回填走 `putEntity`（baseVersion = 当前 vN → vN+1）；边界清空 = `delete` 或由 P19 调用方按档案事务处理 |
 | P11 星标断面 | `optimize_artifact` 表先版本化落盘再复用（[09 §2](../09-state.md) 协议 5）；行式裁决记录随 body 一起写 |
 | P13 命令面 + init 项目帧 | `project_frame` v1 创建：`putEntity('project_frame', workspaceKey, frameBody, {taskId, eventType:'init-frame', ...})` |
-| P14 星标按钮 UI | 用户确认终稿 → `optimize_artifact` 写入 + `dossier` 回填（P9 面）；`rollbackEntity` 在预览放弃/重做时可选 |
+| P14b 星标 host 方法 + 时序 B | 用户确认终稿 → `optimize_artifact` 写入 + `dossier` 回填（P9 面）；`rollbackEntity` 在预览放弃/重做时可选 |
 | P17/P19 边界装配/编排 | `boundary_archive` 写入走 `putEntity`；档案堆只追加（[10 §6](../10-wiring.md) 断言4）；硬帽截断 = 新版本写入 |
-| P20 压力路径 + 保险丝 | 检查点/断路器状态（如需要持久）走 `putEntity` 版本化；无直接表（暂用 `boundary_archive` 之外的新表需 P20 单列决策，不在 P3 猜测） |
-| P21 恢复编排 + 全链验收 | `auditEntity`/`rollbackEntity`/`listFactMirror` 是恢复序原语；`restore/*` 事实发射、`version-mismatch` 发射归 P21；恢复演练 = 09 §6 |
+| P20a 压力路径 | 检查点/断路器状态（如需要持久）走 `putEntity` 版本化；无直接表（暂用 `boundary_archive` 之外的新表需 P20a 单列决策，不在 P3 猜测） |
+| P21a 恢复编排 | `auditEntity`/`rollbackEntity`/`listFactMirror` 是恢复序原语；`restore/*` 事实发射、`version-mismatch` 发射归 P21a；恢复演练 = 09 §6 |
 
 ### 8.2 对后续计划的修正（随本计划先行回写 `docs/implement/00-master.md`）
 
@@ -376,9 +376,9 @@ Node 内置模块 + `spawnSync`，只跑命令/扫描，不替代测试。流程
 | P3 | P0 | **P1,P2** | 事实镜像接线经 P1 `logger/ignorable-channel`；`FactMirrorRecord`↔`LedgerFact` 等价断言依赖 P2 |
 | P12 | P10 | **P10,P3** | 自动断面逐消息追加卷宗 `dossier`（docs/02 §2/§3） |
 | P13 | P8,P9,P11 | **P8,P9,P11,P3** | init 项目帧写 `project_frame`（docs/09 §2/§4） |
-| P14 | P11,P13,P6 | **P11,P13,P6,P3** | 星标确认写 `optimize_artifact` + 回填卷宗（时序 B，docs/10 §4） |
+| P14b | P14a,P11,P13,P6 | **P14a,P11,P13,P6,P3** | 星标确认写 `optimize_artifact` + 回填卷宗（时序 B，docs/10 §4） |
 | P19 | P17,P18,P2 | **P17,P18,P2,P3** | 边界归档写 `boundary_archive`（时序 A，docs/10 §3） |
-| P21 | P19,P20 | **P19,P20,P3** | 恢复编排直接读/回滚四实体表（docs/09 §4） |
+| P21a | P20a,P20b | **P20a,P20b,P3** | 恢复编排直接读/回滚四实体表（docs/09 §4） |
 
 **句柄获取铁律（P3 审查补充，2026-09-06）**：`context_economy` 域在 `index.ts` 开域后
 由 P3 的 `ContextEconomyStorage` 句柄统一服务；后续工单**不得**自行调用

@@ -1,4 +1,4 @@
-# implement · 施工总纲（P0–P21 工单制）
+# implement · 施工总纲（P0–P21b 工单制）
 
 > 本族是**施工计划，不是设计正典**。设计唯一正典 = `docs/00–11`；工单与正典冲突时停工上报，
 > 以正典为准。全部工单完成后本族整体归档（git 历史即存档）。
@@ -9,7 +9,7 @@
 
 设计文档写清了"该是什么"，但直接丢给廉价模型施工会翻车在三处：**猜 API**（harness 没这个
 接口它也敢编）、**做设计**（文档留的口子它自己拍板）、**验不了**（"看起来对了"就算完）。所以
-把 R0–R4 拆成 23 份工单（P0–P21 + P1.1/P1.2 追记）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
+把 R0–R4 拆成 28 份工单（P0–P21b + P1.1/P1.2 追记）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
 flash 只需要照单干活——不需要理解全局，禁止发挥。
 
 ## 1. 工单制（角色与纪律）
@@ -48,7 +48,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
    配置载荷变更只经 `field-model.ts` ↔ `config.ts` 对应律同步（观察模式设置项已按用户
    定调清理，2026-09），`tests/field-model.spec.ts` 的**结构断言不变量只增不减**。
 
-## 3. 阶段总表（P0–P21，映射 R0–R4）
+## 3. 阶段总表（P0–P21b，映射 R0–R4）
 
 尺寸：**S** = 单文件 ≤150 行净增 + spec；**M** = 2–4 文件 ≤400 行净增 + spec；
 **L** = 工单内必须拆分两份。
@@ -71,14 +71,18 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P11 | 星标断面 | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5,**P2** | M |
 | P12 | 自动断面服务 | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3 | M |
 | P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3 | M |
-| P14 | 星标按钮 UI | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿；时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P11,P13,P6,P3 | M |
-| P15 | 工具剪切 | R3 | `core/shear/` 工具半边 + `domains/shear.ts` 调度（[03 §2](../03-shear.md)：四档时机 / ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则） | P6,P7,P12,**P2** | M |
-| P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15 | M |
+| P14a | 星标按钮 UI（槽 + 预览） | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿（mock host 方法契约） | P13 | M |
+| P14b | 星标 host 方法 + 时序 B | R2 | host 方法（装配输入栈 → H12 断面 → 双通道解析 → 回填/优化产物落盘）+ 时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P14a,P11,P13,P6,P3 | M |
+| P15a | 工具剪切纯核 | R3 | `core/shear/` 工具半边（ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则；[03 §2](../03-shear.md)） | P2 | M |
+| P15b | 工具剪切调度 | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面） | P15a,P6,P7,P12,P2 | M |
+| P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15b | M |
 | P17 | 边界装配器 | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机）+ 共享事务原语（04 §1） | P6,P8,P9 | L（拆纯核/接线两份） |
 | P18 | 压缩调用 | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验；模板在前 + datasets 同源断言，04 §7） | P5,P9 | M |
 | P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 15K 硬帽截断 + `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2,P3 | M |
-| P20 | 压力路径 + 保险丝 | R4 | 时序 C：wire 锚定计量（估计器 `CHARS_PER_TOKEN=1.5` 校准，04 §5）+ 检查点/断路器 + hard-truncate no-op 语义 + `request-error` 接管；`cordis.patch.yml` 加 compaction-basic `auto:false` | P19 | M |
-| P21 | 恢复编排 + 全链验收 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练）+ 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P19,P20,P3 | M |
+| P20a | 压力路径 | R4 | 时序 C：wire 锚定计量（估计器 `CHARS_PER_TOKEN=1.5` 校准，04 §5）+ 检查点/断路器 | P19 | M |
+| P20b | 保险丝 | R4 | hard-truncate no-op 语义 + `request-error` 接管；`cordis.patch.yml` 加 compaction-basic `auto:false` | P19 | S |
+| P21a | 恢复编排 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练；`restore/*` 事实发射） | P20a,P20b,P3 | M |
+| P21b | 全链验收 + 可视化 | R4 | 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P21a | M |
 
 依赖主干（其余见各行"依赖"列）：
 
@@ -86,18 +90,20 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 P0 ─┬─ P1 ─┬─ P2 ─ P5 ─┐
     │      ├─ P6 ────────┤
     │      └─ P7 ─┐      │
-    ├─ P3(P1,P2) ─ P8 ─ P9 ─ P10 ─ P12(P10,P3) ─ P15 ─ P16
-    │      └────────┴─ P11 ─ P13(P8,P9,P11,P3) ─ P14(P11,P13,P6,P3)
+    ├─ P3(P1,P2) ─ P8 ─ P9 ─ P10 ─ P12(P10,P3) ─ P15b(P15a,P6,P7,P12,P2) ─ P16
+    │      └────────┴─ P11 ─ P13(P8,P9,P11,P3) ─ P14a(P13) ─ P14b(P14a,P11,P13,P6,P3)
     └─ P4 ─ P8                │
-P17(P6,P8,P9) ─ P19(P17,P18,P2,P3) ─ P20 ─ P21
-P18(P5,P9)
+P2 ─ P15a ────────────────────┘
+P17(P6,P8,P9) ─ P19(P17,P18,P2,P3) ─┬─ P20a(P19) ─┐
+P18(P5,P9)                          └─ P20b(P19) ─┤
+                                                   └─ P21a(P20a,P20b,P3) ─ P21b(P21a)
 ```
 
-> P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15（行依赖列已同步；P5 原已依赖 P2）。
-> P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14/P19/P21 补 P3）。
+> P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
+> P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b/P19/P21a 补 P3）。
 
 平台通道横切（[docs/12](../12-platform-capabilities.md) 正典）：ignorable 发射通道缺失时事实轨
-降级 KV 镜像——P2 事实源抽象 / P3 事实镜像表 / P8 段状态机 KV 双源 / P21 可视化读事实源抽象，
+降级 KV 镜像——P2 事实源抽象 / P3 事实镜像表 / P8 段状态机 KV 双源 / P21b 可视化读事实源抽象，
 各工单编写时按 docs/12 展开。降级实现整体居于 `platform/ignorable-channel.ts`（D3 断言锁定
 单元边界，机制代码零感知），上游合并后按 docs/12 §2 清单原子删除。
 
@@ -147,7 +153,7 @@ commit: `<type>(<scope>): <一行>`；账本快照：<是否需要>
 
 ## 6. 总纲自身的验收
 
-- [ ] §3 表 23 行（含 P1.1/P1.2 追记）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
+- [ ] §3 表 28 行（含 P1.1/P1.2 追记）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
 - [ ] 每行依赖列构成 DAG（无环）；
 - [ ] 尺寸全部 S/M（L 已注明拆分）；
 - [ ] 工单模板含 harness 符号核验位与停工上报条款。
