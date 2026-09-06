@@ -29,11 +29,11 @@ function warnOnce(msg: string, err: unknown): void {
 /** 测试钩子：重置「单次告警后停用」旗标（命名惯例同 ignorable 单元的 probe 重置钩子）。 */
 export function resetDiagSinkWarnOnce(): void { warnDisabled = false }
 
-/** 日志目录：opts.dir > 环境变量 CE_DIAG_DIR > <插件根>/logs（插件根 = 本文件上两级：src|lib/platform → 根）。 */
+/** 日志目录：opts.dir > 环境变量 CE_DIAG_DIR > <插件根>/logs（插件根 = 本文件上三级：src|lib/platform → src|lib → 根）。 */
 export function resolveDiagDir(explicit?: string): string {
   if (explicit) return explicit
   if (process.env.CE_DIAG_DIR) return process.env.CE_DIAG_DIR
-  return join(dirname(dirname(fileURLToPath(import.meta.url))), 'logs')
+  return join(dirname(dirname(dirname(fileURLToPath(import.meta.url)))), 'logs')
 }
 
 /** cordis Logger.format 本地最小复刻（决策点②）：%s%d%i%f%o%O 占位 + Error 首参 stack + 尾参拼接。 */

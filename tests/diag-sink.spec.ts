@@ -4,7 +4,8 @@
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Exporter, Message } from '@deepseek-ai/cordis'
 import { apply } from '../src/index.ts'
@@ -170,29 +171,32 @@ describe('diag-sink（P1.1）', () => {
     expect(lines(file)[0]!.msg).toBe('hello')
   })
 
-  it('⑨ 真 apply e2e：CE_DIAG_DIR 重定向 + apply 挂载 → named 日志落行、卸载即净', () => {
+  it('⑨ 真 apply e2e：CE_DIAG_DIR 重定向 + apply 挂载 → named 引导行落盘、卸载即净', () => {
     process.env.CE_DIAG_DIR = dir
     const { ctx, disposers } = makeCtx()
     expect(() => apply(ctx as never, {})).not.toThrow()
     const file = join(dir, 'context-economy.log')
+    // apply 的引导行经 ceLogger（named）→ 即 sink 首行（纪律③：诊断走 named logger）
+    expect(lines(file)).toHaveLength(1)
+    expect(lines(file)[0]).toMatchObject({ name: 'context-economy', msg: 'context-economy: applying (template state)' })
     ;(ctx.logger as unknown as (n: string) => { info: (...a: unknown[]) => void })('context-economy')
       .info('audit line %o', { k: 1 })
-    const recs = lines(file)
-    expect(recs).toHaveLength(1)
-    expect(recs[0]).toMatchObject({ name: 'context-economy', msg: 'audit line {"k":1}' })
+    expect(lines(file)).toHaveLength(2)
+    expect(lines(file)[1]).toMatchObject({ msg: 'audit line {"k":1}' })
     for (const d of [...disposers]) d()
     ;(ctx.logger as unknown as (n: string) => { info: (...a: unknown[]) => void })('context-economy')
       .info('after unload')
-    expect(lines(file)).toHaveLength(1)
+    expect(lines(file)).toHaveLength(2)
   })
 
-  it('resolveDiagDir：opts.dir > CE_DIAG_DIR > <插件根>/logs（默认以 logs 结尾且绝对）', () => {
+  it('resolveDiagDir：opts.dir > CE_DIAG_DIR > <插件根>/logs（默认 = 仓库/包根，回归锚）', () => {
     process.env.CE_DIAG_DIR = join(dir, 'envdir')
     expect(resolveDiagDir('explicit')).toBe('explicit')
     expect(resolveDiagDir()).toBe(join(dir, 'envdir'))
     delete process.env.CE_DIAG_DIR
-    const fallback = resolveDiagDir()
-    expect(fallback.endsWith('logs')).toBe(true)
-    expect(fallback).not.toContain(tmpdir())
+    // spec 在 tests/ 下 → 上两级 = 根；diag-sink.ts（src|lib/platform）上三级同根。曾因少跳
+    // 一级把日志建进 lib/logs，弱断言 endsWith('logs') 未拦截——本断言钉死防回归。
+    const root = dirname(dirname(fileURLToPath(import.meta.url)))
+    expect(resolveDiagDir()).toBe(join(root, 'logs'))
   })
 })

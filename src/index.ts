@@ -27,17 +27,18 @@ export const name = '@dsh-external/dsh-context-economy'
 export { Config } from './config.ts'
 
 export function apply(ctx: Context, config: Partial<ConfigShape>): void {
-  ctx.logger.info('context-economy: applying (template state)')
+  // 诊断落盘 sink 最先挂载（P1.1：此后所有 named 诊断行——含本函数的引导行——均落盘）。
+  // 能力缺失（测试替身）静默跳过；能力在但失败单次告警后停用——永不抛出。
+  attachDiagSink(ctx)
+
+  const log = ceLogger(ctx)
+  log.info('context-economy: applying (template state)')
 
   // settings 段注册：配置权威源 = settings scope（用户层 > 装配 base > schema 默认）。
   // 这条注册是 client 设置卡挂载的前提（shell.available）；首次注册触发一次 onChange。
   registerContextEconomySettings(ctx, config, {
-    onChange: () => ctx.logger.info('context-economy: config updated'),
+    onChange: () => log.info('context-economy: config updated'),
   })
-
-  // 诊断落盘 sink（P1.1：ctx.logger.exporter → 插件 logs/ JSONL，agent 自审入口；11 §4③）。
-  // 能力缺失（测试替身）静默跳过；能力在但失败单次告警后停用——永不抛出。
-  attachDiagSink(ctx)
 
   // H1/H7 事件面（docs/11 §2 events.ts 行）：firehose → 异步旁路队列，卸载即净。
   ctx.effect(() => {
