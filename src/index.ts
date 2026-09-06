@@ -19,6 +19,7 @@ import { type Config as ConfigShape } from './config.ts'
 import { registerContextEconomySettings } from './settings.ts'
 import { createEventPump } from './platform/events.ts'
 import { ceLogger } from './platform/logger.ts'
+import { attachDiagSink } from './platform/diag-sink.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
 
@@ -33,6 +34,10 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   registerContextEconomySettings(ctx, config, {
     onChange: () => ctx.logger.info('context-economy: config updated'),
   })
+
+  // 诊断落盘 sink（P1.1：ctx.logger.exporter → 插件 logs/ JSONL，agent 自审入口；11 §4③）。
+  // 能力缺失（测试替身）静默跳过；能力在但失败单次告警后停用——永不抛出。
+  attachDiagSink(ctx)
 
   // H1/H7 事件面（docs/11 §2 events.ts 行）：firehose → 异步旁路队列，卸载即净。
   ctx.effect(() => {

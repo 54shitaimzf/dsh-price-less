@@ -5,6 +5,7 @@ node_modules/
 .pnpm-store/
 docs.zip
 *.log
+logs/
 .tmp-*/
 
 # 实验产物：原始大件不入库（账本小件 scorecard/boundaries/audit 仍提交）

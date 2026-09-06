@@ -54,7 +54,8 @@ src/
 │  ├─ llm.ts         # H12 辅助调用端口（purpose 路由 + usage/缓存观测回执）
 │  ├─ storage.ts     # H10 storageDomain 封装（四实体表声明、版本化读写、CAS）
 │  ├─ skills.ts      # H13 技能目录枚举 + watch（稳定前缀原料 + 引用守卫查表）
-│  └─ logger.ts      # ctx.logger('context-economy') + ignorable 自定义事件发射
+│  ├─ logger.ts      # ctx.logger('context-economy') + ignorable 自定义事件发射
+│  └─ diag-sink.ts   # 诊断落盘：ctx.logger.exporter() → 插件 logs/ JSONL（P1.1，agent 自审入口）
 ├─ core/             # 纯核（零 harness import：事件/会话类型本地重声明，结构性兼容）
 │  ├─ units.ts       # 分划单位状态机：task 段 fold、边界记录（01 §3.5 正典）
 │  ├─ dossier.ts     # 卷宗：append-only 累积、标注、回填、边界清空（02 §2）
@@ -95,7 +96,9 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
    不外溢——平台层把重活（判别/断面/压缩）投递进自有队列，**永不阻塞 append**
    （fail-lazy 铁律的接线形态）。
 3. **诊断走 `ctx.logger('context-economy')`**；运营事实一律进会话事件而非 stdout——
-   保证"从落盘日志完整重建插件行为"可审计。
+   保证"从落盘日志完整重建插件行为"可审计。诊断另经公开导出面 `ctx.logger.exporter()` 落盘
+   插件根 `logs/context-economy.log`（JSONL，2 MiB 封顶滚动 1 份，`CE_DIAG_DIR` 可重定向；
+   `platform/diag-sink.ts`）——agent 无需 console 即可 Read/grep 自审（P1.1）。
 
 附：**本插件不注册 system-prompt 注入**（宪法：无隐藏注入段，知识出口可见）；
 提示词纪律——静态模板在前、实例参数在后，严禁动态拼接。

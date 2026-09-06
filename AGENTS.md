@@ -16,7 +16,9 @@ harness checkout 的本地实现（上游共识形态，待合并），插件经
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；后续机制按 `docs/11 §8` 搭建序（R1 余量 P2–P7 → R2–R4）与
 `docs/implement/` 工单推进，核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
-sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。
+sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
+落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
+`docs/11 §4③`）。
 实验框架 `experiments/evalground/` **封存**（2026-09-06：旧管线依赖清退前生产 lib 编译产物，随残留清空中断，不再作为门禁；`runs/` 证据与 `datasets/` 资产只读保全，解封条件见 `evalground/SEALED.md`——R3/R4 门对照实验随机制落地重建实验面后组织）。
 
 ## Build

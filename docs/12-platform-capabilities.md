@@ -48,7 +48,8 @@ vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
   `platform/ignorable-channel.ts` + `platform/logger.ts` 的 emitCeFact 发射路径**（后者上游合并后
   仅一行改直连）；机制代码（core/domains，P9+ 起的发射方）只经 `emitCeFact` 端口发射，**对模式
   零感知**——端口签名在通道存在与否两种世界里完全一致。D3 结构断言锁定单元边界：概念 token
-  越出两个单元文件即红。
+  越出两个单元文件即红。诊断落盘 sink（`platform/diag-sink.ts`，[11 §4](11-structure.md) 纪律③）
+  不属于本单元、亦不引用单元内任何符号——两单元可独立整删。
 - **降级模式**：通道缺失 → 事实写入 KV 镜像（P3 事实镜像表接线前 = blocked：warn + 计数）；
   镜像写入失败 → blocked。一切失败 warn + 计数，**绝不外溢、绝不静默**（[11 §4](11-structure.md) 纪律③）。
 - **删除清单（上游合并发版后，一次原子提交完成）**：
