@@ -1,6 +1,6 @@
 # P4 技能目录端口（映射 R1；依赖 P0；尺寸 S）
 
-> 状态：**计划态（本文件为 P4 施工工单）**。
+> 状态：**已施工（commit `3abe364`；落地过程已通过 `node scripts/verify-p4.mjs` 与 `npm run gate`）**。
 > 设计正典：[10 §1 H13](../10-wiring.md)（技能目录挂点）/
 > [11 §2](../11-structure.md)（模块树 `platform/skills.ts` 行 + 依赖铁律）/
 > [02 §2](../02-discriminator.md)（稳定前缀 = 技能目录 + 项目帧；技能目录 = name/description/whenToUse 机械枚举）/
