@@ -9,9 +9,11 @@
  * - 下划线约定：字段 key 用点路径（'discriminator.mode'）；paths 为写路径数组
  *   （默认 [field]），供 scope.mutate 原子提交多段 path。
  *
- * 版本协议: 本文件与 host 的 src/discriminator/presets.ts（DISC_PRESETS）同源是
- *           客户端侧镜像（preset 路由），改预设需同步（同 CLIENT_DEFAULTS 镜像
- *           CONFIG_DEFAULTS 的约定）。客户端不得 import host src（跨域打包）。
+ * 版本协议: 插件主体清退至模板态后，本文件是重设计的唯一"加回设置项"入口——
+ *           组壳/组件/交互全保留，仅 FIELD-DEF 载荷清空（4 组壳 fields:[]，
+ *           3 个组外保留 spec 支撑钉住模式行与模型路由选择器安全保存）。
+ *           host 侧对应最小 schema = src/config.ts（手工同步对；客户端不得
+ *           import host src——跨域打包约束）。
  *
  * 审查清单: 纯数据/纯函数；无 Host 引用穿越；不 import react。
  * 度量: 无新增（配置变更经判账号本 call 字段可观测，docs/07 §18）。
@@ -24,28 +26,12 @@ import type { Tone } from './theme.ts'
 /* 基础类型                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** 卡片编辑的配置形状（= Config schema 的可写面；可选字段只在暂存/覆盖时存在）。 */
+/** 卡片编辑的配置形状（= host Config schema 的可写面；模板态最小集）。 */
 export interface EconomyCardSettingsShape {
-  sub2IntentMapping?: boolean
-  compressionDriver?: string
-  taskCompression?: boolean
-  overflowRecovery?: boolean
   discriminator?: {
     mode?: 'off' | 'observe' | 'active'
-    preset?: 'deepseek' | 'deepseek-low'
     provider?: string
     model?: string
-    temperature?: number
-    maxTokens?: number
-    effort?: 'none' | 'low' | 'high' | 'max'
-    maxConcurrency?: number
-    timeoutMs?: number
-    cacheLimit?: number
-    journalLimit?: number
-    historyWindow?: number
-    messageExcerptChars?: number
-    journalPath?: string
-    debugIo?: boolean
   }
 }
 
@@ -215,21 +201,8 @@ export function economyPathField(
 /* -------------------------------------------------------------------------- */
 
 export const CLIENT_DEFAULTS = {
-  sub2IntentMapping: true,
-  compressionDriver: 'native',
-  taskCompression: true,
-  overflowRecovery: true,
   discriminator: {
     mode: 'off',
-    preset: 'deepseek',
-    maxConcurrency: 4,
-    timeoutMs: 15000,
-    cacheLimit: 1024,
-    journalLimit: 256,
-    historyWindow: 2,
-    messageExcerptChars: 80,
-    journalPath: '',
-    debugIo: false,
   },
 } as const
 
@@ -309,8 +282,8 @@ export function splitRouteKey(key: string): { provider: string; model: string } 
 }
 
 /**
- * 内置预设路由（client 侧镜像 host DISC_PRESETS；改预设需同步 src/discriminator/presets.ts）。
- * 恒显示于模型路由下拉（即使不在配置目录里），保证"跟随预设/预设模型"始终可选。
+ * 内置预设路由（常驻模型路由下拉，保证"跟随预设/预设模型"始终可选）。
+ * 模板态保留：这是"模型列表"交互的常驻底座，重设计时按需增删。
  */
 export const MODEL_PRESET_ROUTES: EconomySelectOption[] = [
   { value: routeKey('deepseek-official', 'deepseek-v4-flash-vision-exp'), label: 'deepseek-official：deepseek-v4-flash-vision-exp', group: '内置预设', tone: 'business', pitch: '官方 API 直连：判别口径与实验批次一致（推荐默认）。' },
@@ -338,89 +311,13 @@ export function buildModelRouteOptions(groups: readonly { id: string; name: stri
 /* -------------------------------------------------------------------------- */
 
 export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; docs?: string }> = {
-  sub2IntentMapping: {
-    label: '启用记忆投影',
-    hint: '开启后会沉淀并复用任务要点；关闭则只压缩、不记忆。',
-    docs: '把跨轮对话里的目标与步骤要点沉淀到知识层，后续任务直接复用，省去重复交代。关闭后仅做压缩、不做记忆。',
-  },
-  taskCompression: {
-    label: '任务结束时压缩',
-    hint: '任务完成即把完成步骤压成摘要，只留结论与待办，省上下文。',
-    docs: '每个任务结束时，把已完成步骤的细节压缩成简短摘要，只保留结论与待办，从而明显降低之后每一轮的输入 token。',
-  },
-  overflowRecovery: {
-    label: '溢出自动恢复',
-    hint: '上下文接近上限时自动接管并整理关键内容，避免卡死。',
-    docs: '当上下文接近上限、原生压缩可能失败时，插件接管并重排关键信息、加速释放空间，避免长对话卡死。',
-  },
-  compressionDriver: { label: '压缩驱动', hint: '当前为原生压缩引擎，无可选项。', docs: '压缩引擎选择。当前仅原生 compactRegion；本插件将来独立实现时，换值即换驱动。' },
   'discriminator.mode': {
     label: '判别模式',
     hint: 'off=关闭（推荐）；observe=只看不动（测量）；active=真正介入。',
-    docs: 'off：不挂载判别器，零成本（默认）。observe：每条消息都判定但只记账、不发行为，用于测量；会产生少量 token 费，无直接收益。active：额外发出 verdict 事件，驱动上层编排。',
+    docs: 'off：不挂载引擎，零成本（默认）。observe：判定但只记账、不发行为，用于测量。active：发出 verdict 事件，驱动上层编排。（重设计时在此按域加回文案——每字段一条，label 一句 / hint 一行 / docs 收进 "?" 浮窗。）',
   },
-  'discriminator.preset': {
-    label: '预设',
-    hint: '一键套用一套判据、模型与思考强度的组合。',
-    docs: '预设决定 "用什么判据、哪个模型、多强思考" 这一整套搭配。新手选 deepseek 默认档即可；deepseek-low 为显式低思考档。想单独覆盖某个参数，去 "模型与调优/高级" 组。',
-  },
-  'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般不需要单独填，用下方 "模型" 路由下拉即可。' },
-  'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。一般用 "模型" 路由下拉选择，会自动同时设好服务商与模型，避免两者不匹配。' },
-  'discriminator.temperature': {
-    label: '随机性',
-    hint: '默认 0（更稳定）；DeepSeek 思考模型下此参数会被忽略。',
-    docs: '采样温度。0 最稳定（默认）。注意 DeepSeek 官方 API 在思考模式下会忽略此参数，改了未必生效。',
-  },
-  'discriminator.maxTokens': {
-    label: '回答长度上限',
-    hint: '单次判别的最大输出 token；调高会增加成本。',
-    docs: '单次判别的输出 token 上限（软限制；推理模型的 thinking token 不计入，实测）。100–2000，默认 400。',
-  },
-  'discriminator.effort': {
-    label: '思考强度',
-    hint: 'none=不额外思考（默认省钱）；仅部分模型支持更高档。',
-    docs: '仅对能力表里实测/文档双证的模型发送 low/high/max，其余强制 "不发送"（默认档）。增大思考会显著增加成本与延迟，仅部分模型支持。',
-  },
-  'discriminator.maxConcurrency': {
-    label: '并发数',
-    hint: '同时处理多少判断；过高可能排队或超时。',
-    docs: '判别并发上限 1–16，默认 4。队列满即跳过并记 overload，避免阻塞主链路。',
-  },
-  'discriminator.timeoutMs': {
-    label: '单次超时',
-    hint: '超过此时限即放弃，按 "继续" 处理。',
-    docs: '单次判别超时（1000–60000ms，默认 15000）。超时 → 按 continue 兜底，保证不卡住主链路。',
-  },
-  'discriminator.cacheLimit': {
-    label: '结果缓存条数',
-    hint: '缓存已判结果避免重复问模型；0=关缓存。',
-    docs: 'L1 精确键缓存容量（默认 1024）。键含配置面，重放防重、不降语料调用；0=关闭。',
-  },
-  'discriminator.journalLimit': {
-    label: '记录保留条数',
-    hint: '最多保留多少条判定记录，超出自动滚动删除。',
-    docs: '账号台账环表容量（16–1000，默认 256）。超出按时间滚动删除。',
-  },
-  'discriminator.historyWindow': {
-    label: '参考历史条数',
-    hint: '判断时带最近几条对话做参考；建议保持默认。',
-    docs: '段内历史窗口 0–6。口径与实验 v6 冻结一致=2。改动会破坏跨配置的对比口径，除非做对照实验，否则不建议动。',
-  },
-  'discriminator.messageExcerptChars': {
-    label: '原文摘录长度',
-    hint: '记录里保留多少字原话；0=不留，省空间。',
-    docs: '判别记录中目标消息原文摘录长度（0–200，默认 80）。0=不留原文，占空间更小。',
-  },
-  'discriminator.journalPath': {
-    label: '记录保存位置',
-    hint: '留空=默认目录；也可自定义。',
-    docs: '判别台账/IO 日志落盘目录。空=默认 `~/.dsh/context-economy/`。落盘：judge-records.jsonl（常开，成本流水）+ judge-io.jsonl（仅 debugIo=true 时写原始输入输出）。',
-  },
-  'discriminator.debugIo': {
-    label: '调试日志',
-    hint: '开启后原样记录每次判别的输入输出（文件会大）；排障才开。',
-    docs: 'debugIo=true 时写 judge-io.jsonl（原始 prompt 与模型输出，可回放比对）。日常关闭，排障时才开，避免文件膨胀。',
-  },
+  'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般用模型路由下拉选择，自动同时设好服务商与模型。' },
+  'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
 }
 
 /* -------------------------------------------------------------------------- */
@@ -443,7 +340,10 @@ export interface EconomyFieldGroup {
   fields: EconomyFieldSpec[]
 }
 
-/** 分组层级（可见性分级 → 组标题人话说明）。 */
+/**
+ * 分组壳（模板态）：4 个组的标题/描述/语义色/开态全部保留——重设计时向各组的
+ * fields 数组加回 economyXxxField(...) 即可原样复现 UI；本态全部 fields:[]。
+ */
 export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
   {
     id: 'assembly',
@@ -453,12 +353,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-business-primary)',
     tint: 'var(--dsw-alias-state-business-tertiary)',
     defaultOpen: true,
-    fields: [
-      economyBoolField('sub2IntentMapping', { visibility: 'core', default: true }),
-      economyBoolField('taskCompression', { visibility: 'core', default: true }),
-      economyBoolField('overflowRecovery', { visibility: 'core', default: true }),
-      economySelectField('compressionDriver', [{ value: 'native', label: 'native（原生）' }], { visibility: 'hidden', default: 'native', deflabel: '（原生）' }),
-    ],
+    fields: [],
   },
   {
     id: 'discern',
@@ -469,19 +364,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     tint: 'var(--dsw-alias-state-success-tertiary)',
     defaultOpen: true,
     routeSelector: true,
-    fields: [
-      economySelectField('discriminator.mode', [
-        { value: 'off', label: 'off（默认）：关闭，零成本', tone: 'neutral' },
-        { value: 'observe', label: 'observe：只看不动（测量）', tone: 'warn' },
-        { value: 'active', label: 'active：发 verdict 驱动编排', tone: 'business' },
-      ], { visibility: 'core', default: 'off', deflabel: '（默认）' }),
-      economySelectField('discriminator.preset', [
-        { value: 'deepseek', label: 'deepseek（默认）：官方直连', tone: 'business' },
-        { value: 'deepseek-low', label: 'deepseek-low：低思考档', tone: 'success' },
-      ], { visibility: 'core', default: 'deepseek', deflabel: '（默认）' }),
-      economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
-      economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
-    ],
+    fields: [],
   },
   {
     id: 'tune',
@@ -491,19 +374,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-warn-primary)',
     tint: 'var(--dsw-alias-state-warn-tertiary)',
     defaultOpen: false,
-    fields: [
-      economySelectField('discriminator.effort', [
-        { value: '', label: '（跟随预设）', tone: 'neutral' },
-        { value: 'none', label: 'none：不发送（模型默认档）', tone: 'neutral' },
-        { value: 'low', label: 'low', tone: 'success' },
-        { value: 'high', label: 'high', tone: 'warn' },
-        { value: 'max', label: 'max', tone: 'error' },
-      ], { visibility: 'tune', deflabel: '（跟随预设）' }),
-      economyNumberField('discriminator.temperature', { min: 0, max: 1, step: 0.1, unit: '', visibility: 'tune', deflabel: '（跟随预设）' }),
-      economyNumberField('discriminator.maxTokens', { min: 100, max: 2000, step: 50, unit: 'token', visibility: 'tune', deflabel: '（跟随预设）' }),
-      economyNumberField('discriminator.maxConcurrency', { min: 1, max: 16, step: 1, unit: '并发', visibility: 'tune', default: 4, deflabel: '（默认 4）' }),
-      economyNumberField('discriminator.timeoutMs', { min: 1000, max: 60000, step: 500, unit: 'ms', visibility: 'tune', default: 15000, deflabel: '（默认 15000）' }),
-    ],
+    fields: [],
   },
   {
     id: 'advanced',
@@ -513,16 +384,23 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-error-primary)',
     tint: 'var(--dsw-alias-state-error-tertiary)',
     defaultOpen: false,
-    fields: [
-      economyNumberField('discriminator.cacheLimit', { min: 0, max: 5000, step: 100, unit: '条', visibility: 'debug', default: 1024, deflabel: '（默认 1024）' }),
-      economyNumberField('discriminator.journalLimit', { min: 16, max: 1000, step: 16, unit: '条', visibility: 'debug', default: 256, deflabel: '（默认 256）' }),
-      economyNumberField('discriminator.historyWindow', { min: 0, max: 6, step: 1, unit: '条', visibility: 'debug', default: 2, deflabel: '（建议保持 2）' }),
-      economyNumberField('discriminator.messageExcerptChars', { min: 0, max: 200, step: 10, unit: '字', visibility: 'debug', default: 80, deflabel: '（默认 80）' }),
-      economyPathField('discriminator.journalPath', { visibility: 'debug', placeholder: '默认 ~/.dsh/context-economy/', default: '', deflabel: '（默认目录）' }),
-      economyBoolField('discriminator.debugIo', { visibility: 'debug', default: false, deflabel: '（关）' }),
-    ],
+    fields: [],
   },
 ]
 
-/** 扁平化字段 spec 表（维持 key → spec 索引 + 旧版一次性升级兼容）。 */
-export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = ECONOMY_FIELD_GROUPS.flatMap(g => g.fields)
+/**
+ * 组外保留 spec（不进任何组、不渲染为普通字段行）：
+ * - discriminator.mode：Card 钉住的模式行（MODE_SPEC 查找自本表，缺位会崩）；
+ * - provider/model：ModelRouteSelector 暂存目标——controller.save 按 spec 索引
+ *   写路径，缺 spec 会崩（保留 = 模型路由选择器端到端可用）。
+ * 重设计加回字段时：字段进组 fields；这三条保留 spec 的 key 若被复用则从本表移除。
+ */
+export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
+  economySelectField('discriminator.mode', [
+    { value: 'off', label: 'off（默认）：关闭，零成本', tone: 'neutral' },
+    { value: 'observe', label: 'observe：只看不动（测量）', tone: 'warn' },
+    { value: 'active', label: 'active：发 verdict 驱动编排', tone: 'business' },
+  ], { visibility: 'core', default: 'off', deflabel: '（默认）' }),
+  economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
+  economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
+]

@@ -1,5 +1,5 @@
 /**
- * 内嵌鲸鱼娘女仆吉祥物（MIT 许可，来源见 docs/12 §5 归属）。
+ * 内嵌鲸鱼娘女仆吉祥物（MIT 许可，来源归属见 docs/ledger-history.md §18）。
  * 由 DeepSeek-Whale-Girl 仓库 assets/whale/whale-maid.png（640×640）缩放至 192×192，
  * 透明 PNG → base64 data-URL。为什么内嵌：client 侧由 __ModuleLoader__.load 工厂加载，
  * asset 文件路径解析不可靠，data-URL 在任何加载方式下都稳定（离线/无外链/无 CSP 资源问题）。

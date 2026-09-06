@@ -6,7 +6,7 @@
  * 用了不存在于 DSH 的 `--theme-*` 变量，导致一直落到硬编码深色回退值。
  *
  * 令牌名来源：`packages/client` 各 `*.css` 实际使用的 `--dsw-*`（已 grep 核实，
- * 见 docs/12 §5 配置面 UI 重构账本）。命名空间含义：
+ * 见 docs/ledger-history.md §18 配置面 UI 账本）。命名空间含义：
  * - `--dsw-alias-label-*` 文字层级；`--dsw-alias-bg-*` 表面层级；
  * - `--dsw-alias-border-*` 边框层级；`--dsw-specific-input-major` 输入框表面；
  * - `--dsw-alias-brand-primary` 品牌主色；`--dsw-alias-state-error-primary` 错误/危险。

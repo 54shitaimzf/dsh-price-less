@@ -54,29 +54,8 @@ node -e "
 "
 link_pkg cosmokit vendor/cosmokit
 link_pkg schemastery vendor/schemastery
-link_pkg @deepseek-ai/dsh-llm packages/llm/llm
-# 任务记忆域依赖（类型导入）：session 投影 / session / 压缩服务定义
-link_pkg @deepseek-ai/dsh-session-projection packages/session/session-projection
-link_pkg @deepseek-ai/dsh-session packages/core/session
-link_pkg @deepseek-ai/dsh-compaction packages/compaction/compaction
-link_pkg @deepseek-ai/dsh-agent packages/core/agent
-# settings 注册（GUI 配置卡片 host 半边；installSettingsSection）
+# settings 注册（设置 UI 壳 host 半边；SettingsProvider.installSection）
 link_pkg @deepseek-ai/dsh-settings packages/settings/settings
-# 任务记忆域依赖（类型导入）：todo 事件所有权在 dsh-tool-todo，
-# 需载入其对 SessionEventMap 的声明合并，使 'todo/write' 类型可解析。
-link_pkg @deepseek-ai/dsh-tool-todo packages/todo/tool-todo
-# zod（投影 stateSchema 运行时依赖；从 checkout 的 pnpm store 定位）
-ZOD_DIR=$(find "$CHECKOUT/node_modules/.pnpm" -maxdepth 1 -type d -iname 'zod@*' 2>/dev/null | head -1)
-if [ -n "$ZOD_DIR" ]; then
-  node -e "
-    const fs = require('fs');
-    const path = require('path');
-    fs.rmSync('node_modules/zod', { recursive: true, force: true });
-    fs.symlinkSync(path.resolve(process.argv[1], 'node_modules/zod'), path.resolve('node_modules/zod'), process.platform === 'win32' ? 'junction' : 'dir');
-  " "$ZOD_DIR"
-else
-  echo "build: zod not found in checkout pnpm store" >&2
-fi
 # @types/node（编译类型；checkout 自带）
 link_pkg @types/node node_modules/@types/node
 

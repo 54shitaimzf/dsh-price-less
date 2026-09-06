@@ -13,12 +13,12 @@
  * - save() 用 scope.mutate(ops, basedRevision) 原子提交（多段 path + revision 门）；
  * - 载入模型目录用于"模型路由下拉"（新会话/adapters/settings 变更时刷新）。
  *
- * 与 Host 契约（docs/12 §5）：
+ * 与 Host 契约（docs/11 §6）：
  * - namespace 'context-economy'；scope.getSnapshot() = { status, value, base, user, revision, writable }
  * - 写入经 scope.mutate(ops, revision) —— revision-fenced 文档变更。
  *
  * 审查清单: 纯 client；fiber 效应（dispose 清订阅/递增代际）；不依赖官方内部模块。
- * 度量: 无新增（配置变更经判账号本 call 字段可观测，docs/07 §18）。
+ * 度量: 无新增（配置变更经判账号本 call 字段可观测，docs/ledger-history.md §18）。
  */
 
 import type { ClientRemote, ModelProviderGroup } from '@deepseek-ai/dsh-api-remotes/client'

@@ -1,6 +1,9 @@
 /**
- * field-model 纯逻辑单测（client 半边，无 React/DOM 依赖）。
- * 覆盖：字段 parse/format、默认解析、可见性分级、模型路由选项三源合并、routeKey 往返。
+ * field-model 纯逻辑单测（client 半边，无 React/DOM 依赖）——模板态修剪版。
+ * 插件主体清退后本 spec 只保护**保留的 UI 壳机械件**：
+ * 字段工厂 parse 精度、默认解析与深度工具、模型路由选项合并、
+ * 空组壳 + 3 个组外保留 spec（钉住模式行 / 模型路由暂存安全）。
+ * 重设计加回设置项时按域扩回对应断言（清退前完整版见 git 历史）。
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -20,8 +23,8 @@ import {
 
 describe('字段 parse（validation 精度）', () => {
   it('number：合法 / 越界 / 非数 → 精确错误文案', () => {
-    const f = economyNumberField('discriminator.timeoutMs', { min: 1000, max: 60000, step: 500 })
-    expect(f.parse('15000')).toEqual({ kind: 'set', values: { 'discriminator.timeoutMs': 15000 } })
+    const f = economyNumberField('demo.timeoutMs', { min: 1000, max: 60000, step: 500 })
+    expect(f.parse('15000')).toEqual({ kind: 'set', values: { 'demo.timeoutMs': 15000 } })
     expect(f.parse('999')).toEqual({ kind: 'error', message: '需 ≥ 1000' })
     expect(f.parse('999999')).toEqual({ kind: 'error', message: '需 ≤ 60000' })
     expect(f.parse('abc')).toEqual({ kind: 'error', message: '不是有效数字' })
@@ -29,28 +32,26 @@ describe('字段 parse（validation 精度）', () => {
   })
 
   it('bool：true/false / 其他 → 错误文案', () => {
-    const f = economyBoolField('sub2IntentMapping')
-    expect(f.parse('true')).toEqual({ kind: 'set', values: { sub2IntentMapping: true } })
-    expect(f.parse('false')).toEqual({ kind: 'set', values: { sub2IntentMapping: false } })
+    const f = economyBoolField('demo.enabled')
+    expect(f.parse('true')).toEqual({ kind: 'set', values: { 'demo.enabled': true } })
+    expect(f.parse('false')).toEqual({ kind: 'set', values: { 'demo.enabled': false } })
     expect(f.parse('yes').kind).toBe('error')
   })
 
   it('select：合法值 set；空串 → clear（跟随预设 = 无该选项时清空）', () => {
-    const f = economySelectField('discriminator.mode', [
+    const f = economySelectField('demo.mode', [
       { value: 'off', label: 'off' },
       { value: 'observe', label: 'observe' },
-      { value: 'active', label: 'active' },
     ])
-    expect(f.parse('off')).toEqual({ kind: 'set', values: { 'discriminator.mode': 'off' } })
+    expect(f.parse('off')).toEqual({ kind: 'set', values: { 'demo.mode': 'off' } })
     expect(f.parse('watch')).toEqual({ kind: 'error', message: '请从选项中选择' })
     expect(f.parse('')).toEqual({ kind: 'clear' })
   })
 })
 
 describe('默认解析与深度工具', () => {
-  it('defaultForPath：带默认字段返回值，可选覆盖（provider）→ undefined', () => {
+  it('defaultForPath：mode 有默认；可选覆盖（provider）→ undefined', () => {
     expect(defaultForPath('discriminator.mode')).toBe('off')
-    expect(defaultForPath('discriminator.maxConcurrency')).toBe(4)
     expect(defaultForPath('discriminator.provider')).toBeUndefined()
   })
 
@@ -85,29 +86,25 @@ describe('模型路由', () => {
   })
 })
 
-describe('文案一致性（下拉 vs 字段说明）', () => {
-  it('mode 的字段 hint 含「测量」与下拉 observe 选项逐字一致', () => {
-    const modeSpec = ECONOMY_FIELD_SPECS.find(s => s.field === 'discriminator.mode')!
-    const observe = modeSpec.options!.find(o => o.value === 'observe')!
-    // 下拉「测量」与字段说明「（测量）」一致，避免内容各说各话。
-    expect(observe.label).toContain('测量')
-    expect(ECONOMY_FIELD_COPY['discriminator.mode'].hint).toContain('observe=只看不动（测量）')
-  })
-})
-
-describe('可见性分级（设置项精简）', () => {
-  it('核心组默认展开，调节/排障组默认折叠', () => {
-    const byId = Object.fromEntries(ECONOMY_FIELD_GROUPS.map(g => [g.id, g]))
-    expect(byId.assembly.defaultOpen).toBe(true)
-    expect(byId.discern.defaultOpen).toBe(true)
-    expect(byId.tune.defaultOpen).toBe(false)
-    expect(byId.advanced.defaultOpen).toBe(false)
+describe('模板态壳不变量（空组 + 组外保留 spec）', () => {
+  it('4 个组壳保留但全部 fields:[]（清空设置项、保折叠标题）', () => {
+    expect(ECONOMY_FIELD_GROUPS.map(g => g.id)).toEqual(['assembly', 'discern', 'tune', 'advanced'])
+    for (const g of ECONOMY_FIELD_GROUPS) expect(g.fields).toEqual([])
+    expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')?.routeSelector).toBe(true)
   })
 
-  it('compressionDriver 为 hidden（不单独渲染）；provider/model 为 hidden（复合路由接管）', () => {
+  it('ECONOMY_FIELD_SPECS = 恰 3 个保留 spec：mode（钉住行）+ provider/model（hidden，路由暂存安全）', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(specs.get('compressionDriver')?.visibility).toBe('hidden')
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(3)
+    expect(specs.get('discriminator.mode')?.type).toBe('select')
     expect(specs.get('discriminator.provider')?.visibility).toBe('hidden')
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
+  })
+
+  it('mode 文案一致性（下拉 vs 字段说明）', () => {
+    const modeSpec = ECONOMY_FIELD_SPECS.find(s => s.field === 'discriminator.mode')!
+    const observe = modeSpec.options!.find(o => o.value === 'observe')!
+    expect(observe.label).toContain('测量')
+    expect(ECONOMY_FIELD_COPY['discriminator.mode'].hint).toContain('observe=只看不动（测量）')
   })
 })

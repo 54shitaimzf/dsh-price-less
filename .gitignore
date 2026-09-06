@@ -16,3 +16,8 @@ experiments/evalground/runs/**/compress-snapshots.jsonl
 experiments/evalground/runs/**/workspace/
 experiments/evalground/batches/
 experiments/evalground/.scratch/
+
+# 扫描器/校验器缓存与本地工作台（工具缓存非证据）
+.mimosa/
+.assert-tmp/
+.workbuddy/
