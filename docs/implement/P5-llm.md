@@ -1,11 +1,10 @@
 # P5 辅助调用端口（映射 R1；依赖 P2；尺寸 S）
 
-> 状态：**计划（本文档即施工工单；执行前工作树须干净。起草时已核 `git status --porcelain` 为空；
-> 起草后新增本文件与 master P5 行链接，属计划态变更，开工执行前再核一遍即可）。**
+> 状态：**已施工（commit `f48c51f`；落地过程已通过 `node scripts/verify-p5.mjs`、`npm run gate` 与 `DSH_CHECKOUT=G:/deepseek-harness npm run build`）**。
 > 执行模式：**人工介入仅限必要时刻**（自动化检查无法判定、或触发 §6.7 停工上报时）。
 > harness 接口核验、上下文组装检查等，凡能用 LLM 调用接口/脚本机械检查的，
 > 一律自动化执行，不设逐项人工批准；最后一步按 §9 汇报。
-> 前置完成面：P0 / P1 / P1.1 / P1.2 / P2 / P3 / P4 均已施工并合入 main；本单是当前第一份未执行工单。
+> 前置完成面：P0 / P1 / P1.1 / P1.2 / P2 / P3 / P4 均已施工并合入 main；本单已执行完毕。
 > 设计正典：[10 §1 H12](../10-wiring.md)（辅助 LLM 挂点）/
 > [11 §2](../11-structure.md)（模块树 `platform/llm.ts` 行：`CeAuxPurpose` 单点适配 + purpose 路由 +
 > usage/缓存观测回执）/
