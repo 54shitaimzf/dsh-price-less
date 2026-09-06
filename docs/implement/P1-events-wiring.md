@@ -98,6 +98,11 @@ usage 聚合 → 07 字段全表。同输入同账（纯函数断言）。
    （harness 仓 commit `04cba8f394`，session 包 81 测试全绿 + api-catalog 重生成校验通过），
    插件端口已翻转为真实发射，回环测试（append → snapshotEvents → ignorable===true →
    validateStoredEvents 放行）过。发射失败按 fail-lazy 遏制（warn + emitErrors 计数）。
+   **共识形态对齐（后续提交）**：按上游社区共识（#5463/#5474 谱系）补 `IgnorableSessionEventMap`
+   append 编译闸（未合并类型不可携带 ignorable——该 map 只活在写入侧，读取不查，不引入组合依赖）+
+   loud-write 告警（未知无标记非 surface 类型 append 现场去重告警）+ 拒读文案修正；
+   harness commit `a3c0a8bc02`（session 82 + persistence 18 测试全绿，api-catalog 重生成校验过）；
+   插件 ce-logger.spec 类型级双侧断言（双 map 合并正例 + gate-probe 编译闸反例）。
 
 ## 3. 产出
 

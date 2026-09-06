@@ -8,14 +8,22 @@
  * 端口翻转记录见 P1 工单 §2.4 决策点⑤。
  */
 import { describe, expect, it } from 'vitest'
-import type { SessionEventMap } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEventMap } from '@deepseek-ai/dsh-session'
 import { ceFactStats, ceLogger, emitCeFact, type CeFactType } from '../src/platform/logger.ts'
 
 // 词汇派生类型级验证（P1 工单 §5）：与 harness compaction/* 同款声明合并形态
 // （packages/compaction/compaction/src/types.ts:17，目标模块 '@deepseek-ai/dsh-session/types'）。
+// IgnorableSessionEventMap = harness 侧 append 编译闸（社区共识形态 #5463/#5474，
+// harness commit a3c0a8bc02）——类型并入 SessionEventMap（载荷）+ IgnorableSessionEventMap
+// （可标记）后才可在 session.append 携带 { ignorable: true }；该 map 只活在写入侧，读取不查。
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /** 测试探针事件（仅测试类型面；生产词汇表为空——P1 工单 §2.4-③）。 */
+    'context-economy/test-probe': { probe: string }
+    /** 编译闸反例专用：并入 SessionEventMap 但刻意不并入 IgnorableSessionEventMap。 */
+    'context-economy/gate-probe': { x: number }
+  }
+  interface IgnorableSessionEventMap {
     'context-economy/test-probe': { probe: string }
   }
 }
@@ -93,6 +101,16 @@ const probeData: SessionEventMap['context-economy/test-probe'] = { probe: 'typed
 emitCeFact({ append: () => ({}) } as never, 'context-economy/test-probe', { probe: 'typed' })
 void probeType
 void probeData
+// 编译闸正例：双 map 合并后 raw append 可携带 { ignorable: true }。
+const probeSession = { append: () => ({}) } as unknown as Session
+probeSession.append('context-economy/test-probe', { probe: 'typed' }, { ignorable: true })
+void probeSession
+// 编译闸反例：并入 SessionEventMap 但未并入 IgnorableSessionEventMap 的类型不可标记
+//（若闸失效，@ts-expect-error 自身报"未使用"→ typecheck:tests 红）。
+const gateSession = { append: () => ({}) } as unknown as Session
+// @ts-expect-error 未并入 IgnorableSessionEventMap 的类型不可携带 ignorable opts
+gateSession.append('context-economy/gate-probe', { x: 1 }, { ignorable: true })
+void gateSession
 // 反例：族外类型不进 CeFactType（若前缀守卫失效，@ts-expect-error 自身报错 → typecheck 红）。
 const outside = 'other/event' as string
 // @ts-expect-error 未声明合并的族外事件类型不得通过 CeFactType

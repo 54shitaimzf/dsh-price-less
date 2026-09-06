@@ -10,7 +10,8 @@ task 边界压缩+热尾 / 40% 压力路径 / 防溢出保险丝）+ 五条节�
 **现状**：P0（零位断言：`scripts/assert-structure.mjs` + `npm run assert`/`gate`）与 P1（事件面
 接线：`platform/events.ts` H1/H7 firehose → 异步旁路队列 + `platform/logger.ts` ignorable 事实
 发射端口）**已施工**；`platform/` 是唯一 harness 触点层，`context-economy/*` 事件发射走 harness
-`Session.append` LogIntent 通道（**本地补丁**，harness 仓 commit `04cba8f394`——checkout 升级时
+`Session.append` LogIntent 通道（**本地补丁**，harness 仓 commit `a3c0a8bc02`，已对齐上游社区
+共识形态 IgnorableSessionEventMap/#5463/#5474——checkout 升级时
 该通道需同步确认，缺通道则未知类型无标记会砖会话重载）。client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；后续机制按 `docs/11 §8` 搭建序（R1 余量 P2–P7 → R2–R4）与
 `docs/implement/` 工单推进，核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
