@@ -1,0 +1,46 @@
+{
+  "total": 4,
+  "sections": [
+    {
+      "summary": "Produce dsh-sample-plugin v1.3.0 release notes from given facts; only release-notes-v1.3.0.md written, no other files changed",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "Write v1.3.0 release notes for dsh-sample-plugin (single file, only given facts)",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "release-notes-v1.3.0.md",
+          "change": "write release notes title + 新特性/修复/兼容性/致谢 from given facts",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "release-notes-v1.3.0.md",
+              "lineRange": "1-20",
+              "symbol": null
+            }
+          ]
+        },
+        {
+          "type": "plan",
+          "goal": "Write v1.3.0 release notes for dsh-sample-plugin (single file, only given facts)",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "Created release-notes-v1.3.0.md; only file modified, no code/tests touched",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "Confirm release-notes-v1.3.0.md content reflects v1.3.0 facts",
+    "detail": {
+      "verifications": [],
+      "failures": []
+    }
+  }
+}

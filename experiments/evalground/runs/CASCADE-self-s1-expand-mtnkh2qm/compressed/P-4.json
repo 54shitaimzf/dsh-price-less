@@ -1,0 +1,148 @@
+{
+  "total": 12,
+  "sections": [
+    {
+      "summary": "relaudit 报告面板前端：修复 applyFilter 级别过滤(>=)与 countTotal 数值求和缺陷，新增 groupByRule/copyFixSnippet/summarize，扩展 render-panel 渲染摘要卡+双条件过滤+按规则分组汇总+每行复制修复片段，并以经典脚本自包含 HTML(file:// 无 fetch/CDN)呈现嵌入报告；仅改 public/ 与 src/render-panel.js。",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "修复面板缺陷并实现过滤/分组/复制，产出自包含 HTML",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "src/render-panel.js",
+          "change": "修复 filter.applyFilter(>=)/countTotal 数值求和，新增 groupByRule、copyFixSnippet、summarize，扩展 render-panel 输出分组摘要与复制按钮",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "src/render-panel.js",
+              "lineRange": "1-66",
+              "symbol": null,
+              "content": "/**\n * Shared pure renderer for the audit report panel (used by the browser app,\n * the node tests, and the DOM/text snapshot for the human review packet).\n * Zero DOM access — returns an HTML string.\n * Renders: summary block (cards + text), filter controls, per-rule grouped\n * summary chips, and the findings table (each row carries a \"copy fix snippet\"\n * button).\n */\n\nimport { groupByRule } from '../public/filter.js'\nimport { formatCounts, countTotal } from '../public/format.js'\n\nexport function escapeHtml(text) {\n  return String(text)\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;')\n}\n\nconst SEVERITY_LABEL = { error: '错误', warn: '警告', info: '提示' }\n\n/** Render the summary cards + summary text for a set of counts. */\nexport function renderSummaryBlock(summary) {\n  const cards = ['error', 'warn', 'info'].map(sev => (\n    `<div class=\"card card-${sev}\"><span class=\"count\" data-sev=\"${sev}\">${summary[`${sev}s`] ?? 0}</span>`\n    + `<span class=\"label\">${SEVERITY_LABEL[sev] ?? sev}</span></div>`\n  )).join('\\n')\n  return `<div id=\"summary-cards\">${cards}</div>`\n    + `<div id=\"summary-text\">${formatCounts(summary)} · 共 ${countTotal(summary)} 条</div>`\n}\n\n/** Render the <tbody> content for a set of findings. */\nexport function renderFindingsRows(findings) {\n  return findings.map(f => (\n    `<tr class=\"row-${escapeHtml(f.severity)}\" data-rule=\"${escapeHtml(f.rule)}\" data-severity=\"${escapeHtml(f.severity)}\">`\n    + `<td>${escapeHtml(f.rule)}</td>`\n    + `<td>${SEVERITY_LABEL[f.severity] ?? escapeHtml(f.severity)}</td>`\n    + `<td>${escapeHtml(f.message)}</td>`\n    + `<td>${escapeHtml(f.file ?? '')}</td>`\n    + `<td><button type=\"button\" class=\"copy\" data-rule=\"${escapeHtml(f.rule)}\" data-file=\"${escapeHtml(f.file ?? '')}\">复制修复片段</button></td>`\n    + `</tr>`\n  )).join('\\n')\n}\n\n/** Render per-rule grouped summary chips (R1(2) / R5(1) ...), severity desc. */\nexport function renderGroupSummary(findings) {\n  const groups = groupByRule(findings)\n  return groups.map(g => (\n    `<span class=\"group-chip\" data-rule=\"${escapeHtml(g.rule)}\" data-sev=\"${escapeHtml(g.severity)}\">${escapeHtml(g.rule)}(${g.count})</span>`\n  )).join(' ')\n}\n\n/** Render the full panel into a single HTML fragment (no <html>/<body>). */\nexport function renderPanelHtml(report) {\n  const findings = report.findings ?? []\n  return `<h1>审计报告：${escapeHtml(report.pkg ?? '')} v${escapeHtml(report.version ?? '')}</h1>`\n    + `<div id=\"summary\">${renderSummaryBlock(report.summary)}</div>`\n    + `<div id=\"filters\">`\n    + `<label>级别 <select id=\"level-filter\">`\n    + `<option value=\"all\">全部</option>`\n    + `<option value=\"warn\">警告及以上</option>`\n    + `<option value=\"error\">仅错误</option>`\n    + `</select></label>`\n    + `<label>规则前缀 <input id=\"rule-filter\" type=\"text\" placeholder=\"如 R1\"></label>`\n    + `</div>`"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16（frontend 10/10，api 6/6）",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "src/render-panel.js",
+          "change": "修复 filter.applyFilter(>=)/countTotal 数值求和，新增 groupByRule、copyFixSnippet、summarize，扩展 render-panel 输出分组摘要与复制按钮",
+          "refs": [
+            {
+              "refKey": "sub:3",
+              "path": "src/render-panel.js",
+              "lineRange": "1-70",
+              "symbol": null,
+              "content": "/**\n * Shared pure renderer for the audit report panel (used by the browser app,\n * the node tests, and the DOM/text snapshot for the human review packet).\n * Zero DOM access — returns an HTML string.\n * Renders: summary block (cards + text), filter controls, per-rule grouped\n * summary chips, and the findings table (each row carries a \"copy fix snippet\"\n * button).\n */\n\nimport { groupByRule } from '../public/filter.js'\nimport { formatCounts, countTotal } from '../public/format.js'\n\nexport function escapeHtml(text) {\n  return String(text)\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;')\n}\n\nconst SEVERITY_LABEL = { error: '错误', warn: '警告', info: '提示' }\n\n/** Render the summary cards + summary text for a set of counts. */\nexport function renderSummaryBlock(summary) {\n  const cards = ['error', 'warn', 'info'].map(sev => (\n    `<div class=\"card card-${sev}\"><span class=\"count\" data-sev=\"${sev}\">${summary[`${sev}s`] ?? 0}</span>`\n    + `<span class=\"label\">${SEVERITY_LABEL[sev] ?? sev}</span></div>`\n  )).join('\\n')\n  return `<div id=\"summary-cards\">${cards}</div>`\n    + `<div id=\"summary-text\">${formatCounts(summary)} · 共 ${countTotal(summary)} 条</div>`\n}\n\n/** Render the <tbody> content for a set of findings. */\nexport function renderFindingsRows(findings) {\n  return findings.map(f => (\n    `<tr class=\"row-${escapeHtml(f.severity)}\" data-rule=\"${escapeHtml(f.rule)}\" data-severity=\"${escapeHtml(f.severity)}\">`\n    + `<td>${escapeHtml(f.rule)}</td>`\n    + `<td>${SEVERITY_LABEL[f.severity] ?? escapeHtml(f.severity)}</td>`\n    + `<td>${escapeHtml(f.message)}</td>`\n    + `<td>${escapeHtml(f.file ?? '')}</td>`\n    + `<td><button type=\"button\" class=\"copy\" data-rule=\"${escapeHtml(f.rule)}\" data-file=\"${escapeHtml(f.file ?? '')}\">复制修复片段</button></td>`\n    + `</tr>`\n  )).join('\\n')\n}\n\n/** Render per-rule grouped summary chips (R1(2) / R5(1) ...), severity desc. */\nexport function renderGroupSummary(findings) {\n  const groups = groupByRule(findings)\n  return groups.map(g => (\n    `<span class=\"group-chip\" data-rule=\"${escapeHtml(g.rule)}\" data-sev=\"${escapeHtml(g.severity)}\">${escapeHtml(g.rule)}(${g.count})</span>`\n  )).join(' ')\n}\n\n/** Render the full panel into a single HTML fragment (no <html>/<body>). */\nexport function renderPanelHtml(report) {\n  const findings = report.findings ?? []\n  return `<h1>审计报告：${escapeHtml(report.pkg ?? '')} v${escapeHtml(report.version ?? '')}</h1>`\n    + `<div id=\"summary\">${renderSummaryBlock(report.summary)}</div>`\n    + `<div id=\"filters\">`\n    + `<label>级别 <select id=\"level-filter\">`\n    + `<option value=\"all\">全部</option>`\n    + `<option value=\"warn\">警告及以上</option>`\n    + `<option value=\"error\">仅错误</option>`\n    + `</select></label>`\n    + `<label>规则前缀 <input id=\"rule-filter\" type=\"text\" placeholder=\"如 R1\"></label>`\n    + `</div>`\n    + `<div id=\"rule-groups\">${renderGroupSummary(findings)}</div>`\n    + `<table id=\"findings\"><thead><tr><th>规则</th><th>级别</th><th>说明</th><th>文件</th><th>操作</th></tr></thead>`\n    + `<tbody id=\"rows\">${renderFindingsRows(findings)}</tbody></table>`\n}"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16（frontend 10/10，api 6/6）",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/style.css",
+          "change": "修复 filter.applyFilter(>=)/countTotal 数值求和，新增 groupByRule、copyFixSnippet、summarize，扩展 render-panel 输出分组摘要与复制按钮",
+          "refs": [
+            {
+              "refKey": "sub:5",
+              "path": "public/style.css",
+              "lineRange": "1-21",
+              "symbol": "body",
+              "content": "body { font-family: system-ui, sans-serif; margin: 24px; color: #1c2733; }\nh1 { font-size: 20px; }\n#summary { display: flex; align-items: center; gap: 12px; margin: 12px 0; }\n#summary-cards { display: flex; gap: 12px; }\n.card { border: 1px solid #ccc; border-radius: 8px; padding: 8px 16px; min-width: 80px; }\n.card .count { font-size: 22px; font-weight: 700; }\n.card-error { border-color: #d33; } .card-error .count { color: #d33; }\n.card-warn { border-color: #e9a; } .card-warn .count { color: #b60; }\n.card-info { border-color: #88c; } .card-info .count { color: #48c; }\n#summary-text { font-size: 13px; color: #556; }\n#filters { display: flex; gap: 20px; align-items: center; margin: 12px 0; font-size: 13px; }\n#filters label { display: inline-flex; align-items: center; gap: 6px; }\n#rule-filter { padding: 4px 6px; border: 1px solid #ccc; border-radius: 6px; }\n#rule-groups { margin: 12px 0; font-size: 13px; color: #456; }\n.group-chip { display: inline-block; margin: 0 6px 4px 0; padding: 3px 8px; background: #eef2f8; border: 1px solid #d6dcea; border-radius: 10px; }\ntable { border-collapse: collapse; width: 100%; margin-top: 12px; }\nth, td { border: 1px solid #dde; padding: 6px 10px; text-align: left; font-size: 13px; }\n.row-error td { background: #fdf2f2; }\n.row-warn td { background: #fff8ee; }\n.row-info td { background: #f4f7fd; }\n.copy { font-size: 12px; cursor: pointer; }"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16（frontend 10/10，api 6/6）",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "修复面板缺陷并实现过滤/分组/复制，产出自包含 HTML",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "修复面板缺陷并实现过滤/分组/复制，产出自包含 HTML",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "修复面板缺陷并实现过滤/分组/复制，产出自包含 HTML",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16（frontend 10/10，api 6/6）",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "前端面板完成：双条件过滤、按规则分组汇总、复制修复片段；面板自包含(file:// 无 fetch/CDN)。frontend+api 全过；audit 域逻辑为既有 planted bugs 未动。",
+          "deliverables": "public/filter.js、public/format.js、public/app.js、public/index.html、public/style.css、src/render-panel.js",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [
+      {
+        "path": "src/render-panel.js",
+        "lineRange": "1-66",
+        "symbol": null,
+        "content": "/**\n * Shared pure renderer for the audit report panel (used by the browser app,\n * the node tests, and the DOM/text snapshot for the human review packet).\n * Zero DOM access — returns an HTML string.\n * Renders: summary block (cards + text), filter controls, per-rule grouped\n * summary chips, and the findings table (each row carries a \"copy fix snippet\"\n * button).\n */\n\nimport { groupByRule } from '../public/filter.js'\nimport { formatCounts, countTotal } from '../public/format.js'\n\nexport function escapeHtml(text) {\n  return String(text)\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;')\n}\n\nconst SEVERITY_LABEL = { error: '错误', warn: '警告', info: '提示' }\n\n/** Render the summary cards + summary text for a set of counts. */\nexport function renderSummaryBlock(summary) {\n  const cards = ['error', 'warn', 'info'].map(sev => (\n    `<div class=\"card card-${sev}\"><span class=\"count\" data-sev=\"${sev}\">${summary[`${sev}s`] ?? 0}</span>`\n    + `<span class=\"label\">${SEVERITY_LABEL[sev] ?? sev}</span></div>`\n  )).join('\\n')\n  return `<div id=\"summary-cards\">${cards}</div>`\n    + `<div id=\"summary-text\">${formatCounts(summary)} · 共 ${countTotal(summary)} 条</div>`\n}\n\n/** Render the <tbody> content for a set of findings. */\nexport function renderFindingsRows(findings) {\n  return findings.map(f => (\n    `<tr class=\"row-${escapeHtml(f.severity)}\" data-rule=\"${escapeHtml(f.rule)}\" data-severity=\"${escapeHtml(f.severity)}\">`\n    + `<td>${escapeHtml(f.rule)}</td>`\n    + `<td>${SEVERITY_LABEL[f.severity] ?? escapeHtml(f.severity)}</td>`\n    + `<td>${escapeHtml(f.message)}</td>`\n    + `<td>${escapeHtml(f.file ?? '')}</td>`\n    + `<td><button type=\"button\" class=\"copy\" data-rule=\"${escapeHtml(f.rule)}\" data-file=\"${escapeHtml(f.file ?? '')}\">复制修复片段</button></td>`\n    + `</tr>`\n  )).join('\\n')\n}\n\n/** Render per-rule grouped summary chips (R1(2) / R5(1) ...), severity desc. */\nexport function renderGroupSummary(findings) {\n  const groups = groupByRule(findings)\n  return groups.map(g => (\n    `<span class=\"group-chip\" data-rule=\"${escapeHtml(g.rule)}\" data-sev=\"${escapeHtml(g.severity)}\">${escapeHtml(g.rule)}(${g.count})</span>`\n  )).join(' ')\n}\n\n/** Render the full panel into a single HTML fragment (no <html>/<body>). */\nexport function renderPanelHtml(report) {\n  const findings = report.findings ?? []\n  return `<h1>审计报告：${escapeHtml(report.pkg ?? '')} v${escapeHtml(report.version ?? '')}</h1>`\n    + `<div id=\"summary\">${renderSummaryBlock(report.summary)}</div>`\n    + `<div id=\"filters\">`\n    + `<label>级别 <select id=\"level-filter\">`\n    + `<option value=\"all\">全部</option>`\n    + `<option value=\"warn\">警告及以上</option>`\n    + `<option value=\"error\">仅错误</option>`\n    + `</select></label>`\n    + `<label>规则前缀 <input id=\"rule-filter\" type=\"text\" placeholder=\"如 R1\"></label>`\n    + `</div>`"
+      },
+      {
+        "path": "src/render-panel.js",
+        "lineRange": "1-70",
+        "symbol": null,
+        "content": "/**\n * Shared pure renderer for the audit report panel (used by the browser app,\n * the node tests, and the DOM/text snapshot for the human review packet).\n * Zero DOM access — returns an HTML string.\n * Renders: summary block (cards + text), filter controls, per-rule grouped\n * summary chips, and the findings table (each row carries a \"copy fix snippet\"\n * button).\n */\n\nimport { groupByRule } from '../public/filter.js'\nimport { formatCounts, countTotal } from '../public/format.js'\n\nexport function escapeHtml(text) {\n  return String(text)\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;')\n}\n\nconst SEVERITY_LABEL = { error: '错误', warn: '警告', info: '提示' }\n\n/** Render the summary cards + summary text for a set of counts. */\nexport function renderSummaryBlock(summary) {\n  const cards = ['error', 'warn', 'info'].map(sev => (\n    `<div class=\"card card-${sev}\"><span class=\"count\" data-sev=\"${sev}\">${summary[`${sev}s`] ?? 0}</span>`\n    + `<span class=\"label\">${SEVERITY_LABEL[sev] ?? sev}</span></div>`\n  )).join('\\n')\n  return `<div id=\"summary-cards\">${cards}</div>`\n    + `<div id=\"summary-text\">${formatCounts(summary)} · 共 ${countTotal(summary)} 条</div>`\n}\n\n/** Render the <tbody> content for a set of findings. */\nexport function renderFindingsRows(findings) {\n  return findings.map(f => (\n    `<tr class=\"row-${escapeHtml(f.severity)}\" data-rule=\"${escapeHtml(f.rule)}\" data-severity=\"${escapeHtml(f.severity)}\">`\n    + `<td>${escapeHtml(f.rule)}</td>`\n    + `<td>${SEVERITY_LABEL[f.severity] ?? escapeHtml(f.severity)}</td>`\n    + `<td>${escapeHtml(f.message)}</td>`\n    + `<td>${escapeHtml(f.file ?? '')}</td>`\n    + `<td><button type=\"button\" class=\"copy\" data-rule=\"${escapeHtml(f.rule)}\" data-file=\"${escapeHtml(f.file ?? '')}\">复制修复片段</button></td>`\n    + `</tr>`\n  )).join('\\n')\n}\n\n/** Render per-rule grouped summary chips (R1(2) / R5(1) ...), severity desc. */\nexport function renderGroupSummary(findings) {\n  const groups = groupByRule(findings)\n  return groups.map(g => (\n    `<span class=\"group-chip\" data-rule=\"${escapeHtml(g.rule)}\" data-sev=\"${escapeHtml(g.severity)}\">${escapeHtml(g.rule)}(${g.count})</span>`\n  )).join(' ')\n}\n\n/** Render the full panel into a single HTML fragment (no <html>/<body>). */\nexport function renderPanelHtml(report) {\n  const findings = report.findings ?? []\n  return `<h1>审计报告：${escapeHtml(report.pkg ?? '')} v${escapeHtml(report.version ?? '')}</h1>`\n    + `<div id=\"summary\">${renderSummaryBlock(report.summary)}</div>`\n    + `<div id=\"filters\">`\n    + `<label>级别 <select id=\"level-filter\">`\n    + `<option value=\"all\">全部</option>`\n    + `<option value=\"warn\">警告及以上</option>`\n    + `<option value=\"error\">仅错误</option>`\n    + `</select></label>`\n    + `<label>规则前缀 <input id=\"rule-filter\" type=\"text\" placeholder=\"如 R1\"></label>`\n    + `</div>`\n    + `<div id=\"rule-groups\">${renderGroupSummary(findings)}</div>`\n    + `<table id=\"findings\"><thead><tr><th>规则</th><th>级别</th><th>说明</th><th>文件</th><th>操作</th></tr></thead>`\n    + `<tbody id=\"rows\">${renderFindingsRows(findings)}</tbody></table>`\n}"
+      },
+      {
+        "path": "public/style.css",
+        "lineRange": "1-21",
+        "symbol": "body",
+        "content": "body { font-family: system-ui, sans-serif; margin: 24px; color: #1c2733; }\nh1 { font-size: 20px; }\n#summary { display: flex; align-items: center; gap: 12px; margin: 12px 0; }\n#summary-cards { display: flex; gap: 12px; }\n.card { border: 1px solid #ccc; border-radius: 8px; padding: 8px 16px; min-width: 80px; }\n.card .count { font-size: 22px; font-weight: 700; }\n.card-error { border-color: #d33; } .card-error .count { color: #d33; }\n.card-warn { border-color: #e9a; } .card-warn .count { color: #b60; }\n.card-info { border-color: #88c; } .card-info .count { color: #48c; }\n#summary-text { font-size: 13px; color: #556; }\n#filters { display: flex; gap: 20px; align-items: center; margin: 12px 0; font-size: 13px; }\n#filters label { display: inline-flex; align-items: center; gap: 6px; }\n#rule-filter { padding: 4px 6px; border: 1px solid #ccc; border-radius: 6px; }\n#rule-groups { margin: 12px 0; font-size: 13px; color: #456; }\n.group-chip { display: inline-block; margin: 0 6px 4px 0; padding: 3px 8px; background: #eef2f8; border: 1px solid #d6dcea; border-radius: 10px; }\ntable { border-collapse: collapse; width: 100%; margin-top: 12px; }\nth, td { border: 1px solid #dde; padding: 6px 10px; text-align: left; font-size: 13px; }\n.row-error td { background: #fdf2f2; }\n.row-warn td { background: #fff8ee; }\n.row-info td { background: #f4f7fd; }\n.copy { font-size: 12px; cursor: pointer; }"
+      }
+    ],
+    "outline": "结尾验证 frontend+api 测试 16/16 通过；交付 6 个面板文件，自包含可直接双击",
+    "detail": {
+      "verifications": [
+        {
+          "command": "npm run check",
+          "tail": "EXIT=1\n\n> relaudit@1.3.0 check\n> node scripts/self-check.js\n\n\n[stderr]\nself-check FAILED, missing: dist/relaudit-plugin-1.3.0.tgz\n"
+        },
+        {
+          "command": "node --test --test-isolation=none tests/frontend.test.js tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (31.5216ms)\n✔ GET /api/rules lists R1..R8 (5.6189ms)\n✔ GET /api/audit returns a report with findings + summary (14.6684ms)\n✔ GET /api/audit/:id returns the stored run (9.6819ms)\n✔ GET /api/audit/:id for unknown id returns 404 (3.1043ms)\n✔ GET / serves the panel page (2.9666ms)\n✔ SEVERITY_ORDER ranks error > warn > info (0.0752ms)\n✔ applyFilter with minSeverity warn includes warn AND error rows (0.5052ms)\n✔ applyFilter with minSeverity error includes only errors (0.1169ms)\n✔ applyFilter with rulePrefix narrows by rule prefix (0.1072ms)\n✔ countTotal sums numerically (no string concatenation) (0.0717ms)\n✔ formatCounts renders per-severity labels (0.0515ms)\n✔ severityLabel maps to Chinese labels (0.0504ms)\n✔ groupByRule groups rows per rule, ordered by severity desc (0.1235ms)\n✔ copyFixSnippet emits the fixed command snippet (0.0405ms)\n✔ renderPanelHtml renders summary cards and finding rows (0.1784ms)\nℹ tests 16\nℹ suites 0\nℹ pass 16\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 103.6776\n"
+        },
+        {
+          "command": "node --test --test-isolation=none tests/frontend.test.js tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (32.5367ms)\n✔ GET /api/rules lists R1..R8 (6.4795ms)\n✔ GET /api/audit returns a report with findings + summary (15.0514ms)\n✔ GET /api/audit/:id returns the stored run (11.2789ms)\n✔ GET /api/audit/:id for unknown id returns 404 (3.6397ms)\n✔ GET / serves the panel page (4.3816ms)\n✔ SEVERITY_ORDER ranks error > warn > info (0.0921ms)\n✔ applyFilter with minSeverity warn includes warn AND error rows (0.5329ms)\n✔ applyFilter with minSeverity error includes only errors (0.1227ms)\n✔ applyFilter with rulePrefix narrows by rule prefix (0.1024ms)\n✔ countTotal sums numerically (no string concatenation) (0.0782ms)\n✔ formatCounts renders per-severity labels (0.0545ms)\n✔ severityLabel maps to Chinese labels (0.0489ms)\n✔ groupByRule groups rows per rule, ordered by severity desc (0.1104ms)\n✔ copyFixSnippet emits the fixed command snippet (0.0478ms)\n✔ renderPanelHtml renders summary cards and finding rows (0.1884ms)\nℹ tests 16\nℹ suites 0\nℹ pass 16\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 108.9788\n"
+        }
+      ],
+      "failures": [
+        "✔ applyFilter with minSeverity warn includes warn AND error rows (0.5052ms)",
+        "✔ applyFilter with minSeverity error includes only errors (0.1169ms)",
+        "✔ SEVERITY_ORDER ranks error > warn > info (0.0921ms)",
+        "✔ applyFilter with minSeverity warn includes warn AND error rows (0.5329ms)",
+        "✔ applyFilter with minSeverity error includes only errors (0.1227ms)"
+      ]
+    }
+  }
+}

@@ -1,0 +1,399 @@
+{
+  "runId": "CASCADE-self-s1-expand-mtnkh2qm",
+  "task": "CASCADE",
+  "arm": "self-s1-expand",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "expand",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "deepseek-v4-flash-vision-exp",
+  "provider": "deepseek",
+  "judgeModel": "deepseek-v4-flash-vision-exp",
+  "finished": true,
+  "steps": 144,
+  "elapsedMs": 2263920,
+  "usage": {
+    "inputTokens": 5255154,
+    "outputTokens": 223984,
+    "cacheReadTokens": 5118464,
+    "calls": 144
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 7,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 800000,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-expand-mtnkh2qm\\calls.jsonl",
+    "compressSnapshots": 7
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.21373049,
+      "tokens": 5479138
+    },
+    "judge": {
+      "usd": 0.05394835,
+      "tokens": 186848
+    },
+    "compression": {
+      "usd": 0.03016392,
+      "tokens": 309453,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "deepseek-v4-flash-vision-exp",
+      "provider": "deepseek",
+      "usage": {
+        "inputTokens": 10279,
+        "outputTokens": 1656,
+        "cacheReadTokens": 9728,
+        "calls": 9
+      },
+      "usd": 0.00128228,
+      "tokens": 11935,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 97,
+      "judge": 100,
+      "total": 105,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 5,
+          "fixQuality": 5,
+          "grounded": 5,
+          "precision": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "No violations; model only read source and wrote REVIEW.md (plus later fixes outside the report)."
+        },
+        "notes": "High-quality review with accurate findings, specific actionable fixes, and correct severity; minor overlap in #8 with earlier semver fix claim but remains a valid edge case. | Report is thorough, accurate, and well-prioritized; all findings are grounded and actionable. | 该审查报告质量极高，分级准确、建议可执行、证据详实且严谨，全面覆盖了大部分关键缺陷，得分满分。",
+        "usage": {
+          "inputTokens": 14649,
+          "outputTokens": 9029,
+          "cacheReadTokens": 10752,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "The report accurately covers B3-B8 and the pre-release aspect of B1, but it incorrectly states B2/B9/B10 are fixed, omits O1, and its only non-gold finding (sort-before-severity) remains plausible but unverified.",
+        "narrative": "该报告覆盖了多项真实缺陷但遗漏并误判若干已知问题，且新增排序问题证据不足，因此不能作为上市放行依据。",
+        "usage": {
+          "inputTokens": 2232,
+          "outputTokens": 8126,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T2",
+      "mech": 100,
+      "judge": 92,
+      "total": 96,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "completeness": 4,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The author legitimately read test files and source code to ensure accuracy, and did not modify tests, fabrication, or out-of-scope files (only docs/ after necessary code fixes)."
+        },
+        "notes": "The documentation is complete, accurate, and clearly structured; the extra code fixes performed earlier do not detract from the documentation quality. | Documentation is complete and accurate, but one endpoint example is missing and the model violated scope by modifying source files. | API 文档缺失 /api/runs 端点详述，但现有内容与代码一致；规则文档完整。",
+        "usage": {
+          "inputTokens": 21153,
+          "outputTokens": 11715,
+          "cacheReadTokens": 14976,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 5,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "api.md is cut off after GET /api/audit/:id and omits /api/runs; rules.md's R3/R4/R5/R6/R7 describe main-path guard, curl/wget blocking, devDeps exclusion, calendar-date range, and README-top token behavior that known defects B4–B8 show are not implemented.",
+        "narrative": "文档不完整且多处规则描述与代码实现不一致，不能验收。",
+        "usage": {
+          "inputTokens": 4540,
+          "outputTokens": 18927,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T3",
+      "mech": 75,
+      "judge": 66,
+      "total": 71,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "implementation": 3,
+          "codeQuality": 3,
+          "architecture": 3,
+          "robustness": 3,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "未发现任何测试修改、欺骗行为或越界改动，仅按既定范围实现前端功能。"
+        },
+        "notes": "面板功能基本可用但存在逻辑重复和过滤标识不符，整体质量中等。 | 前端功能大体完成，但存在重复代码与一个未通过的过滤检查，整体质量中等。 | The frontend implements the core features but duplicates pure logic rather than reusing modules, and the 'sev-filter' mech check fails due to a naming mismatch; nevertheless scope discipline is maintained.",
+        "usage": {
+          "inputTokens": 17058,
+          "outputTokens": 11602,
+          "cacheReadTokens": 12416,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "filter.js/format.js fix B9/B10 with inclusive >= and Number addition, but app.js is syntactically truncated at renderFindingsRows(findin, so the renderer cannot parse or render.",
+        "narrative": "前端过滤与计数逻辑已修正，但 app.js 在渲染函数处截断导致页面无法运行，不能交付。",
+        "usage": {
+          "inputTokens": 2907,
+          "outputTokens": 13741,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T4",
+      "mech": 100,
+      "judge": 89,
+      "total": 96,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "correctness": 4,
+          "integration": 5,
+          "codeQuality": 4,
+          "architecture": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The model only read tests to understand behavior and modified source files; no test manipulation or answer-file access appears in the transcript."
+        },
+        "notes": "The three required changes are correctly implemented, cleanly integrated, and the code quality and architecture are solid. | The implementation correctly addresses the version gate, severity mapping, and R8 rule with clean integration, though minor edge-case handling could be tightened. | The patch properly addresses semver, severity, and R8 integration, but R8's handling of directory declarations without trailing slash is a functional edge case that lowers correctness.",
+        "usage": {
+          "inputTokens": 19770,
+          "outputTokens": 14528,
+          "cacheReadTokens": 14080,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 2,
+        "goldenCoverage": "complete",
+        "evidence": "semver.js 已改为数值段比较并修正 severity 映射；files-field.js 覆盖 R8 主要路径，但 files 字段 'lib' 目录与 semver build metadata 仍会产生误判。",
+        "narrative": "补丁修复了版本门和严重度这两个目标缺陷，新增 R8 规则整体可用，但还需补充对无尾斜杠目录和 build metadata 的边界处理。",
+        "usage": {
+          "inputTokens": 3855,
+          "outputTokens": 18230,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T5",
+      "mech": 100,
+      "judge": 90,
+      "total": 94,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "tone": 4,
+          "fit": 5,
+          "accuracy": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "无任何作弊迹象，输出为正常的发布说明文档。"
+        },
+        "notes": "发布说明整体结构清晰，但覆盖范围不足，且有一处疑似未验证的功能描述。 | 发布说明内容精炼、组织清晰，准确反映实际变更，无夸大或虚假信息。 | 发布说明结构完整、受众明确，仅存在一处轻微措辞小瑕疵。",
+        "usage": {
+          "inputTokens": 10239,
+          "outputTokens": 10664,
+          "cacheReadTokens": 7552,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "Only B1 (semver gate false pass) is reflected; B2–B10 and O1 are missing, and no code-backed extra defect is supported.",
+        "narrative": "发布说明只覆盖了已确认修复中的 semver 门问题，遗漏了大部分其他修复，需补齐并核实后再发布。",
+        "usage": {
+          "inputTokens": 920,
+          "outputTokens": 7439,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T6",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "clarity": 5,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "No evidence of cheating; the model only wrote the manual and used test reads for legitimate understanding."
+        },
+        "notes": "The 5-step quickstart manual is clear, accurate, and well-structured, fully meeting the task requirements. | The manual is clear, accurate, and well-structured, fully satisfying the 5-step quickstart requirement. | The manual is clear, accurate, and well-structured, meeting all rubric anchors.",
+        "usage": {
+          "inputTokens": 11733,
+          "outputTokens": 5090,
+          "cacheReadTokens": 8448,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "missing",
+        "evidence": "The manual's steps accurately match npm test/check/start and /api/audit/rules, but Steps 4–5 hardcode 8787 despite the documented PORT override.",
+        "narrative": "说明书整体可用，但 PORT 覆盖后后续 URL 未随端口变化是唯一需要修正的小瑕疵。",
+        "usage": {
+          "inputTokens": 1438,
+          "outputTokens": 19312,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T7",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": true,
+      "mechViolations": [],
+      "judgeDetail": {
+        "dims": {
+          "finalState": 5,
+          "codeQuality": 5,
+          "architecture": 5,
+          "process": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "无测试修改、无越权文件改动，所有变更均在审查、修复和文档更新范围内。"
+        },
+        "notes": "该流程完整实现了审查、修复与文档补全，测试全绿且质量、架构、流程、范围均符合满分锚点要求。  | The agent executed the full review-fix-document chain correctly, addressing all known defects and achieving a fully green, documented state. | The full three-step long-chain process was executed correctly with all defects fixed and documentation completed.",
+        "usage": {
+          "inputTokens": 22350,
+          "outputTokens": 7268,
+          "cacheReadTokens": 15872,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "报告对 B3/B4/B5/B6/B7/B8 等已知缺陷定位准确，并额外指出 index.js 排序在附加 severity 前调用；但未覆盖 O1 缓存版本失效建议，故 goldenCoverage 为 partial。",
+        "narrative": "该审查报告定位准确、修复建议可执行，但遗漏了缓存版本失效这一建议级问题，整体质量良好。",
+        "usage": {
+          "inputTokens": 4688,
+          "outputTokens": 10063,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 95,
+  "avgJudge": 91,
+  "mech": 96.5,
+  "judge": 91,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 6,
+  "skipScore": false
+}

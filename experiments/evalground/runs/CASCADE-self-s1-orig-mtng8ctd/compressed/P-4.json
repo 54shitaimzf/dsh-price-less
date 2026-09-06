@@ -1,0 +1,178 @@
+{
+  "total": 19,
+  "sections": [
+    {
+      "summary": "Frontend rework of the relaudit report panel: fixed two planted bugs (applyFilter >= severity compare; countTotal numeric sum), added dual filter controls, rule-grouped summary rows, per-row copy-fix-snippet buttons, and a single self-contained offline HTML — confined to public/* and src/render-panel.js.",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16 (frontend+api); npm run check fails only on pre-existing dist tarball; audit-domain tests fail on pre-existing planted bugs",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "src/render-panel.js",
+          "change": "add filter controls, group rows, copy buttons; pure body-fragment renderer",
+          "refs": [
+            {
+              "refKey": "sub:3",
+              "path": "src/render-panel.js",
+              "lineRange": "1-86",
+              "symbol": null
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16 (frontend+api); npm run check fails only on pre-existing dist tarball; audit-domain tests fail on pre-existing planted bugs",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/app.js",
+          "change": "wire filters + copy delegation; auto-boot from embedded report",
+          "refs": [
+            {
+              "refKey": "sub:6",
+              "path": "public/app.js",
+              "lineRange": "1-96",
+              "symbol": "Public"
+            }
+          ]
+        },
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/standalone.html",
+          "change": "single self-contained offline HTML (file://, no server/network)",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16 (frontend+api); npm run check fails only on pre-existing dist tarball; audit-domain tests fail on pre-existing planted bugs",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/standalone.html",
+          "change": "single self-contained offline HTML (file://, no server/network)",
+          "refs": [
+            {
+              "refKey": "sub:11",
+              "path": "public/standalone.html",
+              "lineRange": "1-255",
+              "symbol": "doctype"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16 (frontend+api); npm run check fails only on pre-existing dist tarball; audit-domain tests fail on pre-existing planted bugs",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "public/standalone.html",
+          "change": "single self-contained offline HTML (file://, no server/network)",
+          "refs": [
+            {
+              "refKey": "sub:13",
+              "path": "public/standalone.html",
+              "lineRange": "1-255",
+              "symbol": "doctype"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16 (frontend+api); npm run check fails only on pre-existing dist tarball; audit-domain tests fail on pre-existing planted bugs",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "result": "pass 16/16 (frontend+api); npm run check fails only on pre-existing dist tarball; audit-domain tests fail on pre-existing planted bugs",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "read code/docs/data to establish report shape and frontend contract",
+          "constraints": "only public/* + src/render-panel.js; never touch tests/ or src/audit domain logic",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "Frontend acceptance tests/frontend.test.js green; offline single-file deliverable produced; src/audit planted bugs left untouched per instructions",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "Delivered a self-contained offline report panel (standalone.html) and confirmed the frontend acceptance test passes.",
+    "detail": {
+      "verifications": [
+        {
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (32.3626ms)\n✔ GET /api/rules lists R1..R8 (6.4219ms)\n✔ GET /api/audit returns a report with findings + summary (16.7086ms)\n✔ GET /api/audit/:id returns the stored run (10.5717ms)\n✔ GET /api/audit/:id for unknown id returns 404 (3.496ms)\n✔ GET / serves the panel page (3.566ms)\n✔ SEVERITY_ORDER ranks error > warn > info (1.029ms)\n✔ applyFilter with minSeverity warn includes warn AND error rows (0.4868ms)\n✔ applyFilter with minSeverity error includes only errors (0.1041ms)\n✔ applyFilter with rulePrefix narrows by rule prefix (0.0625ms)\n✔ countTotal sums numerically (no string concatenation) (0.0777ms)\n✔ formatCounts renders per-severity labels (0.064ms)\n✔ severityLabel maps to Chinese labels (0.0584ms)\n✔ groupByRule groups rows per rule, ordered by severity desc (0.1102ms)\n✔ copyFixSnippet emits the fixed command snippet (0.0995ms)\n✔ renderPanelHtml renders summary cards and finding rows (0.2907ms)\nℹ tests 16\nℹ suites 0\nℹ pass 16\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 190.206\n"
+        },
+        {
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (34.0192ms)\n✔ GET /api/rules lists R1..R8 (6.539ms)\n✔ GET /api/audit returns a report with findings + summary (15.3859ms)\n✔ GET /api/audit/:id returns the stored run (10.6089ms)\n✔ GET /api/audit/:id for unknown id returns 404 (3.9372ms)\n✔ GET / serves the panel page (3.7119ms)\n✔ SEVERITY_ORDER ranks error > warn > info (1.0521ms)\n✔ applyFilter with minSeverity warn includes warn AND error rows (0.52ms)\n✔ applyFilter with minSeverity error includes only errors (0.1085ms)\n✔ applyFilter with rulePrefix narrows by rule prefix (0.0622ms)\n✔ countTotal sums numerically (no string concatenation) (0.0823ms)\n✔ formatCounts renders per-severity labels (0.0688ms)\n✔ severityLabel maps to Chinese labels (0.0675ms)\n✔ groupByRule groups rows per rule, ordered by severity desc (0.1253ms)\n✔ copyFixSnippet emits the fixed command snippet (0.1317ms)\n✔ renderPanelHtml renders summary cards and finding rows (0.3685ms)\nℹ tests 16\nℹ suites 0\nℹ pass 16\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 193.0901\n"
+        },
+        {
+          "command": "node --test tests/frontend.test.js tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (33.2895ms)\n✔ GET /api/rules lists R1..R8 (6.2062ms)\n✔ GET /api/audit returns a report with findings + summary (15.3573ms)\n✔ GET /api/audit/:id returns the stored run (10.501ms)\n✔ GET /api/audit/:id for unknown id returns 404 (4.169ms)\n✔ GET / serves the panel page (4.0262ms)\n✔ SEVERITY_ORDER ranks error > warn > info (1.1057ms)\n✔ applyFilter with minSeverity warn includes warn AND error rows (0.4683ms)\n✔ applyFilter with minSeverity error includes only errors (0.1056ms)\n✔ applyFilter with rulePrefix narrows by rule prefix (0.063ms)\n✔ countTotal sums numerically (no string concatenation) (0.2193ms)\n✔ formatCounts renders per-severity labels (0.0857ms)\n✔ severityLabel maps to Chinese labels (0.0642ms)\n✔ groupByRule groups rows per rule, ordered by severity desc (0.1198ms)\n✔ copyFixSnippet emits the fixed command snippet (0.0953ms)\n✔ renderPanelHtml renders summary cards and finding rows (0.328ms)\nℹ tests 16\nℹ suites 0\nℹ pass 16\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 188.5656\n"
+        }
+      ],
+      "failures": [
+        "✔ applyFilter with minSeverity warn includes warn AND error rows (0.52ms)",
+        "✔ applyFilter with minSeverity error includes only errors (0.1085ms)",
+        "✔ SEVERITY_ORDER ranks error > warn > info (1.1057ms)",
+        "✔ applyFilter with minSeverity warn includes warn AND error rows (0.4683ms)",
+        "✔ applyFilter with minSeverity error includes only errors (0.1056ms)"
+      ]
+    }
+  }
+}

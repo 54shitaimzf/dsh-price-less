@@ -1,0 +1,86 @@
+{
+  "total": 7,
+  "sections": [
+    {
+      "summary": "补全 relaudit 的 API 文档与审计规则文档：以 src/server.js 与 src/audit 为准，仅改 docs/api.md（全部端点）与 docs/rules.md（R1–R8，补全 R8）",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "阅读 src/server.js、src/audit/*、src/store.js、sample-pkg 与 tests/api.test.js，确认 GET /api/rules 返回 8 条规则（R1–R8）",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/api.test.js",
+          "result": "pass (6/6)",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "阅读 src/server.js、src/audit/*、src/store.js、sample-pkg 与 tests/api.test.js，确认 GET /api/rules 返回 8 条规则（R1–R8）",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/rules.md",
+          "lineRange": "1-109",
+          "symbol": null,
+          "change": "补全 R8 产物 files 一致性判据，并将 R1–R8 结构化为 检测/判据/严重度",
+          "test": "node --test --test-isolation=none tests/api.test.js",
+          "refs": [
+            {
+              "refKey": "sub:3",
+              "path": "docs/rules.md",
+              "lineRange": "1-109",
+              "symbol": null,
+              "content": "# 审计规则说明（R1–R8）\n\n> 每条规则：检测什么 / 判据 / 严重度。规则实现见 `src/audit/`。\n> 严重度与 `GET /api/rules` 返回的一致。\n\n---\n\n## R1 semver 门\n\npackage.json 版本必须等于 CHANGELOG 头版本，且大于最近发布版本。\n\n- **检测什么**：`package.json` 的 `version` 与 CHANGELOG 头版本、最近发布版本之间的一致性。\n- **判据**：\n  1. CHANGELOG 必须存在可解析的版本条目（`## [x.y.z]`），否则报「CHANGELOG 无可解析的版本条目」。\n  2. CHANGELOG 头版本必须等于 `package.json.version`。\n  3. `package.json.version` 必须大于最近发布的版本（`data/versions.json` 的 `releases` 末项）。\n- **严重度**：error\n\n---\n\n## R2 tarball 结构\n\n产物 tarball 可解析、条目完整。\n\n- **检测什么**：`dist/relaudit-plugin-<version>.tgz` 能否被解析出条目，条目是否完整（无损坏/空条目）。\n- **判据**：\n  1. tarball 需能解析出至少一个条目，否则报「产物 tarball 为空或不可解析」。\n  2. 对每个条目，若大小为 `0` 且名称不以 `/` 结尾（即非目录条目），则报「产物条目异常: <name>」。\n- **严重度**：error\n\n---\n\n## R3 lib 完整性\n\nmain 字段指向的文件存在、非空，且位于包目录内。\n\n- **检测什么**：`package.json` 的 `main` 入口文件是否有效。\n- **判据**：\n  1. `main` 必须是字符串且非空，否则报「package.json 缺少 main 字段」。\n  2. `main` 解析后的文件必须存在，否则报「main 文件不存在: <main>」。\n  3. 该文件必须非空（`size > 0`），否则报「main 文件为空: <main>」。\n  4. 该文件应位于包目录内（包含关系校验）。\n- **严重度**：warn\n\n---\n\n## R4 沙箱规则\n\nbuild.sh 只允许白名单命令与环境变量（禁止网络抓取）。\n\n- **检测什么**：`scripts/build.sh` 使用的命令与环境变量是否在发布沙箱白名单内。\n- **判据**：\n  1. 逐行去除注释后分析；首个命令词必须属于白名单命令（`bash`、`npm`、`node`、`cd`、`echo`、`mkdir`、`cat`、`rm`、`cp`、`mv`、`set`、`export`、`exit`、`grep`、`find`、`test`、`link` 等），否则报「build.sh:<行> 调用未许可命令 <cmd>」。\n  2. 行内引用的环境变量（`$VAR` / `${VAR}`）必须属于白名单环境变量（`DSH_CHECKOUT`、`NODE_ENV`、`PATH`、`HOME`、`PWD`、`npm_package_name`、`npm_package_version`），否则报「build.sh:<行> 使用未许可环境变量 $VAR」。\n  3. 目的为禁止网络抓取类命令（如 `curl`、`wget` 等来自网络拉取的步骤应被拦截）。\n- **严重度**：warn\n\n---\n\n## R5 依赖审计\n\n运行时依赖（含 link 依赖）必须在 node_modules 清单中；dev 依赖不算缺失。\n\n- **检测什么**：`package.json` 声明的运行时依赖是否都已安装进 `node-modules.json` 清单。\n- **判据**：\n  1. 遍历 `dependencies`（含 `link:` 形式），其包名必须出现在 `node-modules.json` 中，否则报「依赖 <name>（link 依赖）未在 node_modules 清单中」。\n  2. `devDependencies` 不作为运行时缺失来报告。\n- **严重度**：warn\n\n---\n\n## R6 CHANGELOG 格式\n\n版本条目格式 `## [x.y.z] - YYYY-MM-DD`，日历日期合法，必备节 Added/Fixed/Changed。\n\n- **检测什么**：`CHANGELOG.md` 的版本条目格式、日期合法性及必备章节。\n- **判据**：\n  1. 条目格式须匹配 `## [x.y.z] - YYYY-MM-DD`；无版本条目则报「CHANGELOG 无规范版本条目」。\n  2. 日期必须是合法日历日期（`YYYY-MM-DD`，月份 1–12、日期不超当月最大天数），否则报「CHANGELOG 版本 <version> 日期非法: <date>」。\n  3. 每个版本条目下须包含 `Added`、`Fixed`、`Changed` 三节（`###` 或 `##` 标题），缺失则报「CHANGELOG 版本 <version> 缺少 <section> 节」。\n- **严重度**：warn\n\n---\n\n## R7 README 一致性\n\nREADME 顶部标注版本等于 package.json 版本。\n\n- **检测什么**：`README.md` 顶部版本标注与 `package.json.version` 是否一致。\n- **判据**：\n  1. README 须存在版本标注（形如 `v<major>.<minor>.<patch>`），否则报「README 无版本标注」。\n  2. 顶部版本标注应与 `package.json.version` 一致，否则报「README 当前标注 v<x.y.z> ≠ package.json v<version>」。\n- **严重度**：warn\n\n---\n\n## R8 产物 files 一致性\n\ntarball 内条目必须由 package.json 的 `files` 字段声明。\n\n- **检测什么**：产物 tarball 中的每个条目是否都属于 `package.json` 的 `files` 所声明的范围。\n- **判据**：\n  1. 遍历 tarball 各条目路径；去掉其 `package/` 前缀得到相对路径 `rel`。\n  2. `package.json` 恒视为已声明（始终包含在产物中）。\n  3. `rel` 需满足以下任一条件，否则视为未声明：\n     - 等于某个非目录的 `files` 条目（如 `README.md`、`CHANGELOG.md`）；\n     - 或以某个目录形式的 `files` 条目（以 `/` 结尾，如 `lib/`、`scripts/`）为前缀。\n  4. 未声明的条目应报告为发现。\n- **严重度**：error"
+            }
+          ]
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/api.test.js",
+          "result": "pass (6/6)",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "阅读 src/server.js、src/audit/*、src/store.js、sample-pkg 与 tests/api.test.js，确认 GET /api/rules 返回 8 条规则（R1–R8）",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "两份文档补全完成；端点名/字段名与代码一致，仅改动 docs/api.md 与 docs/rules.md",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "封装 docs/api.md 与 docs/rules.md 的补全交付，运行 targeted API 测试 6/6 通过",
+    "detail": {
+      "verifications": [
+        {
+          "command": "npm test",
+          "tail": "EXIT=1\n\n> relaudit@1.3.0 test\n> node --test tests/\n\nnode:internal/modules/cjs/loader:1458\n  throw err;\n  ^\n\nError: Cannot find module 'D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-expand-mtnkh2qm\\workspace\\tests'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1455:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1065:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1070:22)\n    at Module._load (node:internal/modules/cjs/loader:1241:25)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v25.7.0\n✖ tests (67.0007ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 72.2149\n\n✖ failing tests:\n\ntest at tests:1:1\n✖ tests (67.0007ms)\n  'test failed'\n"
+        },
+        {
+          "command": "npm run check",
+          "tail": "EXIT=1\n\n> relaudit@1.3.0 check\n> node scripts/self-check.js\n\n\n[stderr]\nself-check FAILED, missing: dist/relaudit-plugin-1.3.0.tgz\n"
+        },
+        {
+          "command": "node --test --test-isolation=none tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (30.6024ms)\n✔ GET /api/rules lists R1..R8 (5.4635ms)\n✔ GET /api/audit returns a report with findings + summary (15.1232ms)\n✔ GET /api/audit/:id returns the stored run (9.0814ms)\n✔ GET /api/audit/:id for unknown id returns 404 (2.9525ms)\n✔ GET / serves the panel page (3.4738ms)\nℹ tests 6\nℹ suites 0\nℹ pass 6\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 95.7914\n"
+        }
+      ],
+      "failures": [
+        "Error: Cannot find module 'D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-expand-mtnkh2qm\\workspace\\tests'",
+        "ℹ fail 1",
+        "✖ failing tests:",
+        "'test failed'",
+        "self-check FAILED, missing: dist/relaudit-plugin-1.3.0.tgz"
+      ]
+    }
+  }
+}

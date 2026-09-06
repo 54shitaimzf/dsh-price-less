@@ -1,0 +1,28 @@
+{
+  "total": 2,
+  "sections": [
+    {
+      "summary": "阅读 package.json、src/server.js、scripts/self-check.js、tests/api.test.js，确认 /api/rules 处理器返回 8 条规则（R1..R8）；无任何文件修改。",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "确定 GET /api/rules 返回的规则数量",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "GET /api/rules 返回 8 条规则（R1..R8）",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "结尾：确认 GET /api/rules 返回 8 条规则（R1..R8）",
+    "detail": {
+      "verifications": [],
+      "failures": []
+    }
+  }
+}

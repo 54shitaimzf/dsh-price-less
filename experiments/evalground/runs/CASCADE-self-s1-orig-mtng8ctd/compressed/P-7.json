@@ -1,0 +1,68 @@
+{
+  "total": 5,
+  "sections": [
+    {
+      "summary": "为初次使用的插件作者编写 relaudit 5 步上手手册，仅写入 docs/quickstart.md，不改动代码/测试/数据；命令与端点均先经 package.json/src/server.js 核对为真实存在。",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "核对 package.json 与 src/server.js，确认真实命令、默认端口 127.0.0.1:8787 与 GET /api/audit 端点后撰写上手手册。",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "npm test / npm run check",
+          "result": "fail",
+          "failure": "npm test: tests 目录模块解析 MODULE_NOT_FOUND；npm run check: 缺 dist/relaudit-plugin-1.3.0.tgz",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/quickstart.md",
+          "change": "编写 docs/quickstart.md：恰好 5 个『### 步骤 N：标题』，每步各引用一个真实命令/地址（npm test、npm run check、npm run start、http://127.0.0.1:8787、GET /api/audit），每步含做什么/预期/常见问题，面向插件作者、总字数 300–700；仅改此文件。",
+          "refs": [
+            {
+              "refKey": "sub:2",
+              "path": "docs/quickstart.md",
+              "lineRange": "1-33",
+              "symbol": "relaudit"
+            }
+          ]
+        },
+        {
+          "type": "plan",
+          "goal": "核对 package.json 与 src/server.js，确认真实命令、默认端口 127.0.0.1:8787 与 GET /api/audit 端点后撰写上手手册。",
+          "refs": []
+        },
+        {
+          "type": "wrap",
+          "conclusion": "完成 docs/quickstart.md 撰写，未改动代码/测试/数据，仅该文件被写入。",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "编写并校验 docs/quickstart.md：5 步上手手册，每步引用真实命令/地址与 /api/audit 端点。",
+    "detail": {
+      "verifications": [
+        {
+          "command": "npm test",
+          "tail": "EXIT=1\n\n> relaudit@1.3.0 test\n> node --test tests/\n\nnode:internal/modules/cjs/loader:1458\n  throw err;\n  ^\n\nError: Cannot find module 'D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-orig-mtng8ctd\\workspace\\tests'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1455:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1065:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1070:22)\n    at Module._load (node:internal/modules/cjs/loader:1241:25)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v25.7.0\n✖ tests (74.2826ms)\nℹ tests 1\nℹ suites 0\nℹ pass 0\nℹ fail 1\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 79.5462\n\n✖ failing tests:\n\ntest at tests:1:1\n✖ tests (74.2826ms)\n  'test failed'\n"
+        },
+        {
+          "command": "npm run check",
+          "tail": "EXIT=1\n\n> relaudit@1.3.0 check\n> node scripts/self-check.js\n\n\n[stderr]\nself-check FAILED, missing: dist/relaudit-plugin-1.3.0.tgz\n"
+        }
+      ],
+      "failures": [
+        "Error: Cannot find module 'D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-orig-mtng8ctd\\workspace\\tests'",
+        "ℹ fail 1",
+        "✖ failing tests:",
+        "'test failed'",
+        "self-check FAILED, missing: dist/relaudit-plugin-1.3.0.tgz"
+      ]
+    }
+  }
+}

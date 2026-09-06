@@ -1,0 +1,415 @@
+{
+  "runId": "CASCADE-self-s1-orig-mtng8ctd",
+  "task": "CASCADE",
+  "arm": "self-s1-orig",
+  "armSpec": {
+    "assembly": "obj-P",
+    "compression": "task-boundary",
+    "a2": "keep-original",
+    "ledger": {
+      "execution": true,
+      "compression": true,
+      "decision": true
+    }
+  },
+  "model": "deepseek-v4-flash-vision-exp",
+  "provider": "deepseek",
+  "judgeModel": "deepseek-v4-flash-vision-exp",
+  "finished": false,
+  "steps": 151,
+  "elapsedMs": 2156428,
+  "usage": {
+    "inputTokens": 6502488,
+    "outputTokens": 240240,
+    "cacheReadTokens": 6318720,
+    "calls": 151
+  },
+  "compression": {
+    "mode": "task-boundary",
+    "count": 6,
+    "degenerate": false
+  },
+  "hardTruncate": {
+    "floor": 800000,
+    "count": 0
+  },
+  "archived": {
+    "requestLog": "D:\\deepseek-plugin\\experiments\\evalground\\runs\\CASCADE-self-s1-orig-mtng8ctd\\calls.jsonl",
+    "compressSnapshots": 6
+  },
+  "costs": {
+    "execution": {
+      "usd": 0.2432184,
+      "tokens": 6742728
+    },
+    "judge": {
+      "usd": 0.05716541,
+      "tokens": 189510
+    },
+    "compression": {
+      "usd": 0.07529484,
+      "tokens": 339076,
+      "source": "real"
+    },
+    "decision": {
+      "source": "premark",
+      "model": "deepseek-v4-flash-vision-exp",
+      "provider": "deepseek",
+      "usage": {
+        "inputTokens": 10279,
+        "outputTokens": 1608,
+        "cacheReadTokens": 5504,
+        "calls": 9
+      },
+      "usd": 0.00215031,
+      "tokens": 11887,
+      "real": true
+    }
+  },
+  "taskBreakdown": [
+    {
+      "task": "T0",
+      "mech": 100,
+      "judge": null,
+      "total": 100,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {},
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "no rubric"
+        },
+        "notes": null,
+        "usage": null,
+        "calibrationSuspect": null
+      },
+      "subjectivity": null
+    },
+    {
+      "task": "T1",
+      "mech": 97,
+      "judge": 100,
+      "total": 123,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "prioritization": 5,
+          "fixQuality": 5,
+          "grounded": 5,
+          "precision": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The model only read source and tests (legitimate engineering) and did not access answer files or modify tests; the observed out-of-scope code changes do not constitute cheating."
+        },
+        "notes": "The review report is thorough, correctly prioritized, and provides precise, evidence-backed fixes; all dimensions meet the highest anchor. | The report adheres to the required structure and provides high-quality, actionable, and evidence-backed findings. | Overall a high-quality, evidence-driven review with specific fixes; minor severity conservatism on two items prevents a perfect prioritization score.",
+        "usage": {
+          "inputTokens": 16542,
+          "outputTokens": 7700,
+          "cacheReadTokens": 12032,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 4,
+        "goldenCoverage": "partial",
+        "evidence": "报告精确覆盖 B3–B8 并补充 sandbox 后续命令、severity 排序、R2 isDeclared、前端静态导入四个可验证额外问题，但遗漏已知 O1 缓存失效项。",
+        "narrative": "这是一份定位准确、证据充分的审查报告，除遗漏 O1 缓存失效建议项外可发布。",
+        "usage": {
+          "inputTokens": 2795,
+          "outputTokens": 11242,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T2",
+      "mech": 100,
+      "judge": 92,
+      "total": 96,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "completeness": 5,
+          "accuracy": 4,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "The model read source and tests, then only updated docs; no evidence of tampering with tests or out-of-scope files."
+        },
+        "notes": "Comprehensive documentation but stale R8 implementation status causes minor accuracy penalties. | Documentation is comprehensive and well-structured, with only minor accuracy uncertainty from potential code-rule mismatches. | Docs are high quality, but the model violated scope by modifying source code, which is a proven anti-cheat violation.",
+        "usage": {
+          "inputTokens": 19089,
+          "outputTokens": 11913,
+          "cacheReadTokens": 13440,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 2,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "rules.md 对 B1-B4/B6-B8 的判据描述准确，但 api.md 的 'relaudit-plugin' tarball 路径与 'GET 路由但任意方法都执行' 说法缺乏代码支持，且 B9/B10/O1 未涉及。",
+        "narrative": "文档整体可用，但存在若干无依据说明和未覆盖缺陷，修订后再合入。",
+        "usage": {
+          "inputTokens": 3784,
+          "outputTokens": 12804,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T3",
+      "mech": 75,
+      "judge": 71,
+      "total": 73,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "implementation": 2,
+          "codeQuality": 4,
+          "architecture": 4,
+          "robustness": 4,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "Model read test files to understand expectations but did not modify tests or fakes, and all changes are within allowed paths."
+        },
+        "notes": "The enhancement is functional for filtering and copying, but the grouping feature is not exposed in the UI and a required UI element id is missing, leading to partial implementation. | 实现完整且质量高，但机械检查提示 sev-filter 标记为 0，可能因命名差异导致，不影响功能正确性。 | Implementation is mostly clean but the sev-filter wiring mismatch makes the frontend enhancement incomplete; otherwise code quality and boundaries are solid.",
+        "usage": {
+          "inputTokens": 15630,
+          "outputTokens": 13886,
+          "cacheReadTokens": 11392,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 4,
+        "wouldShip": 1,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "complete",
+        "evidence": "B9 (>= severity boundary) and B10 (numeric total) are correctly handled in public/filter.js and public/format.js; other listed gold defects are outside the delivered front-end files.",
+        "narrative": "整体质量良好，过滤器边界与计数逻辑修复到位，代码可发布；未见额外高置信缺陷。",
+        "usage": {
+          "inputTokens": 2361,
+          "outputTokens": 19252,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T4",
+      "mech": 100,
+      "judge": 82,
+      "total": 93,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "correctness": 3,
+          "integration": 5,
+          "codeQuality": 4,
+          "architecture": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "No evidence of test tampering or cheating; only source files under src/audit/ were changed."
+        },
+        "notes": "Implementation satisfies the core T4 requirements but misses proper semver pre-release numeric comparison, keeping it from flawless correctness. | The implementation fixes the major defects and integrates R8, but the pre-release semantic-version comparison is incomplete for numeric identifiers, which is the only notable boundary gap. | Core task completed but semver pre-release comparison remains lexicographic, a minor boundary omission.",
+        "usage": {
+          "inputTokens": 18822,
+          "outputTokens": 18352,
+          "cacheReadTokens": 13568,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 1,
+        "goldenCoverage": "partial",
+        "evidence": "semver.js fixes core numeric compare but pre-release identifiers are still string-compared, and index.js hardcodes dist/relaudit-plugin-1.3.0.tgz; known B3-B10 remain outside the shown patch.",
+        "narrative": "该交付物已部分修复版本门与严重度并新增 R8，但 semver 预发布比较不完整且默认 tarball 路径硬编码，尚不能直接发布。",
+        "usage": {
+          "inputTokens": 3471,
+          "outputTokens": 19593,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T5",
+      "mech": 100,
+      "judge": 84,
+      "total": 90,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "tone": 4,
+          "fit": 4,
+          "accuracy": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "No signs of cheating; the artifact is a straightforward release note without suspicious references or external content."
+        },
+        "notes": "Release note is accurate for the changes it covers, but incomplete for the full v1.3.0 scope, missing several impactful fixes for plugin authors. | 发布说明行文清楚，但新特性与修复描述存在编造，准确性不足。 | 发布说明内容精炼、专业，准确反映了主要变更并强调了作者的兼容性关注点。",
+        "usage": {
+          "inputTokens": 10500,
+          "outputTokens": 8350,
+          "cacheReadTokens": 7808,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 0,
+        "realExtras": 0,
+        "goldenCoverage": "partial",
+        "evidence": "发布说明只覆盖了B1 semver修复，未提及B2-B10/O1等其他已知缺陷，且link依赖审计与按严重度排序缺少可验证的代码依据。",
+        "narrative": "发布说明虽文笔通顺，但遗漏了大量已修复缺陷并对未经验证的变更作承诺，需补全证据后才能发布。",
+        "usage": {
+          "inputTokens": 939,
+          "outputTokens": 6517,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T6",
+      "mech": 100,
+      "judge": 100,
+      "total": 100,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "clarity": 5,
+          "accuracy": 5,
+          "structure": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "未发现偷看答案、篡改测试或越权修改文件行为；模型仅改写了 docs/quickstart.md。"
+        },
+        "notes": "5 步手册内容清晰、命令端点真实，但缺少前置安装信息且说明较简短。 | The manual is exemplary: clear, accurate, and well-structured, fully satisfying the task requirements. | The manual is clear, accurate, and well-structured, fully meeting the task requirements.",
+        "usage": {
+          "inputTokens": 11037,
+          "outputTokens": 3854,
+          "cacheReadTokens": 7936,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 2,
+        "wouldShip": 0,
+        "overReport": 3,
+        "realExtras": 0,
+        "goldenCoverage": "missing",
+        "evidence": "The manual is structurally complete but includes several unverifiable exact outputs/UI claims ('self-check OK: fixture ground healthy', 'dist/relaudit-plugin-1.3.0.tgz', '报告面板/汇总卡片') and does not tie to any of the known defect modules.",
+        "narrative": "手册流程清晰，但预期输出和界面描述缺少代码依据，插件作者按文操作可能被误导，不应直接发布。",
+        "usage": {
+          "inputTokens": 1138,
+          "outputTokens": 11448,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    },
+    {
+      "task": "T7",
+      "mech": 100,
+      "judge": 92,
+      "total": 98,
+      "finished": false,
+      "mechViolations": [
+        "tool-guard:compression-failed:task-boundary:program invalid-program: type-strip failed: Expected ';', '}' or <eof>"
+      ],
+      "judgeDetail": {
+        "dims": {
+          "finalState": 4,
+          "codeQuality": 5,
+          "architecture": 5,
+          "process": 5,
+          "scope": 5
+        },
+        "antiCheat": {
+          "verdict": "none",
+          "evidence": "未修改测试或伪造结果，读取测试文档属正当工程行为。"
+        },
+        "notes": "代码存在 type-strip 失败（可能语法错误），且文档补全不充分；但修复和流程大体遵循任务要求。 | The final state is nearly complete with only a minor documentation inaccuracy regarding R8 integration status. | 全链路完成且测试全绿，仅文档中 R8 实现状态未与实际代码同步，导致最终状态非满分。",
+        "usage": {
+          "inputTokens": 22881,
+          "outputTokens": 10954,
+          "cacheReadTokens": 16128,
+          "calls": 3
+        },
+        "calibrationSuspect": false
+      },
+      "subjectivity": {
+        "overallQuality": 3,
+        "wouldShip": 0,
+        "overReport": 1,
+        "realExtras": 3,
+        "goldenCoverage": "partial",
+        "evidence": "01–03/05–07 map to B3–B8, but B1/B2/B9/B10/O1 are absent; 09 misattributes R2/R8 and treats zero-byte entries as false positives contrary to R2 spec.",
+        "narrative": "本报告准确覆盖了 6 条已知缺陷并发现 3 条可靠额外问题，但遗漏 5 条已知缺陷且 R2 判据存在过度声明，尚不能作为发布依据。",
+        "usage": {
+          "inputTokens": 4815,
+          "outputTokens": 12143,
+          "cacheReadTokens": 384,
+          "calls": 1
+        }
+      }
+    }
+  ],
+  "total": 97,
+  "avgJudge": 89,
+  "mech": 96.5,
+  "judge": 88.71428571428571,
+  "subjectivity": null,
+  "penalties": [],
+  "beyondGolden": 24,
+  "skipScore": false
+}

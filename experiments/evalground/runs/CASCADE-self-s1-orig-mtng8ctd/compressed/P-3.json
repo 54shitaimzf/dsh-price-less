@@ -1,0 +1,82 @@
+{
+  "total": 8,
+  "sections": [
+    {
+      "summary": "补全 relaudit 文档：docs/api.md 列出全部接口，docs/rules.md 完整说明 R1–R8 并补全 R8；未改代码/测试/数据",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "补齐 relaudit 的 API 与规则说明文档",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "REVIEW.md",
+          "change": "补全 relaudit API 文档：列出 GET /api/versions、/api/audit、/api/audit/:id、/api/rules、/api/runs、/ 的方法/参数/响应示例，字段与 src/server.js 保持一致",
+          "refs": [
+            {
+              "refKey": "sub:1",
+              "path": "REVIEW.md",
+              "lineRange": "1-33",
+              "symbol": "relaudit"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "完成文档补全，仅改 docs/api.md 与 docs/rules.md",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "补齐 relaudit 的 API 与规则说明文档",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/rules.md",
+          "change": "补全 relaudit API 文档：列出 GET /api/versions、/api/audit、/api/audit/:id、/api/rules、/api/runs、/ 的方法/参数/响应示例，字段与 src/server.js 保持一致",
+          "refs": [
+            {
+              "refKey": "sub:4",
+              "path": "docs/rules.md",
+              "lineRange": "1-103",
+              "symbol": null
+            }
+          ]
+        },
+        {
+          "type": "plan",
+          "goal": "补齐 relaudit 的 API 与规则说明文档",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "docs/api.md",
+          "change": "补全 relaudit API 文档：列出 GET /api/versions、/api/audit、/api/audit/:id、/api/rules、/api/runs、/ 的方法/参数/响应示例，字段与 src/server.js 保持一致",
+          "refs": [
+            {
+              "refKey": "sub:6",
+              "path": "docs/api.md",
+              "lineRange": "1-180",
+              "symbol": "relaudit"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "完成文档补全，仅改 docs/api.md 与 docs/rules.md",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "重写 docs/api.md：示例对齐文档化的规则行为（移除与 R5 冲突的 dev 依赖示例）以保持规则语义一致",
+    "detail": {
+      "verifications": [],
+      "failures": []
+    }
+  }
+}

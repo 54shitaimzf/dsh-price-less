@@ -1,0 +1,60 @@
+{
+  "total": 5,
+  "sections": [
+    {
+      "summary": "reviewed relaudit audit rules + frontend; confirmed /api/rules returns 8 rules (R1..R8); authored REVIEW.md (11 findings, 6 error/5 warn); no source/test/data modified",
+      "subtasks": [
+        {
+          "type": "plan",
+          "goal": "scoped review of relaudit audit logic & frontend correctness for pre-release",
+          "refs": []
+        },
+        {
+          "type": "verify",
+          "command": "node --test --test-isolation=none tests/api.test.js",
+          "result": "6/6 pass (GET /api/rules returns R1..R8)",
+          "refs": []
+        },
+        {
+          "type": "plan",
+          "goal": "scoped review of relaudit audit logic & frontend correctness for pre-release",
+          "refs": []
+        },
+        {
+          "type": "impl",
+          "path": "REVIEW.md",
+          "change": "write REVIEW.md code-review report with 11 findings (6 error, 5 warn); no source modified",
+          "refs": [
+            {
+              "refKey": "sub:3",
+              "path": "REVIEW.md",
+              "lineRange": "1-24",
+              "symbol": "relaudit",
+              "content": "# relaudit 上市前审查报告（审计逻辑 & 前端正确性）\n\n范围：`src/audit/`（全部规则实现与装配）、`public/filter.js`、`public/format.js`、`src/render-panel.js`。\n未修改任何代码/测试/数据文件；仅输出本报告。\n\n验证（热桥接确认）：`GET /api/rules` 处理器返回 **8 条规则（R1..R8）**，已通过 `node --test --test-isolation=none tests/api.test.js`（6/6 通过）确认，未改动任何文件。\n\n| 编号 | 位置 | 损害 | 修复建议 | 严重度 |\n| --- | --- | --- | --- | --- |\n| 1 | `src/audit/semver.js` `compareVersions`(16-21 行) | 用字典序字符串比较“1.10.0”<“1.9.0”，导致版本门既可以误报（把已升版本判为不高于最新发布），也可以漏报（把更旧版本判为高于最新发布）；R1 门形同虚设。 | 改用数值三段比较：基于 `parseVersion` 先比较 major/minor/patch，再比较预发布段；替换 `String(a) > String(b)` 这种比较。 | error |\n| 2 | `src/audit/tarball.js` `listTarballEntries`(31-38 行) | ustar prefix 字段(offset 345)被读出却不使用，真实条目名被截断为 basename；深层子目录中被 `files` 声明之外的未授权文件无法被 R2 检出，产品可携带多余文件发布。 | `const full = prefix === '' ? name : prefix + '/' + name`，用 `full` 作为条目名再推入。 | error |\n| 3 | `src/audit/files.js` `checkLib`(20 行) | 缺少 `resolved` 是否仍在 `pkgDir` 内的包含性校验；`main` 指向包外（如 `../../evil.js`）可通过审计，属于路径穿越/越权加载。 | 增加 `const root = path.resolve(pkgDir); if (!resolved.startsWith(root)) findings.push({ code:'R3', message:'main 超出包目录', file: pkg.main })`。 | error |\n| 4 | `src/audit/sandbox.js` `ALLOWED_COMMANDS`(12-13 行) | `npx`/`curl` 被列入白名单，构建脚本可联网拉取并执行任意代码/包，突破受限发布沙箱（供应链风险）。 | 从白名单移除 `npx`、`curl`；如需禁用网络则还应增加“仅本地命令+无网络”的约束检测。 | error |\n| 5 | `src/audit/severity.js` `RULE_SEVERITY`(12 行) | R1（版本门不一致）被映射为 `warn` 而非 `error`，把本应阻断发布的错误降级；未知规则又回退为 `info`，报告的 errors 计数会漏算严重项。 | 将 `R1` 改为 `'error'`；对未知规则建议显式映射或抛出，避免静默归为 `info`。 | error |\n| 6 | `public/filter.js` `applyFilter`(12 行) | 用 `>` 而非 `>=`，按 `minSeverity='warn'` 过滤时会把恰好为 warn 的行全部丢掉（选 warn 只显示 error，选 info 什么都不显示），面板看不到对应级别的发现。 | 改为 `(SEVERITY_ORDER[row.severity] ?? 0) >= min`。 | error |\n| 7 | `src/audit/index.js` `runAudit`(58 行) | `sortFindings` 在对 `raw.map(f => ({...f, rule: f.code}))` 的结果排序时，数组项尚无 `severity` 字段，排序内 `SEVERITY_ORDER[y.severity] ?? 0` 恒为 0；于是“error>warn>info”的优先级排序失效，实际只按规则编号排，错误项不会置顶。 | 先附加 severity 再排序：`raw.map(f => ({ ...f, rule: f.code, severity: severityOf(f.code) }))`，或让 `sortFindings` 依据 `severityOf(x.rule)` 计算。 | warn |\n| 8 | `src/audit/deps.js` `checkDeps`(15 行) | `devDependencies` 被并入运行时依赖集合，凡是只用于开发、未进入构建产物的 dev 依赖都被判为“运行时缺失”，产生大量误报，可能卡住发布。 | 只使用 `pkg.dependencies ?? {}`，移除 dev 依赖合并。 | warn |\n| 9 | `src/audit/changelog.js` `checkChangelog`(31-36 行) | 仅按正则 `^\\d{4}-\\d{2}-\\d{2}$` 校验日期“形状”，而该正则必然通过（`ENTRY_RE` 已捕获同样的位模式）；`isValidDate`（含月份/天数范围校验）未被调用，如 `2026-13-05`、`2026-02-31` 这类非法日期可通过。 | 调用 `isValidDate(entry.year, entry.month, entry.day)`，不通过则产出 R6 finding；删除无用的形状校验。 | warn |\n| 10 | `src/audit/consistency.js` `checkConsistency`(17 行) | 取 README 中最后一个 `vX.Y.Z` token 而非顶部第一个，当底部 changelog 段恰好提到当前版本时，顶部过期的版本徽标会被漏掉，README 与 package.json 不一致不报。 | 改为 `const badge = tokens[0][0].slice(1)`（取第一个 token）。 | warn |\n| 11 | `public/format.js` `countTotal`(10 行) | 先做字符串拼接再做数值相加：`Number(String(errors)+String(warns))+infos`，如 2 errors+1 warn+4 info 得到 25 而非 7，面板“共 N 条”合计错误，误导读者。 | 改为纯数值相加：`return counts.errors + counts.warns + counts.infos`。 | warn |\n\n## 小结\n\n审查共发现 **11 条问题**：**6 条 error**（1 版本门比较错误、2 tarball prefix 丢失导致漏检、3 main 路径越界、4 沙箱放行网络命令、5 R1 严重度误映射、6 filter 过滤丢行）与 **5 条 warn**（7 报告排序失效、8 devDeps 误报、9 changelog 日期未校验、10 README 顶部版本漏检、11 总数显示错误）。最关键的隐患集中在版本门比较、tar 头 prefix 丢失、main 越权路径及沙箱放行网络命令；建议以上修复全部落地后再发布。"
+            }
+          ]
+        },
+        {
+          "type": "wrap",
+          "conclusion": "confirmed GET /api/rules returns 8 rules (R1..R8); deliverables: REVIEW.md; no code/test/data changes",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "retain": {
+    "refs": [],
+    "outline": "write REVIEW.md with 11 findings (6 error/5 warn); verify /api/rules returns R1..R8",
+    "detail": {
+      "verifications": [
+        {
+          "command": "node --test --test-isolation=none tests/api.test.js",
+          "tail": "OK exit=0\n✔ GET /api/versions returns released list (31.1445ms)\n✔ GET /api/rules lists R1..R8 (5.6767ms)\n✔ GET /api/audit returns a report with findings + summary (14.9094ms)\n✔ GET /api/audit/:id returns the stored run (9.6489ms)\n✔ GET /api/audit/:id for unknown id returns 404 (3.1774ms)\n✔ GET / serves the panel page (3.548ms)\nℹ tests 6\nℹ suites 0\nℹ pass 6\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 97.0722\n"
+        }
+      ],
+      "failures": [
+        "ℹ fail 0"
+      ]
+    }
+  }
+}
