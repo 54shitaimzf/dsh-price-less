@@ -61,7 +61,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P1.2 | 地基修补与契约闭合（P1 追记，已施工；commit 见 git log） | R0/R1 | ① `package.json` files/exports 收编 `cordis.patch.yml`（发布包可装配）；② build.sh 补齐 client/tsdown/react/@types/react/zod 链接（干净归档构建成立）；③ `tests/client-apply-smoke.spec.ts`（client 槽注册/订阅/卸载冒烟）；④ `platform/llm.ts` C2 purpose 单点适配锚 + `tests/llm-purpose.spec.ts`；⑤ docs/03/10/11/12 进度与实现缝对齐 | P1 | S |
 | P2 | 度量底座（已施工 commit `38e3af3`；扩写工单见 [P2-ledger-base.md](P2-ledger-base.md)） | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；**facts 源抽象**：会话 ignorable 事件 ∨ KV 事实镜像，[12 §3](../12-platform-capabilities.md)）+ `scripts/verify-p2.mjs` 自动化验收 | P1 | M |
 | P3 | 持久面（已施工 commit `ac15d73`；扩写工单见 [P3-storage.md](P3-storage.md)） | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；**+ 事实镜像表**（降级态，[12 §3](../12-platform-capabilities.md)）；[09 §2](../09-state.md) 协议） | P1,P2 | M |
-| P4 | 技能目录端口 | R1 | `platform/skills.ts`（H13 `SKILL.md` 枚举 + watch + 引用守卫查表接口） | P0 | S |
+| P4 | 技能目录端口（扩写工单见 [P4-skills.md](P4-skills.md)） | R1 | `platform/skills.ts`（H13 `SKILL.md` 枚举 + watch + 引用守卫查表接口） | P0 | S |
 | P5 | 辅助调用端口 | R1 | `platform/llm.ts`（H12 `llm.stream({purpose})` + usage/缓存回执；**C2 单点适配已由 P1.2 落锚**）；补 peerDep `dsh-llm` + build 链接 | P2 | S |
 | P6 | 改史端口 | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
 | P7 | 工具端口 | R1 | `platform/tools.ts`（H6 `tools/post-execute` accept content 覆盖/追加 = T-entry/T-note；`tools/execute` 仅信号/计量）；补 peerDep `dsh-tools` | P1 | S |
