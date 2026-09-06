@@ -17,6 +17,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { type Config as ConfigShape } from './config.ts'
 import { registerContextEconomySettings } from './settings.ts'
+import { createEventPump } from './platform/events.ts'
+import { ceLogger } from './platform/logger.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
 
@@ -30,5 +32,11 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   // 这条注册是 client 设置卡挂载的前提（shell.available）；首次注册触发一次 onChange。
   registerContextEconomySettings(ctx, config, {
     onChange: () => ctx.logger.info('context-economy: config updated'),
+  })
+
+  // H1/H7 事件面（docs/11 §2 events.ts 行）：firehose → 异步旁路队列，卸载即净。
+  ctx.effect(() => {
+    const pump = createEventPump(ctx, ceLogger(ctx))
+    return () => pump.dispose()
   })
 }

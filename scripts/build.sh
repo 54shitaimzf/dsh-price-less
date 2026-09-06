@@ -56,6 +56,13 @@ link_pkg cosmokit vendor/cosmokit
 link_pkg schemastery vendor/schemastery
 # settings 注册（设置 UI 壳 host 半边；SettingsProvider.installSection）
 link_pkg @deepseek-ai/dsh-settings packages/settings/settings
+# 事件面接线（P1：H1/H7 订阅类型面 + dsh-session d.ts 解析链）
+link_pkg @deepseek-ai/dsh-session packages/core/session
+link_pkg @deepseek-ai/dsh-llm packages/llm/llm
+link_pkg @deepseek-ai/dsh-brand packages/util/brand
+link_pkg @deepseek-ai/dsh-util-values packages/util/values
+link_pkg @deepseek-ai/dsh-scope packages/core/scope
+link_pkg @deepseek-ai/dsh-session-persistence packages/session/session-persistence
 # @types/node（编译类型；checkout 自带）
 link_pkg @types/node node_modules/@types/node
 

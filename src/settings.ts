@@ -24,10 +24,9 @@
  * 审查清单: settings 服务未装配时静默跳过（本模块 ctx.inject(['settings'])
  *           回调不执行——与旧独立函数的内部 inject 语义一致）；owner=消费方
  *           ctx（其 unload 抑制 detach 回退，防双重回退）；fiber 效应（卸载即净）；
- *           枚举/范围约束在 config.ts schema（z.union/z.number 边界）；
- *           能力矩阵交集校验留在运行期（sanitizeEffort，DISC_CAPABILITIES）——
- *           GUI 保存以 schema 为边界，运行时二次校验（不重复实现矩阵逻辑）。
- * 度量: 无新增（配置变更可经判账号本 call 字段观测，docs/07 §18.1）
+ *           枚举/范围约束在 config.ts schema（z.union/z.number 边界），GUI 保存以
+ *           schema 为边界（运行期二次校验随重设计域工单按需落位）。
+ * 度量: 无新增（配置变更可经判账号本 call 字段观测，docs/07 §0.5 指标一览）
  */
 
 import type { Context } from '@deepseek-ai/cordis'

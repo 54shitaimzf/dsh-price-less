@@ -44,9 +44,11 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('S1', 'src/core/x.ts', "import y from 'cordis'\n").length).toBeGreaterThanOrEqual(1)
     expect(check('S1', 'src/core/x.ts', "import { pump } from '../platform/events.ts'\n").length).toBeGreaterThanOrEqual(1)
   })
-  it('S2：src 非 history 文件出现改史关键词 → issue', () => {
+  it('S2：.append( 出现在 history/logger 之外 → issue（surfaceOp 只读比较不算改史）', () => {
     expect(check('S2', 'src/foo.ts', "session.append('x', d)\n")).not.toEqual(NO_ISSUES)
-    expect(check('S2', 'src/foo.ts', 'const { surfaceOp } = ev\n')).not.toEqual(NO_ISSUES)
+    expect(check('S2', 'src/core/x.ts', 'log.append(x)\n')).not.toEqual(NO_ISSUES)
+    expect(check('S2', 'src/platform/other.ts', 'session.append(x)\n')).not.toEqual(NO_ISSUES)
+    expect(check('S2', 'src/domains/a.ts', "if (event.surfaceOp !== 'append') return\n")).toEqual(NO_ISSUES)
   })
   it('S3：context-economy/* 事件锚点窗口内无 ignorable → issue', () => {
     expect(check('S3', 'src/a.ts', "session.append('context-economy/task-boundary', d)\n")).not.toEqual(NO_ISSUES)
@@ -56,6 +58,14 @@ describe('负样本（每规则 ≥1）', () => {
   })
   it('S5：src/client 出现 setInterval( → issue', () => {
     expect(check('S5', 'src/a.ts', 'setInterval(tick, 1000)\n')).not.toEqual(NO_ISSUES)
+  })
+  it('D1：session/event 监听体 10 行内出现 await → issue', () => {
+    const body = "ctx.on('session/event', (s, e) => {\n  const x = await tick()\n})"
+    expect(check('D1', 'src/a.ts', body)).not.toEqual(NO_ISSUES)
+  })
+  it('D2：waterfall 注册（agent/pre-step / tools/execute）缺 return next( → issue', () => {
+    expect(check('D2', 'src/a.ts', "ctx.on('agent/pre-step', (p) => p)\n")).not.toEqual(NO_ISSUES)
+    expect(check('D2', 'src/a.ts', "ctx.on('tools/execute', (t) => t)\n")).not.toEqual(NO_ISSUES)
   })
 })
 
@@ -75,13 +85,18 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('M5').check({ path: 'src/index.ts', text: host }, new Map())).toEqual(NO_ISSUES)
     expect(rule('M5').check({ path: 'client/index.ts', text: client }, new Map())).toEqual(NO_ISSUES)
   })
-  it('S1–S5：各自干净文件', () => {
+  it('S1–S5 + D1/D2：各自干净文件', () => {
     expect(check('S1', 'src/core/x.ts', "import { fold } from './fold.ts'\nexport type X = { a: number }\n")).toEqual(NO_ISSUES)
     expect(rule('S2').check({ path: 'src/platform/history.ts', text: 'session.append(x, { surfaceOp, sourceEventSeqs })' }, new Map())).toEqual(NO_ISSUES)
+    expect(rule('S2').check({ path: 'src/platform/logger.ts', text: 'session.append(type, data)' }, new Map())).toEqual(NO_ISSUES)
     expect(check('S2', 'src/domains/a.ts', 'const total = count.append\n')).toEqual(NO_ISSUES)
     expect(check('S3', 'src/a.ts', "// ignorable 自定义事件\nsession.append('context-economy/task-boundary', d) // ignorable:true\n")).toEqual(NO_ISSUES)
     expect(check('S4', 'client/a.ts', "import { Card } from './Card.tsx'\n")).toEqual(NO_ISSUES)
     expect(check('S5', 'client/a.ts', 'setTimeout(tick, 1000)\n')).toEqual(NO_ISSUES)
+    expect(check('D1', 'src/a.ts', "ctx.on('session/event', (s, e) => {\n  filter(e)\n})\n")).toEqual(NO_ISSUES)
+    expect(check('D1', 'src/a.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
+    expect(check('D2', 'src/a.ts', "ctx.on('agent/pre-step', (p, next) => next())\n// return next() 之上\n")).toEqual(NO_ISSUES)
+    expect(check('D2', 'src/a.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
   })
 })
 
@@ -90,11 +105,12 @@ describe('真实树集成', () => {
     const result = runRules(collectFiles())
     expect(result.ok).toBe(true)
   })
-  it('零位快照：真实树 rules 逐条等于 P0 §3.2-4 冻结值（漂移 = 断言面被动过，必须显式过工单）', () => {
+  it('零位快照：真实树 rules 逐条等于冻结值（P0 立面 + P1 追加；漂移 = 断言面被动过，必须显式过工单）', () => {
     const result = runRules(collectFiles())
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'vacuous', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
+      D1: 'pass', D2: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {
