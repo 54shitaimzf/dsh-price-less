@@ -28,6 +28,7 @@
 | H11 | UI | client `ctx.slots.register({name:'settings.section'…},Card)`；conversation.view 星标按钮；`ctx.remote.session.modelCatalog()` | 设置卡壳（已保留）；星标 → host 方法（时序 B）；模型路由目录 |
 | H12 | 辅助 LLM | `llm.stream({purpose})` | 判别 / 断面 / 压缩调用统一 purpose 标记（度量可区分 + 前缀对齐）；usage 回执入账 |
 | H13 | 技能目录 | DSH skill 系统文件根扫描（`SKILL.md` → name/description/whenToUse；目录 watch 热更新） | 稳定前缀原料 + 引用守卫查表（[02 §2](02-discriminator.md)）；枚举纯机械零 LLM |
+| H14 | 会话事实发射 | `session.append` + LogIntent（`IgnorableSessionEventMap` 合并成员） | `context-economy/*` log-only 事件唯一写入通道（append 侧编译闸，读取不查合并表）；能力探测与降级契约 = [12](12-platform-capabilities.md) |
 
 **三条辨析（防接错缝）**：
 

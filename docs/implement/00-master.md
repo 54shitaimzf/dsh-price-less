@@ -56,8 +56,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 |---|---|---|---|---|---|
 | P0 | 工程零位核对（已施工 commit `274e37d`） | R0 | manifest 差距核对（[11 §1](../11-structure.md) 表逐项）；`scripts/assert-structure.mjs` 断言骨架（暂全过）+ `npm run assert` | — | S |
 | P1 | 事件面接线（已施工 commit `1ed5419` + 翻转 `28351b3`；harness LogIntent 补丁 `04cba8f394`） | R1 | `platform/logger.ts` + `platform/events.ts`（H1 firehose → 异步旁路队列；[10 §1](../10-wiring.md) H1/H7） | P0 | S |
-| P2 | 度量底座 | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；observe 空转入账） | P1 | M |
-| P3 | 持久面 | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；[09 §2](../09-state.md) 协议） | P0 | M |
+| P2 | 度量底座 | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；**facts 源抽象**：会话 ignorable 事件 ∨ KV 事实镜像，[12 §3](../12-platform-capabilities.md)） | P1 | M |
+| P3 | 持久面 | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；**+ 事实镜像表**（降级态，[12 §3](../12-platform-capabilities.md)）；[09 §2](../09-state.md) 协议） | P0 | M |
 | P4 | 技能目录端口 | R1 | `platform/skills.ts`（H13 `SKILL.md` 枚举 + watch + 引用守卫查表接口） | P0 | S |
 | P5 | 辅助调用端口 | R1 | `platform/llm.ts`（H12 `llm.stream({purpose})` + usage/缓存回执）；补 peerDep `dsh-llm` + build 链接 | P2 | S |
 | P6 | 改史端口 | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
@@ -89,6 +89,11 @@ P0 ─┬─ P1 ─┬─ P2 ─ P5 ─┐
 P17(P6,P8,P9) ─ P19(P17,P18,P2) ─ P20 ─ P21
 P18(P5,P9)
 ```
+
+平台通道横切（[docs/12](../12-platform-capabilities.md) 正典）：ignorable 发射通道缺失时事实轨
+降级 KV 镜像——P2 事实源抽象 / P3 事实镜像表 / P8 段状态机 KV 双源 / P21 可视化读事实源抽象，
+各工单编写时按 docs/12 展开。降级实现整体居于 `platform/ignorable-channel.ts`（D3 断言锁定
+单元边界，机制代码零感知），上游合并后按 docs/12 §2 清单原子删除。
 
 ## 4. 里程碑验收（R 门，单工单之外）
 

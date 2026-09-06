@@ -76,6 +76,8 @@ costPerTask = 执行(主模型) + 判别(judge*) + 断面(optimize*) + 压缩(co
 ```
 
 同输入同账（纯函数断言）；KV 损毁不影响回放（[09 §1](09-state.md) 双源）。
+事实源抽象：facts = 会话 ignorable 事件 ∨ KV 事实镜像（通道契约 [12 §2–§3](12-platform-capabilities.md)）——
+同一 fold、同输入同账，通道存在与否两种环境的账本口径一致。
 
 ## 6. 报表模板（每次改动前后各一份）
 

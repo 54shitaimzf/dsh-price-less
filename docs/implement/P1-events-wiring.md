@@ -103,6 +103,8 @@ usage 聚合 → 07 字段全表。同输入同账（纯函数断言）。
    loud-write 告警（未知无标记非 surface 类型 append 现场去重告警）+ 拒读文案修正；
    harness commit `a3c0a8bc02`（session 82 + persistence 18 测试全绿，api-catalog 重生成校验过）；
    插件 ce-logger.spec 类型级双侧断言（双 map 合并正例 + gate-probe 编译闸反例）。
+   **契约正典化**：通道/探测/降级/删除清单升格为 `docs/12-platform-capabilities.md`（正典），
+   实现单元 `platform/ignorable-channel.ts` + D3 断言随之落地；本单保留为施工史（含 harness 提交号）。
 
 ## 3. 产出
 

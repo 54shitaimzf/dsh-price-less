@@ -83,7 +83,7 @@ platform 是唯一 `ctx` 触点（index.ts 装配根除外）；client 只经 se
 |---|---|---|---|
 | 配置 | settings 服务 | Config 用户层（revision fence 防并发丢写） | provider 原子写 |
 | **durable 真源** | storageDomain KV（H10） | 四实体：卷宗 / 项目帧（含技能目录快照）/ 边界档案 / 优化产物（[09 §2](09-state.md) 协议） | 回退上一版本（快照） |
-| 会话事实 | 自定义 **ignorable 事件**进会话 JSONL（§5 纪律①） | `task-boundary`、`judge-*`、`optimize-run`、`shear-applied`、`pressure-fired`、`restore/*`（全 log-only） | **可回放重建**（KV 只是加速缓存，损毁 = 重放日志重建） |
+| 会话事实 | 自定义 **ignorable 事件**进会话 JSONL（§5 纪律①） | `task-boundary`、`judge-*`、`optimize-run`、`shear-applied`、`pressure-fired`、`restore/*`（全 log-only） | **可回放重建**（KV 只是加速缓存，损毁 = 重放日志重建）；通道缺失时降级 KV 镜像（[12 §3](12-platform-capabilities.md)，失效方向不变） |
 
 workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 

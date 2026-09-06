@@ -1,12 +1,10 @@
 #!/usr/bin/env node
 /**
- * 结构断言引擎（P0 工单 §3.1 立面；P1 追加 D1/D2 + S2 修订，P0 §8-1 协议）——
- * docs/11 §1 manifest 表 / §2 依赖铁律 / §4 日志纪律①② / §9 结构验收 +
- * docs/10 §1 H2/H4/H6（挂点语义）固化为离线机械断言。
- * 规则命名空间：M=manifest，S=structure，D=域规则。后续工单只追加规则 + 更新
- * tests/assert-structure.spec.ts 零位快照 + 补负/正样本，引擎与 CLI 零改动（P0 §8-1）。
- * 输出确定性（P0 §6-2）：无时间戳、无 ANSI 颜色、路径一律 '/' 分隔；--json schema 冻结（P0 §8-2）。
- * exit：0 = 全过（含 vacuous）；1 = 有 fail；2 = 引擎自身异常（如 package.json 解析失败）。
+ * 结构断言引擎（P0 §3.1 立面；P1 起 D 族/S2 修订按 P0 §8-1 协议追加）——docs/11 §1/§2/§4/§9 +
+ * docs/10 §1 H2/H4/H6/H14 + docs/12 §2 固化为离线机械断言。规则命名空间：M/S/D；后续工单只追加
+ * 规则 + 更新 tests/assert-structure.spec.ts 零位快照 + 补负/正样本，引擎与 CLI 零改动。
+ * 输出确定性（P0 §6-2）：无时间戳、无 ANSI、路径 '/' 分隔；--json schema 冻结（P0 §8-2）。
+ * exit：0 = 全过（含 vacuous）；1 = 有 fail；2 = 引擎自身异常。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -23,8 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const EXCLUDE = /(^|[\\/])(node_modules|lib|experiments|scripts|docs|datasets|reports|\.git)([\\/]|$)/
 const SCAN_EXT = /\.(ts|tsx|mjs|css|json)$/
-const ROOT_MANIFESTS = ['package.json', 'cordis.patch.yml', 'tsdown.config.ts', 'vitest.config.ts']
-const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+const ROOT_MANIFESTS = ['package.json', 'cordis.patch.yml', 'tsdown.config.ts', 'vitest.config.ts']; const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 
 /** 引擎侧文件收集：src/ client/ tests/ 递归（SCAN_EXT）+ 根清单；点项与 EXCLUDE 目录跳过。 */
 export function collectFiles(root = ROOT) {
@@ -47,9 +44,7 @@ export function collectFiles(root = ROOT) {
 /** 规则执行（纯）：appliesTo 命中 0 文件 → vacuous（显式可见，不算失败）；check 有 issue → fail。 */
 export function runRules(files) {
   const all = new Map(files.map((f) => [f.path, f.text]))
-  const rules = {}
-  const issues = []
-  const vacuous = []
+  const rules = {}; const issues = []; const vacuous = []
   for (const rule of RULES) {
     const scoped = files.filter((f) => rule.appliesTo(f.path))
     if (scoped.length === 0) { vacuous.push(rule.id); rules[rule.id] = { status: 'vacuous', issueCount: 0 }; continue }
@@ -61,7 +56,7 @@ export function runRules(files) {
   return { ok: issues.length === 0, rules, vacuous, issues }
 }
 
-/** @type {Rule[]} 规则表（语义冻结，改动只许追加；S2 于 P1 按工单修订放行面）。 */
+/** @type {Rule[]} 规则表（语义冻结，改动只许追加；S2 于 P1 两次按工单修订放行面）。 */
 export const RULES = [
   { id: 'M1', canon: 'docs/11 §1 表', appliesTo: (p) => p === 'package.json', check: (f) => {
     const pkg = JSON.parse(f.text)
@@ -99,11 +94,12 @@ export const RULES = [
       .filter((re) => re.test(f.text))
       .map((re) => ({ message: `core must not import harness/platform (type-only included), matches ${re}` })) },
   { id: 'S2', canon: 'docs/11 §9 + 10 §1 H4', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
-    // 改史/写日志调用归口：.append( 只许 platform/history（H4 改史）+ platform/logger（log-only 事实事件）。
-    // surfaceOp|sourceEventSeqs 关键词不设路径禁令——docs/10 §1 H1 输入面过滤需读 surfaceOp、
-    // docs/11 §2 明文允许 core 本地重声明事件类型；写侧归口由本条 + P6 类型级测试承接（P0 §8-3）。
-    /\.append\(/.test(f.text) && f.path !== 'src/platform/history.ts' && f.path !== 'src/platform/logger.ts'
-      ? [{ message: '.append( must only appear in src/platform/{history,logger}.ts (H4 改史归口 + P1 事实事件端口)' }]
+    // 改史/写日志调用归口：.append( 只许 history（H4 改史）+ logger/ignorable-channel（log-only
+    // 事实事件，后者属 docs/12 §2 可删除单元）。surfaceOp|sourceEventSeqs 不设路径禁令——
+    // docs/10 §1 H1 输入面需读 surfaceOp、docs/11 §2 允许 core 本地重声明；写侧归口由本条 +
+    // P6 类型级测试承接（P0 §8-3）。
+    /\.append\(/.test(f.text) && f.path !== 'src/platform/history.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/platform/ignorable-channel.ts'
+      ? [{ message: '.append( must only appear in src/platform/{history,logger,ignorable-channel}.ts (H4 改史归口 + P1 事实事件端口)' }]
       : [] },
   { id: 'S3', canon: 'docs/11 §4 纪律①', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) => {
     const out = []; const lines = f.text.split('\n')
@@ -116,15 +112,18 @@ export const RULES = [
   { id: 'S4', canon: 'docs/11 §2 依赖铁律', appliesTo: (p) => p.startsWith('client/'), check: (f) => /from\s+['"][^'"]*\.\.\/src\//.test(f.text) ? [{ message: 'client must not import host src via ../src/' }] : [] },
   { id: 'S5', canon: 'docs/11 §2（无 timer）', appliesTo: (p) => p.startsWith('src/') || p.startsWith('client/'), check: (f) => f.text.includes('setInterval(') ? [{ message: 'timer forbidden: host half is event-driven, no polling loop (docs/11 §2)' }] : [] },
   { id: 'D1', canon: 'docs/11 §4 纪律②', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) => {
-    const out = []; const lines = f.text.split('\n')
-    for (let i = 0; i < lines.length; i++) {
-      if (!/on\('session\/event'/.test(lines[i])) continue
-      if (/await/.test(lines.slice(i, i + 11).join('\n'))) out.push({ line: i + 1, message: "firehose listener body contains await within 10 lines (async bypass required, 11 §4 纪律②: never block append)" })
-    }
+    const lines = f.text.split('\n'); const out = []
+    for (let i = 0; i < lines.length; i++) if (/on\('session\/event'/.test(lines[i]) && /await/.test(lines.slice(i, i + 11).join('\n'))) out.push({ line: i + 1, message: 'firehose listener body contains await within 10 lines (async bypass required, 11 §4 纪律②: never block append)' })
     return out } },
   { id: 'D2', canon: 'docs/10 §1 H2/H6', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
     /on\('agent\/pre-step'|on\('tools\/execute'/.test(f.text) && !/return next\(/.test(f.text)
       ? [{ message: "waterfall listener (agent/pre-step | tools/execute) must return next() (docs/10 §1 H2/H6)" }]
+      : [] },
+  { id: 'D3', canon: 'docs/12 §2/§4', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
+    // 解耦锁定（docs/12 §2）：ignorable 通道概念只许居于可删除单元（ignorable-channel.ts +
+    // logger.ts 发射路径）——越界即红，保证上游合并后机制代码零改动的原子删除。
+    /IgnorableSessionEventMap|append\.toString|IgnorableChannel|setFactMirror|factModeStats|emitFact\(/.test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts'
+      ? [{ message: 'ignorable-channel concepts must stay in the removable unit (platform/ignorable-channel.ts + logger.ts emit path, docs/12 §2)' }]
       : [] },
 ]
 
