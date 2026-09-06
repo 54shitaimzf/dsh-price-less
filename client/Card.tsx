@@ -11,7 +11,7 @@
  * - 组件库重组（CeSelect/CeToggle/CeNumber/CeText/CePath/CeGroup/CeTip/CeConfirm/FieldRow）；
  * - 全 `--dsw-*` 令牌主题（亮/暗自适应）；卡片根去掉 overflow:hidden（弹层不被裁切）；
  * - 模型路由下拉（预设 + 配置目录三源合并，自建"手动填写"高级区）；
- * - mode 默认 off、字段按 核心/调节/排障 分级精简、长说明收进 ?浮窗；
+ * - 字段按 核心/调节/排障 分级精简、长说明收进 ?浮窗；观察模式行已清理（2026-09）；
  * - 「恢复默认」二次确认（危险红）。
  *
  * 审查清单: 无 Host 引用；组件经 slot 注册（client/index.ts）；样式内联 + 单个 <style>
@@ -55,10 +55,6 @@ const STYLE_KF = `
 @keyframes ceErrPulse { 0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent)} 100%{box-shadow:0 0 0 10px transparent} }
 @keyframes ceFoldFade { from{opacity:.4;transform:translateY(-2px)} to{opacity:1;transform:none} }
 `
-
-/** 常驻卡片头部的「模式」字段（key to pinned FieldRow）。 */
-const MODE_FIELD = 'discriminator.mode'
-const MODE_SPEC = ECONOMY_FIELD_SPECS.find(s => s.field === MODE_FIELD)!
 
 /* -------------------------------------------------------------------------- */
 /* 吉祥物                                                                      */
@@ -263,19 +259,6 @@ export function EconomyCard(props: EconomyCardProps) {
           <CeButton variant="ghost" disabled={disabled} onClick={() => setConfirmOpen(true)}>恢复默认</CeButton>
         </div>
 
-        {/* 「模式」常驻头部：关键开关零次点击，不藏进大折叠；左右 12px 与「设置项」容器内容列对齐 */}
-        <div style={{ padding: '0 12px 10px', marginBottom: 10, borderBottom: `1px solid ${TOKEN.borderL2}` }}>
-          <FieldRow
-            field={MODE_FIELD}
-            spec={MODE_SPEC}
-            state={snapshot.fields[MODE_FIELD]!}
-            disabled={disabled}
-            accent={TOKEN.businessPrimary}
-            onEdit={(t) => props.edit(MODE_FIELD, t)}
-            onReset={() => props.resetField(MODE_FIELD)}
-          />
-        </div>
-
         {/* 大折叠「设置项」：父级分区容器（bg+border+圆角，明确包住四个子组），默认收起；
             展开时组内前两项默认开。层级由"容器"表达，不用横向缩进（保住与常驻行的对齐）。 */}
         <div style={{ border: `1px solid ${TOKEN.borderL2}`, borderRadius: 10, background: TOKEN.bgLayer1, overflow: 'hidden', padding: '6px 12px' }}>
@@ -311,7 +294,6 @@ export function EconomyCard(props: EconomyCardProps) {
                   onEdit={(f, t) => props.edit(f, t)}
                   onReset={(f) => props.resetField(f)}
                   onRetryCatalog={props.retryCatalog}
-                  skipField={MODE_FIELD}
                 />
               ))}
             </div>

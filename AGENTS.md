@@ -19,7 +19,7 @@ client/ 设置壳**全保留**（星标按钮 +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。
-实验框架 `experiments/evalground/` **封存**（2026-09-06：旧管线依赖清退前生产 lib 编译产物，随残留清空中断，不再作为门禁；`runs/` 证据与 `datasets/` 资产只读保全，解封条件见 `evalground/SEALED.md`——R3/R4 门对照实验随机制落地重建实验面后组织）。
+实验框架 `experiments/evalground/` **封存**（2026-09-06：旧管线依赖清退前生产 lib 编译产物，随残留清空中断；`runs/` 证据与 `datasets/` 资产只读保全，解封条件见 `evalground/SEALED.md`。**实验结论已固化进 docs/02–04 设计，R3/R4 不再组织对照实验**）。
 
 ## Build
 
@@ -31,19 +31,23 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 
 ## Test
 
-- 每个机制（判别/星标断面/剪切/压缩）必须能在 `docs/08-experiment.md` 的协议里被观测；
+- 每个机制（判别/星标断面/剪切/压缩）必须能在 `docs/07-metrics.md` 的协议里被观测；
 - 改动前后必须留账本快照（`docs/07-metrics.md` 现行口径；历史快照档 = `docs/ledger-history.md`，
-  只增不改），否则改动不算完成；
-- 对照试验用配对差值（Δ=臂−基线）汇报，禁止单次运行的结论；
+  只增不改），否则改动不算完成；账本快照 = 纯回放管道产出，不依赖实验批。
+- **不再组织对照实验（2026-09 定）**：实验结论已固化进 `docs/02–04` 设计与常数；
+  R3/R4 验收 = 机械断言 + 07 账本回放 + 真机冒烟（`docs/implement/00-master.md` §4）。
+  `docs/08` 与 `experiments/evalground/` 封存为历史方法学，正文不改，如将来重建实验面再启用。
 - 插件侧 vitest：设置壳不变量（`tests/field-model.spec.ts`）+ P0 冒烟/断言自测
   （`apply-smoke` / `assert-structure`）+ P1 事件面（`events-pump` / `ce-logger` /
-  `harness-session` 真集成）；机制测试随搭建按 docs/08 协议恢复。
-- **评测模型固定（硬规则）**：任何实验批次内，executor/judge 必须全部固定且同批次不换——当前固定 = **DeepSeek 官方 API 直连（https://api.deepseek.com，key 在 homedir yaml `DEEPSEEK_API_KEY`）/ executor = judge = decision = deepseek-v4-flash-vision-exp**（单一事实源 `experiments/evalground/scores.config.json` 的 executor/judge 字段）。**2026-09 传输层切换：opencode zen 网关（hy3/glm-5.3-flash）整体退役；换评测模型 = 整批重跑并标注**——切换前全部 run 属 opencode 时代历史批次，与新批次数字永不混用、不混批。deepseek-v4-flash-vision-exp 是 thinking 模型（实测返回 reasoning_content、官方接受 max_completion_tokens、`prompt_tokens_details.cached_tokens` 可读），须走 `protocolFor(model)`（含 `deepseek`）的 max_completion_tokens + 宽松预算，不得退回到 max_tokens/8192 的 length-cap 老问题；
-- **thinking 协议（硬规则）**：thinking 模型（GLM-5.3-Flash/deepseek 系强制 thinking 不可关）做多轮工具调用时，必须把上一轮 assistant 的 `reasoning_content` **原样回传**，否则网关 400（"reasoning_content ... must be passed back"）。`experiments/evalground/lib/gateway.mjs` 已统一处理：读取 `message.reasoning_content`（兼容数组块）并暴露给调用方、发出请求时回传；`runner.mjs` 在重建 assistant 消息时携带它。改任何 transport 都必须保持这条（gateway 的 `protocolFor(model)` 是 max 参数名/temperature 的单一事实源：thinking→max_completion_tokens、GLM→temp=1、其余→max_tokens/temp=0）。
-- **缓存观测（硬要求）**：`gateway.mjs` 的 `cacheReadTokens` 必须读 OpenAI 标准 `data.usage.prompt_tokens_details.cached_tokens`（同时兜底 `prompt_cache_hit_tokens`/`cache_read_tokens`/`prompt_cache_read_tokens`）——实测 DeepSeek 官方 API 直连回 `prompt_tokens_details.cached_tokens`（2026-09 冒烟：共享前缀二连调命中 0→640），漏读会让缓存永远为 null、成本按无缓存高估。缓存命中率是压缩效率的核心对比指标，改动 gateway/usage 读取时必须保持可观测。
-- **主观评判层（evalground 评分标准）**：评分 = mech（确定性事实：金色命中/范围/测试/反作弊）+ judge（固定 rubric 盲评；review 型任务含 `grounded`「证据落地」维，prompt 注入 `golden-bugs.json` 缺陷参照以区分"真实超金色集发现"与"伪造"）+ `lib/subjective.mjs` 资深 reviewer 盲评（overallQuality/wouldShip/overReport/**realExtras**，**盲评、不入总分**；prompt 不传入臂，防标记泄漏）。金色集已补全 `public/filter.js`(B9)/`public/format.js`(B10) 两个真实 planted bug；mech `report-match` 改**连续覆盖分**（hits/goldenTotal × (1 − fp/goldenTotal)，非"达标即满分"）；`score.assemble` 追加**超金色奖励** `beyondGolden`（仅 review 任务、gate 在 `grounded`≥3 时才给，`min(realExtras,6)×6×gate`），**总分可超过 100**（已批准语义）。改 golden-bugs.json / task rubric / judge / subjective / score 后必须用 `scripts/re-score-run.mjs` 或 rejudge 回填既有 run，禁止新旧口径混用。
-- **压缩域实验语言（硬规则）**：压缩域按**任务尺度**标定，**不**按裸模型窗口（模型真实 1M；1M 只喂 hard-truncate 安全阀，永不作压缩触发）。DSH-native 的 `retainRatio`/`thresholdRatio` 相对压缩域窗口算预算——直接套裸窗口会让触发门永不过或保留预算吞掉全任务（`selectCompactableRange` 返回 null，压 0 字节）。正确标定：**压缩域窗口 ≈ 任务峰值上下文**（跑一次无压缩 full 实测；2026-09 实测峰值 233K ⇒ domain=125K）⇒ **threshold=100K 真实触发**；**retain 是绝对设计值 10K 真实**（`retainTokens/thresholdTokens` 绝对覆写，DSH 本体保留 8K 量级；比例派生只作 fallback），任务中途可触发、有东西可压。估计器必须 wire 校准（`CHARS_PER_TOKEN=1.5`，实测 chars/4 低估 2.7×，2026-09 F10），所有 token 预算（retain/threshold/outline 等）按校准后语义解读。不变量 `retain < thresholdTokens`；且 `retain` 必须在标签范围内（`retainRatio < thresholdRatio`，否则 config 校验抛错）。**触发器语义**：`self`/C2 的 **task 边界自动触发** = 在 `agent/pre-step` 发现 `status==='closed' && !compactedTaskIds` 的 task 就压（挂点语义见 `docs/10` 时序 A），**不是** `trigger.tokenThreshold`（=token 阈值，那是 DSH 压力/溢出触发，非插件 task 边界语义）。四旋钮方法论（A1 范围 / A2 处理 + task=架构单位）见 `experiments/evalground/EXPERIMENT.md`——它是实验方法学单一事实源（机制设计正典 = `docs/02–04` 域文档），评价引擎/臂表是它的执行形态，不许漂移。
-- **上下文窗口硬截断（仅防溢出安全阀，独立于压缩域逻辑）**：`runner.mjs` 在每次请求前用 `estimateMessagesTokens(messages)` 估算，若 ≥ `contextWindow × truncatePct` 则重建消息表：保留稳定的 `[system, task]` 前缀（缓存友好）再补最尾近消息、丢弃最旧历史，记一条 `hard-truncate` transcript 事件与 `runner.hardTruncate` 计数器。它是**全臂兜底**（独立于 compression 模式），**仅做防溢出**，平时（< floor）完全 no-op、不改变未护栏 run 的字节行为；`score.assemble` 不对 `hard-truncate` 施加惩罚（不属于任何扣分分支），因此触发与否不改变打分语义，但记录在 scorecard 供审计。**注意**：此为"防溢出安全阀"，**不等于**压缩域标定——压缩域标定按上一条的"任务尺度"，别拿这个 floor 当压缩域窗口。
+  `harness-session` 真集成）；机制测试随搭建按 docs/08 协议组织（回放/注入/确定性，不做臂对照）。
+- **压缩域标定常数（实验结论已固化，施工直接引用，不再重跑）**：压缩域窗口 ≈ 任务峰值
+  上下文（2026-09 实测峰值 233K ⇒ domain=125K）⇒ `thresholdTokens=100K`、`retainTokens=10K`
+  （绝对值，比例派生只作 fallback）；估计器 `CHARS_PER_TOKEN=1.5` 校准；不变量
+  `retain < thresholdTokens`、`retainRatio < thresholdRatio`。**触发器语义**：task 边界
+  自动触发 = `agent/pre-step` 发现 `status==='closed' && !compactedTaskIds` 的 task 就压
+  （`docs/10` 时序 A），不是 `trigger.tokenThreshold`（那是 DSH 压力/溢出触发）。
+- **上下文窗口硬截断（仅防溢出安全阀）**：独立于压缩域逻辑，平时 no-op；只做防溢出，
+  不是压缩域标定（结论见上一条）。
 
 ## Architecture
 
@@ -65,7 +69,7 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 
 ## Workflow
 
-- 新功能：先立度量（docs/07 字段能观测）→ 再看挂点（docs/10 事件流）→ 写逻辑 → 构建 → 对照试验留账本。
+- 新功能：先立度量（docs/07 字段能观测）→ 再看挂点（docs/10 事件流）→ 写逻辑 → 构建 → 账本快照（不做对照实验）。
 - 每个模块的 TODO 必须引用对应 `docs/0X-*.md` 文件；模块注释按 `docs/05 §6` 合规自证模板（平面/回退链步数/审查清单/度量）。
 
 ## Don't

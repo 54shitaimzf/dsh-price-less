@@ -35,15 +35,17 @@ JSONL（账本可回放、KV 只是加速缓存）。插件事件类型按构造
 携带标记、拒绝非 true 值；append 现场对未知无标记类型去重告警（loud-write）；拒读文案指向
 仓外插件事件。读侧严格性保持原样。
 
-**现状（诚实记录）**：本仓 harness checkout 已实现（commit `04cba8f394` + `a3c0a8bc02`，
-session 包 82 测试 + persistence 18 测试全绿，api-catalog 重生成校验过）；上游未开放 PR，
+**现状（诚实记录）**：本仓 harness checkout 已实现（commit `04cba8f394` + `a3c0a8bc02`
++ `ea04b581a5`，session 包 82 测试全绿，api-catalog 重生成校验过）；上游未开放 PR，
 vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
 
 ## 2. 能力探测、耦合铁律与删除清单
 
-- **探测**：只读、零副作用、进程级记忆一次——检查 `Session.prototype.append` 源码含补丁
-  特征串（vanilla append 无任何 `ignorable` 字样；补丁版含运行期拒绝文案，字面量不被压缩
-  抹除，已对构建产物核实恰好 1 处）。**不经配置**：无开关、无设置面，删除时无残留。
+- **探测**：只读、零副作用、进程级记忆一次——读补丁导出的**结构化运行时能力常量**
+  `SESSION_LOG_INTENT = 1`（harness commit `ea04b581a5`）；vanilla 构建无此导出（读得
+  `undefined`）。**不解析实现源码文本**：minify/混淆/改名安全，能力标记由补丁显式声明。
+  测试可经 `ignorableChannelAvailable(api?)` 注入假能力源。**不经配置**：无开关、
+  无设置面，删除时无残留。
 - **耦合铁律（本契约的承重条）**：探测、发射路由、镜像降级**全部居于可删除单元
   `platform/ignorable-channel.ts` + `platform/logger.ts` 的 emitCeFact 发射路径**（后者上游合并后
   仅一行改直连）；机制代码（core/domains，P9+ 起的发射方）只经 `emitCeFact` 端口发射，**对模式

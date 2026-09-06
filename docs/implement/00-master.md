@@ -35,17 +35,17 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
    事件全部 `ignorable:true`（类型级测试）；模板在前、实例参数在后。
 5. **禁区（零接触）**：`experiments/**`（2026-09-06 起**封存**：旧实验管线依赖清退前生产
    lib 编译产物，随残留清空中断——`runs/**` 实验证据与 `datasets/` 资产只读保全，解封条件
-   见 `experiments/evalground/SEALED.md`；R3/R4 门对照实验随机制落地重建实验面后按
-   [08](../08-experiment.md) 组织）、`datasets/`、`reports/`、`scripts/attic/`、
-   `docs/00–11` 设计正文与 `ledger-history.md`/`legacy.md`、
+   见 `experiments/evalground/SEALED.md`；**R3/R4 不再组织对照实验，实验结论已固化进
+   docs/02–04 设计**，如将来重建实验面再按 [08](../08-experiment.md) 组织）、`datasets/`、
+   `reports/`、`scripts/attic/`、`docs/00–11` 设计正文与 `ledger-history.md`/`legacy.md`、
    凭证类文件（凭据只存 homedir，永不进仓库）。
 6. **mock 优先**：platform 端口的单测全部走 fake 实现（无网络、无真模型）；真实调用只在
    工单明示的集成点出现。
 7. **度量先行**（AGENTS 硬规则）：每个机制工单第一步 = 先落 `docs/07` 对应字段的最小
    可回放记账，再写机制本体。
 8. **UI 壳不变量**：`client/` 壳（Card/controller/components/theme/mascot）零结构改动；
-   配置扩展只经 `field-model.ts` ↔ `config.ts` 对应律双扩，`tests/field-model.spec.ts`
-   既有断言只增不减。
+   配置载荷变更只经 `field-model.ts` ↔ `config.ts` 对应律同步（观察模式设置项已按用户
+   定调清理，2026-09），`tests/field-model.spec.ts` 的**结构断言不变量只增不减**。
 
 ## 3. 阶段总表（P0–P21，映射 R0–R4）
 
@@ -67,11 +67,11 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P9 | 卷宗 | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
 | P10 | 判据与对表 | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5 | M |
 | P11 | 星标断面 | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5 | M |
-| P12 | 自动断面服务 | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` off/observe/active 门控） | P10 | M |
+| P12 | 自动断面服务 | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10 | M |
 | P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11 | M |
 | P14 | 星标按钮 UI | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿；时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P11,P13,P6 | M |
 | P15 | 工具剪切 | R3 | `core/shear/` 工具半边 + `domains/shear.ts` 调度（[03 §2](../03-shear.md)：四档时机 / ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则） | P6,P7,P12 | M |
-| P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；**03 §8 探针前置在本单内立起** | P15 | M |
+| P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15 | M |
 | P17 | 边界装配器 | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机）+ 共享事务原语（04 §1） | P6,P8,P9 | L（拆纯核/接线两份） |
 | P18 | 压缩调用 | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验；模板在前 + datasets 同源断言，04 §7） | P5,P9 | M |
 | P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 15K 硬帽截断 + `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2 | M |
@@ -104,8 +104,8 @@ P18(P5,P9)
    `docs/ledger-history.md` 追记（只增不改）；
 2. **缓存四断言**（[10 §6](../10-wiring.md)）：R2 起每次里程碑必跑；
 3. **结构断言**：`npm run assert` 全绿（core 零 import / 改史归口 / ignorable / UI 不变量）；
-4. **对照实验**：按 [08](../08-experiment.md) 臂表组织首批 run（R3/R4 门必做；评测模型与
-   批次纪律按 AGENTS.md 硬规则，runs 证据零接触）。
+4. **机制验收（无对照实验，2026-09 定）**：实验结论已固化进 docs/02–04 设计；R3/R4 以
+   机械断言 + 07 账本回放 + 真机冒烟验收，不组织臂对照 run。
 
 ## 5. 工单模板（`P<NN>-<slug>.md` 统一骨架）
 

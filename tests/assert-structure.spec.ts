@@ -69,8 +69,9 @@ describe('负样本（每规则 ≥1）', () => {
   })
   it('D3：ignorable 通道概念越出可删除单元 → issue（docs/12 §2）', () => {
     expect(check('D3', 'src/domains/a.ts', "emitFact(session, 'x', d)\n")).not.toEqual(NO_ISSUES)
+    expect(check('D3', 'src/domains/a.ts', "import { emitFact } from '../platform/ignorable-channel.ts'\n")).not.toEqual(NO_ISSUES)
     expect(check('D3', 'src/core/a.ts', 'type X = keyof IgnorableSessionEventMap\n')).not.toEqual(NO_ISSUES)
-    expect(check('D3', 'src/index.ts', "append.toString().includes('x')\n")).not.toEqual(NO_ISSUES)
+    expect(check('D3', 'src/index.ts', 'const capable = SESSION_LOG_INTENT === 1\n')).not.toEqual(NO_ISSUES)
   })
 })
 
@@ -102,7 +103,7 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(check('D1', 'src/a.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
     expect(check('D2', 'src/a.ts', "ctx.on('agent/pre-step', (p, next) => next())\n// return next() 之上\n")).toEqual(NO_ISSUES)
     expect(check('D2', 'src/a.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
-    expect(rule('D3').check({ path: 'src/platform/ignorable-channel.ts', text: 'setFactMirror(); append.toString()' }, new Map())).toEqual(NO_ISSUES)
+    expect(rule('D3').check({ path: 'src/platform/ignorable-channel.ts', text: 'setFactMirror(); const v = SESSION_LOG_INTENT; emitFact(s, t, d)' }, new Map())).toEqual(NO_ISSUES)
     expect(rule('D3').check({ path: 'src/platform/logger.ts', text: "import { emitFact, factModeStats } from './ignorable-channel.ts'" }, new Map())).toEqual(NO_ISSUES)
     expect(check('D3', 'src/platform/events.ts', 'export function createEventPump()\n')).toEqual(NO_ISSUES)
   })

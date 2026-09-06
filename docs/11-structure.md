@@ -120,7 +120,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 
 | 开关 | 默认 | 域 | 语义 |
 |---|---|---|---|
-| `discriminator.auto` | off | 判别 | off（不挂载零成本）/ observe（只记账）/ active（发 verdict 接入投影）；**星标通道常在，不受此开关门控** |
+| `discriminator.auto` | false | 判别 | 自动断面总开关（boolean）；false=不挂载零成本 / true=发 verdict 接入投影；**星标通道常在，不受此开关门控**（观察模式已取消，2026-09） |
 | `shear.enabled` | true | 剪切 | 工具剪切 + 对话剪切总开关（分层可再关 T-note / T0-R） |
 | `compression.boundary` | true | 压缩 | task 边界压缩 |
 | `compression.pressure` | true | 压缩 | 压力路径（`pressureRatio=0.4` × 压缩域窗口） |
@@ -149,10 +149,10 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | 阶段 | 内容 | 出门门槛 |
 |---|---|---|
 | **R0 骨架核对** | manifest 差距清零（§1 表）；inject 声明定稿；`dev_self_test` 全链路 | 注入/重载/卸载净；typecheck×2 + vitest 绿 |
-| **R1 平台面** | platform 七端口（含 skills）+ settings 域 + `core/ledger` 空转（observe 只记账） | 账本字段能从 JSONL 回放；ignorable 断言过 |
-| **R2 判别域** | core/{units,dossier,judge,optimize,prefix} + domains/input + init 项目帧 + 星标按钮（H11） | 边界 F1 / 判别成本 / tableHitRate / optimizePromptTokens 入账；observe→active 门控可用；星标端到端（断面→预览→确认→回填） |
-| **R3 剪切域** | core/shear + domains/shear（工具剪切四档先行：T-entry + T0/T0-R；对话 run 次之） | cut*/shear*/tableRepair 字段入账；误剪反馈闭环；探针前置条件满足（[03 §8](03-shear.md)） |
-| **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织 | hotTail*/pressure*/archiveTruncate 入账；强制重读率 A/B；`auto:false` 协调生效 |
+| **R1 平台面** | platform 七端口（含 skills）+ settings 域 + `core/ledger` 空转（只记账，不发行为） | 账本字段能从 JSONL 回放；ignorable 断言过 |
+| **R2 判别域** | core/{units,dossier,judge,optimize,prefix} + domains/input + init 项目帧 + 星标按钮（H11） | 边界 F1 / 判别成本 / tableHitRate / optimizePromptTokens 入账；`auto` 开关可用（默认关）；星标端到端（断面→预览→确认→回填） |
+| **R3 剪切域** | core/shear + domains/shear（工具剪切四档先行：T-entry + T0/T0-R；对话 run 次之） | cut*/shear*/tableRepair 字段入账；误剪反馈闭环；阈值常数按既有实验结论初值落位（[03 §8](03-shear.md)，不做对照实验） |
+| **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织 | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效 |
 | R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
 
 施工分解：R0–R4 细化为 P0–P21 工单（flash 级自主执行粒度，验收全机械），总纲与工单见

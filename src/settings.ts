@@ -18,7 +18,8 @@
  *   返回当前已解析值（动态，无需在 onChange 重复设源）；
  * - settings 服务脱离时 disposer 把 setSource 回退为 `() => entry`（装配
  *   base），配置自动回到装配值——消费方因此永不持有一个失效来源；
- * - onChange 用于"值变了需要重建资源"的响应（本插件 = mode 切换重挂判别器）；
+ * - onChange 用于"值变了需要重建资源"的响应（模板态仅诊断记录；未来机制开关
+ *   变更时经此重挂对应域）；
  *   attach 时（含注册首次）与 detach 后各触发一次。
  *
  * 审查清单: settings 服务未装配时静默跳过（本模块 ctx.inject(['settings'])
@@ -38,7 +39,7 @@ import { resolveConfig } from './config.ts'
 /** 本插件配置的 settings namespace（client 卡片按其注册同名 key；0.1.3 = 普通字符串，类型层校验小写连字符格式）。 */
 export const CONTEXT_ECONOMY_SETTINGS_NS = 'context-economy'
 
-/** 配置变更通知（mode 等需要重建资源的变更 → 重挂判别器）。 */
+/** 配置变更通知（机制开关等需要重建资源的变更 → 重挂对应域；模板态仅诊断记录）。 */
 export interface ContextEconomySettingsHooks {
   /** settings 文档变更后回调（含注册时首次、与 settings 脱离回退 base 后）。 */
   onChange: () => void

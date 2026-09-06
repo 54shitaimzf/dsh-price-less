@@ -15,20 +15,29 @@
  */
 
 import type { Session, SessionEvent, SessionEventMap, SessionEventType } from '@deepseek-ai/dsh-session'
+import * as dshSessionRuntime from '@deepseek-ai/dsh-session'
 import type { CeLogger } from './events.ts'
 
-/** 补丁版 append 的运行期拒绝文案——vanilla append 不含任何 ignorable 字样（docs/12 §2）。 */
-const CHANNEL_PROBE_MARKER = 'must not be marked ignorable'
+/**
+ * 能力探测源（docs/12 §2）：补丁版 harness 导出显式运行时能力常量
+ * `SESSION_LOG_INTENT = 1`（harness commit ea04b581a5）；vanilla 构建无此导出
+ * （读得 undefined）。探测不解析实现源码文本，minify/混淆/改名安全。
+ * 测试可经可选参数注入假能力源；生产代码只走无参调用。
+ */
+export interface SessionRuntimeCapabilities {
+  SESSION_LOG_INTENT?: unknown
+}
 
 let channelProbe: boolean | undefined
 
 /**
- * ignorable 通道可用性（只读探测，进程级记忆一次）。
- * @param session - 任一 Session 实例（探测其 append 源码；能力属 harness 构建层，与实例无关）。
+ * ignorable 通道可用性（结构化能力探测，进程级记忆一次，只读零副作用）。
+ * @param api - 测试注入用能力源；缺省读 @deepseek-ai/dsh-session 运行期导出。
  */
-export function ignorableChannelAvailable(session: Session): boolean {
+export function ignorableChannelAvailable(api?: SessionRuntimeCapabilities): boolean {
   if (channelProbe === undefined) {
-    channelProbe = session.append.toString().includes(CHANNEL_PROBE_MARKER)
+    const source = api ?? dshSessionRuntime as unknown as SessionRuntimeCapabilities
+    channelProbe = source.SESSION_LOG_INTENT === 1
   }
   return channelProbe
 }
@@ -71,7 +80,7 @@ export function emitFact<T extends keyof SessionEventMap & string>(
   data: SessionEventMap[T],
   logger?: CeLogger,
 ): FactWriteResult {
-  if (ignorableChannelAvailable(session)) {
+  if (ignorableChannelAvailable()) {
     try {
       // CeFactType 前缀按构造排除 surface 类型；append 的条件 opts 在泛型下不可消解，
       // 经类型化适配器单点收窄（harness 运行期仍强制拒绝 surface+ignorable）。

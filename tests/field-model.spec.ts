@@ -2,7 +2,8 @@
  * field-model 纯逻辑单测（client 半边，无 React/DOM 依赖）——模板态修剪版。
  * 插件主体清退后本 spec 只保护**保留的 UI 壳机械件**：
  * 字段工厂 parse 精度、默认解析与深度工具、模型路由选项合并、
- * 空组壳 + 3 个组外保留 spec（钉住模式行 / 模型路由暂存安全）。
+ * 空组壳 + 2 个组外保留 spec（模型路由暂存安全）。
+ * 观察模式设置项已按用户定调清理；机制开关随 R2 工单以 boolean 字段加回。
  * 重设计加回设置项时按域扩回对应断言（清退前完整版见 git 历史）。
  */
 import { describe, expect, it } from 'vitest'
@@ -39,25 +40,25 @@ describe('字段 parse（validation 精度）', () => {
   })
 
   it('select：合法值 set；空串 → clear（跟随预设 = 无该选项时清空）', () => {
-    const f = economySelectField('demo.mode', [
+    const f = economySelectField('demo.enabled', [
       { value: 'off', label: 'off' },
-      { value: 'observe', label: 'observe' },
+      { value: 'on', label: 'on' },
     ])
-    expect(f.parse('off')).toEqual({ kind: 'set', values: { 'demo.mode': 'off' } })
+    expect(f.parse('off')).toEqual({ kind: 'set', values: { 'demo.enabled': 'off' } })
     expect(f.parse('watch')).toEqual({ kind: 'error', message: '请从选项中选择' })
     expect(f.parse('')).toEqual({ kind: 'clear' })
   })
 })
 
 describe('默认解析与深度工具', () => {
-  it('defaultForPath：mode 有默认；可选覆盖（provider）→ undefined', () => {
-    expect(defaultForPath('discriminator.mode')).toBe('off')
+  it('defaultForPath：模板态无必填默认；可选覆盖（provider/model）→ undefined', () => {
     expect(defaultForPath('discriminator.provider')).toBeUndefined()
+    expect(defaultForPath('discriminator.model')).toBeUndefined()
   })
 
   it('readPath：点路径深度读', () => {
-    expect(readPath({ discriminator: { mode: 'active' } }, 'discriminator.mode')).toBe('active')
-    expect(readPath({ discriminator: {} }, 'discriminator.mode')).toBeUndefined()
+    expect(readPath({ discriminator: { provider: 'deepseek-official' } }, 'discriminator.provider')).toBe('deepseek-official')
+    expect(readPath({ discriminator: {} }, 'discriminator.provider')).toBeUndefined()
   })
 
   it('sameValue：原始与对象比较', () => {
@@ -75,7 +76,7 @@ describe('模型路由', () => {
     expect(splitRouteKey('')).toEqual({ provider: '', model: '' })
   })
 
-  it('buildModelRouteOptions：预设三源恒显示 + 配置目录合并', () => {
+  it('buildModelRouteOptions：预设恒显示 + 配置目录合并', () => {
     const groups = [
       { id: 'deepseek-official', name: 'DeepSeek Official', models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }] },
     ]
@@ -93,18 +94,16 @@ describe('模板态壳不变量（空组 + 组外保留 spec）', () => {
     expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')?.routeSelector).toBe(true)
   })
 
-  it('ECONOMY_FIELD_SPECS = 恰 3 个保留 spec：mode（钉住行）+ provider/model（hidden，路由暂存安全）', () => {
+  it('ECONOMY_FIELD_SPECS = 恰 2 个保留 spec：provider/model（hidden，路由暂存安全），无观察模式', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(ECONOMY_FIELD_SPECS).toHaveLength(3)
-    expect(specs.get('discriminator.mode')?.type).toBe('select')
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(2)
+    expect(specs.has('discriminator.mode')).toBe(false)
     expect(specs.get('discriminator.provider')?.visibility).toBe('hidden')
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
   })
 
-  it('mode 文案一致性（下拉 vs 字段说明）', () => {
-    const modeSpec = ECONOMY_FIELD_SPECS.find(s => s.field === 'discriminator.mode')!
-    const observe = modeSpec.options!.find(o => o.value === 'observe')!
-    expect(observe.label).toContain('测量')
-    expect(ECONOMY_FIELD_COPY['discriminator.mode'].hint).toContain('observe=只看不动（测量）')
+  it('provider/model 文案存在且提示"跟随预设"（模型路由选择器的安全语义）', () => {
+    expect(ECONOMY_FIELD_COPY['discriminator.provider'].hint).toContain('跟随预设')
+    expect(ECONOMY_FIELD_COPY['discriminator.model'].hint).toContain('跟随预设')
   })
 })

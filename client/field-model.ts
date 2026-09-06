@@ -6,12 +6,14 @@
  * - 默认值解析（CLIENT_DEFAULTS 镜像，与 host src/config.ts CONFIG_DEFAULTS 同值）；
  * - 可见性分级（core/tune/debug/hidden），驱动卡片"分级精简"；
  * - 模型路由选项构建（预设三源 + 配置 catalog 三源合并，与对话模型选择一致）；
- * - 下划线约定：字段 key 用点路径（'discriminator.mode'）；paths 为写路径数组
+ * - 下划线约定：字段 key 用点路径（'discriminator.provider'）；paths 为写路径数组
  *   （默认 [field]），供 scope.mutate 原子提交多段 path。
  *
  * 版本协议: 插件主体清退至模板态后，本文件是重设计的唯一"加回设置项"入口——
  *           组壳/组件/交互全保留，仅 FIELD-DEF 载荷清空（4 组壳 fields:[]，
- *           3 个组外保留 spec 支撑钉住模式行与模型路由选择器安全保存）。
+ *           2 个组外保留 spec 支撑模型路由选择器安全保存）。观察模式设置项
+ *           （off/observe/active）已按用户定调清理；机制开关随 R2 工单
+ *           以 boolean 门控形态加回。
  *           host 侧对应最小 schema = src/config.ts（手工同步对；客户端不得
  *           import host src——跨域打包约束）。
  *
@@ -29,7 +31,6 @@ import type { Tone } from './theme.ts'
 /** 卡片编辑的配置形状（= host Config schema 的可写面；模板态最小集）。 */
 export interface EconomyCardSettingsShape {
   discriminator?: {
-    mode?: 'off' | 'observe' | 'active'
     provider?: string
     model?: string
   }
@@ -201,9 +202,7 @@ export function economyPathField(
 /* -------------------------------------------------------------------------- */
 
 export const CLIENT_DEFAULTS = {
-  discriminator: {
-    mode: 'off',
-  },
+  discriminator: {},
 } as const
 
 /** 该路径的推荐默认值（未定义 = 可选覆盖，恢复时清空跟随预设）。 */
@@ -221,7 +220,7 @@ export function defaultForPath(key: string): unknown {
 /* 路径工具                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** 点路径 → 段数组（'discriminator.mode' → ['discriminator','mode']；顶层 = 单段）。 */
+/** 点路径 → 段数组（'discriminator.provider' → ['discriminator','provider']；顶层 = 单段）。 */
 export function pathSegments(key: string): string[] {
   const dot = key.indexOf('.')
   return dot < 0 ? [key] : [key.slice(0, dot), key.slice(dot + 1)]
@@ -311,11 +310,6 @@ export function buildModelRouteOptions(groups: readonly { id: string; name: stri
 /* -------------------------------------------------------------------------- */
 
 export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; docs?: string }> = {
-  'discriminator.mode': {
-    label: '判别模式',
-    hint: 'off=关闭（推荐）；observe=只看不动（测量）；active=真正介入。',
-    docs: 'off：不挂载引擎，零成本（默认）。observe：判定但只记账、不发行为，用于测量。active：发出 verdict 事件，驱动上层编排。（重设计时在此按域加回文案——每字段一条，label 一句 / hint 一行 / docs 收进 "?" 浮窗。）',
-  },
   'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般用模型路由下拉选择，自动同时设好服务商与模型。' },
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
 }
@@ -390,17 +384,12 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
 
 /**
  * 组外保留 spec（不进任何组、不渲染为普通字段行）：
- * - discriminator.mode：Card 钉住的模式行（MODE_SPEC 查找自本表，缺位会崩）；
  * - provider/model：ModelRouteSelector 暂存目标——controller.save 按 spec 索引
  *   写路径，缺 spec 会崩（保留 = 模型路由选择器端到端可用）。
- * 重设计加回字段时：字段进组 fields；这三条保留 spec 的 key 若被复用则从本表移除。
+ * 观察模式设置项已清理；机制开关随 R2 工单以 boolean 字段进组（fields 数组）。
+ * 重设计加回字段时：字段进组 fields；这两条保留 spec 的 key 若被复用则从本表移除。
  */
 export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
-  economySelectField('discriminator.mode', [
-    { value: 'off', label: 'off（默认）：关闭，零成本', tone: 'neutral' },
-    { value: 'observe', label: 'observe：只看不动（测量）', tone: 'warn' },
-    { value: 'active', label: 'active：发 verdict 驱动编排', tone: 'business' },
-  ], { visibility: 'core', default: 'off', deflabel: '（默认）' }),
   economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
   economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
 ]
