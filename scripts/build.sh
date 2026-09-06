@@ -91,6 +91,9 @@ link_pkg @deepseek-ai/dsh-brand packages/util/brand
 link_pkg @deepseek-ai/dsh-util-values packages/util/values
 link_pkg @deepseek-ai/dsh-scope packages/core/scope
 link_pkg @deepseek-ai/dsh-session-persistence packages/session/session-persistence
+# P3：storageDomain 持久面依赖（host 侧只 import dsh-storage-domain；dsh-storage 为域层内部依赖）
+link_pkg @deepseek-ai/dsh-storage packages/storage/storage
+link_pkg @deepseek-ai/dsh-storage-domain packages/storage/storage-domain
 # @types/node（编译类型；checkout 自带）
 link_pkg @types/node node_modules/@types/node
 

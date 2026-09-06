@@ -129,6 +129,12 @@ export const RULES = [
     (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts'
       ? [{ message: 'ignorable-channel concepts must stay in the removable unit (platform/ignorable-channel.ts + logger.ts emit path, docs/12 §2)' }]
       : [] },
+    { id: 'D4', canon: 'docs/09 §1/§2 + docs/11 §2 + docs/13 §3.6',
+      appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
+      check: (f) => /(ctx\.storageDomain|storageDomain|defineDomain|domainTable)/.test(f.text)
+        && f.path !== 'src/platform/storage.ts' && f.path !== 'src/index.ts'
+        ? [{ message: 'storageDomain/defineDomain/domainTable must only appear in platform/storage.ts (index.ts wiring allowed, docs/09 §1)' }]
+        : [] },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */

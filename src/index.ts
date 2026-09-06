@@ -18,8 +18,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import { type Config as ConfigShape } from './config.ts'
 import { registerContextEconomySettings } from './settings.ts'
 import { createEventPump } from './platform/events.ts'
-import { ceLogger } from './platform/logger.ts'
+import { ceLogger, registerFactMirror } from './platform/logger.ts'
 import { attachDiagSink } from './platform/diag-sink.ts'
+import type {} from '@deepseek-ai/dsh-storage-domain'
+import { openContextEconomyStorage, type ContextEconomyStorage } from './platform/storage.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
 
@@ -44,5 +46,36 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   ctx.effect(() => {
     const pump = createEventPump(ctx, ceLogger(ctx))
     return () => pump.dispose()
+  })
+
+  // H10 持久面（docs/09 §1/§2 + docs/11 §2 storage.ts）：fail-lazy 开域；事实镜像经 logger 单点接线。
+  ctx.inject(['storageDomain'], (storageCtx) => {
+    storageCtx.effect(() => {
+      let storage: ContextEconomyStorage | undefined
+      let disposed = false
+      const disposer = async () => {
+        if (disposed) return
+        disposed = true
+        registerFactMirror(undefined)
+        await storage?.close()
+      }
+      void openContextEconomyStorage(storageCtx, { logger: ceLogger(storageCtx) })
+        .then((opened) => {
+          if (disposed) {
+            void opened.close()
+            return
+          }
+          storage = opened
+          registerFactMirror((type, data) => opened.writeFactMirror(type, data))
+        })
+        .catch((e) => {
+          registerFactMirror(undefined)
+          ceLogger(storageCtx).warn(
+            'context-economy: storage domain unavailable (contained, fail-lazy)',
+            e instanceof Error ? e.message : String(e),
+          )
+        })
+      return disposer
+    })
   })
 }

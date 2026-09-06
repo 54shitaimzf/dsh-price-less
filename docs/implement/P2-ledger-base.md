@@ -1,6 +1,6 @@
 # P2 度量底座（映射 R1；依赖 P1；尺寸 M）
 
-> 状态：**计划态（本文件为扩写后的施工工单）**。
+> 状态：**已施工（commit `38e3af3`；2026-09-06 P3 计划验收 P2：`node scripts/verify-p2.mjs` 输出 `P2 VERIFY PASS`，`npm run gate` 全绿，`DSH_CHECKOUT=G:/deepseek-harness npm run build` 通过）**。
 > 设计正典：[07 §5](../07-metrics.md)（回放管道与同输入同账）/ [07 §2](../07-metrics.md)
 > （固定单价表口径）/ [07 §6](../07-metrics.md)（报表模板）/ [10 §1 H7](../10-wiring.md)
 > （度量回放原料面）/ [11 §2](../11-structure.md)（模块树 core/ledger 行 + 依赖铁律）/

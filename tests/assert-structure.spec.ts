@@ -74,6 +74,10 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D3', 'src/core/a.ts', 'type X = keyof IgnorableSessionEventMap\n')).not.toEqual(NO_ISSUES)
     expect(check('D3', 'src/index.ts', 'const capable = SESSION_LOG_INTENT === 1\n')).not.toEqual(NO_ISSUES)
   })
+  it('D4：storageDomain/defineDomain/domainTable 越出 platform/storage.ts 与 index.ts → issue', () => {
+    expect(check('D4', 'src/domains/a.ts', "ctx.storageDomain.open({ name: 'x' })\n")).not.toEqual(NO_ISSUES)
+    expect(check('D4', 'src/core/a.ts', "import { defineDomain } from '@deepseek-ai/dsh-storage-domain'\n")).not.toEqual(NO_ISSUES)
+  })
 })
 
 describe('正样本（干净文件 → 0 issue）', () => {
@@ -109,6 +113,10 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D3').check({ path: 'src/platform/logger.ts', text: "import { emitFact, factModeStats } from './ignorable-channel.ts'" }, new Map())).toEqual(NO_ISSUES)
     expect(check('D3', 'src/platform/events.ts', 'export function createEventPump()\n')).toEqual(NO_ISSUES)
   })
+  it('D4：storage 概念只许在 storage.ts 与 index.ts（docs/09 §1）', () => {
+    expect(rule('D4').check({ path: 'src/platform/storage.ts', text: "defineDomain({ name: 'x' }); ctx.storageDomain" }, new Map())).toEqual(NO_ISSUES)
+    expect(rule('D4').check({ path: 'src/index.ts', text: "ctx.inject(['storageDomain'], ...)" }, new Map())).toEqual(NO_ISSUES)
+  })
 })
 
 describe('真实树集成', () => {
@@ -121,7 +129,7 @@ describe('真实树集成', () => {
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
-      D1: 'pass', D2: 'pass', D3: 'pass',
+      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

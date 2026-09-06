@@ -59,8 +59,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P1 | 事件面接线（已施工 commit `1ed5419` + 翻转 `28351b3`；harness LogIntent 补丁 `04cba8f394`） | R1 | `platform/logger.ts` + `platform/events.ts`（H1 firehose → 异步旁路队列；[10 §1](../10-wiring.md) H1/H7） | P0 | S |
 | P1.1 | 诊断落盘 sink（P1 追记，已施工 commit `545db1b` + 修正 `8e84039`，真机验证通过） | R1 | `platform/diag-sink.ts`（`ctx.logger.exporter()` → 插件 `logs/context-economy.log` JSONL，agent 自审面，零 harness 改动；[11 §4](../11-structure.md) 纪律③追记） | P1 | S |
 | P1.2 | 地基修补与契约闭合（P1 追记，已施工；commit 见 git log） | R0/R1 | ① `package.json` files/exports 收编 `cordis.patch.yml`（发布包可装配）；② build.sh 补齐 client/tsdown/react/@types/react/zod 链接（干净归档构建成立）；③ `tests/client-apply-smoke.spec.ts`（client 槽注册/订阅/卸载冒烟）；④ `platform/llm.ts` C2 purpose 单点适配锚 + `tests/llm-purpose.spec.ts`；⑤ docs/03/10/11/12 进度与实现缝对齐 | P1 | S |
-| P2 | 度量底座（扩写工单见 [P2-ledger-base.md](P2-ledger-base.md)） | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；**facts 源抽象**：会话 ignorable 事件 ∨ KV 事实镜像，[12 §3](../12-platform-capabilities.md)）+ `scripts/verify-p2.mjs` 自动化验收 | P1 | M |
-| P3 | 持久面 | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；**+ 事实镜像表**（降级态，[12 §3](../12-platform-capabilities.md)）；[09 §2](../09-state.md) 协议） | P0 | M |
+| P2 | 度量底座（已施工 commit `38e3af3`；扩写工单见 [P2-ledger-base.md](P2-ledger-base.md)） | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；**facts 源抽象**：会话 ignorable 事件 ∨ KV 事实镜像，[12 §3](../12-platform-capabilities.md)）+ `scripts/verify-p2.mjs` 自动化验收 | P1 | M |
+| P3 | 持久面（已施工；扩写工单见 [P3-storage.md](P3-storage.md)） | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；**+ 事实镜像表**（降级态，[12 §3](../12-platform-capabilities.md)）；[09 §2](../09-state.md) 协议） | P1,P2 | M |
 | P4 | 技能目录端口 | R1 | `platform/skills.ts`（H13 `SKILL.md` 枚举 + watch + 引用守卫查表接口） | P0 | S |
 | P5 | 辅助调用端口 | R1 | `platform/llm.ts`（H12 `llm.stream({purpose})` + usage/缓存回执；**C2 单点适配已由 P1.2 落锚**）；补 peerDep `dsh-llm` + build 链接 | P2 | S |
 | P6 | 改史端口 | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
@@ -70,15 +70,15 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P10 | 判据与对表 | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5,**P2** | M |
 | P11 | 星标断面 | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5,**P2** | M |
 | P12 | 自动断面服务 | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10 | M |
-| P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11 | M |
-| P14 | 星标按钮 UI | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿；时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P11,P13,P6 | M |
+| P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3 | M |
+| P14 | 星标按钮 UI | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿；时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P11,P13,P6,P3 | M |
 | P15 | 工具剪切 | R3 | `core/shear/` 工具半边 + `domains/shear.ts` 调度（[03 §2](../03-shear.md)：四档时机 / ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则） | P6,P7,P12,**P2** | M |
 | P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15 | M |
 | P17 | 边界装配器 | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机）+ 共享事务原语（04 §1） | P6,P8,P9 | L（拆纯核/接线两份） |
 | P18 | 压缩调用 | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验；模板在前 + datasets 同源断言，04 §7） | P5,P9 | M |
-| P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 15K 硬帽截断 + `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2 | M |
+| P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 15K 硬帽截断 + `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2,P3 | M |
 | P20 | 压力路径 + 保险丝 | R4 | 时序 C：wire 锚定计量（估计器 `CHARS_PER_TOKEN=1.5` 校准，04 §5）+ 检查点/断路器 + hard-truncate no-op 语义 + `request-error` 接管；`cordis.patch.yml` 加 compaction-basic `auto:false` | P19 | M |
-| P21 | 恢复编排 + 全链验收 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练）+ 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P19,P20 | M |
+| P21 | 恢复编排 + 全链验收 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练）+ 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P19,P20,P3 | M |
 
 依赖主干（其余见各行"依赖"列）：
 
@@ -86,14 +86,15 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 P0 ─┬─ P1 ─┬─ P2 ─ P5 ─┐
     │      ├─ P6 ────────┤
     │      └─ P7 ─┐      │
-    ├─ P3 ─ P8 ─ P9 ─ P10 ─ P12 ─ P15 ─ P16
+    ├─ P3(P1,P2) ─ P8 ─ P9 ─ P10 ─ P12 ─ P15 ─ P16
     │      └────────┴─ P11 ─ P13 ─ P14
     └─ P4 ─ P8                │
-P17(P6,P8,P9) ─ P19(P17,P18,P2) ─ P20 ─ P21
+P17(P6,P8,P9) ─ P19(P17,P18,P2,P3) ─ P20 ─ P21
 P18(P5,P9)
 ```
 
 > P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15（行依赖列已同步；P5 原已依赖 P2）。
+> P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14/P19/P21 补 P3）。
 
 平台通道横切（[docs/12](../12-platform-capabilities.md) 正典）：ignorable 发射通道缺失时事实轨
 降级 KV 镜像——P2 事实源抽象 / P3 事实镜像表 / P8 段状态机 KV 双源 / P21 可视化读事实源抽象，
