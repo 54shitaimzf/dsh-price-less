@@ -86,6 +86,11 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D6', 'src/domains/a.ts', "ctx.llm.stream({ purpose: 'x' })\n")).not.toEqual(NO_ISSUES)
     expect(check('D6', 'src/platform/events.ts', "import type { GenerateOptions } from '@deepseek-ai/dsh-llm'\n")).not.toEqual(NO_ISSUES)
   })
+  it('D7：history 协议概念越出 platform/history.ts → issue（docs/10 §1 H4/H5 + docs/11 §2）', () => {
+    expect(check('D7', 'src/domains/a.ts', "port.beginCompaction({ compactionId: CompactionId('c') })\n")).not.toEqual(NO_ISSUES)
+    expect(check('D7', 'src/platform/events.ts', "session.append('compaction/start', d)\n")).not.toEqual(NO_ISSUES)
+    expect(check('D7', 'src/core/a.ts', "import { toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'\n")).not.toEqual(NO_ISSUES)
+  })
 })
 
 describe('正样本（干净文件 → 0 issue）', () => {
@@ -135,6 +140,10 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D6').check({ path: 'src/platform/llm.ts', text: llmFile }, new Map())).toEqual(NO_ISSUES)
     expect(rule('D6').check({ path: 'src/platform/events.ts', text: "import type { ContentBlock } from '@deepseek-ai/dsh-llm'" }, new Map())).toEqual(NO_ISSUES)
   })
+  it('D7：history 协议概念只许在 platform/history.ts（docs/10 §1 H4/H5 + docs/11 §2）', () => {
+    const historyFile = "import { CompactionId, toolPairingBalancedAfter } from '@deepseek-ai/dsh-compaction'\nsession.append('compaction/start', d)\nsession.append('compaction/prune', d)"
+    expect(rule('D7').check({ path: 'src/platform/history.ts', text: historyFile }, new Map())).toEqual(NO_ISSUES)
+  })
 })
 
 describe('真实树集成', () => {
@@ -147,7 +156,7 @@ describe('真实树集成', () => {
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
-      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass',
+      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

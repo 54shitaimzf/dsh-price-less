@@ -9,13 +9,15 @@ task 边界压缩+热尾 / 40% 压力路径 / 防溢出保险丝）+ 五条节�
 
 **现状**：P0（零位断言：`scripts/assert-structure.mjs` + `npm run assert`/`gate`）、P1（事件面
 接线：`platform/events.ts` H1/H7 firehose → 异步旁路队列 + `platform/logger.ts` 事实发射端口）、
-P1.1（诊断落盘 sink）与 P1.2（地基修补与契约闭合：打包清单 / 干净构建 / client 冒烟 /
-C2 purpose 单点适配 / T-entry 实现缝对齐）**已施工**；`platform/` 是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+P1.1（诊断落盘 sink）、P1.2（地基修补与契约闭合）、P2（度量底座 `core/ledger`）、
+P3（持久面 `platform/storage.ts`）、P4（技能目录 `platform/skills.ts`）、P5（辅助调用
+`platform/llm.ts`）与 P6（改史端口 `platform/history.ts`：H4 surfaceOp replace +
+H5 compaction 事务 + 配对平衡守卫）**已施工**；`platform/` 是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
 client/ 设置壳**全保留**（星标按钮 +
-度量可视化按 `docs/11 §5` 接线）；后续机制按 `docs/11 §8` 搭建序（R1 余量 P2–P7 → R2–R4）与
+度量可视化按 `docs/11 §5` 接线）；后续机制按 `docs/11 §8` 搭建序（R1 余量 P7 → R2–R4）与
 `docs/implement/` 工单推进，核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；

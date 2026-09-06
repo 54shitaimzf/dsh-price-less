@@ -147,6 +147,12 @@ export const RULES = [
       && f.path !== 'src/platform/llm.ts'
       ? [{ message: 'llm service concepts must only appear in platform/llm.ts (H12 辅助调用端口收口, docs/10 §1 H12)' }]
       : [] },
+
+  { id: 'D7', canon: 'docs/10 §1 H4/H5 + docs/11 §2 history.ts', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
+    /(CompactionId|compaction\/start|compaction\/end|compaction\/prune|toolPairingBalanced|@deepseek-ai\/dsh-compaction)/.test(f.text)
+      && f.path !== 'src/platform/history.ts'
+      ? [{ message: 'history protocol concepts (H4/H5 compaction/* + pairing guard) must only appear in src/platform/history.ts (docs/10 §1 H4/H5)' }]
+      : [] },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */

@@ -206,7 +206,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 | `src/platform/llm.ts` | `GenerateOptions.purpose` 单点适配、`streamCeLlm`、`toCeLlmUsage` | 已施工（P5） |
 | `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
-| `src/platform/history.ts` | `Session.append(surfaceOp replace)` | 未施工（P6） |
+| `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/post-execute')` | 未施工（P7） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session` | 已施工（壳保留） |
 

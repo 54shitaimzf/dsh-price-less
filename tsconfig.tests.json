@@ -3,9 +3,13 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2023"],
+    "lib": [
+      "ES2023"
+    ],
     "strict": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
@@ -13,5 +17,11 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["tests/ce-logger.spec.ts", "tests/llm-purpose.spec.ts", "tests/storage.spec.ts", "tests/skills.spec.ts"]
+  "include": [
+    "tests/ce-logger.spec.ts",
+    "tests/llm-purpose.spec.ts",
+    "tests/storage.spec.ts",
+    "tests/skills.spec.ts",
+    "tests/history.spec.ts"
+  ]
 }

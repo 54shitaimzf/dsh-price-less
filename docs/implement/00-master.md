@@ -9,7 +9,7 @@
 
 设计文档写清了"该是什么"，但直接丢给廉价模型施工会翻车在三处：**猜 API**（harness 没这个
 接口它也敢编）、**做设计**（文档留的口子它自己拍板）、**验不了**（"看起来对了"就算完）。所以
-把 R0–R4 拆成 28 份工单（P0–P21b + P1.1/P1.2 追记）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
+把 R0–R4 拆成 29 份工单（P0–P21b + P1.1/P1.2/P5.1 追记）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
 flash 只需要照单干活——不需要理解全局，禁止发挥。
 
 ## 1. 工单制（角色与纪律）
@@ -63,7 +63,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P3 | 持久面（已施工 commit `ac15d73`；扩写工单见 [P3-storage.md](P3-storage.md)） | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；**+ 事实镜像表**（降级态，[12 §3](../12-platform-capabilities.md)）；[09 §2](../09-state.md) 协议） | P1,P2 | M |
 | P4 | 技能目录端口（已施工 commit `3abe364`；扩写工单见 [P4-skills.md](P4-skills.md)） | R1 | `platform/skills.ts`（H13 `ctx.skills` 官方缝快照枚举 + `skills/change` watch + 引用守卫查表接口） | P0 | S |
 | P5 | 辅助调用端口（已施工 commit `f48c51f`；扩写工单见 [P5-llm.md](P5-llm.md)） | R1 | `platform/llm.ts`（H12 `llm.stream({purpose})` + usage/缓存回执；**C2 单点适配已由 P1.2 落锚；peerDep/build 链接已由 P1.2 落位，P5 只核验**） | P2 | S |
-| P6 | 改史端口 | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
+| P5.1 | P5 审查补正（llm 回执遏制 + docs/10 状态行闭合 + 流类型/早断语义锁定；扩写工单见 [P5.1-llm-hardening.md](P5.1-llm-hardening.md)） | R1 | 修 `platform/llm.ts`（返回类型 `AsyncGenerator`；onUsage 抛错遏制）；补 `tests/llm-stream-robustness.spec.ts` 2 用例；docs/10 状态行补 H10/H13 | P5 | S |
+| P6 | 改史端口（已施工；扩写工单见 [P6-history.md](P6-history.md)） | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
 | P7 | 工具端口 | R1 | `platform/tools.ts`（H6 `tools/post-execute` accept content 覆盖/追加 = T-entry/T-note；`tools/execute` 仅信号/计量）；补 peerDep `dsh-tools` | P1 | S |
 | P8 | 分划单位 + 稳定前缀 | R2 | `core/units.ts`（[01 §3.5](../01-architecture.md) 状态机）+ `core/prefix.ts`（技能目录快照**本地重声明同构类型** + 项目帧 vN；`prefixRebuildCause`；字节稳定断言，[02 §2](../02-discriminator.md)/[06 §4](../06-cache.md)；**watch 经 P4 端口在 index 装配根接线**） | P3,P4,**P2** | M |
 | P9 | 卷宗 | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
@@ -98,6 +99,9 @@ P17(P6,P8,P9) ─ P19(P17,P18,P2,P3) ─┬─ P20a(P19) ─┐
 P18(P5,P9)                          └─ P20b(P19) ─┤
                                                    └─ P21a(P20a,P20b,P3) ─ P21b(P21a)
 ```
+
+> P5.1 追记（2026-09-07 审查补正）：P5 ─ P5.1；只做回执遏制/流类型语义锁定/docs 状态行闭合，
+> 不改变 R1–R4 主干依赖。
 
 > P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
 > P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b/P19/P21a 补 P3）。
@@ -153,7 +157,7 @@ commit: `<type>(<scope>): <一行>`；账本快照：<是否需要>
 
 ## 6. 总纲自身的验收
 
-- [ ] §3 表 28 行（含 P1.1/P1.2 追记）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
+- [ ] §3 表 29 行（含 P1.1/P1.2/P5.1 追记）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
 - [ ] 每行依赖列构成 DAG（无环）；
 - [ ] 尺寸全部 S/M（L 已注明拆分）；
 - [ ] 工单模板含 harness 符号核验位与停工上报条款。
