@@ -1,5 +1,8 @@
 # P1 事件面接线（映射 R1；依赖 P0；尺寸 S）
 
+> 状态：**已施工**（commit `1ed5419` 立面 + `28351b3` ignorable 翻转；harness LogIntent 补丁
+> `04cba8f394`，session 包 81 测试全绿 + api-catalog 重生成校验过）。施工期修正 3 处（S2
+> 关键词禁令删除 / D2 零位 pass / apply-smoke 适配）均已回写本文。
 > 设计正典：[10 §1](../10-wiring.md)（H1/H7）/ [11 §2](../11-structure.md)（模块树两行）/
 > [11 §4](../11-structure.md)（日志纪律②③）/ [02 §2](../02-discriminator.md)（输入面过滤）/
 > [07 §5](../07-metrics.md)（回放管道）/ [09 §1](../09-state.md)（会话事实双源）。

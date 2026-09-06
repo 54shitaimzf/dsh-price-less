@@ -54,8 +54,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 
 | # | 工单 | 映射 | 新增/改动 | 依赖 | 尺寸 |
 |---|---|---|---|---|---|
-| P0 | 工程零位核对 | R0 | manifest 差距核对（[11 §1](../11-structure.md) 表逐项）；`scripts/assert-structure.mjs` 断言骨架（暂全过）+ `npm run assert` | — | S |
-| P1 | 事件面接线 | R1 | `platform/logger.ts` + `platform/events.ts`（H1 firehose → 异步旁路队列；[10 §1](../10-wiring.md) H1/H7） | P0 | S |
+| P0 | 工程零位核对（已施工 commit `274e37d`） | R0 | manifest 差距核对（[11 §1](../11-structure.md) 表逐项）；`scripts/assert-structure.mjs` 断言骨架（暂全过）+ `npm run assert` | — | S |
+| P1 | 事件面接线（已施工 commit `1ed5419` + 翻转 `28351b3`；harness LogIntent 补丁 `04cba8f394`） | R1 | `platform/logger.ts` + `platform/events.ts`（H1 firehose → 异步旁路队列；[10 §1](../10-wiring.md) H1/H7） | P0 | S |
 | P2 | 度量底座 | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；observe 空转入账） | P1 | M |
 | P3 | 持久面 | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；[09 §2](../09-state.md) 协议） | P0 | M |
 | P4 | 技能目录端口 | R1 | `platform/skills.ts`（H13 `SKILL.md` 枚举 + watch + 引用守卫查表接口） | P0 | S |

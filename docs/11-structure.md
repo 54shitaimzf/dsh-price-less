@@ -28,7 +28,7 @@
 | 项 | 规范要求 | 现状 | 动作 |
 |---|---|---|---|
 | name/version | `@dsh-external/dsh-context-economy` / 0.0.1 | 一致 | — |
-| peerDeps | 范围声明不硬编码版本 | cordis/dsh-settings/schemastery 在 | **R1 补** `@deepseek-ai/dsh-llm`、`@deepseek-ai/dsh-tools`（判别/断面/剪切需要），版本随 checkout 核对 |
+| peerDeps | 范围声明不硬编码版本 | cordis/dsh-settings/schemastery/dsh-session/dsh-llm 在（P1 补，junction 集随 build.sh） | **R1 补** `@deepseek-ai/dsh-tools`（剪切需要，P7），版本随 checkout 核对 |
 | dsh.bundle.patch | `./cordis.patch.yml` | 在 | R4 加 compaction-basic `auto:false` 覆写（防双触发，[10 §1](10-wiring.md) 辨析③） |
 | dsh.client.* | inject + platform + `exports["./client"]` | 全在 | — |
 | 构建 | build.sh（DSH_CHECKOUT 探测 + junction 链接）→ tsc host → tsdown client | 在 | R1 起链接集随 peerDeps 扩 |
