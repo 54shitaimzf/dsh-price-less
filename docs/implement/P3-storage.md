@@ -1,6 +1,6 @@
 # P3 持久面（映射 R1；依赖 P1,P2；尺寸 M）
 
-> 状态：**已施工（本单完成；`node scripts/verify-p3.mjs` 输出 `P3 VERIFY PASS`，`npm run gate` 全绿，`DSH_CHECKOUT=G:/deepseek-harness npm run build` 通过）**。
+> 状态：**已施工（commit `ac15d73`；`node scripts/verify-p3.mjs` 输出 `P3 VERIFY PASS`，`npm run gate` 全绿，`DSH_CHECKOUT=G:/deepseek-harness npm run build` 通过）**。
 > 设计正典：[09 §1–§6](../09-state.md)（双源结构 / 实体版本协议 / 恢复契约 / 回滚审计）/
 > [11 §2–§3](../11-structure.md)（模块树 `platform/storage.ts` 行 + 三轨持久化）/
 > [11 §8](../11-structure.md)（R1 出门门槛）/
@@ -227,10 +227,13 @@ D3 允许 logger.ts 引用 `setFactMirror`（可删除单元内）；`index.ts` 
 在 host 依赖链接区（`dsh-session-persistence` 之后）加：
 
 ```bash
-link_pkg @deepseek-ai/schemastery vendor/schemastery
 link_pkg @deepseek-ai/dsh-storage packages/storage/storage
 link_pkg @deepseek-ai/dsh-storage-domain packages/storage/storage-domain
 ```
+
+`@deepseek-ai/schemastery` 不需要在插件根重复链接：`dsh-storage-domain` 包内
+`node_modules/@deepseek-ai/schemastery` 已链接 checkout `vendor/schemastery`（Node/TS 按
+包局部解析），build.sh 根链接 `schemastery` 供本插件 `src/config.ts` 使用。
 
 `zod` 已由 `link_store_pkg zod` 链接（P1.2）；本单起 host lib 直接 `import z from 'zod'`，
 因此 `package.json` peerDependencies 增加（均不硬编码精确版本）：
@@ -371,10 +374,18 @@ Node 内置模块 + `spawnSync`，只跑命令/扫描，不替代测试。流程
 | 行 | 原依赖 | 修正为 | 理由 |
 |---|---|---|---|
 | P3 | P0 | **P1,P2** | 事实镜像接线经 P1 `logger/ignorable-channel`；`FactMirrorRecord`↔`LedgerFact` 等价断言依赖 P2 |
+| P12 | P10 | **P10,P3** | 自动断面逐消息追加卷宗 `dossier`（docs/02 §2/§3） |
 | P13 | P8,P9,P11 | **P8,P9,P11,P3** | init 项目帧写 `project_frame`（docs/09 §2/§4） |
 | P14 | P11,P13,P6 | **P11,P13,P6,P3** | 星标确认写 `optimize_artifact` + 回填卷宗（时序 B，docs/10 §4） |
 | P19 | P17,P18,P2 | **P17,P18,P2,P3** | 边界归档写 `boundary_archive`（时序 A，docs/10 §3） |
 | P21 | P19,P20 | **P19,P20,P3** | 恢复编排直接读/回滚四实体表（docs/09 §4） |
+
+**句柄获取铁律（P3 审查补充，2026-09-06）**：`context_economy` 域在 `index.ts` 开域后
+由 P3 的 `ContextEconomyStorage` 句柄统一服务；后续工单**不得**自行调用
+`openContextEconomyStorage`（域名全局唯一，重复 open 会被 harness 拒为 `already-open`）。
+消费方式 = 在 `index.ts` 的 `openContextEconomyStorage(...).then(opened => ...)` 装配回调内，
+把 `opened` 作为参数传给 domain 工厂；domain 工厂签名建议为
+`(ctx, deps: { storage: ContextEconomyStorage; ... }) => disposer`。
 
 总纲 §3 依赖主干图补注：`P2 ─ P3`（P3 依赖列已含 P2）；上述行新增依赖均从较早节点指向
 较晚节点，DAG 性保持。

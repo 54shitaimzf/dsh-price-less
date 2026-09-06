@@ -6,7 +6,7 @@
 > 事实冲突时以源码为准。
 >
 > 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`，2026-09-06 审查）。
-> 当前插件：`@dsh-external/dsh-context-economy`（`D:/deepseek-plugin`，HEAD `0767ab0`，P1.2 已施工）。
+> 当前插件：`@dsh-external/dsh-context-economy`（`D:/deepseek-plugin`，HEAD `ac15d73`，P3 已施工）。
 > 使用方式：后续工单（P2 起）凡涉及 harness API，先查本文 §3/§4 的“核验源”列；表中未列的符号
 > 仍按总纲铁律逐条 grep 到定义处才准 import。
 
@@ -146,7 +146,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 - `open(spec)`：`packages/storage/storage-domain/src/index.ts:100-140`——reserve 域名防重入、
   路由 backend、开 KV unit、按表 zod 校验记录、构造 `Domain`。**调用者持有 handle 并负责 close**
   （通常作为 `ctx.effect` disposer）。
-- 当前插件：尚未使用（P3 落 `platform/storage.ts` 四实体表 + 事实镜像表）。
+- 当前插件：已使用（P3 `platform/storage.ts`：`context_economy` 域四实体表 + `fact_mirror` + `entity_snapshots`；`index.ts` 经 `logger.registerFactMirror` 接线）。
 
 ### 3.7 `tools/*` 事件（P7/P15 使用）
 
@@ -189,7 +189,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 | `src/platform/ignorable-channel.ts` | `SESSION_LOG_INTENT` 探测、`Session.append(type,data,{ignorable:true})` | 已施工（P1 翻转） |
 | `src/platform/diag-sink.ts` | `ctx.logger.exporter()` | 已施工（P1.1） |
 | `src/platform/llm.ts` | `GenerateOptions.purpose` 单点适配 | 契约锚已落（P1.2）；调用面待 P5 |
-| `src/platform/storage.ts` | `ctx.storageDomain.open` | 未施工（P3） |
+| `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
 | `src/platform/skills.ts` | DSH skill 目录扫描（H13） | 未施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)` | 未施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/post-execute')` | 未施工（P7） |
