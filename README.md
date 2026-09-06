@@ -1,42 +1,46 @@
 # @dsh-external/dsh-context-economy
 
-DSH 插件：**全面 token 节约 + 执行效率**（`src/config.ts` 装配，schema 见 `src/config.ts`）。
+DSH 的**全自动上下文管理工具**：判别、剪切、压缩自转，无人值守；用户唯一的主动作是可选的
+星标（把散落的意图/约束/验收/路径整理成一份确定化的执行包）。
 
-## 当前落地状态（v0.8.0）
+**五条节约理念**：缓存复用 · 软件架构经验提取 · 无关内容剪枝 · 执行路线确定化 ·
+多做（相信用户决策）· 只在必要时刻探索 —— 正典见 [docs/00 §1](docs/00-overview.md)。
 
-| 能力 | 状态 | 代码 | 文档 |
-|---|---|---|---|
-| 判别器（task 边界语义判定） | ✅ | `src/discriminator/*` | [docs/03](docs/03-input-domain.md) |
-| 判别器 → 段状态机（语义票合议，active 模式） | ✅ v0.8.0 | `src/task/projection.ts` + `engine.ts` | docs/03 §5 |
-| 任务段状态机（投影 fold） | ✅ | `src/task/projection.ts` | docs/03 |
-| 显式 `/task` 指令 | ✅ | `src/task/explicit.ts` | docs/03 |
-| 压缩触发 + 溢出接管 | ✅ | `src/task/{orchestrator,driver,range,compaction}.ts` | [docs/02](docs/02-compaction.md) |
-| task 分划压缩选择（近因门+冷区闭合任务） | ✅ | `src/task/range-task-partitioned.ts` | docs/02 §4.5 |
-| 结构化摘要 schema / 缓存 / 按 task 落盘 | ✅（L0） | `src/task/{digest-schema,digest-cache,digest-store}.ts` | docs/02 §4.5 |
-| digest 替换检查点事务（G2 自研驱动，端到端） | 📐 | `src/task/{summarizer,driver-task-partitioned}.ts` | docs/02 §4.5 Next |
-| 配置 schema | ✅ | `src/config.ts` | [docs/00 §2](docs/00-overview.md) |
-| 提示词产品域 / 编排域 / 文件与寻址域 | 📐 蓝图（未实现） | — | docs/04 / 13 / 15 |
+## 一图
 
-## 快速上手（读文档）
+```
+ ├─ 核心一 优化判别器（02）：一个理解核、两个断面（星标手动 / 自动对表）
+ ├─ 核心二 压缩器（04）：边界装配+热尾 · 压力路径 40% · 防溢出保险丝
+ ├─ 叠加层 剪切层（03）：工具剪切四档 + 对话 run 剪切
+ └─ 支撑面：宪法守卫（05）· 缓存纪律（06）· 度量（07）· 实验（08）
+          · 状态版本（09）· 挂点（10）· 工程结构（11）
+```
 
-1. **[docs/00](docs/00-overview.md)** 系统总览——**先看状态标注**（✅ 已落地 / 📐 蓝图），不把设计当现状；
-2. **[docs/03](docs/03-input-domain.md)** 判别器真相：决策链（T0/L0/L1/LLM/fail-lazy）、窗口口径、自适应链、溯源记录、observe/active 模式；
-3. **[docs/07 §0.5](docs/07-metrics.md)** 当前已落地指标一览（定义 + 观测方式 + 代码落点 + 改造协议）。
+## 读文档（推荐序）
 
-宪法与回退链：[docs/05](docs/05-rule-domain.md)（确定性优先 / 字节稳定 / 账本快照 / 配对 Δ）。
+1. **[docs/00](docs/00-overview.md)** 总览：定位、五理念、公共契约、术语、路线图；
+2. **[docs/01](docs/01-architecture.md)** 架构总纲：平面分层、分划单位正典、四层防御；
+3. **[docs/02](docs/02-discriminator.md)** / **[docs/03](docs/03-shear.md)** /
+   **[docs/04](docs/04-compactor.md)** 双核心与剪切层（机制设计正典）；
+4. **[docs/11](docs/11-structure.md)** 工程结构与搭建（模块树 / 数据面 / UI 壳 / R0–R4）；
+5. 按需：宪法 [05](docs/05-constitution.md) · 缓存 [06](docs/06-cache.md) · 度量 [07](docs/07-metrics.md)
+   · 实验 [08](docs/08-experiment.md) · 状态 [09](docs/09-state.md) · 挂点 [10](docs/10-wiring.md)。
+
+**实验框架**：`experiments/evalground/`（EXPERIMENT.md = 实验方法学单一事实源；run 证据原样保留）。
+**存档**：退役设计 = [docs/legacy.md](docs/legacy.md)；账本历史 = [docs/ledger-history.md](docs/ledger-history.md)（只增不改）。
 
 ## 构建 / 测试 / 挂载
 
 ```bash
 # 构建（需先建立 checkout 依赖 junction）
-DSH_CHECKOUT=G:/deepseek-harness bash scripts/build.sh   # 或等价 tsc 编译（见 docs/00）
-npm run test      # vitest 全量单测（76 用例）
-npm run typecheck
+DSH_CHECKOUT=G:/deepseek-harness npm run build       # host tsc + client tsdown
+npm run typecheck && npm run typecheck:client
+npm run test                                          # vitest（壳不变量）
 
-# 热装配到当前 DSH 实例（免重启，替换 <root> 为本目录）
-dev_install_package <root>      # 双路径一致：重启后由 profile bundles 装配
-dev_uninject_plugin dsh-context-economy   # 卸载即净（回滚）
+# 注入到 DSH 实例（注入器环境内）
+dev_inject_plugin <本目录>      # 卸载：dev_uninject_plugin dsh-context-economy
 ```
 
-> 装配后判别器默认 **off**（不挂载，零成本）；判别记录 = 日志行
-> `context-economy: judge record <json>`（grep 即回放）。observe/active 需在配置卡片显式开启。
+> 装配后自动链默认 **off**（不挂载，零成本）；星标通道常在。设置卡壳 + 星标按钮 +
+> 消息列表度量可视化按 [docs/11 §5](docs/11-structure.md) 接线，设置项载荷唯一入口
+> `client/field-model.ts`。

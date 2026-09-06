@@ -1,112 +1,106 @@
-# 10 · DSH 挂点图（实现接线手册）
+# 10 · 挂点与接线（权威挂点地图）
 
-> 系统如何接到 DSH 的既有机制上。事件名以 `packages/` 源码为准
-> （agent-loop、compaction、session、system-prompt、llm、tools、client-ui-slots）。
-> 写入顺序：先 [docs/12](12-main-plugin.md)（主插件底座），再按能力域。
+> 本文是**权威挂点地图**——插件接到 DSH 的哪个事件/服务/槽上，逐条对 harness 源码核验。
+> 域归属视角与三条主时序也在此。事件分两层：会话日志事件（`session/event` firehose，
+> append-only 落盘）与 cordis 运行时事件（waterfall/emit，不落盘）。
+> 状态：设计 · 未实现（模块落位见 [11 §3](11-structure.md)）。
 
 ## 0. 它解决什么问题（人话版）
 
-这套件不是自己另起炉灶，而是**接线**（把插件接到 DSH 既有机制上）到 DSH 已经跑着的机制里（agent-loop、compaction、session 等）。问题是：这些机制在哪个事件、哪个钩子上能插进去？插错了就监听不到，机制就白做。所以这份文档就是一张**接线手册**：先给一张**挂点表**（挂点 = DSH 的某个事件/钩子，插件插上去干活的位置），说明每件事在哪接、归哪个域管；再给**命令挂点**（斜杠命令 = 用户可输入的权威入口），明确 `/task` 系列**归输入域**、判别器（判定任务边界的那套逻辑，输入域）消费的 **Tier-0 信号**（用户显式命令：`/task` 系列文本识别，`src/task/explicit.ts`——一票算数）；然后两条**时序 A/B**（两条主线流程的逐步走法：task 结束→知识更新 / 点击优化→管线）把流程一步步走给你看；最后给**缓存对齐检查点**和**实施顺序**。收益是动手前先知道"接哪、谁管、怎么走"，少走弯路；代价是每条挂点都要有配套度量字段（docs/07），否则算不出账。它不改设计，只告诉你往哪接、按什么顺序接。
+接线错两件事就全白做：**监听不存在的事件**（机制聋了）和**绕过官方协议改历史**（升级即碎）。
+这篇就是接线手册：每个机制挂哪个确切钩子、走哪条官方通道、命令面怎么注册、三条主流程
+逐步怎么走、改完跑哪四道缓存断言。
 
-## 1. 挂点表
+## 1. 挂点表（H1–H13，对 harness 源码逐条核验）
 
-| 机制 | DSH 挂点 | 本套件用途 | 归属 |
+| # | 机制 | 挂点（确切名） | 通道与语义 |
 |---|---|---|---|
-| 每步注入 | `agent/pre-step` waterfall（返回 `decision.messages`） | 管道引导行（可分性预检） | 编排域 |
-| 判别调用 | `session/event`（`user/message` 输入面：append + `source.kind==='user'` + 主会话） | 语义票：L0 快路径 / L1 缓存 / LLM 判别（自适应链） → `judge-recorded`/`judge-error`/`judge-verdict`(active) | 输入域 |
-| 压力压缩触发 | `agent/pre-step`（阈值计量） | task 内压缩（保尾压头） | 压缩域 |
-| 溢出恢复 | `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | 强制压缩 + 重试 | 压缩域 |
-| 压缩事务 | `compaction/start`/`summary`/`end` 事件 | 检查点落盘、配对平衡、缩水校验 | 压缩域 |
-| 证据采集 | `tool/call`、`tool/result`、`user/message`、approval | 映射/偏好现象、文件引用计数（可分性判据） | 压缩域、输入域 |
-| 请求信封 | `request/header`（system + tools 字节） | 前缀稳定性断言（P 锚）、模板注册基准 | 输入域、提示词域 |
-| 辅助调用 | `llm.stream({purpose:'…'})` | 摘要/标注调用（前缀对齐 + 可区分度量） | 压缩域、输入域 |
-| 度量 | `step/start/end`、`assistant/message`(usage) | 账本回放（docs/07） | 全局 |
-| UI 按钮 | client `conversation.view` slot（`src/client/index.ts`） | "优化提示词"入口与预览 | 提示词域 |
-| 版本失配告警 | 自定义事件 `context-economy/version-mismatch` | 隐藏/可见一致性护栏（docs/09 §5） | 输入域、提示词域 |
-| 恢复编排 | 会话 resume / 进程重启 | 主插件恢复契约（docs/12 §2） | 主插件 |
-| 守卫拦截 | 装配期 + 运行期钩子 | 预算/字节/补丁/回退链检查（docs/12 §4） | 主插件 |
-| 管道事件 | `pipeline/*`（log-only） | 拆分/扇出/合流/回退可观测 | 编排域 |
+| H1 | 判别器输入 | `session/event` → `user/message` | 输入面过滤同 [02 §2](02-discriminator.md)（append + `source.kind==='user'` + 主会话 + u≥1）；同步 post-commit 派发，监听器异常不外溢 |
+| H2 | 边界/步准入 | `agent/pre-step`（waterfall） | task 闭合发现（边界信号成立 → 触发边界压缩）；**必须 `return next()`** |
+| H3 | 压力触发 | `agent/pre-step`（压力计量）+ `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | `pressureRatio=0.4` × 压缩域窗口按 wire 锚定计量（[04 §3](04-compactor.md)）；溢出恢复走 request-error 接管 |
+| H4 | **改史唯一通道** | `session.append(type, data, {surfaceOp:{op:'replace',start,end}, sourceEventSeqs})` | replace 的 `sourceEventSeqs` 必含全部被遮蔽节点；紧邻契约：`compaction/summary` ↔ 替换 `user/message`；`compaction/prune` 影子计价紧随同步 append |
+| H5 | 压缩事务 | `compaction/start` … `compaction/end`（log-only 标记对） | 持锁幂等（`turn:null` 独立事务）；`assertNoActiveCompaction` 防重入 |
+| H6 | 剪切层挂点 | `tools/execute` around-wrapper（`next()` 进 body）= T-entry 写时整形；`tools/post-execute` accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车 | 工具自有 `finalizeContent` 属定义侧（仅自有工具） |
+| H7 | 度量回放 | `step/start|end`、`assistant/message`（usage）、`request/header`、`tool/call|result`（原始 arguments + meta） | [07](07-metrics.md) 账本全部字段可从会话 JSONL 回放重算 |
+| H8 | 设置 | `ctx.settings.installSection(owner,'context-economy',Config,entry,hooks)`；写 = `mutate(ns,ops,expectedRevision)` revision-fence | 持久化归 settings-file（原子写 + 文件锁）；`settings/updated` 观察 |
+| H9 | 恢复 | `agent/session-start{source:'resume'|'startup'}` + Session 构造种子 | 种子**不上 firehose**（`firstLiveSeq` 定界）——重启重建需自扫或订阅时区分；恢复序 = [09 §4](09-state.md) |
+| H10 | 持久 KV | `ctx.storageDomain.open(defineDomain({name,version,tables}))` | durable 写 + `domain/changed`；backend 可换（json/sqlite） |
+| H11 | UI | client `ctx.slots.register({name:'settings.section'…},Card)`；conversation.view 星标按钮；`ctx.remote.session.modelCatalog()` | 设置卡壳（已保留）；星标 → host 方法（时序 B）；模型路由目录 |
+| H12 | 辅助 LLM | `llm.stream({purpose})` | 判别 / 断面 / 压缩调用统一 purpose 标记（度量可区分 + 前缀对齐）；usage 回执入账 |
+| H13 | 技能目录 | DSH skill 系统文件根扫描（`SKILL.md` → name/description/whenToUse；目录 watch 热更新） | 稳定前缀原料 + 引用守卫查表（[02 §2](02-discriminator.md)）；枚举纯机械零 LLM |
 
-## 1.1 命令挂点（斜杠命令 = 用户可输入的权威入口）
+**三条辨析（防接错缝）**：
 
-内置命令家族（同一风格锚点）：`/plan`（计划模式）、`/goal`（粗轴目标）、`/compact`（手动压缩）、`/feedback`（反馈）。
-本套件要注册的命令（`ctx.commands.register({ name, description, ... })`，任一插件可注册，按会话作用域解析）：
+1. **harness 的 task ≠ 域 task**：原生 `team/task` 与 `todo/write` 只是判别器 L0 侧的
+   免费辅助事实；边界权威 = 优化判别器（[01 §3.5](01-architecture.md) 意图轴）。
+2. **改史没有任何旁路**：不能原地改写/删除会话行；一切历史变更（剪切/压缩/修复）都表达为
+   "append 带 replace 的表面事件"——原生表面 fold 因此自动正确派生（原生兼容的核心承诺）。
+3. **引擎协调**：压缩实现以旁路协议写入（不动 `ctx.compaction` 服务），
+   `cordis.patch.yml` 覆写 compaction-basic `auto:false` 防双触发；整体替换引擎为后续选项
+   （换引擎不换协议）。
 
-| 命令 | 归属 | 行为 | 事件 |
-|---|---|---|---|
-| `/task`（无参） | 输入域 | 查看当前 task（id、mode、pending、文件签名） | — |
-| `/task <描述>` | 输入域 | **显式新 task 起点**（用户宣言 = Tier-0 权威边界，压倒自动判定） | `task-boundary {kind:'explicit'}` |
-| `/task close` | 输入域 | 显式闭合当前 task（触发门控 → L3 差分） | `task-boundary {kind:'explicit-close'}` |
-| `/optimize-prompt` | 提示词产品域 📐 | 等同"优化提示词"按钮：跑 docs/04 管线 → 预览 diff → 原地替换（**蓝图，未落地**） | client popup 或命令结果 |
-| `/run-task-pipeline` | 编排域 📐 | 用户显式触发三段管道（**蓝图，未落地**） | `pipeline/split`…`pipeline/complete` |
+## 2. 命令面（用户权威入口）
 
-UI 层挂点：client `conversation.view` slot 按钮调用同一 host JSON 方法；斜杠命令与按钮共用同一管线（一入口两形态）。
-补充：`/plan` 事件（`plan/mode`）、goal 生命周期命令作为边界信号属机械时代设计（v0.3.0 退役）；判别器当前只消费 `user/message` 文本（docs/03 §2），不消费 plan/goal 事件——恢复事件面接入属蓝图。
+| 命令 | 归属 | 行为 |
+|---|---|---|
+| `/task <描述>` | 判别器 | **显式新 task 起点**（Tier-0 权威边界，压倒自动判定） |
+| `/task close` | 判别器 | 显式闭合当前 task（→ 边界压缩 + 归档） |
+| `/task`（无参） | 判别器 | 查看当前 task（id、卷宗规模、回填版本） |
+| `/optimize-prompt` | 判别器手动断面 | = 星标按钮（一入口两形态），跑 [02 §4](02-discriminator.md) 断面 |
+| `/compact`（DSH 原生） | 非边界 | 历史维护，判别器忽略（维护类命令不切碎 task） |
 
-**命令分两类（判界语义）**：
-- **边界命令**（Tier-0）：`/task`、`/plan`、goal 生命周期命令——宣言 task/goal 起止；
-  （当前落地 = `/task` 系列文本识别；`/plan`/goal 事件面为 📐 蓝图）
-- **非边界命令**（对判界无影响）：`/compact`（历史维护，最多记里程碑）、`/feedback`（反馈记录）、其它维护类命令。
-实现约定：判界引擎只消费边界事件的语义，维护类命令一律忽略，避免 `/compact` 这类动作把 task 错误切碎。
-
-## 2. 时序 A：task 结束 → L3 更新
-
-> 一条主线流程：一个 task 走到最后一步，系统怎么判断它结束了、并把学到的东西写进 L3。
+## 3. 时序 A：task 闭合 → 边界压缩 → 归档
 
 ```text
-turn/end（最后一步）
-  → 输入域: task 边界判定（判别器语义票——T0 显式 / L0 词表 / L1 缓存 / LLM 主路径，docs/03 §1）
-  ├─ 非边界 → 结束（零成本）
-  └─ 边界 → 主插件: L3 差分（证据→偏好/映射）+ 意图映射表更新（📐 蓝图，docs/12 §7–8）
-                ├─ 无证据 → 版本不变
-                └─ 有证据 → 差分写 + 版本+1（docs/09）
-                              → 下一轮锚定段 = 新版本（字节稳定）
-                                → 压缩域: 体积归档（旧 task → 摘要区，📐 蓝图）
+turn/end → 自动断面边界信号成立（或 /task close）
+  → H2 agent/pre-step：发现 closed && 未归档的 task
+  → 压缩器边界装配（H4/H5）：类型化摘要 + 热尾申报 → 装配（事实层冻结 + 坐标层 + 热尾 ≤10K）
+     · T-boundary 搭车：段内老调用对随大 replace 折叠（剪切层清单）
+  → 档案归档 vN（H10）→ 卷宗清空（新 task 新卷宗）
+  → 度量：task-digest-created / hotTail* / cutEvents 入账（H7）
 ```
 
-## 3. 时序 B：点击"优化提示词"
-
-> 另一条主线流程：用户在界面上点一下"优化提示词"，背后发生了什么。
+## 4. 时序 B：星标点击 → 断面 → 预览 → 回填 + 剪切
 
 ```text
-用户点击（client conversation.view）
-  → host JSON 方法 /context-economy/api/optimize
-    1. 任务类型识别（L0 机械）→ 模板命中（docs/04 §4）
-    2. 映射定位（意图映射表检索，docs/15 §1；embedding 缺位走机械等价）
-    3. 路径钉死（条件化，仅本会话工具）
-    4. SKILL.md 方法论机械摘录
-    5. verbatim spans 保留 → 预览数据返回
-  → client 渲染 diff → 用户确认/编辑
-  → 原地替换对话框内容（可见层）
-  → 编辑差异 → 高信号纠正 → L3 差分写（docs/09 §5）
+用户点星标（H11 conversation.view）或 /optimize-prompt
+  → host 方法：装配输入栈（稳定前缀[技能目录+项目帧] + 卷宗 + 当前 prompt）
+  → H12 llm.stream({purpose:'optimize-judge'})：单次断面（temperature 0、无工具调用）
+  → 双通道解析：产品（自由文本）+ 行式裁决（行级容错）
+  → client 渲染 diff → 用户确认/编辑（= 终稿）
+  → 执行：优化后 prompt 原地替换（对话框）；判别回填落卷宗 vN+1（H10）；
+     剪切清单 → H4 surfaceOp 执行（run 冲刷，结论句落位）；task 边界裁决仅提示不执行
+  → 度量：optimize-run 全账（输入栈体积/产出/回填/剪切规模/explorationAvoided 基线）
 ```
 
-## 4. 缓存对齐检查点（每次改动后跑）
+## 5. 时序 C：压力触发与保险丝
 
-改了任何一处，都要过这四道断言，确认前缀没有漂移、缓存没有白算：
+```text
+每请求前 wire 锚定计量 ≥ 0.4 × 压缩域窗口
+  → 压力压缩（H4/H5）：选缝（末段子任务起点）→ 检查点 + [cutPoint..end] 全量逐字
+  → 断路器（单 task 上限 3–4）；fail-lazy 重试一档
+保险丝（独立兜底）：估算 ≥ contextWindow × 0.8 → 重建消息表（保 [system, task] 前缀 +
+  最尾近消息）→ hard-truncate 事件入账；低于地板完全 no-op
+```
+
+## 6. 缓存对齐检查点（每次改动后跑）
 
 ```text
 断言1：本轮请求 = 上轮请求 + 新增段（前缀性质）
-断言2：锚定段/P 段同版本逐字节一致
-断言3：辅助调用（摘要/标注）为"上一次请求前缀 + 新颖尾"
-断言4：模板主体在同类请求间字节一致
+断言2：同版本卷宗/项目帧/档案/优化产物逐字节一致
+断言3：辅助调用（判别/断面/压缩）= 上一次请求真前缀 + 新短尾
+断言4：档案堆只追加（无原地改写；滑窗走 bump 语义）
 ```
 
-## 5. 实施顺序建议（依赖关系）
+## 7. 实施顺序（依赖关系）
 
-下面的顺序按依赖排出：前面的不做，后面的立不起来。
+与 [11 §9](11-structure.md) 搭建序一致：平台面（H7/H8/H10 观测与存储先行）→ 判别域
+（H1/H2/H12 + 星标 H11）→ 剪切域（H6/H4）→ 压缩域（H3/H4/H5）。
+前面的不做，后面的立不起来；每阶段出门槛 = 度量先行。
 
-```text
-第 0 步：docs/09 L3 存储（含意图映射表协议）+ docs/07 回放器 + 主插件底座（docs/12：恢复/接入/守卫/P 服务——先可观测、可恢复）
-第 1 步：输入域（task 生命周期发现）+ 压缩域（体积管理：消费边界事件）
-第 2 步：主插件数据面（意图映射表 task 周期更新 + L3 差分）
-第 3 步：提示词产品域（意图强调 + 模板缓存 + 用户编辑回流 + 管道任务模板）
-第 4 步：文件与寻址域（寻址参考 + 页式/快照/补丁链）+ docs/08 对照试验跑批 → 按数据决定各域去留
-第 5 步（按数据裁决）：编排域（管道，默认关）——三率达标才默认开
-```
+## 8. 验收标准
 
-## 6. 验收标准
-
-- [ ] 每个挂点都有对应度量字段（docs/07）；
-- [ ] 断言 1–4 进 CI；
-- [ ] 关闭任一能力域（Config 布尔）后，其余能力域功能完整。
+- [ ] 每个挂点都有对应度量字段（[07](07-metrics.md)）；
+- [ ] 断言 1–4 进 CI；改史调用只出现在 platform/history 层（grep 断言，[11 §10](11-structure.md)）；
+- [ ] 自定义会话事件全部 `ignorable:true`（类型级测试）；
+- [ ] 关闭任一域（Config 布尔）后其余功能完整。
