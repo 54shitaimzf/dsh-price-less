@@ -6,7 +6,7 @@
 > 事实冲突时以源码为准。
 >
 > 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`，2026-09-06 审查）。
-> 当前插件：`@dsh-external/dsh-context-economy`（`D:/deepseek-plugin`，HEAD `ac15d73`，P3 已施工）。
+> 当前插件：`@dsh-external/dsh-context-economy`（`D:/deepseek-plugin`，P4 已施工）。
 > 使用方式：后续工单（P2 起）凡涉及 harness API，先查本文 §3/§4 的“核验源”列；表中未列的符号
 > 仍按总纲铁律逐条 grep 到定义处才准 import。
 
@@ -148,7 +148,20 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   （通常作为 `ctx.effect` disposer）。
 - 当前插件：已使用（P3 `platform/storage.ts`：`context_economy` 域四实体表 + `fact_mirror` + `entity_snapshots`；`index.ts` 经 `logger.registerFactMirror` 接线）。
 
-### 3.7 `tools/*` 事件（P7/P15 使用）
+### 3.7 `ctx.skills`（技能目录，P4 使用）
+
+- Context 键：`packages/skill/skill/src/index.ts:286-288`（`ctx.skills: SkillRegistry`）。
+- `snapshot(options)`：`packages/skill/skill/src/index.ts:483-490`，返回
+  `{ skills: SkillSummary[], complete: boolean }`。
+- `get(name, options)`：`packages/skill/skill/src/index.ts:502-504`，返回
+  `SkillDefinition | undefined`；`isSkillName` 不合法直接 `undefined`。
+- `skills/change`：`packages/skill/skill/src/index.ts:290-299`，emit 通知（unfiltered
+  invalidation）；消费者自己 `snapshot` 重取，监听异常被 harness 遏制。
+- 当前插件：`src/platform/skills.ts` 已施工（P4）——经 `ctx.skills` 官方缝生成
+  model-invocable 目录快照、`skillCatalogContains` 引用守卫查表、`watchSkillCatalog`
+  订阅 `skills/change` 热更新；不手写 `SKILL.md` 扫描。
+
+### 3.8 `tools/*` 事件（P7/P15 使用）
 
 - `tools/execute` 与 `tools/post-execute` 都是 waterfall：
   `packages/core/tools/src/index.ts:155-175`。
@@ -157,7 +170,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   `tools/post-execute` accept `content` 覆盖/追加。
 - 当前插件：尚未订阅；P7 落 `platform/tools.ts`。
 
-### 3.8 客户端接口（client 半边）
+### 3.9 客户端接口（client 半边）
 
 - 客户端插件包声明 `dsh.client`（platform/web、inject 列表、`exports["./client"]`）。
 - 当前插件 client 注入：`['slots','settingsScope','remote','remote.session','connection']`
@@ -190,7 +203,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 | `src/platform/diag-sink.ts` | `ctx.logger.exporter()` | 已施工（P1.1） |
 | `src/platform/llm.ts` | `GenerateOptions.purpose` 单点适配 | 契约锚已落（P1.2）；调用面待 P5 |
 | `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
-| `src/platform/skills.ts` | DSH skill 目录扫描（H13） | 未施工（P4） |
+| `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)` | 未施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/post-execute')` | 未施工（P7） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session` | 已施工（壳保留） |

@@ -78,6 +78,10 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D4', 'src/domains/a.ts', "ctx.storageDomain.open({ name: 'x' })\n")).not.toEqual(NO_ISSUES)
     expect(check('D4', 'src/core/a.ts', "import { defineDomain } from '@deepseek-ai/dsh-storage-domain'\n")).not.toEqual(NO_ISSUES)
   })
+  it('D5：skill 概念越出 platform/skills.ts 与 index.ts → issue（docs/10 §1 H13 + docs/11 §2）', () => {
+    expect(check('D5', 'src/core/a.ts', "import type { SkillSummary } from '@deepseek-ai/dsh-skill'\n")).not.toEqual(NO_ISSUES)
+    expect(check('D5', 'src/platform/events.ts', "ctx.on('skills/change', () => {})\n")).not.toEqual(NO_ISSUES)
+  })
 })
 
 describe('正样本（干净文件 → 0 issue）', () => {
@@ -117,6 +121,11 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D4').check({ path: 'src/platform/storage.ts', text: "defineDomain({ name: 'x' }); ctx.storageDomain" }, new Map())).toEqual(NO_ISSUES)
     expect(rule('D4').check({ path: 'src/index.ts', text: "ctx.inject(['storageDomain'], ...)" }, new Map())).toEqual(NO_ISSUES)
   })
+  it('D5：skill 概念只许在 platform/skills.ts 与 index.ts（docs/10 §1 H13 + docs/11 §2）', () => {
+    const skillFile = "import type { SkillSummary } from '@deepseek-ai/dsh-skill'\nctx.skills\n'skills/change'"
+    expect(rule('D5').check({ path: 'src/platform/skills.ts', text: skillFile }, new Map())).toEqual(NO_ISSUES)
+    expect(rule('D5').check({ path: 'src/index.ts', text: "ctx.skills via wiring" }, new Map())).toEqual(NO_ISSUES)
+  })
 })
 
 describe('真实树集成', () => {
@@ -129,7 +138,7 @@ describe('真实树集成', () => {
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
-      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass',
+      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

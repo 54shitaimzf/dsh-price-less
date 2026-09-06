@@ -135,6 +135,12 @@ export const RULES = [
         && f.path !== 'src/platform/storage.ts' && f.path !== 'src/index.ts'
         ? [{ message: 'storageDomain/defineDomain/domainTable must only appear in platform/storage.ts (index.ts wiring allowed, docs/09 §1)' }]
         : [] },
+  { id: 'D5', canon: 'docs/10 §1 H13 + docs/11 §2 + docs/13 §3.7',
+    appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
+    check: (f) => /(ctx\.skills|skills\/change|SkillSummary|SkillDefinition|@deepseek-ai\/dsh-skill)/.test(f.text)
+      && f.path !== 'src/platform/skills.ts' && f.path !== 'src/index.ts'
+      ? [{ message: 'skill registry concepts must only appear in platform/skills.ts (index.ts wiring allowed, docs/10 §1 H13)' }]
+      : [] },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */
