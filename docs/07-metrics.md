@@ -85,10 +85,10 @@ costPerTask = 执行(主模型) + 判别(judge*) + 断面(optimize*) + 压缩(co
 == batch <id> · arm <name> · <date> ==
 质量门：完成率 / 盲评（先过门）
 成本：costPerSuccessfulTask（冷/热分列）+ 恒等式分解
-机制：本批改动族字段（Δ 配对，n ≥ 3 复现）
+机制：本批改动族字段（账本快照前后差 Δ；同任务重跑可选，不设实验臂门槛）
 断裂：prefixRebuild* / cutBreakCost
 误伤：cutMisfireDetected / rerunAfterCut / rereadAfterRepair
-结论：仅配对 Δ，预注册阈值对照
+结论：仅信可回放账本对比，阈值先登记后读数
 ```
 
 ## 7. 验收标准
