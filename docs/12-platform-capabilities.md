@@ -4,7 +4,7 @@
 > 以什么形态实现、官方未提供时如何降级、官方提供后如何原子删除。
 > 状态：通道 2 条——C1 ignorable 写入（本地实现待上游合并；能力探测与降级已固化于
 > `platform/ignorable-channel.ts`，D3 结构断言锁定单元边界）；C2 辅助调用 purpose
-> 标记（插件侧类型适配，`platform/llm.ts` 单点收窄，P1.2 契约锚已落，P5 补齐调用面）。
+> 标记（插件侧类型适配，`platform/llm.ts` 单点收窄；P1.2 契约锚 + P5 调用面已施工）。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -50,11 +50,10 @@ vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
 后声明属性类型必须一致）。`llm-deepseek` adapter 只对这两个值有特殊策略；未知 purpose
 不会改变 wire 请求形状，只进入 `prepareExtensions` 的 request 事实。
 
-**闭合形态（P1.2 锚 / P5 实现）**：`platform/llm.ts` 定义 `CE_AUX_PURPOSES`（judge /
+**闭合形态（P1.2 锚 / P5 已施工）**：`platform/llm.ts` 定义 `CE_AUX_PURPOSES`（judge /
 optimize / compaction 三值）与 `CeGenerateOptions = Omit<GenerateOptions,'purpose'> &
-{ purpose?: CePurpose }`；`toHarnessGenerateOptions` 是**唯一 cast 收窄点**。P5 的
-`stream` 调用面消费 `CeGenerateOptions`，usage 回执按调用侧 purpose 记账——不依赖 wire
-回显。cast 单点由后续 D 族断言锁定（与 C1 的 D3 同构）。
+{ purpose?: CePurpose }`；`toHarnessGenerateOptions` 是**唯一 cast 收窄点**。P5 已施工：`streamCeLlm` 消费 `CeGenerateOptions`，usage 回执按调用侧 purpose 记账——不依赖 wire
+回显。cast 单点由 D6 断言锁定（与 C1 的 D3 同构）。
 
 **失效方向**：宿主不识别自定义 purpose 时行为 = 普通辅助调用（无特殊 header/thinking
 策略），度量仍由插件本地记账；最坏损失是观测标签，不是用户数据。**不降级、不补丁、
@@ -111,5 +110,5 @@ optimize / compaction 三值）与 `CeGenerateOptions = Omit<GenerateOptions,'pu
 - [ ] 回环 spec 常绿 = 升级自检（§2）；
 - [ ] core/domains 零通道概念引用（D3 的反向即本条，新增发射方工单验收时 grep 复核）；
 - [ ] C2：`toHarnessGenerateOptions` 是 `as GenerateOptions` 唯一 cast 点（grep 断言），
-      `CeGenerateOptions` 可携带三值自定义 purpose（`npm run typecheck:tests`）；
+      `CeGenerateOptions` 可携带三值自定义 purpose（`npm run typecheck:tests`）；`streamCeLlm` 落位，D6 锁定 cast 单点；
 - [ ] 删除演练：按 §2 清单在分支执行删除 → `npm run gate` 全绿且机制文件 diff 为空。

@@ -125,7 +125,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 - 当前插件：`src/settings.ts` 注册 namespace `context-economy`（schema = `src/config.ts` 的
   schemastery `Config`）；client 半边经 `settingsScope.bind` 读同一 namespace。
 
-### 3.5 `ctx.llm`（辅助 LLM 调用，P5 补齐调用面）
+### 3.5 `ctx.llm`（辅助 LLM 调用，P5 已施工）
 
 - Context 键：`packages/llm/llm/src/index.ts:54-55`（`ctx.llm: LlmRuntime`）。
 - `llm/stream` 是 waterfall：`packages/llm/llm/src/index.ts:60-68`。
@@ -134,7 +134,9 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 - `TokenUsage`：`packages/llm/llm/src/types.ts:149-157`（input/output/total/cacheRead/
   cacheWrite/reasoning）。
 - 当前插件：`src/platform/llm.ts` 是 C2 purpose 单点适配（`CeAuxPurpose`/`CeGenerateOptions`/
-  `toHarnessGenerateOptions`/`resolveLlmService`）；P5 在此补 stream 调用与 usage 回执。
+  `toHarnessGenerateOptions`/`resolveLlmService`），P5 已补齐调用面：`streamCeLlm` 消费
+  `CeGenerateOptions` 并透传 `StreamChunk`；`CeLlmUsageReceipt`/`toCeLlmUsage` 提供 usage 与
+  缓存观测回执；服务缺失时 yield `CE_LLM_UNAVAILABLE` 终止块（fail-lazy）。
 
 ### 3.6 `ctx.storageDomain.open(defineDomain({...}))`（持久 KV，P3 使用）
 
@@ -201,7 +203,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 | `src/platform/logger.ts` | `ctx.logger`、`SessionEventMap` 声明合并派生 `CeFactType` | 已施工（P1） |
 | `src/platform/ignorable-channel.ts` | `SESSION_LOG_INTENT` 探测、`Session.append(type,data,{ignorable:true})` | 已施工（P1 翻转） |
 | `src/platform/diag-sink.ts` | `ctx.logger.exporter()` | 已施工（P1.1） |
-| `src/platform/llm.ts` | `GenerateOptions.purpose` 单点适配 | 契约锚已落（P1.2）；调用面待 P5 |
+| `src/platform/llm.ts` | `GenerateOptions.purpose` 单点适配、`streamCeLlm`、`toCeLlmUsage` | 已施工（P5） |
 | `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)` | 未施工（P6） |

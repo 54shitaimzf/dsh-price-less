@@ -141,6 +141,12 @@ export const RULES = [
       && f.path !== 'src/platform/skills.ts' && f.path !== 'src/index.ts'
       ? [{ message: 'skill registry concepts must only appear in platform/skills.ts (index.ts wiring allowed, docs/10 §1 H13)' }]
       : [] },
+  { id: 'D6', canon: 'docs/10 §1 H12 + docs/11 §2 + docs/12 §1 C2',
+    appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
+    check: (f) => /(ctx\.llm|llm\/stream|llm\.stream|\bGenerateOptions\b|\bTokenUsage\b|\bStreamChunk\b|\bLlmRuntime\b)/.test(f.text)
+      && f.path !== 'src/platform/llm.ts'
+      ? [{ message: 'llm service concepts must only appear in platform/llm.ts (H12 辅助调用端口收口, docs/10 §1 H12)' }]
+      : [] },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */
