@@ -62,7 +62,7 @@
 
 - 稳定前缀 = **技能目录 + 项目最终目标**（[02 §2](02-discriminator.md) 输入栈①）；
   版本事件只有三种：技能装卸（目录变更，机械触发）、项目帧修订（用户确认后 bump）、
-  压缩域档案追加（[04 §6](04-compactor.md)）。
+  压缩域档案变更（追加 / 超帽截断，[04 §6](04-compactor.md)）。
 - 每次 bump 记 `prefixRebuildCount` 与重价体积（`prefixRebuildTokens`）；
   bump 理由枚举 `{shear | compaction | note | skill | frame}` 入账。
 - 档案堆只追加不可改写；越界按 15K 硬帽整条截断最老条目（[04 §6](04-compactor.md)）——
