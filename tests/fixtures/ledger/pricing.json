@@ -1,0 +1,1 @@
+{ "inputPerToken": 1, "outputPerToken": 3, "cacheReadPerToken": 0.1, "cacheWritePerToken": 0.05 }

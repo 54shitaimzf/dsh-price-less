@@ -1,0 +1,204 @@
+# 13 · DSH 插件规范与接口审查（可复用参考）
+
+> 定位：**harness 插件开发的外部契约单一参考**——把散落在 G:/deepseek-harness 源码/文档里的
+> 插件规范、装配格式、可用接口逐条核验后收拢成一份可直接引用的文档。本文不是设计正典的替代，
+> 而是 docs/00–12 之外“harness 现状是什么”的事实层；正典冲突时以 docs/00–11 为准，harness
+> 事实冲突时以源码为准。
+>
+> 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`，2026-09-06 审查）。
+> 当前插件：`@dsh-external/dsh-context-economy`（`D:/deepseek-plugin`，HEAD `0767ab0`，P1.2 已施工）。
+> 使用方式：后续工单（P2 起）凡涉及 harness API，先查本文 §3/§4 的“核验源”列；表中未列的符号
+> 仍按总纲铁律逐条 grep 到定义处才准 import。
+
+## 0. 一句话结论
+
+DSH = 全插件 Cordis agent harness：**没有特权核心可补丁**。外部插件 = 一个 Cordis 插件包
+（package.json 声明 `dsh.bundle.patch` 指向 cordis.patch.yml），经 profile patch 层插入一个
+loader entry（`id` + `name` + 可选 `config/disabled/inject`）；运行时 `apply(ctx, config)`
+通过 `ctx` 上的服务（`logger`/`on`/`effect`/`inject`/`settings`/`llm`/`storageDomain`/…）
+贡献行为，所有注册挂 `ctx.effect` 卸载即净。会话事实走 `session.append`（log-only 事件必须
+`ignorable:true` 且类型并入 `IgnorableSessionEventMap`），改史只能走 `surfaceOp:'replace'`。
+
+## 1. 装配层（插件怎么被加载）
+
+### 1.1 插件包 manifest（外部插件最小集）
+
+harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
+`name`/`inject`/`Config`/`apply`，无 default export）；外部插件以 bundle 形态装配，当前插件
+`package.json` 的合规面已由 P0/P1.2 固化（`scripts/assert-structure.mjs` M1–M5）。必需项：
+
+| 项 | 值/形态 | 核验源 |
+|---|---|---|
+| `name` / `version` | 任意 npm 包名；版本 `x.y.z` | 当前插件 `package.json` |
+| `type` | `"module"`（ESM everywhere） | `G:/deepseek-harness/AGENTS.md` Conventions |
+| `main` / `types` | `./lib/index.js` / `./lib/types/index.d.ts` | `docs/cookbook/adding-a-package.md` |
+| `exports["."]` | `{ types, default }` | 同上 |
+| `exports["./cordis.patch.yml"]` | `./cordis.patch.yml`（发布包可装配，P1.2 收编） | 当前插件 `package.json` |
+| `dsh.bundle.patch` | `"./cordis.patch.yml"`（bundle 格式声明） | `packages/bundle/base/package.json` |
+| `dsh.client.*` | client 半边：`platform`/`inject`/`exports["./client"]` | `packages/client/AGENTS.md` |
+| `peerDependencies` | `@deepseek-ai/cordis`（范围声明，必含）+ 实际使用到的 `@deepseek-ai/dsh-*` | 当前插件 P1/P1.2 已补齐 |
+| `files` | 发布清单收编 `lib/` 与 `cordis.patch.yml` | P1.2 M3 断言 |
+
+### 1.2 `cordis.patch.yml` 行格式与 patch 语义
+
+- 行 = `EntryOptions`：`id`（组内稳定）、`name`（模块 specifier）、`config?`、`group?`、
+  `disabled?`、`inject?`。定义处：`vendor/loader/src/config/entry.ts:16-26`。
+- patch 文件是 entry-list 方言：顶层 `- insert:` 列表插入新行；非 insert patch 用
+  `id` 定位目标行并**整体替换** `config`（不是合并）；`disabled`/`inject` 同样按行覆盖。
+  `!!js` 表达式允许出现在 `config` 与 `disabled`（`config` 在目标行激活时对 plugin context
+  插值；`disabled` 每次挂载决策时对 loader context 求值）。
+  实现：`vendor/include/src/index.ts:52-100`（`applyEntryPatches`）。
+- 行顺序无加载语义（激活由服务可用性驱动）；同 id 后写覆盖前写（last write winning per row）。
+- 当前插件 bundle 层（模板态）只有一行插入：
+  `- insert: [{ id: dsh-context-economy, name: '@dsh-external/dsh-context-economy' }]`。
+
+### 1.3 profile 分层与调试
+
+- 应用序：profile 列出的各 bundle（如 `dsh-base`）→ profile `cordis.patch.yml` → home 级
+  → `--patch` overlay。`dsh --profile web --dump-config` 打印组合树。
+  核验源：`docs/architecture.md` “Profiles and bundles”。
+- 外部插件安装：`dsh plugin --profile <name> add <package>`；开发期可用注入器
+  `dev_inject_plugin`（junction + `loader.create`，免重启）。
+- 注意：`--patch` 重复注入同 id 会被 loader 拒绝（`duplicate loader entry id`）；已注入的
+  插件不要叠 `--patch`（P1.1 真机方法学备注）。
+
+## 2. Cordis 插件运行时模型
+
+核验源：`vendor/cordis/src/registry.ts`、`fiber.ts`、`events.ts`、`service.ts`、
+`docs/cordis-primer.md`。
+
+| 概念 | 规则 |
+|---|---|
+| 插件形态 | 函数插件（`(ctx, config) => …`）、`{ apply(ctx, config) }`、`Service` 子类；外部插件用函数或 `apply` 对象。 |
+| 入口导出 | 函数插件具名导出 `name`/`inject`/`Config`/`apply`，**不要 default export**（混用会丢 namespace）。 |
+| `Config` | Standard Schema 校验器（schemastery 兼容）；校验失败 = `ValidationError`，插件不启动。当前插件 `src/config.ts` 用 schemastery。 |
+| `inject` | 声明所需服务：数组 `['settings']` 或对象 `{ settings: null }`；服务可用前 fiber 处于 PENDING。 |
+| `ctx.effect(fn)` | **一切注册的归宿**：fn 返回 disposer（或 disposer 迭代/异步迭代）；卸载时逆序执行。当前插件所有注册均走它。 |
+| `ctx.on(name, listener)` | 事件监听（fiber 自动持有，卸载即摘）；返回 disposer。 |
+| `ctx.plugin` / `ctx.inject` | 动态装载/依赖注入；`ctx.inject(['settings'], cb)` 是函数式等待服务可用的短路径（当前 `settings.ts` 用它）。 |
+| 服务读取 | 声明依赖用 `ctx.<name>`；**可选服务用 `ctx.get(name)`**（`packages/AGENTS.md:7`）。 |
+| waterfall | 监听器最后参数 `next`；**必须 `return next()` 才委托**，return 而不调 = 短路（`docs/cordis-primer.md`）。当前插件尚未注册 waterfall 监听（P6/P7 起）。 |
+
+## 3. 当前插件已核验使用的 harness 接口
+
+### 3.1 `ctx.logger(name)`（诊断通道）
+
+- 定义：`vendor/cordis/src/logger.ts`。`ctx.logger` 是 LoggerService 的 callable：
+  `ctx.logger('context-economy')` 返回 named `Logger`（info/warn/error/debug）。
+- 纪律：诊断走 named logger，运营事实进会话事件（docs/11 §4 纪律③）。
+- 当前插件：`src/platform/logger.ts:ceLogger`；`src/platform/diag-sink.ts` 经
+  `ctx.logger.exporter()` 落盘 JSONL（公开导出面 `vendor/cordis/src/logger.ts:232-236`）。
+
+### 3.2 `ctx.on('session/event')`（会话 firehose）
+
+- 事件声明：`packages/core/session/src/index.ts:64-90`（`@mode emit`，post-commit、
+  fire-and-forget；监听器异常被遏制，不影响 append 返回）。
+- 监听签名：`(session: Session, event: SessionEvent) => void`；`SessionEvent` 是
+  `type` 判别联合（`packages/core/session/src/types.ts:475-510`），switch type 自动窄化 data。
+- 纪律：同步 post-commit 派发 ⇒ 监听器 O(1) + 异步旁路，**永不阻塞 append**（docs/11 §4 纪律②）。
+- 当前插件：`src/platform/events.ts` 的 `createEventPump` 订阅，过滤后经微任务队列派发
+  `input/user-message` 与 `metrics/session-event` 两个进程内领域事件。
+
+### 3.3 `Session.append`（会话事实写入）
+
+- 签名：`packages/core/session/src/index.ts:717-738`。
+  - surface 事件（`user/message`/`assistant/message`/`tool/result`）：必须带
+    `SurfaceIntent`（`surfaceOp`，replace 时还要完整 `sourceEventSeqs`）。
+  - log-only 事件：类型须先声明合并进 `IgnorableSessionEventMap`，才可带
+    `{ ignorable: true }`；未合并类型编译期不可标记（append 侧编译闸）。
+  - 未知无标记 log-only 类型：append 现场去重 warn（loud-write backstop），但旧 harness
+    读侧会拒读整条日志——所以**必须 ignorable**（`packages/core/session/src/index.ts:743-758`）。
+- `IgnorableSessionEventMap` 定义：`packages/core/session/src/types.ts:445-466`；
+  类型与载荷合并进 `SessionEventMap`（`packages/core/session/src/types.ts:260`）。
+- 能力探测：补丁版导出运行时常量 `SESSION_LOG_INTENT = 1`
+  （`packages/core/session/src/index.ts:31`；commit `ea04b581a5`）。vanilla 无此导出 ⇒ 通道缺失。
+- 当前插件：`src/platform/ignorable-channel.ts` 探测 + 路由（emitted/mirrored/blocked）；
+  `src/platform/logger.ts` 的 `emitCeFact` 是唯一事实发射端口（词汇表从 `SessionEventMap`
+  自动派生，当前 = `never`）。
+
+### 3.4 `ctx.inject(['settings'], cb)` + `settings.installSection`（设置段）
+
+- `SettingsProvider.installSection(owner, ns, schema, entry, hooks)`：
+  `packages/settings/settings/src/index.ts:472-521`。语义：注册 base（装配值）→
+  provider 在时实时读取 scope → provider 脱离时回退 base；首次注册与 detach 各触发一次 onChange。
+- 写路径：`scope.update(patch)` 或 `replace(section)`，带 `expectedRevision` revision-fence。
+- 当前插件：`src/settings.ts` 注册 namespace `context-economy`（schema = `src/config.ts` 的
+  schemastery `Config`）；client 半边经 `settingsScope.bind` 读同一 namespace。
+
+### 3.5 `ctx.llm`（辅助 LLM 调用，P5 补齐调用面）
+
+- Context 键：`packages/llm/llm/src/index.ts:54-55`（`ctx.llm: LlmRuntime`）。
+- `llm/stream` 是 waterfall：`packages/llm/llm/src/index.ts:60-68`。
+- `GenerateOptions`：`packages/llm/llm/src/types.ts:407`；`purpose` 当前仅
+  `'compaction' | 'session-title'`（`packages/llm/llm/src/types.ts:442-458` 一带）。
+- `TokenUsage`：`packages/llm/llm/src/types.ts:149-157`（input/output/total/cacheRead/
+  cacheWrite/reasoning）。
+- 当前插件：`src/platform/llm.ts` 是 C2 purpose 单点适配（`CeAuxPurpose`/`CeGenerateOptions`/
+  `toHarnessGenerateOptions`/`resolveLlmService`）；P5 在此补 stream 调用与 usage 回执。
+
+### 3.6 `ctx.storageDomain.open(defineDomain({...}))`（持久 KV，P3 使用）
+
+- Context 键：`packages/storage/storage-domain/src/index.ts:37`
+  （`ctx.storageDomain: DomainFacility`）。
+- `defineDomain(spec)`：`packages/storage/storage-domain/src/spec.ts:107-160`。
+  字段：`name`（`UNIT_NAME_RE`）、`version`（非负整数）、`layout?`（`single|per-record`）、
+  `compatibleVersions?`、`invalidRecords?`、`global?`、`tables`（zod record schemas）。
+- `open(spec)`：`packages/storage/storage-domain/src/index.ts:100-140`——reserve 域名防重入、
+  路由 backend、开 KV unit、按表 zod 校验记录、构造 `Domain`。**调用者持有 handle 并负责 close**
+  （通常作为 `ctx.effect` disposer）。
+- 当前插件：尚未使用（P3 落 `platform/storage.ts` 四实体表 + 事实镜像表）。
+
+### 3.7 `tools/*` 事件（P7/P15 使用）
+
+- `tools/execute` 与 `tools/post-execute` 都是 waterfall：
+  `packages/core/tools/src/index.ts:155-175`。
+- T-entry 时机的实现缝已闭合（P1.2）：`tools/execute` 返回值会经
+  `normalizeDispatchResult` 按 `value` 重新 render content，content-only 修改会丢；改挂
+  `tools/post-execute` accept `content` 覆盖/追加。
+- 当前插件：尚未订阅；P7 落 `platform/tools.ts`。
+
+### 3.8 客户端接口（client 半边）
+
+- 客户端插件包声明 `dsh.client`（platform/web、inject 列表、`exports["./client"]`）。
+- 当前插件 client 注入：`['slots','settingsScope','remote','remote.session','connection']`
+  （`client/index.ts`）；`ctx.slots.inject('settings.plugin.item', function* () { yield ctx.slots.register({...}, Card) })`
+  是官方卡槽注册形态。命名空间 `context-economy` 与 host `settings.ts` 同值。
+- 依赖面全部 type-only 拉 Context merge（`@deepseek-ai/dsh-api-remotes/client` 等）。
+
+## 4. 会话日志兼容契约（本插件最关键的 4 条）
+
+1. **写**：`context-economy/*` 自定义事件必须 log-only + `{ ignorable: true }`；类型先并入
+   `SessionEventMap` 与 `IgnorableSessionEventMap`（append 侧编译闸）。读侧只认落盘信封上的
+   `ignorable` 标记，不查合并表（无组合依赖）。
+2. **读**：未知类型且无 `ignorable` → `validateStoredEvents` 拒读整条日志
+   （`packages/session/session-persistence/src/storage-contract.ts:69-80`）。
+3. **改史**：任何历史变更只能 `session.append(type, data, { surfaceOp: { op:'replace', start, end }, sourceEventSeqs })`；
+   禁止原地改/删。
+4. **模型可见 ⟺ 已落盘**：一切进入模型请求的内容必须能从会话日志重建；新模型可见输入必须
+   新增 `SessionEventMap` 事件类型。
+
+## 5. 当前插件 ↔ 接口落位表（2026-09-06 现状）
+
+| 当前文件 | 使用接口 | 状态 |
+|---|---|---|
+| `src/index.ts` | `apply(ctx, config)`、`ctx.effect`、`attachDiagSink`、`createEventPump`、`registerContextEconomySettings` | 已施工 |
+| `src/settings.ts` | `ctx.inject(['settings'], cb)`、`installSection` | 已施工 |
+| `src/config.ts` | schemastery `Config` | 已施工 |
+| `src/platform/events.ts` | `ctx.on('session/event')`、`SessionEvent` 类型面 | 已施工（P1） |
+| `src/platform/logger.ts` | `ctx.logger`、`SessionEventMap` 声明合并派生 `CeFactType` | 已施工（P1） |
+| `src/platform/ignorable-channel.ts` | `SESSION_LOG_INTENT` 探测、`Session.append(type,data,{ignorable:true})` | 已施工（P1 翻转） |
+| `src/platform/diag-sink.ts` | `ctx.logger.exporter()` | 已施工（P1.1） |
+| `src/platform/llm.ts` | `GenerateOptions.purpose` 单点适配 | 契约锚已落（P1.2）；调用面待 P5 |
+| `src/platform/storage.ts` | `ctx.storageDomain.open` | 未施工（P3） |
+| `src/platform/skills.ts` | DSH skill 目录扫描（H13） | 未施工（P4） |
+| `src/platform/history.ts` | `Session.append(surfaceOp replace)` | 未施工（P6） |
+| `src/platform/tools.ts` | `ctx.on('tools/post-execute')` | 未施工（P7） |
+| `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session` | 已施工（壳保留） |
+
+## 6. 复用方法（后续工单的核验流程）
+
+1. 查本文表：接口是否已登记。
+2. 未登记 → grep 到定义处：`grep -n "符号" G:/deepseek-harness/packages/**/src/**`（或
+   `vendor/`），把 `文件:行` 写进工单 §2.3 才准 import。
+3. 已登记但发现签名不符 → 以 checkout 源码为准，停工上报或更新本文。
+4. 上游合并/升级后：重跑 `grep` 复核本文行号，升级自检 = `npm test`（回环用例即通道测试）。

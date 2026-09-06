@@ -1,0 +1,32 @@
+{
+  "eventCounts": {
+    "stepStart": 2,
+    "stepEnd": 2,
+    "assistantMessage": 2,
+    "requestHeader": 2,
+    "toolCall": 3,
+    "toolResult": 2
+  },
+  "taskCount": 2,
+  "roundsPerTask": 1,
+  "tokensPerRound": { "inputTokens": 150, "outputTokens": 25 },
+  "toolCallsPerTask": 1.5,
+  "usage": {
+    "inputTokens": 300,
+    "outputTokens": 50,
+    "cacheReadTokens": 30,
+    "cacheWriteTokens": 13,
+    "reasoningTokens": 7,
+    "totalTokens": 350
+  },
+  "compoundedVolume": 20,
+  "reDiscoveryTokens": 12,
+  "cost": {
+    "inputCost": 273,
+    "outputCost": 150,
+    "cacheReadCost": 3,
+    "cacheWriteCost": 0.65,
+    "totalCost": 423.65
+  },
+  "costPerSuccessfulTask": 211.825
+}

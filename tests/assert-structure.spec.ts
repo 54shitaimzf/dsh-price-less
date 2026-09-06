@@ -120,7 +120,7 @@ describe('真实树集成', () => {
     const result = runRules(collectFiles())
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
-      S1: 'vacuous', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
+      S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
       D1: 'pass', D2: 'pass', D3: 'pass',
     })
   })
