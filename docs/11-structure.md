@@ -29,9 +29,9 @@
 |---|---|---|---|
 | name/version | `@dsh-external/dsh-context-economy` / 0.0.1 | 一致 | — |
 | peerDeps | 范围声明不硬编码版本 | cordis/dsh-settings/schemastery/dsh-session/dsh-llm 在（P1 补，junction 集随 build.sh） | **R1 补** `@deepseek-ai/dsh-tools`（剪切需要，P7），版本随 checkout 核对 |
-| dsh.bundle.patch | `./cordis.patch.yml` | 在 | R4 加 compaction-basic `auto:false` 覆写（防双触发，[10 §1](10-wiring.md) 辨析③） |
+| dsh.bundle.patch | `./cordis.patch.yml` | 在（P1.2：`files`+`exports` 收编，npm pack 可装配） | R4 加 compaction-basic `auto:false` 覆写（防双触发，[10 §1](10-wiring.md) 辨析③） |
 | dsh.client.* | inject + platform + `exports["./client"]` | 全在 | — |
-| 构建 | build.sh（DSH_CHECKOUT 探测 + junction 链接）→ tsc host → tsdown client | 在 | R1 起链接集随 peerDeps 扩 |
+| 构建 | build.sh（DSH_CHECKOUT 探测 + junction 链接）→ tsc host → tsdown client | 在（P1.2：client/tsdown/react/@types/react/zod 链接补齐，干净环境可复现） | R1 起链接集随 peerDeps 扩 |
 | 入口铁律 | `export name/inject/Config/apply`；一切资源注册挂 `ctx.effect`；waterfall 必须 `return next()` | 最小闭环在 | 全程遵守 |
 | client 铁律 | `inject=['slots'…]` + register 必带 name；操作用完整包名 | 壳未动 | — |
 
