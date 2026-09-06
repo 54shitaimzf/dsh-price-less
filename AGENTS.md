@@ -24,8 +24,11 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 
 ## Build
 
+- 干净环境先装 devDeps（内部 @deepseek-ai 包仍由 build.sh 链接 checkout）：
+  `npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --no-package-lock`。
 - `DSH_CHECKOUT=G:/deepseek-harness npm run build` —— junction 链接 checkout 依赖后 tsc 编译 host，
-  随后 tsdown 编译 client（UI 壳），产物 `lib/`。
+  随后 tsdown 编译 client（UI 壳），产物 `lib/`；build.sh 现在同时补齐 client/tsdown/react/
+  @types/react/zod 链接（P1.2，干净归档可复现）。
 - 改完代码必须构建通过才提交；每单验收第一行 = `npm run gate`（P0 冻结四段：typecheck +
   typecheck:client + test + assert；P1 起 `npm run typecheck:tests` 单独跑——类型级词汇派生守门）；
   `npm run assert` = 结构断言（M/S/D 规则，工单推进时追加规则 + 更新零位快照）。

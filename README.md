@@ -39,10 +39,13 @@ DSH 的**全自动上下文管理工具**：判别、剪切、压缩自转，无
 ## 构建 / 测试 / 挂载
 
 ```bash
-# 构建（需先建立 checkout 依赖 junction）
+# 干净环境先装 devDeps（内部 @deepseek-ai 包由 build.sh 链接 checkout；P1.2）
+npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --no-package-lock
+
+# 构建（build.sh 补齐 host + client/tsdown/react 等 junction）
 DSH_CHECKOUT=G:/deepseek-harness npm run build       # host tsc + client tsdown
 npm run typecheck && npm run typecheck:client
-npm run test                                          # vitest（壳不变量）
+npm run test                                          # vitest（壳不变量 + 平台端口 + client 冒烟）
 
 # 注入到 DSH 实例（注入器环境内）
 dev_inject_plugin <本目录>      # 卸载：dev_uninject_plugin dsh-context-economy
