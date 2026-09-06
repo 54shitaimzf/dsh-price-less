@@ -87,12 +87,14 @@ usage 聚合 → 07 字段全表。同输入同账（纯函数断言）。
    platform 层事件类型面必需（SessionEvent / SessionEventMap / cordis Events 合并）。范围声明
    `>=0.1.3-alpha.1 <2`（M2 为「必含」非「恰含」，加键合规）；docs/11 §1 现状列随本单回写。
    `@deepseek-ai/dsh-llm` 同批补（docs/11 §1 R1 行明文；本单类型链经 dsh-session 传递依赖它）。
-5. **ignorable 写入通道缺口**：harness 0.1.3-alpha.1 的 `Session.append` 信封构造无 ignorable
-   参数（§2.3 证据链），而 11 §4 纪律①要求 `context-economy/*` 必带 `ignorable:true`——
-   现状直接发射 = 写出未知类型无标记行 = 会话重载被 `validateStoredEvents` 整条拒读（砖掉恢复）。
-   **处置**：本单 `emitCeFact` 运行期 fail-closed（不写、warn、计数）；独立补丁阶段给 harness
-   `Session.append` 加非 surface 事件 `{ignorable?: true}` 通道（LogIntent），落地后本单端口
-   翻转为真实发射并升级回环测试。fail-closed 期间 P2–P8 全不受阻（第一个真实消费者在 P9）。
+5. **ignorable 写入通道缺口（已闭合）**：harness 0.1.3-alpha.1 的 `Session.append` 信封构造
+   无 ignorable 参数（§2.3 证据链），而 11 §4 纪律①要求 `context-economy/*` 必带
+   `ignorable:true`——直接发射 = 写出未知类型无标记行 = 会话重载被 `validateStoredEvents`
+   整条拒读。**处置记录**：施工先以 fail-closed（warn + 计数、不写）落端口；随本工单给
+   harness 加 `Session.append` 非 surface 事件 `LogIntent`（`{ignorable?: true}`）通道
+   （harness 仓 commit `04cba8f394`，session 包 81 测试全绿 + api-catalog 重生成校验通过），
+   插件端口已翻转为真实发射，回环测试（append → snapshotEvents → ignorable===true →
+   validateStoredEvents 放行）过。发射失败按 fail-lazy 遏制（warn + emitErrors 计数）。
 
 ## 3. 产出
 
@@ -125,15 +127,16 @@ export function createEventPump(ctx: Context, logger?: Logger): EventPump
 ```ts
 export type CeFactType = Extract<keyof SessionEventMap & string, `context-economy/${string}`>
 export function ceLogger(ctx: Context): Logger          // ctx.logger('context-economy')
-export function emitCeFact(session: Session, type: CeFactType, data: JsonValue): void
-export function ceFactStats(): { blockedNoIgnorableChannel: number }
+export function emitCeFact<T extends CeFactType>(session: Session, type: T, data: SessionEventMap[T], logger?: Logger): void
+export function ceFactStats(): { emitErrors: number }
 ```
 
-- 词汇表从 `SessionEventMap` 声明合并**自动派生**（测试 spec 内合并 `'context-economy/test-probe'`
-  即扩类型面——类型级验证，决策点③）。
-- 运行期 **fail-closed**（决策点⑤）：warn 一条（含 blockedNoIgnorableChannel 计数语义），
-  不调 `session.append`。guard 行含 `ignorable` 字样（S3 启发式锚点自然满足）。
-- harness LogIntent 补丁落地后翻转：`session.append(type, data, { ignorable: true })`。
+- 词汇表从 `SessionEventMap` 声明合并**自动派生**（spec 文件合并 `'context-economy/test-probe'`
+  即扩类型面——类型级验证，决策点③）；泛型 `T extends CeFactType` 收口：未合并事件类型的
+  生产代码无字面事件名可传（CeFactType 当前 = never）。
+- **真实发射（翻转后最终形态）**：`session.append(type, data, { ignorable: true })`——写入
+  通道 = harness LogIntent 补丁（决策点⑤已闭合）；append 失败 fail-lazy 遏制（warn +
+  emitErrors 计数、不外溢）；append 调用点在 S2 放行面（platform/logger.ts）。
 
 ### 3.3 `src/index.ts` 装配（+约 6 行）
 
@@ -228,5 +231,6 @@ export function ceFactStats(): { blockedNoIgnorableChannel: number }
    由 P9+ 机制工单声明合并扩展（本单端口自动放行）。
 3. **P8/P12（判别域）**：`on('input/user-message')` 即 H1 消费入口；u≥1 与段状态机在
    `core/units.ts` 补齐，输入面五条件已由 `passesInputFace` 承担。
-4. **harness LogIntent 补丁**（独立阶段）：落地后 `emitCeFact` 翻转真实发射，回环测试升级
-   （append → snapshotEvents → ignorable===true → validateStoredEvents 放行），本单缺口条目关闭。
+4. **harness LogIntent 补丁**（已落地，commit `04cba8f394`）：`emitCeFact` 已翻转真实发射，
+   回环测试升级完成（append → snapshotEvents → ignorable===true → validateStoredEvents 放行），
+   本单缺口条目关闭。P9+ 机制工单声明合并事件类型后即可经本端口发射。

@@ -14,6 +14,7 @@ import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import { validateStoredEvents } from '@deepseek-ai/dsh-session-persistence'
 import { createEventPump } from '../src/platform/events.ts'
+import { emitCeFact } from '../src/platform/logger.ts'
 
 const hasRuntime = existsSync('node_modules/@deepseek-ai/dsh-session')
   && existsSync('node_modules/@deepseek-ai/dsh-session-persistence')
@@ -57,5 +58,19 @@ describe.skipIf(!hasRuntime)('harness 真集成（junction 在位时）', () => 
     }]
     expect(() => validateStoredEvents(meta, unknownEvent() as never)).toThrow(/unknown to this harness/)
     expect(validateStoredEvents(meta, unknownEvent(true) as never)).toHaveLength(1)
+  })
+
+  it('回环（P1 工单 §8-4）：emitCeFact → append ignorable:true → snapshotEvents 可见 → validateStoredEvents 放行', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const session = ctx.sessions.create()
+    // harness-session.spec 不在 typecheck:tests 面内（词汇合并声明在 ce-logger.spec）——轻转型调用
+    ;(emitCeFact as (s: unknown, t: string, d: unknown) => void)(session, 'context-economy/test-probe', { probe: 'round-trip' })
+    const event = session.snapshotEvents().at(-1)
+    expect(event?.type).toBe('context-economy/test-probe')
+    expect(event?.ignorable).toBe(true)
+    // 带标记的未知类型通过存储契约校验 = 会话日志可重载（fail-closed 缺口已闭合的机械证明）
+    const meta = { id: session.header.id, version: 2 } as never
+    expect(validateStoredEvents(meta, [event] as never)).toHaveLength(1)
   })
 })
