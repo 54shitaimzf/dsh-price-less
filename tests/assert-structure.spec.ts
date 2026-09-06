@@ -25,9 +25,10 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('M2', 'package.json', JSON.stringify({ peerDependencies: { schemastery: '3.18.0' } })).length).toBeGreaterThanOrEqual(1)
     expect(check('M2', 'package.json', JSON.stringify({ peerDependencies: { '@deepseek-ai/cordis': '>=4 <5', '@deepseek-ai/dsh-settings': '>=0.1.3 <2', schemastery: '^3.18.0', extra: 'x' } }))).toEqual(NO_ISSUES)
   })
-  it('M3：patch 指向错误 / 文件集缺 cordis.patch.yml → issue', () => {
+  it('M3：patch 指向错误 / 文件集缺 cordis.patch.yml / files 未收编 patch → issue', () => {
     expect(check('M3', 'package.json', JSON.stringify({ dsh: { bundle: { patch: './other.yml' } } })).length).toBeGreaterThanOrEqual(1)
     expect(check('M3', 'package.json', JSON.stringify({ dsh: { bundle: { patch: './cordis.patch.yml' } } }), new Map()).length).toBeGreaterThanOrEqual(1)
+    expect(check('M3', 'package.json', JSON.stringify({ dsh: { bundle: { patch: './cordis.patch.yml' } }, files: ['lib'] }), new Map([['cordis.patch.yml', 'y']])).length).toBeGreaterThanOrEqual(1)
   })
   it('M4：platform 非 web / inject 缺项 / exports 缺 ./client → issue', () => {
     expect(check('M4', 'package.json', JSON.stringify({ dsh: { client: { platform: 'node', inject: ['react'] } } })).length).toBeGreaterThanOrEqual(1)
@@ -82,6 +83,7 @@ describe('正样本（干净文件 → 0 issue）', () => {
       peerDependencies: { '@deepseek-ai/cordis': '>=4 <5', '@deepseek-ai/dsh-settings': '>=0.1.3 <2', schemastery: '^3.18.0' },
       dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['react', '@deepseek-ai/dsh-client-ui-slots'] } },
       exports: { './client': { default: './lib/client.js' } },
+      files: ['lib', 'cordis.patch.yml'],
     })
     for (const id of ['M1', 'M2', 'M3', 'M4']) expect(check(id, 'package.json', pkg, new Map([['cordis.patch.yml', 'y']]))).toEqual(NO_ISSUES)
   })

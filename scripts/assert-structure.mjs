@@ -70,10 +70,12 @@ export const RULES = [
       .filter((key) => { const v = peers[key]; return typeof v !== 'string' || !/[<^~>=]/.test(v) })
       .map((key) => ({ message: `peerDependencies.${key} missing or hardcoded exact version (range required), got ${JSON.stringify(peers[key] ?? null)}` })) } },
   { id: 'M3', canon: 'docs/11 §1 表', appliesTo: (p) => p === 'package.json', check: (f, all) => {
-    const patch = (JSON.parse(f.text).dsh ?? {}).bundle?.patch
+    const pkg = JSON.parse(f.text)
+    const patch = (pkg.dsh ?? {}).bundle?.patch
     return [
       ...(patch !== './cordis.patch.yml' ? [{ message: `dsh.bundle.patch must be './cordis.patch.yml', got ${JSON.stringify(patch ?? null)}` }] : []),
       ...(!all.has('cordis.patch.yml') ? [{ message: 'cordis.patch.yml not found in file set' }] : []),
+      ...(!Array.isArray(pkg.files) || !pkg.files.includes('cordis.patch.yml') ? [{ message: `files must include 'cordis.patch.yml' (npm pack bundle patch), got ${JSON.stringify(pkg.files ?? null)}` }] : []),
     ] } },
   { id: 'M4', canon: 'docs/11 §1 表 + package.json', appliesTo: (p) => p === 'package.json', check: (f) => {
     const pkg = JSON.parse(f.text)
