@@ -9,7 +9,7 @@
 
 设计文档写清了"该是什么"，但直接丢给廉价模型施工会翻车在三处：**猜 API**（harness 没这个
 接口它也敢编）、**做设计**（文档留的口子它自己拍板）、**验不了**（"看起来对了"就算完）。所以
-把 R0–R4 拆成 22 份工单：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
+把 R0–R4 拆成 23 份工单（P0–P21 + P1.1/P1.2 追记）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
 flash 只需要照单干活——不需要理解全局，禁止发挥。
 
 ## 1. 工单制（角色与纪律）
@@ -57,12 +57,13 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P0 | 工程零位核对（已施工 commit `274e37d`） | R0 | manifest 差距核对（[11 §1](../11-structure.md) 表逐项）；`scripts/assert-structure.mjs` 断言骨架（暂全过）+ `npm run assert` | — | S |
 | P1 | 事件面接线（已施工 commit `1ed5419` + 翻转 `28351b3`；harness LogIntent 补丁 `04cba8f394`） | R1 | `platform/logger.ts` + `platform/events.ts`（H1 firehose → 异步旁路队列；[10 §1](../10-wiring.md) H1/H7） | P0 | S |
 | P1.1 | 诊断落盘 sink（P1 追记，已施工 commit `545db1b` + 修正 `8e84039`，真机验证通过） | R1 | `platform/diag-sink.ts`（`ctx.logger.exporter()` → 插件 `logs/context-economy.log` JSONL，agent 自审面，零 harness 改动；[11 §4](../11-structure.md) 纪律③追记） | P1 | S |
+| P1.2 | 地基修补与契约闭合（P1 追记，已施工；commit 见 git log） | R0/R1 | ① `package.json` files/exports 收编 `cordis.patch.yml`（发布包可装配）；② build.sh 补齐 client/tsdown/react/@types/react/zod 链接（干净归档构建成立）；③ `tests/client-apply-smoke.spec.ts`（client 槽注册/订阅/卸载冒烟）；④ `platform/llm.ts` C2 purpose 单点适配锚 + `tests/llm-purpose.spec.ts`；⑤ docs/03/10/11/12 进度与实现缝对齐 | P1 | S |
 | P2 | 度量底座 | R1 | `core/ledger/`（07 通用族 fold 纯函数 + fixture 回放"同输入同账"断言；**facts 源抽象**：会话 ignorable 事件 ∨ KV 事实镜像，[12 §3](../12-platform-capabilities.md)） | P1 | M |
 | P3 | 持久面 | R1 | `platform/storage.ts`（H10 defineDomain 四实体表 + CAS + 快照回退；**+ 事实镜像表**（降级态，[12 §3](../12-platform-capabilities.md)）；[09 §2](../09-state.md) 协议） | P0 | M |
 | P4 | 技能目录端口 | R1 | `platform/skills.ts`（H13 `SKILL.md` 枚举 + watch + 引用守卫查表接口） | P0 | S |
-| P5 | 辅助调用端口 | R1 | `platform/llm.ts`（H12 `llm.stream({purpose})` + usage/缓存回执）；补 peerDep `dsh-llm` + build 链接 | P2 | S |
+| P5 | 辅助调用端口 | R1 | `platform/llm.ts`（H12 `llm.stream({purpose})` + usage/缓存回执；**C2 单点适配已由 P1.2 落锚**）；补 peerDep `dsh-llm` + build 链接 | P2 | S |
 | P6 | 改史端口 | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
-| P7 | 工具端口 | R1 | `platform/tools.ts`（H6 around-wrapper `next()` 进 body + post-execute 追加）；补 peerDep `dsh-tools` | P1 | S |
+| P7 | 工具端口 | R1 | `platform/tools.ts`（H6 `tools/post-execute` accept content 覆盖/追加 = T-entry/T-note；`tools/execute` 仅信号/计量）；补 peerDep `dsh-tools` | P1 | S |
 | P8 | 分划单位 + 稳定前缀 | R2 | `core/units.ts`（[01 §3.5](../01-architecture.md) 状态机）+ `core/prefix.ts`（技能目录快照 + 项目帧 vN；`prefixRebuildCause`；字节稳定断言，[02 §2](../02-discriminator.md)/[06 §4](../06-cache.md)） | P3,P4 | M |
 | P9 | 卷宗 | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
 | P10 | 判据与对表 | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5 | M |
@@ -142,7 +143,7 @@ commit: `<type>(<scope>): <一行>`；账本快照：<是否需要>
 
 ## 6. 总纲自身的验收
 
-- [ ] §3 表 22 行与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
+- [ ] §3 表 23 行（含 P1.1/P1.2 追记）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
 - [ ] 每行依赖列构成 DAG（无环）；
 - [ ] 尺寸全部 S/M（L 已注明拆分）；
 - [ ] 工单模板含 harness 符号核验位与停工上报条款。

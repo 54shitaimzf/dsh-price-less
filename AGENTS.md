@@ -7,9 +7,10 @@ task 边界压缩+热尾 / 40% 压力路径 / 防溢出保险丝）+ 五条节�
 宪法与回退链在 `docs/05`，缓存纪律 `docs/06`，状态协议 `docs/09`。
 完整设计在 `docs/`，本文件只给可执行的高信号指令。
 
-**现状**：P0（零位断言：`scripts/assert-structure.mjs` + `npm run assert`/`gate`）与 P1（事件面
-接线：`platform/events.ts` H1/H7 firehose → 异步旁路队列 + `platform/logger.ts` 事实发射端口）
-**已施工**；`platform/` 是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+**现状**：P0（零位断言：`scripts/assert-structure.mjs` + `npm run assert`/`gate`）、P1（事件面
+接线：`platform/events.ts` H1/H7 firehose → 异步旁路队列 + `platform/logger.ts` 事实发射端口）、
+P1.1（诊断落盘 sink）与 P1.2（地基修补与契约闭合：打包清单 / 干净构建 / client 冒烟 /
+C2 purpose 单点适配 / T-entry 实现缝对齐）**已施工**；`platform/` 是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。

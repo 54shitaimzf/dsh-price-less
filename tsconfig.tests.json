@@ -13,5 +13,5 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["tests/ce-logger.spec.ts"]
+  "include": ["tests/ce-logger.spec.ts", "tests/llm-purpose.spec.ts"]
 }

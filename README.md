@@ -1,8 +1,9 @@
 # @dsh-external/dsh-context-economy
 
-> **实现状态（2026-09）：R0 ✓ · R1 3/8（events/logger/diag-sink）· R2–R4 设计态。**
+> **实现状态（2026-09）：R0 ✓ · R1 3/8（events/logger/diag-sink）· R2–R4 设计态；P1.2 地基修补 ✓。**
 > 当前是**模板态骨架**：装配/构建/测试/设置 UI 壳全部可用，双核心与四层防御的机制代码
 > 尚未施工（工单进度见 [docs/implement/00-master.md](docs/implement/00-master.md)）。
+> 打包清单、干净构建、client 卸载冒烟与 purpose/T-entry 契约锚已补齐（P1.2）；
 > 观察模式设置项已清理；R3/R4 不再组织对照实验（实验结论已固化进设计）。
 
 DSH 的**全自动上下文管理工具**：判别、剪切、压缩自转，无人值守；用户唯一的主动作是可选的

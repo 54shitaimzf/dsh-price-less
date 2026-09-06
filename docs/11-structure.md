@@ -20,7 +20,7 @@
 
 四形态（toolkit / daemon-loop / ui-panel / hybrid）里选 **hybrid**：host 半 = 事件驱动
 （判别/剪切/压缩全是事件触发，**无 timer**——不用 daemon-loop 的轮询循环）；client 半 =
-设置卡 + 星标按钮（`settings.section` / `conversation.view` 槽，壳已保留）。
+设置卡 + 星标按钮（`settings.plugin.item` / `conversation.view` 槽，壳已保留）。
 注入即完整生效（host+client）、卸载即净。
 
 **manifest 合规清单**（规范 vs 现状，R0 核对表）：
@@ -50,8 +50,8 @@ src/
 ├─ platform/         # 适配面（唯一 harness 触点；升级只改这里）
 │  ├─ events.ts      # H1 firehose 订阅 → 进程内领域事件（异步队列旁路，§5 纪律②）
 │  ├─ history.ts     # H4/H5 改史端口：surfaceOp replace + compaction 事务 + prune 计价
-│  ├─ tools.ts       # H6 around-wrapper / post-execute 端口（T-entry/T-note）
-│  ├─ llm.ts         # H12 辅助调用端口（purpose 路由 + usage/缓存观测回执）
+│  ├─ tools.ts       # H6 post-execute 端口（T-entry content 覆盖 / T-note 追加）+ tools/execute 信号计量
+│  ├─ llm.ts         # H12 辅助调用端口（CeAuxPurpose 单点适配 + purpose 路由 + usage/缓存观测回执）
 │  ├─ storage.ts     # H10 storageDomain 封装（四实体表声明、版本化读写、CAS）
 │  ├─ skills.ts      # H13 技能目录枚举 + watch（稳定前缀原料 + 引用守卫查表）
 │  ├─ logger.ts      # ctx.logger('context-economy') + ignorable 自定义事件发射
@@ -105,7 +105,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 
 ## 5. UI 壳接线（保留资产 ↔ 新架构）
 
-- 挂载链：`settings.ts` installSection（H8）→ client `settings.section` 槽（H11）→
+- 挂载链：`settings.ts` installSection（H8）→ client `settings.plugin.item` 槽（H11）→
   Card/controller/components 壳（**零改动**）→ **`field-model.ts` 是唯一载荷入口**。
 - 对应律：`ECONOMY_FIELD_SPECS` ↔ Config 字段一一对应（扩配置 = Config + field-model
   两处同扩，测试断言一致性）。配置面（§6）按此重填。

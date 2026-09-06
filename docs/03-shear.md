@@ -34,10 +34,15 @@
 
 | 档 | 时机 | 挂点 | 断裂成本 | 准入与动作 |
 |---|---|---|---|---|
-| T-entry | 写时整形（结果落账**前**） | `tools/execute` around-wrapper（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因 |
+| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因 |
 | T-loop | 思考后占位（模型消费完结果） | surfaceOp replace | 一次 + 短尾（剪点 = 刚消费完） | 当次结论极短 + cmd/bash 类；**read 类排除**（喂后续编辑，剪 = 逼重读）；**必须 stub 占位替换而非移除**（保 tool_call 配对防 400） |
 | T-note | 注记协商（写时贴注 + 消费后协商剪） | 贴注 = `tools/post-execute` accept 追加；剪除 = surfaceOp replace | 同 T-loop（剪点贴消费） | 见 §2.1 |
 | T-boundary | 边界搭车 | task 压缩大 replace | 已付（搭车） | **老调用对唯一合法去处**，绝不中段独立剪 |
+
+> 挂点核验（P1.2 契约闭合）：harness `tools/execute` 的返回结果会经
+> `normalizeDispatchResult` 按 `value` 重新渲染 content，wrapper 只改 content 会丢失；
+> 因此 T-entry 的落账前整形走 `tools/post-execute` accept `content` 覆盖（自有工具仍走
+> 定义侧 `finalizeContent`）。**时机经济学与准入动作不变**，仅修正实现缝。
 
 ### 2.1 T-note 注记协商（超长结果的结论提取）
 

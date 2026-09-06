@@ -2,8 +2,9 @@
 
 > 域定义：**插件对 harness 原生能力的全部额外假设，登记于一处**——每条通道为什么必须存在、
 > 以什么形态实现、官方未提供时如何降级、官方提供后如何原子删除。
-> 状态：通道 1 条（C1 ignorable 写入），本地实现待上游合并；能力探测与降级已固化
-> （`platform/ignorable-channel.ts`，D3 结构断言锁定单元边界）。
+> 状态：通道 2 条——C1 ignorable 写入（本地实现待上游合并；能力探测与降级已固化于
+> `platform/ignorable-channel.ts`，D3 结构断言锁定单元边界）；C2 辅助调用 purpose
+> 标记（插件侧类型适配，`platform/llm.ts` 单点收窄，P1.2 契约锚已落，P5 补齐调用面）。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -38,6 +39,29 @@ JSONL（账本可回放、KV 只是加速缓存）。插件事件类型按构造
 **现状（诚实记录）**：本仓 harness checkout 已实现（commit `04cba8f394` + `a3c0a8bc02`
 + `ea04b581a5`，session 包 82 测试全绿，api-catalog 重生成校验过）；上游未开放 PR，
 vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
+
+### C2 · 辅助调用 purpose 标记（插件侧类型适配，不修 harness）
+
+**需求来源**：[10 §1 H12](10-wiring.md) 要求判别 / 断面 / 压缩辅助调用统一 purpose 标记，
+度量按 purpose 分账（[07 §5](07-metrics.md)）。
+
+**宿主现状（已核验）**：`packages/llm/llm/src/types.ts:442` 的 `GenerateOptions.purpose`
+仅 `'compaction' | 'session-title'`，且 interface 属性**不能**经声明合并宽化（TS2717，
+后声明属性类型必须一致）。`llm-deepseek` adapter 只对这两个值有特殊策略；未知 purpose
+不会改变 wire 请求形状，只进入 `prepareExtensions` 的 request 事实。
+
+**闭合形态（P1.2 锚 / P5 实现）**：`platform/llm.ts` 定义 `CE_AUX_PURPOSES`（judge /
+optimize / compaction 三值）与 `CeGenerateOptions = Omit<GenerateOptions,'purpose'> &
+{ purpose?: CePurpose }`；`toHarnessGenerateOptions` 是**唯一 cast 收窄点**。P5 的
+`stream` 调用面消费 `CeGenerateOptions`，usage 回执按调用侧 purpose 记账——不依赖 wire
+回显。cast 单点由后续 D 族断言锁定（与 C1 的 D3 同构）。
+
+**失效方向**：宿主不识别自定义 purpose 时行为 = 普通辅助调用（无特殊 header/thinking
+策略），度量仍由插件本地记账；最坏损失是观测标签，不是用户数据。**不降级、不补丁、
+不静默**——适配层常量即可观测。
+
+**删除/演进清单**：上游宽化 `GenerateOptions.purpose` union 后，删 `platform/llm.ts`
+本地宽化类型与 `toHarnessGenerateOptions`（保留 P5 调用/usage 面），跑 `npm run gate`。
 
 ## 2. 能力探测、耦合铁律与删除清单
 
@@ -86,4 +110,6 @@ vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
        blocked，注册镜像后 → mirrored；
 - [ ] 回环 spec 常绿 = 升级自检（§2）；
 - [ ] core/domains 零通道概念引用（D3 的反向即本条，新增发射方工单验收时 grep 复核）；
+- [ ] C2：`toHarnessGenerateOptions` 是 `as GenerateOptions` 唯一 cast 点（grep 断言），
+      `CeGenerateOptions` 可携带三值自定义 purpose（`npm run typecheck:tests`）；
 - [ ] 删除演练：按 §2 清单在分支执行删除 → `npm run gate` 全绿且机制文件 diff 为空。
