@@ -1,6 +1,6 @@
 # P8 分划单位 + 稳定前缀（映射 R2；依赖 P3,P4,P2；尺寸 M）
 
-> 状态：**已施工（commit `fa8fdab`；`node scripts/verify-p8.mjs` 输出 `P8 VERIFY PASS`）**。
+> 状态：**已施工（commit `fa8fdab`）；真机接线修正待提交（`dsh web` 复盘见 §3.4 注/§8.2）**。
 > 当前完成情况：R1 平台面已完成——P0–P7 全部施工（P7 commit `5a8c8f2`）；P8 已施工（commit `fa8fdab`），R2 判别域进行中。
 > 设计正典：[01 §3.5](../01-architecture.md)（分划单位正典）/
 > [02 §2/§3/§6](../02-discriminator.md)（输入栈、段状态机、事件与度量）/
@@ -110,6 +110,10 @@
    必须覆盖 `prefixRebuild*`，属正典冲突 → 停工上报，不自行扩事实名。
 9. **同构类型本地重声明**：`core/prefix.ts` 的 `SkillCatalogEntry`/`SkillCatalogSnapshot`
    与 `platform/skills.ts` 结构完全一致，但**不得** import platform（P4 §8.1 已预告）。
+10. **技能目录是可选能力，走 `ctx.inject(['skills'])` 子 fiber**：主插件不导出
+    `inject=['skills']`（避免 headless 无技能服务时主插件整体 PENDING）；watch 在
+    storage 打开后经 `ctx.inject(['skills'], cb)` 启动，skills 缺失时 watch 不启动、
+    插件其余功能照常。真机失败复盘见 §3.4 注。
 
 ## 3. 产出
 
@@ -375,15 +379,32 @@ function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): (
 
 装配变更：
 
-1. 在 `openContextEconomyStorage(...).then((opened) => { ... })` 内、`storage = opened` 之后
-   调用 `stopSkillWatch = startStablePrefixWatch(ctx, opened)`；`let stopSkillWatch:
-   (() => void) | undefined` 定义在 effect 闭包顶部。
-2. disposer 中按序执行：`stopSkillWatch?.()` → `registerFactMirror(undefined)` →
+1. **不设主插件级 `export const inject = ['skills']`**：`skills` 是稳定前缀的**可选能力**，
+   主插件不得因技能服务缺失而整体 PENDING（headless 无 skills 时事件面/存储面/设置卡仍须可用）。
+2. 在 `openContextEconomyStorage(...).then((opened) => { ... })` 内、`storage = opened` 之后，
+   通过 `ctx.inject(['skills'], (skillsCtx) => { ... })` 启动技能 watch：
+   ```ts
+   ctx.inject(['skills'], (skillsCtx) => {
+     if (disposed) return
+     stopSkillWatch = startStablePrefixWatch(skillsCtx as Context, opened)
+   })
+   ```
+   `skillsCtx` 是 skills 注入子 fiber 的 context，`watchSkillCatalog`/`listSkillCatalog`
+   在它上面读取 `ctx.skills` 是合法的（与 `ctx.inject(['storageDomain'])` 同模式）。
+3. `let stopSkillWatch: (() => void) | undefined` 定义在 storage effect 闭包顶部；
+   disposer 中按序执行：`stopSkillWatch?.()` → `registerFactMirror(undefined)` →
    `await storage?.close()`。
-3. 不使用 timer、不直接监听 `skills/change`（watch 已由 P4 封装）、不 import core 之外的新
+4. 不使用 timer、不直接监听 `skills/change`（watch 已由 P4 封装）、不 import core 之外的新
    harness 包。
-4. 入口导出 `export const inject = ['skills']`：harness 服务读取要求先声明依赖，确保
-   `startStablePrefixWatch` 能在装配根安全读取 `ctx.skills`（P4 端口消费面）。
+
+> **真机失败记录（dsh web 2026-09-07）与修正**：首版 P8 在 index 直接
+> `startStablePrefixWatch(ctx, opened)` 并靠 `export const inject = ['skills']` 读 `ctx.skills`，
+> 真机报 `cannot get property "skills" without inject`（`listSkillCatalog` → `watchSkillCatalog`
+> → `startStablePrefixWatch`）。根因有两点：① `dsh web` 加载 `main` 指向的 `lib/index.js`，
+> 源码新增的 `inject` 导出未重建进 lib 即运行，属**陈旧 lib**；② 即便 lib 重建，把 `skills`
+> 设为主插件硬依赖也不正确——headless 无技能服务时主插件会被整体 PENDING。因此本版改为
+> **lib 必须重建 + 动态 `ctx.inject(['skills'])` 子 fiber**：主插件不声明 skills 依赖，
+> 技能服务可用时 watch 自动启动，不可用时插件其余功能照常（fail-lazy 方向不变）。
 
 ### 3.5 `tests/units.spec.ts`（新，≤220 行；全部 fake 事实与事件，零 cordis 运行时 import）
 
@@ -429,9 +450,12 @@ function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): (
 
 复用 `tests/storage.spec.ts` 的 FakeTable/FakeDomain 最小实现（同文件复制，≤100 行）。
 fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 disposer）、
-`inject(['storageDomain'], cb)`（提供含 `storageDomain`/`effect`/`logger` 的 storageCtx）、
-`on('skills/change')`（记录监听器供测试 emit）、`skills`（`snapshot` 返回可变目录）。
-用例：
+`inject(deps, cb)`（**须同时处理两条依赖路径**：`['storageDomain']` → 提供含
+`storageDomain`/`effect`/`logger` 的 storageCtx；`['skills']` → 用根 ctx 调 cb，
+以匹配 index 的 `ctx.inject(['skills'])` 子 fiber 模式）、
+`on('skills/change')`（记录监听器供测试 emit）、`skills`（`snapshot` 返回可变目录；
+缺 skills 的 harness 用 `withSkills:false` 构造）。
+用例（五组）：
 
 1. **无项目帧不创建**：apply 后 flush microtasks；断言 `project_frame` 表无记录；
    `skills/change` 监听器已注册（watch 活跃）。
@@ -441,6 +465,9 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
    断言 `project_frame` 记录 `version=2`、`body.skillCatalog` 为 B、`source.eventType=
    'prefix-rebuild'`、`source.evidence.cause='skill'`。
 4. **卸载净**：执行 disposers 后再 emit；断言版本保持 2；重复 dispose no-op。
+5. **无 skills 服务时主插件仍可用**：`withSkills:false` 构造 harness；apply 后 flush；
+   断言 storageDomain 已打开（`fact_mirror` 表存在）、无 `skills/change` 监听器、
+   `project_frame` 无记录、apply 不抛错（headless 兼容）。
 
 ### 3.8 `scripts/verify-p8.mjs`（新，≤120 行；agent 自动化验收入口）
 
@@ -453,19 +480,22 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
 4. grep/扫描组（期望 0 命中）：
    - `src/core/units.ts`、`src/core/prefix.ts`：`@deepseek-ai/`、`from 'cordis`、
      `platform/`、`ctx\.`、`session.append`、`setInterval(`、`emitCeFact`。
-   - `src/index.ts`：`skills/change`（watch 封装在 P4，index 不直接监听）。
+   - `src/index.ts`：`skills/change`（watch 封装在 P4，index 不直接监听）、
+     `export const inject = ['skills']`（主插件不得把可选技能服务设为硬依赖）。
 5. grep/扫描组（期望 ≥1 命中）：
    - `foldSegmentState` 在 `src/core/units.ts` 与 `src/core/ledger/fold.ts`；
    - `renderStablePrefix` 在 `src/core/prefix.ts` 与 `tests/prefix.spec.ts`；
-   - `watchSkillCatalog` 与 `projectFrameStorageKey` 在 `src/index.ts`。
-6. 行数预算：`src/core/units.ts ≤150`、`src/core/prefix.ts ≤180`、
+   - `watchSkillCatalog`、`projectFrameStorageKey`、`ctx.inject(['skills']` 在 `src/index.ts`。
+6. **lib 新鲜度检查**：`lib/index.js` 必须存在，且不含 `export const inject = ['skills']`、
+   且含 `ctx.inject(['skills']`——防止 `dsh web` 加载陈旧 lib（真机失败复盘，见 §3.4 注）。
+7. 行数预算：`src/core/units.ts ≤150`、`src/core/prefix.ts ≤180`、
    `tests/units.spec.ts ≤220`、`tests/prefix.spec.ts ≤220`、
    `tests/prefix-wiring.spec.ts ≤240`、`scripts/verify-p8.mjs ≤120`；
    `git diff --numstat src/index.ts` 净增 ≤60。
-7. 测试名抽查：`grep -n "describe('foldSegmentState" tests/units.spec.ts`、
+8. 测试名抽查：`grep -n "describe('foldSegmentState" tests/units.spec.ts`、
    `grep -n "describe('renderStablePrefix" tests/prefix.spec.ts`、
    `grep -n "describe('prefix wiring" tests/prefix-wiring.spec.ts` 各 ≥1。
-8. 打印 `P8 VERIFY PASS` 或失败清单，exit 0/1。
+9. 打印 `P8 VERIFY PASS` 或失败清单，exit 0/1。
 
 ### 3.9 `tsconfig.tests.json`（改）
 
@@ -504,20 +534,24 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
 
 ## 5. 验收（全机械 + agent 自动化检查）
 
-- [ ] `node scripts/verify-p8.mjs` 输出 `P8 VERIFY PASS`（§3.8 八组全过）
+- [ ] `node scripts/verify-p8.mjs` 输出 `P8 VERIFY PASS`（§3.8 九组全过）
 - [ ] `DSH_CHECKOUT=G:/deepseek-harness npm run build` exit 0（P8 新文件进 lib/ 编译）
 - [ ] `npm run gate` exit 0（typecheck + typecheck:client + vitest + assert 四段全绿）
 - [ ] `npm run typecheck:tests` exit 0（新增三份 spec 进 include）
 - [ ] `node scripts/assert-structure.mjs --json` 连跑两次输出逐字节一致（diff 为空）
 - [ ] `tests/units.spec.ts` §3.5 九组用例齐全且绿；`tests/prefix.spec.ts` §3.6 十组用例齐全且绿；
-      `tests/prefix-wiring.spec.ts` §3.7 四组用例齐全且绿（vitest 输出可见）
+      `tests/prefix-wiring.spec.ts` §3.7 五组用例齐全且绿（vitest 输出可见）
 - [ ] `grep -R "@deepseek-ai/\|from 'cordis\|from \".*platform" src/core/units.ts src/core/prefix.ts`
       无命中（core 零 harness/platform import；S1 反向）
 - [ ] `grep -R "ctx\.\|session.append\|setInterval(\|emitCeFact" src/core/units.ts src/core/prefix.ts`
       无命中（纯核零触点、零 timer、零事实发射）
 - [ ] `grep -n "skills/change" src/index.ts` 无命中（watch 封装在 P4，不直接监听）
+- [ ] `grep -n "export const inject = \['skills'\]" src/index.ts` 无命中；`grep -n "ctx.inject(\['skills'\]" src/index.ts`
+      至少 1 命中（可选技能服务走子 fiber 注入，主插件不硬依赖 skills）
+- [ ] `grep -n "export const inject = \['skills'\]" lib/index.js` 无命中；`grep -n "ctx.inject(\['skills'\]" lib/index.js`
+      至少 1 命中（lib 新鲜度——dsh web 加载 main 指向的 lib，不重建 lib 必复现真机失败）
 - [ ] `git diff tests/apply-smoke.spec.ts tests/events-pump.spec.ts tests/field-model.spec.ts`
-      为空（既有测试零改动；assert-structure.spec 本单不改）
+      为空（既有测试零改动；assert-structure.spec 本单不改；prefix-wiring.spec 为本单新增）
 - [ ] 行数预算：`src/core/units.ts ≤150`、`src/core/prefix.ts ≤180`、
       `tests/units.spec.ts ≤220`、`tests/prefix.spec.ts ≤220`、
       `tests/prefix-wiring.spec.ts ≤240`、`scripts/verify-p8.mjs ≤120`（`wc -l`）
@@ -544,9 +578,12 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
    监听、不轮询。
 6. **CAS 写保护**：`putEntity` 必须带 `{ baseVersion: current.version }`；CAS 失败
    （并发 bump）由 catch 承接并 warn，不重试、不外溢（fail-lazy）。
-7. **不改 P2 fixture**：`tests/fixtures/ledger/**` 与 `tests/ledger-fold.spec.ts`
+7. **lib 必须与 src 同步重建**：`dsh web`/注入器加载 `main` 指向的 `lib/index.js`；
+   改完 src 后未 `npm run build` 即启动真机会加载陈旧 lib（本次真机失败主因之一）。
+   `scripts/verify-p8.mjs` 已加 lib 新鲜度检查。
+8. **不改 P2 fixture**：`tests/fixtures/ledger/**` 与 `tests/ledger-fold.spec.ts`
    现有断言零改动；`foldCommon` 换 taskCount 来源后必须原样绿。
-8. **停工上报触发器**：① §2.3 核验签名与设计不符；② `foldSegmentState` 语义无法同时满足
+9. **停工上报触发器**：① §2.3 核验签名与设计不符；② `foldSegmentState` 语义无法同时满足
    P2 fixture 与 docs/02 §3；③ `reconcileProjectFrame` 与 P3 `putEntity` 的 source/CAS
    语义无法对齐；④ 行数预算超限且无法精简；⑤ 任何未覆盖决策点。
    上报带证据（命令 + 输出 + file:line）。
@@ -573,6 +610,10 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
 | P19 边界路径编排 | 档案追加/截断触发前缀 bump 时，以 `cause='compaction'` 调用 `reconcileProjectFrame`（或复用 P8 fold 口径记账） |
 | P21a 恢复编排 | `project_frame` 恢复后，用 `listSkillCatalog` + `reconcileProjectFrame` 做只读校验；段状态机从 facts 重放（09 §4） |
 
+> 消费提示：`listSkillCatalog`/`watchSkillCatalog` 内部会读 `ctx.skills`；后续工单若没有把
+> `skills` 声明为插件级依赖，必须先经 `ctx.inject(['skills'], cb)` 取得注入子 context 再调用，
+> 不得直接在主插件 ctx 上调用（本次 `dsh web` 真机失败的教训，见 §3.4 注）。
+
 ### 8.2 对后续计划的修正（本计划先行记录，实现后回写总纲）
 
 | 行 | 原依赖 | 修正为 | 理由 |
@@ -586,6 +627,16 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
 
 总纲 §3 依赖主干图无需改边（P8 仍为 P3/P4/P2 后继；P10 新增的 P8 契约依赖是**数据契约**
 而非施工顺序依赖，但建议在 P10 工单正文列 P8 为"契约前置"）。
+
+**本次审查修正（2026-09-07 dsh web 真机失败后，已落实）**：
+
+- `src/index.ts` 取消主插件级 `export const inject = ['skills']`；改为 storage 打开后
+  `ctx.inject(['skills'], cb)` 启动 watch——`skills` 降级为可选能力，headless 无技能服务时
+  主插件不再整体 PENDING（§2.4-10、§3.4）。
+- `tests/prefix-wiring.spec.ts` 的 fake `inject` 同时处理 `['storageDomain']` 与 `['skills']`
+  两条路径；§3.7 用例增至五组（新增无 skills 服务可用性用例）。
+- `scripts/verify-p8.mjs` 新增 lib 新鲜度检查与 `ctx.inject(['skills']` 正/反向扫描，
+  防止陈旧 lib 再次以 `cannot get property "skills" without inject` 形式失败。
 
 ## 9. 汇报模板（本单最后一步）
 

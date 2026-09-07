@@ -26,7 +26,6 @@ import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.
 import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
-export const inject = ['skills']
 const PROJECT_FRAME_TABLE = 'project_frame' as const
 
 // 入口铁律（docs/11 §1）：host 半边导出 name/Config/apply——Config = schema + interface 同名双面。
@@ -112,7 +111,12 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           }
           storage = opened
           registerFactMirror((type, data) => opened.writeFactMirror(type, data))
-          stopSkillWatch = startStablePrefixWatch(ctx, opened)
+          // 技能目录是可选能力：经 ctx.inject(['skills']) 子 fiber 读取，避免把 skills
+          // 设为主插件硬依赖（headless 无 skills 时插件其余功能仍可用）。
+          ctx.inject(['skills'], (skillsCtx) => {
+            if (disposed) return
+            stopSkillWatch = startStablePrefixWatch(skillsCtx as Context, opened)
+          })
         })
         .catch((e) => {
           registerFactMirror(undefined)

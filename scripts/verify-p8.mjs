@@ -27,6 +27,15 @@ if (exists(path.join(checkout, 'packages'))) {
   note('SKIP build: DSH_CHECKOUT not found (' + checkout + ')')
 }
 
+// 1b. lib 新鲜度检查（dsh web 真机失败复盘：main 指向 lib/index.js，陈旧 lib 会缺新接线）
+if (exists('lib/index.js')) {
+  const lib = read('lib/index.js')
+  if (/export const inject = \['skills'\]/.test(lib)) fail('stale lib/index.js: still hard-requires skills at root')
+  if (!/ctx\.inject\(\['skills'\]/.test(lib)) fail('stale lib/index.js: missing dynamic ctx.inject([\'skills\']) wiring')
+} else {
+  fail('lib/index.js missing: run DSH_CHECKOUT=G:/deepseek-harness npm run build before dsh web/injection')
+}
+
 // 2. 门禁
 for (const script of ['gate', 'typecheck:tests']) {
   const r = run('npm', ['run', script])
@@ -46,6 +55,7 @@ for (const f of coreFiles) {
   for (const re of coreForbidden) if (re.test(read(f))) fail(`${f} contains forbidden ${re}`)
 }
 if (/skills\/change/.test(read('src/index.ts'))) fail('src/index.ts directly references skills/change')
+if (/export const inject = \['skills'\]/.test(read('src/index.ts'))) fail('src/index.ts must not hard-require skills as root inject')
 
 // 5. 正向扫描（期望 ≥1 命中）
 const positive = [
@@ -55,6 +65,7 @@ const positive = [
   ['renderStablePrefix in prefix.spec', () => /renderStablePrefix/.test(read('tests/prefix.spec.ts'))],
   ['watchSkillCatalog in index', () => /watchSkillCatalog/.test(read('src/index.ts'))],
   ['projectFrameStorageKey in index', () => /projectFrameStorageKey/.test(read('src/index.ts'))],
+  ['ctx.inject skills in index', () => /ctx\.inject\(\['skills'\]/.test(read('src/index.ts'))],
 ]
 for (const [label, ok] of positive) if (!ok()) fail('missing positive: ' + label)
 

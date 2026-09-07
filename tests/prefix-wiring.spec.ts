@@ -46,7 +46,8 @@ const catalogB: SkillCatalogSnapshot = {
   skills: [{ name: 'beta', description: 'Beta' }],
 }
 
-function makeHarness() {
+function makeHarness(opts: { withSkills?: boolean } = {}) {
+  const withSkills = opts.withSkills ?? true
   const domain = new FakeDomain()
   const disposers: Array<() => unknown> = []
   const logs: Array<{ level: string; text: string }> = []
@@ -88,7 +89,7 @@ function makeHarness() {
 
   const ctx = {
     logger,
-    skills,
+    ...(withSkills ? { skills } : {}),
     on: (name: string, fn: () => void) => {
       let set = listeners.get(name)
       if (!set) listeners.set(name, (set = new Set()))
@@ -100,13 +101,19 @@ function makeHarness() {
       if (typeof d === 'function') disposers.push(d as () => unknown)
     },
     inject: (deps: readonly string[], cb: (provided: unknown) => unknown) => {
+      if (deps.includes('skills')) {
+        if (!withSkills) return
+        const d = cb(ctx)
+        if (typeof d === 'function') disposers.push(d as () => unknown)
+        return
+      }
       if (!deps.includes('storageDomain')) return
       const storageCtx = {
         storageDomain: { open: async () => domain },
         logger,
         effect: ctx.effect,
         on: ctx.on,
-        skills,
+        ...(withSkills ? { skills } : {}),
       }
       const d = cb(storageCtx)
       if (typeof d === 'function') disposers.push(d as () => unknown)
@@ -191,5 +198,14 @@ describe('prefix wiring', () => {
     expect(h.projectFrame()!.version).toBe(2)
     for (const d of [...h.disposers]) d()
     expect(h.projectFrame()!.version).toBe(2)
+  })
+
+  it('无 skills 服务时主插件仍可用：不注册 skills/change watch，也不创建项目帧', async () => {
+    const h = makeHarness({ withSkills: false })
+    apply(h.ctx as never, {})
+    await h.flush()
+    expect(h.listeners.get('skills/change')?.size ?? 0).toBe(0)
+    expect(h.projectFrame()).toBeUndefined()
+    expect(h.domain.tables.has('fact_mirror')).toBe(true)
   })
 })

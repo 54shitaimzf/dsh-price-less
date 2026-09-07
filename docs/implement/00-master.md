@@ -67,8 +67,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P6 | 改史端口（已施工；扩写工单见 [P6-history.md](P6-history.md)） | R1 | `platform/history.ts`（H4 surfaceOp replace + `sourceEventSeqs` 协议 + H5 事务对 + 配对平衡守卫，fake session 测试） | P1 | M |
 | P6.1 | 收尾补正（已施工 commit `82c98d8`；执行 P5.1 + P6 审查修正；扩写工单见 [P6.1-wrapup.md](P6.1-wrapup.md)） | R1 | 执行 P5.1（llm 回执遏制/流类型/早断测试/docs 状态）；修 verify-p6 build-first；docs/13 补 dsh-compaction 节；D7 补 summary；真机 history 冒烟 | P5,P6 | S |
 | P7 | 工具端口（已施工 commit `5a8c8f2`；扩写工单见 [P7-tools.md](P7-tools.md)） | R1 | `platform/tools.ts`（H6 `tools/post-execute` accept content 覆盖/追加 = T-entry/T-note；`tools/execute` 仅信号/计量）；补 peerDep `dsh-tools` | P1 | S |
-| P8 | 分划单位 + 稳定前缀（已施工 commit `fa8fdab`；扩写工单见 [P8-units-prefix.md](P8-units-prefix.md)） | R2 | `core/units.ts`（[01 §3.5](../01-architecture.md) 状态机）+ `core/prefix.ts`（技能目录快照**本地重声明同构类型** + 项目帧 vN；`prefixRebuildCause`；字节稳定断言，[02 §2](../02-discriminator.md)/[06 §4](../06-cache.md)；**watch 经 P4 端口在 index 装配根接线**） | P3,P4,**P2** | M |
-| P9 | 卷宗 | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
+| P8 | 分划单位 + 稳定前缀（已施工 commit `fa8fdab`；真机接线修正待提交，见 [P8-units-prefix.md](P8-units-prefix.md) §3.4/§8.2） | R2 | `core/units.ts`（[01 §3.5](../01-architecture.md) 状态机）+ `core/prefix.ts`（技能目录快照**本地重声明同构类型** + 项目帧 vN；`prefixRebuildCause`；字节稳定断言，[02 §2](../02-discriminator.md)/[06 §4](../06-cache.md)；**watch 经 P4 端口在 index 装配根接线**） | P3,P4,**P2** | M |
+| P9 | 卷宗（扩写工单见 [P9-dossier.md](P9-dossier.md)） | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
 | P10 | 判据与对表 | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5,**P2** | M |
 | P11 | 星标断面 | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5,**P2** | M |
 | P12 | 自动断面服务 | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3 | M |
