@@ -1,8 +1,8 @@
 # P9 卷宗（映射 R2；依赖 P3,P8；尺寸 M）
 
-> 状态：**已施工（commit `783de30`；`node scripts/verify-p9.mjs` 输出 `P9 VERIFY PASS`）**。
+> 状态：**已施工（commit `78f33ad`；`node scripts/verify-p9.mjs` 输出 `P9 VERIFY PASS`）**。
 > 当前完成情况：R1 平台面已完成（P0–P7）；P8 已施工（commit `fa8fdab` + 真机接线修正
-> `037b413`）；P9 卷宗纯核已施工（commit `783de30`），运行期接线仍留 P12/P14b。
+> `037b413`）；P9 卷宗纯核已施工（commit `78f33ad`），运行期接线仍留 P12/P14b。
 > 设计正典：[02 §2](../02-discriminator.md)（卷宗纪律/输入栈）/
 > [02 §4](../02-discriminator.md)（判别回填终审语义）/
 > [09 §2/§4](../09-state.md)（卷宗 vN 实体、读写者矩阵、恢复）/
