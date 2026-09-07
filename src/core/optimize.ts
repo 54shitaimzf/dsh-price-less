@@ -82,7 +82,7 @@ export function renderOptimizePrompt(input: OptimizeInput): OptimizeRender {
   const promptSection = `[当前 prompt]\n${a.promptText}`
   const candidateSection = `[候选权威段]\n${candidates.length === 0 ? '(无)' : candidates.map((c) => `${c.index}. ${c.text}`).join('\n')}`
   const skillSection = `[技能目录]\n${renderSkillCatalog(input.catalog)}`
-  const outputSection = a.short ? OPTIMIZE_PROMPT_OUTPUT.replace('[PRODUCT]\n\n[VERDICTS]', '[PRODUCT]\n(空)\n\n[VERDICTS]') : OPTIMIZE_PROMPT_OUTPUT
+  const outputSection = a.short ? `[PRODUCT]\n(空)\n\n[VERDICTS]\n${OPTIMIZE_PROMPT_OUTPUT}` : OPTIMIZE_PROMPT_OUTPUT
   const prompt = [OPTIMIZE_PROMPT_HEAD, `[稳定前缀]\n${a.prefixText}`, dossierSection, promptSection, candidateSection, skillSection, outputSection].join('\n\n')
   return { version: OPTIMIZE_PROMPT_VERSION, prompt, short: a.short, ctxTokens: a.ctxTokens, truncatedDossierCount: a.truncatedDossierCount }
 }
