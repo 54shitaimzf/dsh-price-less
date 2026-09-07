@@ -29,6 +29,7 @@
     "tests/prefix.spec.ts",
     "tests/prefix-wiring.spec.ts",
     "tests/dossier.spec.ts",
-    "tests/judge.spec.ts"
+    "tests/judge.spec.ts",
+    "tests/optimize.spec.ts"
   ]
 }
