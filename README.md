@@ -1,35 +1,59 @@
+<div align="center">
+
 # dsh-context-economy
 
-> DeepSeek Harness 的上下文管理插件：任务边界、项目帧、自动判别与上下文优化。
->
-> 非官方项目 · 开发态（R2 判别域进行中）
+**Context management plugin for DeepSeek Harness**
 
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-development-yellow)]()
-[![DSH](https://img.shields.io/badge/DSH-plugin-bundle-blue)]()
+[![Status](https://img.shields.io/badge/status-development-yellow.svg)]()
+[![DSH](https://img.shields.io/badge/DSH-plugin-bundle-blue.svg)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)]()
 
-## 这是什么
+[English](./README.md) · [中文](./README.zh-CN.md)
 
-`dsh-context-economy` 是一个面向 DeepSeek Harness 的上下文管理插件，目标是把“送进模型的每个 token”花在更重要的地方：
+</div>
 
-- 显式任务边界
-- 项目帧初始化
-- 自动判别任务延续 / 切换
-- 手动断面入口
-- 可回放、可降级的会话事实
+---
 
-当前已完成平台面与判别域主体骨架，星标 UI 与 host 方法仍在施工中。
+## Table of Contents
 
-## 核心特性
+- [About The Project](#about-the-project)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Commands](#commands)
+- [Session Events](#session-events)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
-- **任务边界**：`/task`、`/task close`，Tier-0 权威边界
-- **项目帧**：`/init` 提案 → 用户确认 → `project_frame` v1
-- **自动判别**：T0 → L0 → 对表 → LLM → fail-lazy 决策链
-- **手动断面**：`/optimize-prompt` 命令入口，后续与星标按钮共用
-- **事实可回放**：`context-economy/*` 事件全部 log-only + ignorable
-- **降级安全**：harness 无 ignorable 通道时自动降级 KV 镜像
+## About The Project
 
-## 架构图
+`dsh-context-economy` is a non-official DeepSeek Harness plugin focused on context economy. It helps reduce token waste by:
+
+- Establishing explicit task boundaries
+- Initializing a project frame through user confirmation
+- Automatically discriminating task continuation, new tasks, and message classes
+- Providing a manual context section entry point
+- Keeping all plugin facts replayable and fail-safe
+
+> **Status**: Development. R2 discriminator phase is in progress.
+
+## Features
+
+- **Task boundaries**: `/task`, `/task close`, and `/task` status.
+- **Project frame**: `/init` proposal → user confirmation → persisted `project_frame` v1.
+- **Automatic discrimination**: T0 → L0 → table matching → LLM → fail-lazy chain.
+- **Manual section**: `/optimize-prompt` entry point, shared with the future star button.
+- **Replayable facts**: all `context-economy/*` events are log-only and `ignorable`.
+- **Graceful degradation**: falls back to KV fact mirroring when the harness ignorable channel is unavailable.
+
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -42,155 +66,116 @@ flowchart LR
   Compactor --> Context
 ```
 
-分层的工程结构：
-
 ```text
 src/
-├─ platform/    # harness 适配层，唯一外部触点
-├─ core/        # 纯逻辑，零 harness import
-├─ domains/     # 命令面、自动断面等编排
-└─ index.ts     # 插件入口
-client/         # 设置卡、星标按钮 UI
-docs/           # 设计正典与施工工单
+├─ platform/    # Harness adapter layer, only external touchpoint
+├─ core/        # Pure logic, zero harness imports
+├─ domains/     # Command face, automatic discriminator, orchestration
+└─ index.ts     # Plugin entry
+client/         # Settings card and star button UI shell
+docs/           # Design canon and implementation work orders
 ```
 
-## 安装
+## Getting Started
 
-> 当前为开发态，尚未发布 npm 包。以下方式面向本地开发与测试。
+### Prerequisites
+
+- Node.js with ESM support
+- A local DeepSeek Harness source checkout for building
+- `dsh` CLI or `dev_inject_plugin` for loading the plugin
+
+### Installation
 
 ```bash
-# 1. 安装依赖
+# 1. Install dependencies
 npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --no-package-lock
 
-# 2. 构建（需要本机 DSH source checkout）
+# 2. Build from source (requires a local DSH checkout)
 DSH_CHECKOUT=/path/to/deepseek-harness npm run build
 
-# 3. 注入到 DSH 实例
+# 3. Inject into a DSH instance
 dev_inject_plugin /path/to/dsh-context-economy
 ```
 
-后续发布形态计划：
+Planned distribution forms:
 
-- npm 包：`dsh plugin add dsh-context-economy`
-- tarball：`dsh plugin add ./dsh-context-economy-0.0.1.tgz`
+- npm: `dsh plugin add dsh-context-economy`
+- tarball: `dsh plugin add ./dsh-context-economy-0.0.1.tgz`
 
-## 快速开始
+## Usage
 
 ```text
-/init 我要做一个上下文管理插件
+/init I am building a context management plugin
 /init confirm
 
-/task 设计命令面
+/task Design the command face
 /task
 /task close
 ```
 
-## 配置
+## Configuration
 
-当前配置集中在 `discriminator` 命名空间。
+Configuration is currently grouped under `discriminator`.
 
-| 配置 | 类型 | 默认值 | 说明 |
+| Key | Type | Default | Description |
 |---|---|---|---|
-| `discriminator.auto` | boolean | `false` | 自动断面总开关 |
-| `discriminator.provider` | string | `deepseek-official` | 辅助 LLM provider |
-| `discriminator.model` | string | `deepseek-v4-flash-vision-exp` | 辅助 LLM 模型 |
+| `discriminator.auto` | boolean | `false` | Master switch for automatic discrimination |
+| `discriminator.provider` | string | `deepseek-official` | Auxiliary LLM provider |
+| `discriminator.model` | string | `deepseek-v4-flash-vision-exp` | Auxiliary LLM model |
 
-## 命令
+## Commands
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `/task <描述>` | 显式开启新任务 |
-| `/task close` | 显式闭合当前任务 |
-| `/task` | 查看当前任务状态 |
-| `/init <项目目标>` | 发起项目帧初始化提案 |
-| `/init confirm` | 确认并写入项目帧 v1 |
-| `/init cancel` | 取消当前提案 |
-| `/init` | 查看当前项目帧 |
-| `/optimize-prompt` | 手动断面入口（P14b 接入后开放） |
+| `/task <description>` | Explicitly open a new task |
+| `/task close` | Explicitly close the current task |
+| `/task` | Show current task status |
+| `/init <goal>` | Start a project frame initialization proposal |
+| `/init confirm` | Confirm and persist `project_frame` v1 |
+| `/init cancel` | Cancel the current proposal |
+| `/init` | Show current project frame |
+| `/optimize-prompt` | Manual context section entry (available after P14b) |
 
-## 会话事实
+## Session Events
 
-所有自定义事件均为 log-only，带 `ignorable: true`。
+All custom events are log-only and carry `ignorable: true`.
 
-| 事件 | 含义 |
+| Event | Meaning |
 |---|---|
-| `context-economy/task-boundary` | 任务边界事实 |
-| `context-economy/judge-recorded` | 自动判别记录 |
-| `context-economy/judge-error` | 判别失败记录 |
-| `context-economy/judge-verdict` | 新任务判定 |
+| `context-economy/task-boundary` | Task boundary fact |
+| `context-economy/judge-recorded` | Automatic discrimination record |
+| `context-economy/judge-error` | Discrimination failure record |
+| `context-economy/judge-verdict` | New task verdict |
 
-## 文档
+## Roadmap
 
-- [docs/00-overview.md](docs/00-overview.md) —— 系统导览与公共契约
-- [docs/01-architecture.md](docs/01-architecture.md) —— 架构总纲
-- [docs/02-discriminator.md](docs/02-discriminator.md) —— 优化判别器
-- [docs/03-shear.md](docs/03-shear.md) —— 剪切层
-- [docs/04-compactor.md](docs/04-compactor.md) —— 压缩器
-- [docs/05-constitution.md](docs/05-constitution.md) —— 宪法与守卫
-- [docs/09-state.md](docs/09-state.md) —— 状态与版本协议
-- [docs/10-wiring.md](docs/10-wiring.md) —— 挂点与接线
-- [docs/11-structure.md](docs/11-structure.md) —— 工程结构
-- [docs/12-platform-capabilities.md](docs/12-platform-capabilities.md) —— 平台能力契约
-- [docs/implement/00-master.md](docs/implement/00-master.md) —— 施工总纲
-
-## 开发
-
-```bash
-# 类型检查 + 测试 + 结构断言
-npm run gate
-
-# 测试类型检查
-npm run typecheck:tests
-
-# 单工单验收
-node scripts/verify-p13.mjs
-```
-
-核心纪律：
-
-- `core/` 零 harness import
-- `context-economy/*` 事件必须 `ignorable: true`
-- 改史唯一通道：`session.append` + `surfaceOp replace`
-- LLM 产物先版本化落盘再复用
-
-## 兼容性
-
-- 验证基于 DSH harness checkout `ea04b581a5`
-- peer dependency 范围见 `package.json`
-- 依赖 harness ignorable 会话事实通道
-- 通道缺失时降级为 KV 事实镜像，行为仍安全
-
-## 已知限制 / 开发路线
-
-### 当前未完成
-
-- 尚未发布 npm / tarball
-- P14a 星标按钮 UI 未接入
-- P14b host 方法与断面回填未接入
-- R3 剪切域、R4 压缩域尚未实现
-- 构建依赖本地 DSH source checkout，尚未提供自包含 `prepare`
-
-### Roadmap
-
-| 阶段 | 内容 | 状态 |
+| Phase | Scope | Status |
 |---|---|---|
-| R1 | 平台面：事件、存储、技能、LLM、历史、工具 | 已完成 |
-| R2 | 判别域：任务边界、项目帧、自动/手动断面 | 进行中 |
-| R3 | 剪切域 | 未开始 |
-| R4 | 压缩域 | 未开始 |
+| R1 | Platform: events, storage, skills, LLM, history, tools | Completed |
+| R2 | Discriminator: task boundaries, project frame, auto/manual sections | In progress |
+| R3 | Shear domain | Planned |
+| R4 | Compaction domain | Planned |
 
-## 贡献
+See [docs/implement/00-master.md](docs/implement/00-master.md) for detailed work orders.
 
-欢迎提交 Issue 和 PR。提交前请确保：
+## Contributing
+
+Contributions are welcome. Before submitting a change, ensure:
 
 ```bash
 npm run gate
 ```
 
-全绿。
+passes completely.
 
 ## License
 
-[BSD-3-Clause](LICENSE)
+Distributed under the [BSD-3-Clause License](LICENSE).
 
-> 本项目与 DeepSeek 官方无隶属关系。
+## Acknowledgments
+
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+- [Cordis](https://github.com/cordijs/cordis)
+- Inspired by the context-economy design in `docs/`
+
+> This project is not affiliated with DeepSeek.
