@@ -72,7 +72,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P10 | 判据与对表（已施工 commit `e00fbd7` + 修正 `7d435b2`；扩写工单见 [P10-judge.md](P10-judge.md)） | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5,P2,**P8** | M |
 | P11 | 星标断面（已施工 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；工单见 [P11-optimize.md](P11-optimize.md)） | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5,**P2** | M |
 | P12 | 自动断面服务（已施工 commit `6746c1b`；工单见 [P12-input.md](P12-input.md)） | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3,P8,P9 | M |
-| P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3,**P12** | M |
+| P13 | 命令面 + init 项目帧（工单见 [P13-commands.md](P13-commands.md)） | R2 | `/task` 系列 + `/init` + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3,**P12**,**P5** | M |
 | P14a | 星标按钮 UI（槽 + 预览） | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿（mock host 方法契约） | P13 | M |
 | P14b | 星标 host 方法 + 时序 B | R2 | host 方法（装配输入栈 → H12 断面 → 双通道解析 → 回填/优化产物落盘）+ 时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P14a,P11,P13,P6,P3 | M |
 | P15a | 工具剪切纯核 | R3 | `core/shear/` 工具半边（ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则；[03 §2](../03-shear.md)） | P2 | M |
