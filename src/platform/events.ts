@@ -28,6 +28,8 @@ export interface CeDomainEvents {
   'input/user-message': { session: Session; seq: SessionSeq; time: number; text: string }
   /** H7：度量回放原料（frozen 原事件引用；07 全字段从此 fold 重算）。 */
   'metrics/session-event': { session: Session; event: SessionEvent }
+  /** P12：context-economy/* ignorable 事实回灌（供自动断面按会话分桶 fold）。 */
+  'facts/session-event': { session: Session; event: SessionEvent }
 }
 
 export type CeDomainEventKind = keyof CeDomainEvents
@@ -125,6 +127,11 @@ export function createEventPump(ctx: Context, logger?: CeLogger): EventPump {
       }
       if (METRICS_FACE_TYPES.has(event.type)) {
         queue.push({ kind: 'metrics/session-event', payload: { session, event } })
+        stats.enqueued++
+      }
+      // P12：只透传 context-economy/* ignorable 事实（docs/12 §2），供领域侧按会话分桶。
+      if (event.type.startsWith('context-economy/')) {
+        queue.push({ kind: 'facts/session-event', payload: { session, event } })
         stats.enqueued++
       }
     } catch (e) {

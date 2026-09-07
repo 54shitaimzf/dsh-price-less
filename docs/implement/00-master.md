@@ -71,7 +71,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P9 | 卷宗（已施工 commit `78f33ad`；扩写工单见 [P9-dossier.md](P9-dossier.md)） | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
 | P10 | 判据与对表（已施工 commit `e00fbd7` + 修正 `7d435b2`；扩写工单见 [P10-judge.md](P10-judge.md)） | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5,P2,**P8** | M |
 | P11 | 星标断面（已施工 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；工单见 [P11-optimize.md](P11-optimize.md)） | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5,**P2** | M |
-| P12 | 自动断面服务（工单见 [P12-input.md](P12-input.md)） | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3,P8,P9 | M |
+| P12 | 自动断面服务（已施工 commit `__P12_COMMIT__`；工单见 [P12-input.md](P12-input.md)） | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3,P8,P9 | M |
 | P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3,**P12** | M |
 | P14a | 星标按钮 UI（槽 + 预览） | R2 | H11 `conversation.view` 槽注册 + controller 扩展 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿（mock host 方法契约） | P13 | M |
 | P14b | 星标 host 方法 + 时序 B | R2 | host 方法（装配输入栈 → H12 断面 → 双通道解析 → 回填/优化产物落盘）+ 时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P14a,P11,P13,P6,P3 | M |
@@ -110,7 +110,7 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > 结构断言全绿（M/S/D1–D8）、R1 出门门槛核对（docs/11 §8 R1 行：JSONL 回放 + ignorable 断言 +
 > platform 七端口齐）通过；下一段 = R2 判别域。
 
-> R2 进行中（2026-09-07）：P8/P9/P10/P11 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p10.mjs` 与 `node scripts/verify-p11.mjs` 均输出 PASS）。
+> R2 进行中（2026-09-07）：P8/P9/P10/P11/P12 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；P12 自动断面服务 commit `__P12_COMMIT__`；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p10.mjs`、`node scripts/verify-p11.mjs` 与 `node scripts/verify-p12.mjs` 均输出 PASS）。
 
 > P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
 > P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b/P19/P21a 补 P3）。

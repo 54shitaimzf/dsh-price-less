@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  CLIENT_DEFAULTS,
   ECONOMY_FIELD_COPY,
   ECONOMY_FIELD_GROUPS,
   ECONOMY_FIELD_SPECS,
@@ -88,18 +89,23 @@ describe('模型路由', () => {
 })
 
 describe('模板态壳不变量（空组 + 组外保留 spec）', () => {
-  it('4 个组壳保留但全部 fields:[]（清空设置项、保折叠标题）', () => {
+  it('4 个组壳保留；assembly 组已挂 auto 开关，其余组仍为空', () => {
     expect(ECONOMY_FIELD_GROUPS.map(g => g.id)).toEqual(['assembly', 'discern', 'tune', 'advanced'])
-    for (const g of ECONOMY_FIELD_GROUPS) expect(g.fields).toEqual([])
+    const assembly = ECONOMY_FIELD_GROUPS.find(g => g.id === 'assembly')!
+    expect(assembly.fields.map(f => f.field)).toEqual(['discriminator.auto'])
+    for (const g of ECONOMY_FIELD_GROUPS.filter(x => x.id !== 'assembly')) expect(g.fields).toEqual([])
     expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')?.routeSelector).toBe(true)
   })
 
-  it('ECONOMY_FIELD_SPECS = 恰 2 个保留 spec：provider/model（hidden，路由暂存安全），无观察模式', () => {
+  it('ECONOMY_FIELD_SPECS = 3 个：auto（core）+ provider/model（hidden），无观察模式', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(ECONOMY_FIELD_SPECS).toHaveLength(2)
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(3)
     expect(specs.has('discriminator.mode')).toBe(false)
+    expect(specs.get('discriminator.auto')?.type).toBe('bool')
+    expect(specs.get('discriminator.auto')?.visibility).toBe('core')
     expect(specs.get('discriminator.provider')?.visibility).toBe('hidden')
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
+    expect(CLIENT_DEFAULTS.discriminator.auto).toBe(false)
   })
 
   it('provider/model 文案存在且提示"跟随预设"（模型路由选择器的安全语义）', () => {

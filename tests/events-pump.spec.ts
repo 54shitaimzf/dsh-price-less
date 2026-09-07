@@ -152,6 +152,34 @@ describe('H7 metrics 透传（docs/10 §1 H7）', () => {
   })
 })
 
+describe('facts/session-event 事实回灌（P12）', () => {
+  it('context-economy/* 事件透传，且保持原事件引用', async () => {
+    const { ctx, fire } = makeFakeCtx()
+    const pump = createEventPump(ctx as never)
+    const seen: FakeEvent[] = []
+    pump.on('facts/session-event', (p) => void seen.push(p.event as never))
+    const session = makeSession()
+    const fact = otherEvent('context-economy/judge-verdict', 1)
+    fire(session, fact)
+    await flush()
+    expect(seen).toEqual([fact])
+    pump.dispose()
+  })
+
+  it('非 context-economy 事件不进入 facts/session-event', async () => {
+    const { ctx, fire } = makeFakeCtx()
+    const pump = createEventPump(ctx as never)
+    const seen: unknown[] = []
+    pump.on('facts/session-event', (p) => void seen.push(p))
+    const session = makeSession()
+    fire(session, otherEvent('turn/start', 1))
+    fire(session, otherEvent('step/start', 2))
+    await flush()
+    expect(seen).toEqual([])
+    pump.dispose()
+  })
+})
+
 describe('异步旁路队列（docs/11 §4 纪律②）', () => {
   it('FIFO 保序：多事件按到达顺序派发', async () => {
     const { ctx, fire } = makeFakeCtx()

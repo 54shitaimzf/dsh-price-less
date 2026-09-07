@@ -71,7 +71,7 @@ describe('apply 冒烟（R0 门离线替身）', () => {
     const rec = installed[0]!
     expect(rec.ns).toBe('context-economy')
     expect(rec.schema).toBe(Config)
-    expect((rec.entry as { discriminator: Record<string, unknown> }).discriminator).toEqual({})
+    expect((rec.entry as { discriminator: Record<string, unknown> }).discriminator).toEqual({ auto: false })
     const hooks = rec.hooks as { setSource: unknown; onChange: unknown }
     expect(typeof hooks.setSource).toBe('function')
     expect(typeof hooks.onChange).toBe('function')

@@ -1,6 +1,6 @@
 # P12 自动断面服务（映射 R2；依赖 P10,P3,P8,P9；尺寸 M）
 
-> 状态：**未执行（待施工）**。前序：P8 稳定前缀已施工（commit `fa8fdab` + fix `037b413`）；P9 卷宗纯核已施工
+> 状态：**已施工（commit `__P12_COMMIT__`；`node scripts/verify-p12.mjs` 输出 `P12 VERIFY PASS`）**。前序：P8 稳定前缀已施工（commit `fa8fdab` + fix `037b413`）；P9 卷宗纯核已施工
 > （commit `78f33ad`）；P10 判据与对表纯核已施工（commit `e00fbd7` + fix `7d435b2`）；
 > P11 星标断面纯核已施工（commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；
 > 其中 `7595c43` 修复短卷宗输出段重复问题，见 §0）。

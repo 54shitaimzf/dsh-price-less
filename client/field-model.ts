@@ -33,6 +33,7 @@ export interface EconomyCardSettingsShape {
   discriminator?: {
     provider?: string
     model?: string
+    auto?: boolean
   }
 }
 
@@ -202,7 +203,7 @@ export function economyPathField(
 /* -------------------------------------------------------------------------- */
 
 export const CLIENT_DEFAULTS = {
-  discriminator: {},
+  discriminator: { auto: false },
 } as const
 
 /** 该路径的推荐默认值（未定义 = 可选覆盖，恢复时清空跟随预设）。 */
@@ -312,6 +313,7 @@ export function buildModelRouteOptions(groups: readonly { id: string; name: stri
 export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; docs?: string }> = {
   'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般用模型路由下拉选择，自动同时设好服务商与模型。' },
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
+  'discriminator.auto': { label: '自动判别', hint: '开启后逐消息判断任务边界；默认关闭。', docs: '自动断面总开关；关闭时零成本，不挂载判别器。' },
 }
 
 /* -------------------------------------------------------------------------- */
@@ -338,6 +340,8 @@ export interface EconomyFieldGroup {
  * 分组壳（模板态）：4 个组的标题/描述/语义色/开态全部保留——重设计时向各组的
  * fields 数组加回 economyXxxField(...) 即可原样复现 UI；本态全部 fields:[]。
  */
+const discriminatorAutoField = economyBoolField('discriminator.auto', { visibility: 'core', default: false, deflabel: '默认关闭' })
+
 export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
   {
     id: 'assembly',
@@ -347,7 +351,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-business-primary)',
     tint: 'var(--dsw-alias-state-business-tertiary)',
     defaultOpen: true,
-    fields: [],
+    fields: [discriminatorAutoField],
   },
   {
     id: 'discern',
@@ -390,6 +394,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
  * 重设计加回字段时：字段进组 fields；这两条保留 spec 的 key 若被复用则从本表移除。
  */
 export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
+  discriminatorAutoField,
   economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
   economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
 ]

@@ -126,7 +126,7 @@ export const RULES = [
     // logger.ts 发射路径）——越界即红，保证上游合并后机制代码零改动的原子删除。
     // 能力探测 = 结构化常量 SESSION_LOG_INTENT（ea04b581a5），不再匹配 append.toString；
     // import/调用 emitFact 的路径同样锁死（事实发射只准经 logger.ts 的 emitCeFact 词汇表门）。
-    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts'
+    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts'
       ? [{ message: 'ignorable-channel concepts must stay in the removable unit (platform/ignorable-channel.ts + logger.ts emit path, docs/12 §2)' }]
       : [] },
     { id: 'D4', canon: 'docs/09 §1/§2 + docs/11 §2 + docs/13 §3.6',

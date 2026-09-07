@@ -130,6 +130,7 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D3').check({ path: 'src/platform/ignorable-channel.ts', text: 'setFactMirror(); const v = SESSION_LOG_INTENT; emitFact(s, t, d)' }, new Map())).toEqual(NO_ISSUES)
     expect(rule('D3').check({ path: 'src/platform/logger.ts', text: "import { emitFact, factModeStats } from './ignorable-channel.ts'" }, new Map())).toEqual(NO_ISSUES)
     expect(check('D3', 'src/platform/events.ts', 'export function createEventPump()\n')).toEqual(NO_ISSUES)
+    expect(rule('D3').check({ path: 'src/domains/judge-facts.ts', text: 'IgnorableSessionEventMap; IgnorableSessionEventMap' }, new Map())).toEqual(NO_ISSUES)
   })
   it('D4：storage 概念只许在 storage.ts 与 index.ts（docs/09 §1）', () => {
     expect(rule('D4').check({ path: 'src/platform/storage.ts', text: "defineDomain({ name: 'x' }); ctx.storageDomain" }, new Map())).toEqual(NO_ISSUES)
