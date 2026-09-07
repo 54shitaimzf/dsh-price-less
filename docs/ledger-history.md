@@ -1463,3 +1463,38 @@
   解封指针）、P12 行（LLM 主路径全量卷宗渲染显式化）、P19 行（15K 硬帽 + archiveTruncate
   入账显式化）；AGENTS.md 现状行同步封存态。清空后验证：typecheck×2 + vitest 11/11 +
   DSH_CHECKOUT build 全绿，lib/ 仅剩模板态产物（index/config/settings/client + types 三件）。
+
+---
+
+## 31. 账本快照 §31：R1 平台面段末基线（首份 07 报表，纯回放管道产出）
+
+> **改动**：R1 平台面施工完毕（P0–P7：platform/ 九文件 = events/logger/ignorable-channel/
+> diag-sink/llm/storage/skills/history/tools + core/ledger 空转只记账、零机制行为）。
+> **首份 07 报表** = P2/P4/P5/P6/P6.1 工单约定的 "R1 段末随 P7 出首份 07 报表快照"。
+> **改动前后同值**：R1 全程机制零行为（判别/剪切/压缩未施工，端口只建不消费），
+> 基线即最终态；R2–R4 起每单按改前改后对照。
+> **产出**：纯回放管道（docs/07 §5：会话 JSONL → core/ledger foldCommon → formatLedgerReport）；
+> 输入 = P2 fixture（tests/fixtures/ledger/session-events.json：2 任务/2 轮/3 工具调用 +
+> task-boundary fact ×1）+ pricing.json + successfulTaskCount=2；同输入同账已由
+> tests/ledger-fold.spec.ts 三次逐字节断言锁定。报表正文 = 管道原样输出：
+
+```
+== batch r1-baseline ==
+通用：
+  roundsPerTask: 1
+  tokensPerRound: 150/25
+  toolCallsPerTask: 1.5
+  compoundedVolume: 20
+  reDiscoveryTokens: 12
+成本：
+  inputCost: 273
+  outputCost: 150
+  cacheReadCost: 3
+  cacheWriteCost: 0.65
+  totalCost: 423.65
+  costPerSuccessfulTask: 211.825
+```
+
+**R1 出门门槛核对（docs/11 §8 R1 行）**：账本字段能从 JSONL 回放（fixture 回放 + 同输入同账
+断言通过）；ignorable 断言过（npm run assert 全绿：D3/S3）；平台七端口齐（含 skills 与
+diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为）。
