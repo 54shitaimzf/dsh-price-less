@@ -100,9 +100,9 @@ describe('client apply 冒烟（P1.2）', () => {
   it('槽注册面正确：settings.plugin.item + key=context-economy + face/actions 完整', () => {
     const { ctx, registrations, slotsCalls } = makeClientCtx()
     expect(() => apply(ctx as never)).not.toThrow()
-    expect(slotsCalls).toEqual(['settings.plugin.item'])
-    expect(registrations).toHaveLength(1)
-    const reg = registrations[0]!
+    expect(slotsCalls).toEqual(['settings.plugin.item', 'conversation.input.right'])
+    expect(registrations).toHaveLength(2)
+    const reg = registrations.find((r) => r.options.name === 'settings.plugin.item')!
     expect(reg.options).toMatchObject({ name: 'settings.plugin.item', key: CONTEXT_ECONOMY_NS })
     expect(reg.component).toBeTypeOf('function')
     const face = reg.inject() as { hooks?: { economyCard?: unknown }; save?: unknown; edit?: unknown }
@@ -110,6 +110,12 @@ describe('client apply 冒烟（P1.2）', () => {
     for (const action of ['edit', 'resetField', 'restoreDefaults', 'retryCatalog', 'save', 'discard'] as const) {
       expect(face[action]).toBeTypeOf('function')
     }
+    const starReg = registrations.find((r) => r.options.name === 'conversation.input.right')!
+    expect(starReg.options).toMatchObject({ name: 'conversation.input.right', id: 'context-economy-star', order: 10 })
+    expect(starReg.component).toBeTypeOf('function')
+    const starFace = starReg.inject('session-1') as { star?: { preview?: unknown; apply?: unknown } }
+    expect(starFace.star?.preview).toBeTypeOf('function')
+    expect(starFace.star?.apply).toBeTypeOf('function')
   })
 
   it('订阅面完整：scope/模型目录 + llm/adapters-updated + settings/document-updated + connection/reset', async () => {

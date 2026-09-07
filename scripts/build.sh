@@ -111,6 +111,9 @@ link_pkg @deepseek-ai/dsh-client-ui-renderer packages/client/ui-renderer
 link_pkg @deepseek-ai/dsh-client-ui-settings packages/client/ui-settings
 link_pkg @deepseek-ai/dsh-client-ui-settings-plugins packages/client/ui-settings-plugins
 link_pkg @deepseek-ai/dsh-client-ui-slots packages/client/ui-slots
+# P14a：星标按钮 type-only 槽位声明与标准会话 props 依赖（不新增运行时 peerDep）。
+link_pkg @deepseek-ai/dsh-client-ui-conversation packages/client/ui-conversation
+link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 link_pkg tsdown node_modules/tsdown
 link_store_pkg react
 link_store_pkg @types/react

@@ -25,7 +25,7 @@
 | H8 | 设置 | `ctx.settings.installSection(owner,'context-economy',Config,entry,hooks)`；写 = `mutate(ns,ops,expectedRevision)` revision-fence | 持久化归 settings-file（原子写 + 文件锁）；`settings/updated` 观察 |
 | H9 | 恢复 | `agent/session-start{source:'resume'|'startup'}` + Session 构造种子 | 种子**不上 firehose**（`firstLiveSeq` 定界）——重启重建需自扫或订阅时区分；恢复序 = [09 §4](09-state.md) |
 | H10 | 持久 KV | `ctx.storageDomain.open(defineDomain({name,version,tables}))` | durable 写 + `domain/changed`；backend 可换（json/sqlite） |
-| H11 | UI | client `ctx.slots.register({name:'settings.plugin.item'…},Card)`（设置卡壳已保留）；conversation.view 星标按钮；`ctx.remote.session.modelCatalog()` | 星标 → host 方法（时序 B）；模型路由目录 |
+| H11 | UI | client `ctx.slots.register({name:'settings.plugin.item'…},Card)`（设置卡壳已保留）；conversation.input.right 星标按钮；`ctx.remote.session.modelCatalog()` | 星标 → host 方法（时序 B）；模型路由目录 |
 | H12 | 辅助 LLM | `llm.stream({purpose})` | 判别 / 断面 / 压缩调用统一 purpose 标记（度量可区分 + 前缀对齐）；usage 回执入账。**宿主现仅 `'compaction'|'session-title'`**，插件自定义 purpose 经 `platform/llm.ts` 单点适配（[12 §1 C2](../12-platform-capabilities.md)），P5 已施工：`platform/llm.ts` `streamCeLlm` + usage 回执 |
 | H13 | 技能目录 | `ctx.skills` 官方注册表（`snapshot`/`get`；`skills/change` 热更新）——`SKILL.md` 扫描与目录 watch 由 harness skill-filesystem 提供者承担 | 稳定前缀原料 + 引用守卫查表（[02 §2](02-discriminator.md)）；枚举纯机械零 LLM |
 | H14 | 会话事实发射 | `session.append` + LogIntent（`IgnorableSessionEventMap` 合并成员） | `context-economy/*` log-only 事件唯一写入通道（append 侧编译闸，读取不查合并表）；能力探测与降级契约 = [12](12-platform-capabilities.md) |
@@ -66,7 +66,7 @@ turn/end → 自动断面边界信号成立（或 /task close）
 ## 4. 时序 B：星标点击 → 断面 → 预览 → 回填 + 剪切
 
 ```text
-用户点星标（H11 conversation.view）或 /optimize-prompt
+用户点星标（H11 conversation.input.right）或 /optimize-prompt
   → host 方法：装配输入栈（稳定前缀[技能目录+项目帧] + 卷宗 + 当前 prompt）
   → H12 llm.stream({purpose:'context-economy-optimize'})：单次断面（temperature 0、无工具调用）
   → 双通道解析：产品（自由文本）+ 行式裁决（行级容错）

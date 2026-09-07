@@ -19,11 +19,16 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only：拉入 slots / settingsScope / remote 的 Context merge 与官方槽位声明。
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EconomyCard } from './Card.tsx'
 import { EconomyCardController, type EconomyCardFace } from './controller.ts'
+import { StarButton } from './star/StarButton.tsx'
+import { createMockStarBridge } from './star/star-bridge.ts'
 
 /** 插件名（与 tsdown banner 的 ModuleLoader load id 一致；入口铁律 docs/11 §1 client 行）。 */
 export const name = 'dsh-price-less'
@@ -71,5 +76,15 @@ export function apply(ctx: ClientContext): void {
         return face
       },
     }, EconomyCard)
+  })
+
+  const starBridge = createMockStarBridge()
+  ctx.slots.inject('conversation.input.right', function* () {
+    yield ctx.slots.register({
+      name: 'conversation.input.right',
+      id: 'context-economy-star',
+      order: 10,
+      inject: (sessionId: SessionId) => ({ star: starBridge }),
+    }, StarButton)
   })
 }

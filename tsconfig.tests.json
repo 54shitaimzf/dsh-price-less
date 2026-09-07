@@ -32,6 +32,7 @@
     "tests/judge.spec.ts",
     "tests/optimize.spec.ts",
     "tests/input.spec.ts",
-    "tests/commands.spec.ts"
+    "tests/commands.spec.ts",
+    "tests/star-model.spec.ts"
   ]
 }
