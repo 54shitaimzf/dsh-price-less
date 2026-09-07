@@ -1,6 +1,6 @@
 # P11 星标断面（映射 R2；依赖 P8,P9,P5,P2；尺寸 M）
 
-> 状态：**已施工（commit `9e5de9b` + 修正 `4a20d32`；`node scripts/verify-p11.mjs` 输出 `P11 VERIFY PASS`）**。前序：P8 稳定前缀已施工（commit `fa8fdab` + fix `037b413`）；P9 卷宗纯核已施工
+> 状态：**已施工（commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；`node scripts/verify-p11.mjs` 输出 `P11 VERIFY PASS`）**。前序：P8 稳定前缀已施工（commit `fa8fdab` + fix `037b413`）；P9 卷宗纯核已施工
 > （commit `78f33ad`）；P10 判据与对表纯核已施工（commit `e00fbd7` + fix `7d435b2`）。
 > 本单交付 `core/optimize.ts` 纯核，**不做运行期接线**：不订阅事件、不调 `streamCeLlm`、不写 KV、不发事实。
 > 运行期消费归 P14b 星标 host 方法（时序 B）；`/optimize-prompt` 命令入口归 P13。
