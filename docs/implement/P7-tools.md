@@ -1,6 +1,6 @@
 # P7 工具端口（映射 R1；依赖 P1；尺寸 S）
 
-> 状态：**已施工（工作树验收全绿；`node scripts/verify-p7.mjs` 输出 `P7 VERIFY PASS`；commit 见 git log）。**
+> 状态：**已施工（commit `5a8c8f2`；`node scripts/verify-p7.mjs` 输出 `P7 VERIFY PASS`）。**
 > 设计正典：[10 §1 H6](../10-wiring.md)（剪切层挂点）/
 > [11 §2](../11-structure.md)（模块树 `platform/tools.ts` 行：H6 post-execute 端口 +
 > tools/execute 信号计量）/ [03 §2](../03-shear.md)（T-entry/T-note 语义归 P15a/P15b，本单只建端口）/
