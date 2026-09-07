@@ -40,9 +40,15 @@ describe('optimize gate', () => {
     const short = renderOptimizePrompt(input({ dossier: body([msg(1, 'hi')]) }))
     expect(short.short).toBe(true)
     expect(short.prompt).toContain('[PRODUCT]\n(空)')
+    // 短卷宗也必须保持“严格两段”单一输出契约，不得出现重复的 [PRODUCT]/[VERDICTS] 分界。
+    expect(short.prompt.match(/\[PRODUCT\]/g)).toHaveLength(1)
+    expect(short.prompt.match(/\[VERDICTS\]/g)).toHaveLength(1)
+    expect(short.prompt).not.toContain('[PRODUCT]\n(空)\n\n[VERDICTS]\n输出格式')
     const long = renderOptimizePrompt(input())
     expect(long.short).toBe(false)
     expect(long.prompt).toContain('[PRODUCT]\n\n[VERDICTS]')
+    expect(long.prompt.match(/\[PRODUCT\]/g)).toHaveLength(1)
+    expect(long.prompt.match(/\[VERDICTS\]/g)).toHaveLength(1)
   })
 })
 
