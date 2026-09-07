@@ -92,6 +92,10 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D7', 'src/core/a.ts', "import { toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'\n")).not.toEqual(NO_ISSUES)
     expect(check('D7', 'src/domains/a.ts', "session.append('compaction/summary', d)\n")).not.toEqual(NO_ISSUES)
   })
+  it('D8：工具事件概念越出 platform/tools.ts → issue（docs/10 §1 H6 + docs/13 §3.9）', () => {
+    expect(check('D8', 'src/domains/a.ts', "ctx.on('tools/post-execute', (e, r, next) => next())\n")).not.toEqual(NO_ISSUES)
+    expect(check('D8', 'src/platform/events.ts', "import type { ToolExecution } from '@deepseek-ai/dsh-tools'\n")).not.toEqual(NO_ISSUES)
+  })
 })
 
 describe('正样本（干净文件 → 0 issue）', () => {
@@ -145,6 +149,11 @@ describe('正样本（干净文件 → 0 issue）', () => {
     const historyFile = "import { CompactionId, toolPairingBalancedAfter } from '@deepseek-ai/dsh-compaction'\nsession.append('compaction/start', d)\nsession.append('compaction/prune', d)\nsession.append('compaction/summary', d)"
     expect(rule('D7').check({ path: 'src/platform/history.ts', text: historyFile }, new Map())).toEqual(NO_ISSUES)
   })
+  it('D8：工具事件概念只许在 platform/tools.ts；ContentBlock 不拦（docs/10 §1 H6 + docs/13 §3.9）', () => {
+    const toolFile = "ctx.on('tools/execute', ...); ctx.on('tools/post-execute', ...)\nPostToolDecision; ToolDispatchExecution; ToolExecution; ToolExecutionResult\nimport type {} from '@deepseek-ai/dsh-tools'"
+    expect(rule('D8').check({ path: 'src/platform/tools.ts', text: toolFile }, new Map())).toEqual(NO_ISSUES)
+    expect(check('D8', 'src/platform/events.ts', "import type { ContentBlock } from '@deepseek-ai/dsh-llm'\n")).toEqual(NO_ISSUES)
+  })
 })
 
 describe('真实树集成', () => {
@@ -157,7 +166,7 @@ describe('真实树集成', () => {
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
-      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass',
+      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass', D8: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

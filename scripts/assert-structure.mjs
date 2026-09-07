@@ -153,6 +153,11 @@ export const RULES = [
       && f.path !== 'src/platform/history.ts'
       ? [{ message: 'history protocol concepts (H4/H5 compaction/* + pairing guard) must only appear in src/platform/history.ts (docs/10 §1 H4/H5)' }]
       : [] },
+  { id: 'D8', canon: 'docs/10 §1 H6 + docs/11 §2 + docs/13 §3.9', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
+    /(tools\/execute|tools\/post-execute|PostToolDecision|ToolDispatchExecution|ToolExecutionResult|\bToolExecution\b|@deepseek-ai\/dsh-tools)/.test(f.text)
+      && f.path !== 'src/platform/tools.ts'
+      ? [{ message: 'tool event concepts must only appear in platform/tools.ts (H6 工具端口收口, docs/10 §1 H6)' }]
+      : [] },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */

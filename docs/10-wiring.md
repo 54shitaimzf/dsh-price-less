@@ -3,7 +3,7 @@
 > 本文是**权威挂点地图**——插件接到 DSH 的哪个事件/服务/槽上，逐条对 harness 源码核验。
 > 域归属视角与三条主时序也在此。事件分两层：会话日志事件（`session/event` firehose，
 > append-only 落盘）与 cordis 运行时事件（waterfall/emit，不落盘）。
-> 状态：部分实现（H1/H4/H5/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts；H8/H11 设置壳已保留；H2/H3/H6/H9 仍为设计态，模块落位见 [11 §3](11-structure.md)）。
+> 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；H8/H11 设置壳已保留；H2/H3/H9 仍为设计态，模块落位见 [11 §3](11-structure.md)）。
 
 ## 0. 它解决什么问题（人话版）
 

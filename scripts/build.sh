@@ -92,6 +92,8 @@ link_pkg @deepseek-ai/dsh-compaction packages/compaction/compaction
 link_pkg @deepseek-ai/dsh-llm packages/llm/llm
 # P4：技能目录端口（ctx.skills 官方注册表；只 import dsh-skill，不手写文件扫描）
 link_pkg @deepseek-ai/dsh-skill packages/skill/skill
+# P7：工具端口（H6 tools/execute + post-execute）
+link_pkg @deepseek-ai/dsh-tools packages/core/tools
 link_pkg @deepseek-ai/dsh-brand packages/util/brand
 link_pkg @deepseek-ai/dsh-util-values packages/util/values
 link_pkg @deepseek-ai/dsh-scope packages/core/scope

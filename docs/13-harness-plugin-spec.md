@@ -182,14 +182,18 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 - 当前插件：`src/platform/history.ts` 已施工（P6）——`createHistoryPort` 消费上述符号
   （H4 replace 唯一改史通道 + H5 事务对 + 可注入配对守卫），见 [10 §1 H4/H5](../10-wiring.md)。
 
-### 3.9 `tools/*` 事件（P7/P15b 使用）
+### 3.9 `tools/*` 事件（P7 已施工；P15b/P21b 使用）
 
 - `tools/execute` 与 `tools/post-execute` 都是 waterfall：
-  `packages/core/tools/src/index.ts:155-175`。
+  `packages/core/tools/src/index.ts:155-167`（`tools/post-execute` 监听器签名
+  `(exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>)`）。
 - T-entry 时机的实现缝已闭合（P1.2）：`tools/execute` 返回值会经
   `normalizeDispatchResult` 按 `value` 重新 render content，content-only 修改会丢；改挂
   `tools/post-execute` accept `content` 覆盖/追加。
-- 当前插件：尚未订阅；P7 落 `platform/tools.ts`。
+- 当前插件：已施工（P7）——`src/platform/tools.ts` `createToolPort(ctx, hooks, logger)`
+  （execute 仅信号/计量恒 `return next()`；post-execute 返回决策短路、hook 异常委托 next）
+  + 决策构造器 `replaceContent`（T-entry 写时整形）/ `appendContent`（T-note 贴注）；
+  T-entry/T-note 判据归 P15a/P15b，端口内不内置剪切规则。
 
 ### 3.10 客户端接口（client 半边）
 
@@ -226,7 +230,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 | `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
-| `src/platform/tools.ts` | `ctx.on('tools/post-execute')` | 未施工（P7） |
+| `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent` | 已施工（P7） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session` | 已施工（壳保留） |
 
 ## 6. 复用方法（后续工单的核验流程）
