@@ -161,8 +161,9 @@ function parseShearLine(rest: string, dossier: DossierBody): { verdict: Optimize
   const startSeq = Number(m[1])
   const endSeq = Number(m[2])
   if (!hasSeq(dossier, startSeq) || !hasSeq(dossier, endSeq) || startSeq > endSeq) return null
-  const note = m[3].trim().slice(0, OPTIMIZE_CONCLUSION_MAX_CHARS)
-  const shear = { startSeq, endSeq, note }
+  const note = m[3].trim()
+  if (note.length === 0) return null
+  const shear = { startSeq, endSeq, note: note.slice(0, OPTIMIZE_CONCLUSION_MAX_CHARS) }
   return { verdict: { kind: 'shear', startSeq, endSeq, note }, shear }
 }
 
