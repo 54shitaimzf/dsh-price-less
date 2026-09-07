@@ -1,6 +1,6 @@
 # P13 命令面 + init 项目帧（映射 R2；依赖 P8,P9,P11,P3,P12,P5；尺寸 M）
 
-> 状态：**未执行（待施工）**。前序：P8 稳定前缀已施工（commit `fa8fdab` + fix `037b413`）；
+> 状态：**已施工（本单）**。前序：P8 稳定前缀已施工（commit `fa8fdab` + fix `037b413`）；
 > P9 卷宗纯核已施工（commit `78f33ad`）；P10 判据与对表纯核已施工（commit `e00fbd7` + fix `7d435b2`）；
 > P11 星标断面纯核已施工（commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`）；
 > P12 自动断面服务已施工（commit `6746c1b` + 文档回写 `579f42e`）。
@@ -518,7 +518,8 @@ export function mountCommandFace(deps: CommandFaceDeps): CommandFace
 |---|---|---|---|
 | P13 | P8,P9,P11,P3,P12 | **P8,P9,P11,P3,P12,P5** | init 提案复用 P5 `streamCeLlm`，且 P13 扩展 `platform/llm.ts` 的 `context-economy-init` purpose |
 | P14b | P14a,P11,P13,P6,P3 | 不变（但正文必须写：`/optimize-prompt` 与星标按钮统一走 `manualOptimize(session, rawInput)` 委托点，P13 已注册命令入口） | 避免 P14b 重复注册 `/optimize-prompt` 或与命令面双入口不一致 |
-| P12 | P10,P3,P8,P9 | 不变 | P12 已施工；P13 只向既有事实流发射 `task-boundary` |
+| P12 | P10,P3,P8,P9 | 不变（但正文必须写：`dossierStorageKey` 前先经 `sessionScopedTaskId(sid, taskId)`，与 P13 同源） | taskId 跨会话唯一性决策已在 P13 落定；P12 同步采用，避免多会话 task-N 相互覆盖 |
+| P13/P12 落地修正 | — | 新增 `core/dossier.ts` `sessionScopedTaskId(sessionId, taskId)`，P12/P13 所有卷宗存储访问先做会话级限定 | P9 §2.4-5 / P10 §6.8 的前置要求，本单补齐 |
 
 ### 8.3 对既有审查发现的处理（本计划落实）
 
@@ -528,6 +529,11 @@ export function mountCommandFace(deps: CommandFaceDeps): CommandFace
    verify 反向扫描锁定不出现 `export const inject=['commands']`。
 3. **P12 会话隔离测试缺口**：P13 的测试在命令面用 `snapshotEvents` 独立 fold，不受 P12 内部
    factsBySession 影响；P13 测试补上“事实按会话隔离”的命令面侧断言（§3.6 用例 4/5）。
+4. **taskId 跨会话唯一性（本次审查补齐）**：P9/P10/P11 均要求 P13 显式定稿。落地为
+   `core/dossier.ts` 的 `sessionScopedTaskId(sessionId, taskId)`，P12/P13 在调用
+   `dossierStorageKey` 前先做会话级限定；`task-boundary` 事实仍保留单会话 fold 的
+   `task-<n>`，存储键与显示层才加会话作用域。后续 P14b/P19/P21b 也必须沿用同一映射，
+   不得直接以裸 `task-<n>` 读写卷宗。
 
 ## 9. 汇报模板（本单最后一步）
 

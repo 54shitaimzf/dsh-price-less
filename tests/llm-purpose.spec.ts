@@ -20,11 +20,12 @@ import {
 import type { TokenUsageLike } from '../src/core/ledger/types.ts'
 
 describe('辅助调用 purpose 契约锚（12 §1 C2）', () => {
-  it('purpose 词汇冻结：三个域各一值，且只作为本地宽化存在', () => {
+  it('purpose 词汇冻结：四个域各一值，且只作为本地宽化存在', () => {
     expect(CE_AUX_PURPOSES).toEqual([
       'context-economy-judge',
       'context-economy-optimize',
       'context-economy-compaction',
+      'context-economy-init',
     ])
   })
 

@@ -15,6 +15,7 @@ import { openContextEconomyStorage, type ContextEconomyStorage } from './platfor
 import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.ts'
 import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
 import { mountAutoDiscriminator } from './domains/input.ts'
+import { mountCommandFace } from './domains/commands.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
 const PROJECT_FRAME_TABLE = 'project_frame' as const
@@ -73,6 +74,9 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   ctx.effect(() => () => pump.dispose())
 
   let stopAuto: (() => void) | undefined
+  let skillsCtx: Context | undefined
+  let llmCtx: Context | undefined
+  let stopCommands: (() => void) | undefined
 
   ctx.inject(['storageDomain'], (storageCtx) => {
     storageCtx.effect(() => {
@@ -84,6 +88,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
         disposed = true
         stopSkillWatch?.()
         stopAuto?.()
+        stopCommands?.()
         registerFactMirror(undefined)
         await storage?.close()
       }
@@ -95,17 +100,31 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           }
           storage = opened
           registerFactMirror((type, data) => opened.writeFactMirror(type, data))
-          ctx.inject(['skills'], (skillsCtx) => {
+          ctx.inject(['skills'], (skillsCtx2) => {
             if (disposed) return
-            stopSkillWatch = startStablePrefixWatch(skillsCtx as Context, opened)
+            skillsCtx = skillsCtx2 as Context
+            stopSkillWatch = startStablePrefixWatch(skillsCtx, opened)
           })
-          ctx.inject(['llm'], (llmCtx) => {
+          ctx.inject(['llm'], (llmCtx2) => {
             if (disposed) return
-            stopAuto = mountAutoDiscriminator(llmCtx as Context, {
+            llmCtx = llmCtx2 as Context
+            stopAuto = mountAutoDiscriminator(llmCtx, {
               pump,
               storage: opened,
               getConfig,
               logger: ceLogger(llmCtx),
+            }).dispose
+          })
+          ctx.inject(['commands'], (commandsCtx) => {
+            if (disposed) return
+            stopCommands = mountCommandFace({
+              commandsCtx: commandsCtx as Context,
+              storage: opened,
+              getConfig,
+              logger: ceLogger(commandsCtx),
+              workspace: process.cwd().replaceAll('\\', '/'),
+              skillsCtx,
+              llmCtx,
             }).dispose
           })
         })

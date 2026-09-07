@@ -3,7 +3,7 @@
  *
  * 宿主现状（docs/12 §1 C2）：`GenerateOptions.purpose` 仅
  * `'compaction' | 'session-title'`，且该 interface 的属性不能经声明合并宽化
- * （TS2717）。本文件因此建立**插件侧类型适配单点**：判别/断面/压缩的 purpose
+ * （TS2717）。本文件因此建立**插件侧类型适配单点**：判别/断面/压缩/init 的 purpose
  * 先走 `CeAuxPurpose` 本地词汇，`toHarnessGenerateOptions` 是唯一向宿主类型的
  * 收窄点（cast 只许出现在这里，D6 断言锁定）。
  * 运行期语义：DeepSeek adapter 只对 `compaction`/`session-title` 有特殊策略，
@@ -28,6 +28,7 @@ export const CE_AUX_PURPOSES = [
   'context-economy-judge',
   'context-economy-optimize',
   'context-economy-compaction',
+  'context-economy-init',
 ] as const
 
 export type CeAuxPurpose = (typeof CE_AUX_PURPOSES)[number]
@@ -68,7 +69,7 @@ export interface CeLlmUsage {
 
 /** 一次辅助调用的 usage 回执：调用侧 purpose + 请求路由 + 用量。 */
 export interface CeLlmUsageReceipt {
-  /** 与请求一致（宽化词汇：CE_AUX_PURPOSES 三值 ∪ 宿主两值）。 */
+  /** 与请求一致（宽化词汇：CE_AUX_PURPOSES 四值 ∪ 宿主两值）。 */
   purpose?: CePurpose
   provider: string
   model: string

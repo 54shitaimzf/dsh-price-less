@@ -42,7 +42,7 @@ vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
 
 ### C2 · 辅助调用 purpose 标记（插件侧类型适配，不修 harness）
 
-**需求来源**：[10 §1 H12](10-wiring.md) 要求判别 / 断面 / 压缩辅助调用统一 purpose 标记，
+**需求来源**：[10 §1 H12](10-wiring.md) 要求判别 / 断面 / 压缩 / init 辅助调用统一 purpose 标记，
 度量按 purpose 分账（[07 §5](07-metrics.md)）。
 
 **宿主现状（已核验）**：`packages/llm/llm/src/types.ts:442` 的 `GenerateOptions.purpose`
@@ -50,8 +50,8 @@ vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
 后声明属性类型必须一致）。`llm-deepseek` adapter 只对这两个值有特殊策略；未知 purpose
 不会改变 wire 请求形状，只进入 `prepareExtensions` 的 request 事实。
 
-**闭合形态（P1.2 锚 / P5 已施工）**：`platform/llm.ts` 定义 `CE_AUX_PURPOSES`（judge /
-optimize / compaction 三值）与 `CeGenerateOptions = Omit<GenerateOptions,'purpose'> &
+**闭合形态（P1.2 锚 / P5 已施工；P13 增 `context-economy-init`）**：`platform/llm.ts` 定义 `CE_AUX_PURPOSES`（judge /
+optimize / compaction / init 四值）与 `CeGenerateOptions = Omit<GenerateOptions,'purpose'> &
 { purpose?: CePurpose }`；`toHarnessGenerateOptions` 是**唯一 cast 收窄点**。P5 已施工：`streamCeLlm` 消费 `CeGenerateOptions`，usage 回执按调用侧 purpose 记账——不依赖 wire
 回显。cast 单点由 D6 断言锁定（与 C1 的 D3 同构）。
 
@@ -110,5 +110,5 @@ optimize / compaction 三值）与 `CeGenerateOptions = Omit<GenerateOptions,'pu
 - [ ] 回环 spec 常绿 = 升级自检（§2）；
 - [ ] core/domains 零通道概念引用（D3 的反向即本条，新增发射方工单验收时 grep 复核）；
 - [ ] C2：`toHarnessGenerateOptions` 是 `as GenerateOptions` 唯一 cast 点（grep 断言），
-      `CeGenerateOptions` 可携带三值自定义 purpose（`npm run typecheck:tests`）；`streamCeLlm` 落位，D6 锁定 cast 单点；
+      `CeGenerateOptions` 可携带四值自定义 purpose（`npm run typecheck:tests`）；`streamCeLlm` 落位，D6 锁定 cast 单点；
 - [ ] 删除演练：按 §2 清单在分支执行删除 → `npm run gate` 全绿且机制文件 diff 为空。

@@ -555,8 +555,10 @@ P12 与 P13 共用本函数；P13 不得另写一套 T0 语义。
 
 ### 8.3 对既有审查发现的处理（本计划落实）
 
-1. **taskId 唯一性**：P12 暂用 `foldSegmentState` 输出的 `task-<n>`（单会话 fold 内唯一）；
-   跨会话共用 storage domain 的会话级唯一 taskId 决策仍归 P13 工单显式定稿；P12 不自行猜测。
+1. **taskId 唯一性（P13 已定稿并落地）**：P12 仍以 `foldSegmentState` 输出的 `task-<n>`
+   作为单会话逻辑 id；但在调用 `dossierStorageKey` 前必须经
+   `sessionScopedTaskId(sid, taskId)` 做会话级限定，避免同一 workspace 多会话的
+   task-1/task-2 在共享 storage domain 中相互覆盖。P12 已按此实现，P13 同源。
 2. **P9 不可变纪律**：P12 调用 `appendDossierMessage`/`annotateDossier` 后只读新对象、CAS 写
    新对象；不原地修改 body/messages/annotations。
 3. **verify 轻量化**：P12 verify 采用"一次 gate + 专项扫描"，不重跑 verify-p8/p9/p10 全量。

@@ -10,6 +10,7 @@ import {
   backfillDossier,
   createDossier,
   dossierStorageKey,
+  sessionScopedTaskId,
   foldDossierLedger,
   isDossierShort,
   type DossierBody,
@@ -72,6 +73,8 @@ describe('dossier', () => {
   it('dossier create/storageKey: 空卷宗与 key 映射', () => {
     expect(createDossier('task-1')).toEqual({ taskId: 'task-1', messages: [], annotations: {} })
     expect(dossierStorageKey('task-1')).toBe('dossier:task-1')
+    expect(sessionScopedTaskId('s1', 'task-1')).toBe('s1:task-1')
+    expect(dossierStorageKey(sessionScopedTaskId('s1', 'task-1'))).toBe('dossier:s1:task-1')
     expect(DOSSIER_CLASSES).toEqual(['action', 'pureQ', 'verifyQ'])
   })
 

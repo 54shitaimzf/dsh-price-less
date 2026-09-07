@@ -47,6 +47,8 @@
 | `/task <描述>` | 判别器 | **显式新 task 起点**（Tier-0 权威边界，压倒自动判定） |
 | `/task close` | 判别器 | 显式闭合当前 task（→ 边界压缩 + 归档） |
 | `/task`（无参） | 判别器 | 查看当前 task（id、卷宗规模、回填版本） |
+| `/init <项目目标>` | 项目帧 | 发起 init 提案（LLM 整理，用户确认后写 project_frame v1） |
+| `/init confirm` / `/init cancel` / `/init` | 项目帧 | 确认/取消/查看当前项目帧 |
 | `/optimize-prompt` | 判别器手动断面 | = 星标按钮（一入口两形态），跑 [02 §4](02-discriminator.md) 断面 |
 | `/compact`（DSH 原生） | 非边界 | 历史维护，判别器忽略（维护类命令不切碎 task） |
 

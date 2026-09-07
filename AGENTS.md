@@ -14,8 +14,8 @@ P3（持久面 `platform/storage.ts`）→ P4（技能目录 `platform/skills.ts
 `platform/llm.ts`）→ P6（改史端口 `platform/history.ts`：H4 surfaceOp replace +
 H5 compaction 事务 + 配对平衡守卫）→ P7（工具端口 `platform/tools.ts`：H6 tools/post-execute
 content 覆盖/追加 + tools/execute 信号计量）全部施工；首份 07 报表见
-`docs/ledger-history.md` §31；**R2 判别域待开工**（core/{units,dossier,judge,optimize,prefix} +
-domains/input）。`platform/`（九文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+`docs/ledger-history.md` §31；**R2 判别域进行中**（P8–P13 已施工：core/{units,dossier,judge,optimize,prefix,init} +
+domains/{input,commands}，P14a/P14b 星标-断面-回填待接入）。`platform/`（九文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
@@ -48,7 +48,7 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
   `docs/08` 与 `experiments/evalground/` 封存为历史方法学，正文不改，如将来重建实验面再启用。
 - 插件侧 vitest：设置壳不变量（`tests/field-model.spec.ts`）+ P0 冒烟/断言自测
   （`apply-smoke` / `assert-structure`）+ P1 事件面（`events-pump` / `ce-logger` /
-  `harness-session` 真集成）；机制测试随搭建按 docs/08 协议组织（回放/注入/确定性，不做臂对照）。
+  `harness-session` 真集成）；机制测试以回放/注入/确定性为主，不做臂对照（`docs/08` 已封存为历史方法学，不再作为施工门禁）。
 - **压缩域标定常数（实验结论已固化，施工直接引用，不再重跑）**：压缩域窗口 ≈ 任务峰值
   上下文（2026-09 实测峰值 233K ⇒ domain=125K）⇒ `thresholdTokens=100K`、`retainTokens=10K`
   （绝对值，比例派生只作 fallback）；估计器 `CHARS_PER_TOKEN=1.5` 校准；不变量

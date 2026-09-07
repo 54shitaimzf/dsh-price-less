@@ -53,6 +53,13 @@ export function dossierStorageKey(taskId: string): string {
   return `dossier:${taskId}`
 }
 
+/** 会话级 taskId 作用域（docs/09 §2 / P9 工单 §2.4-5）：同一 workspace 多会话共用
+ * storage domain 时，调用方须先经本函数把单会话 fold 的 `task-<n>` 限定到会话，
+ * 再交给 `dossierStorageKey`，避免不同会话的 task-1/task-2 相互覆盖。 */
+export function sessionScopedTaskId(sessionId: string, taskId: string): string {
+  return `${sessionId}:${taskId}`
+}
+
 export function createDossier(taskId: string): DossierBody {
   return { taskId, messages: [], annotations: {} }
 }

@@ -26,6 +26,9 @@ log-only 事件——日志 append 后永不重写，状态损毁也能按事件
   删除清单见 [12 §1–§3](12-platform-capabilities.md)；通道缺失不改变本表失效语义的**方向**，
   仅改变真源位置（日志 → KV 镜像）。
 - **workspace 隔离**：按 cwd 分域——项目级实体（项目帧/档案）键含 workspace 标识。
+- **会话级 task 卷宗隔离**：`task-<n>` 只在单会话 fold 内唯一；同一 workspace 多会话共用
+  storage domain 时，卷宗键必须先经会话级限定（`sessionScopedTaskId(sid, taskId)`）再交给
+  `dossierStorageKey`，防止不同会话的 task-1/task-2 相互覆盖（落地见 P13/P12）。
 
 ## 2. 实体与版本协议
 

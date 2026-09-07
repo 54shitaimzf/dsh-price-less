@@ -1,8 +1,7 @@
 # @dsh-external/dsh-context-economy
 
-> **实现状态（2026-09）：R0 ✓ · R1 ✓（P0–P7 平台面全部施工：events/logger/ignorable-channel/diag-sink/ledger/storage/skills/llm/history/tools；首份 07 报表见 [docs/ledger-history.md §31](docs/ledger-history.md)）· R2 判别域待开工（工单进度见 [docs/implement/00-master.md](docs/implement/00-master.md)）· R3–R4 设计态。**
-> 当前是**模板态骨架**：装配/构建/测试/设置 UI 壳全部可用，双核心与四层防御的机制代码
-> 尚未施工（工单进度见 [docs/implement/00-master.md](docs/implement/00-master.md)）。
+> **实现状态（2026-09）：R0 ✓ · R1 ✓（P0–P7 平台面全部施工：events/logger/ignorable-channel/diag-sink/ledger/storage/skills/llm/history/tools；首份 07 报表见 [docs/ledger-history.md §31](docs/ledger-history.md)）· R2 判别域进行中（P8–P13 已施工：/task、/init、/optimize-prompt 命令面 + 项目帧 init + 自动断面/星标纯核；工单进度见 [docs/implement/00-master.md](docs/implement/00-master.md)）· R3–R4 设计态。**
+> 当前已完成平台面与判别域主体骨架，星标 UI 与 host 方法（P14a/P14b）待接入；装配/构建/测试/设置 UI 壳可用。
 > 打包清单、干净构建、client 卸载冒烟与 purpose/T-entry 契约锚已补齐（P1.2）；
 > 观察模式设置项已清理；R3/R4 不再组织对照实验（实验结论已固化进设计）。
 

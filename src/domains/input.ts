@@ -19,7 +19,7 @@ import {
   type JudgeTable,
 } from '../core/judge.ts'
 import { foldSegmentState } from '../core/units.ts'
-import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey, type DossierBody, type DossierClass } from '../core/dossier.ts'
+import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey, sessionScopedTaskId, type DossierBody, type DossierClass } from '../core/dossier.ts'
 import type { LedgerFact } from '../core/ledger/types.ts'
 import { parseT0Command } from '../core/t0.ts'
 import { streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
@@ -152,7 +152,8 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     const sessionFirstSeq = firstSeqBySession.get(sid) ?? seq
     const sessionFacts = factsBySession.get(sid) ?? []
     const segments = foldSegmentState(sessionFacts, { sessionFirstSeq })
-    const taskId = segments.segments.at(-1)!.taskId
+    const localTaskId = segments.segments.at(-1)!.taskId
+    const taskId = sessionScopedTaskId(sid, localTaskId)
     const { body, version } = readDossier(taskId)
     const message = { seq, time, text }
     const appended = appendDossierMessage(body, message)

@@ -1,7 +1,7 @@
 {
   "name": "@dsh-external/dsh-context-economy",
   "version": "0.0.1",
-  "description": "DSH 插件（模板态）：最小 settings 段 + 设置 UI 壳（组件/交互设计保留），主体待重设计（docs/ 为设计单一事实源）",
+  "description": "DSH 上下文管理插件：任务边界、项目帧、自动判别与上下文优化（开发中，R2 判别域 P8–P13 已施工）",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
