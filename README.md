@@ -1,55 +1,196 @@
-# @dsh-external/dsh-context-economy
+# dsh-context-economy
 
-> **实现状态（2026-09）：R0 ✓ · R1 ✓（P0–P7 平台面全部施工：events/logger/ignorable-channel/diag-sink/ledger/storage/skills/llm/history/tools；首份 07 报表见 [docs/ledger-history.md §31](docs/ledger-history.md)）· R2 判别域进行中（P8–P13 已施工：/task、/init、/optimize-prompt 命令面 + 项目帧 init + 自动断面/星标纯核；工单进度见 [docs/implement/00-master.md](docs/implement/00-master.md)）· R3–R4 设计态。**
-> 当前已完成平台面与判别域主体骨架，星标 UI 与 host 方法（P14a/P14b）待接入；装配/构建/测试/设置 UI 壳可用。
-> 打包清单、干净构建、client 卸载冒烟与 purpose/T-entry 契约锚已补齐（P1.2）；
-> 观察模式设置项已清理；R3/R4 不再组织对照实验（实验结论已固化进设计）。
+> DeepSeek Harness 的上下文管理插件：任务边界、项目帧、自动判别与上下文优化。
+>
+> 非官方项目 · 开发态（R2 判别域进行中）
 
-DSH 的**全自动上下文管理工具**：判别、剪切、压缩自转，无人值守；用户唯一的主动作是可选的
-星标（把散落的意图/约束/验收/路径整理成一份确定化的执行包）。
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-development-yellow)]()
+[![DSH](https://img.shields.io/badge/DSH-plugin-bundle-blue)]()
 
-**五条节约理念**：缓存复用 · 软件架构经验提取 · 无关内容剪枝 · 执行路线确定化 ·
-多做（相信用户决策）· 只在必要时刻探索 —— 正典见 [docs/00 §1](docs/00-overview.md)。
+## 这是什么
 
-## 一图
+`dsh-context-economy` 是一个面向 DeepSeek Harness 的上下文管理插件，目标是把“送进模型的每个 token”花在更重要的地方：
 
+- 显式任务边界
+- 项目帧初始化
+- 自动判别任务延续 / 切换
+- 手动断面入口
+- 可回放、可降级的会话事实
+
+当前已完成平台面与判别域主体骨架，星标 UI 与 host 方法仍在施工中。
+
+## 核心特性
+
+- **任务边界**：`/task`、`/task close`，Tier-0 权威边界
+- **项目帧**：`/init` 提案 → 用户确认 → `project_frame` v1
+- **自动判别**：T0 → L0 → 对表 → LLM → fail-lazy 决策链
+- **手动断面**：`/optimize-prompt` 命令入口，后续与星标按钮共用
+- **事实可回放**：`context-economy/*` 事件全部 log-only + ignorable
+- **降级安全**：harness 无 ignorable 通道时自动降级 KV 镜像
+
+## 架构图
+
+```mermaid
+flowchart LR
+  User -->|"/task /init /optimize-prompt"| Commands
+  Session -->|"user/message"| Discriminator
+  Discriminator --> Dossier
+  Discriminator --> ProjectFrame
+  Discriminator --> Optimizer
+  Optimizer --> Prompt
+  Compactor --> Context
 ```
- ├─ 核心一 优化判别器（02）：一个理解核、两个断面（星标手动 / 自动对表）
- ├─ 核心二 压缩器（04）：边界装配+热尾 · 压力路径 40% · 防溢出保险丝
- ├─ 叠加层 剪切层（03）：工具剪切四档 + 对话 run 剪切
- └─ 支撑面：宪法守卫（05）· 缓存纪律（06）· 度量（07）· 实验史（08，封存）
-          · 状态版本（09）· 挂点（10）· 工程结构（11）
+
+分层的工程结构：
+
+```text
+src/
+├─ platform/    # harness 适配层，唯一外部触点
+├─ core/        # 纯逻辑，零 harness import
+├─ domains/     # 命令面、自动断面等编排
+└─ index.ts     # 插件入口
+client/         # 设置卡、星标按钮 UI
+docs/           # 设计正典与施工工单
 ```
 
-## 读文档（推荐序）
+## 安装
 
-1. **[docs/00](docs/00-overview.md)** 总览：定位、五理念、公共契约、术语、路线图；
-2. **[docs/01](docs/01-architecture.md)** 架构总纲：平面分层、分划单位正典、四层防御；
-3. **[docs/02](docs/02-discriminator.md)** / **[docs/03](docs/03-shear.md)** /
-   **[docs/04](docs/04-compactor.md)** 双核心与剪切层（机制设计正典）；
-4. **[docs/11](docs/11-structure.md)** 工程结构与搭建（模块树 / 数据面 / UI 壳 / R0–R4）；
-5. 按需：宪法 [05](docs/05-constitution.md) · 缓存 [06](docs/06-cache.md) · 度量 [07](docs/07-metrics.md)
-   · 实验 [08](docs/08-experiment.md) · 状态 [09](docs/09-state.md) · 挂点 [10](docs/10-wiring.md)。
-
-**实验框架**：`experiments/evalground/` **已封存**（结论固化进 docs/02–04 设计与常数；
-不再作为门禁，run 证据原样保留）。`docs/08-experiment.md` 保留为历史方法学。
-**存档**：退役设计 = [docs/legacy.md](docs/legacy.md)；账本历史 = [docs/ledger-history.md](docs/ledger-history.md)（只增不改）。
-
-## 构建 / 测试 / 挂载
+> 当前为开发态，尚未发布 npm 包。以下方式面向本地开发与测试。
 
 ```bash
-# 干净环境先装 devDeps（内部 @deepseek-ai 包由 build.sh 链接 checkout；P1.2）
+# 1. 安装依赖
 npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --no-package-lock
 
-# 构建（build.sh 补齐 host + client/tsdown/react 等 junction）
-DSH_CHECKOUT=G:/deepseek-harness npm run build       # host tsc + client tsdown
-npm run typecheck && npm run typecheck:client
-npm run test                                          # vitest（壳不变量 + 平台端口 + client 冒烟）
+# 2. 构建（需要本机 DSH source checkout）
+DSH_CHECKOUT=/path/to/deepseek-harness npm run build
 
-# 注入到 DSH 实例（注入器环境内）
-dev_inject_plugin <本目录>      # 卸载：dev_uninject_plugin dsh-context-economy
+# 3. 注入到 DSH 实例
+dev_inject_plugin /path/to/dsh-context-economy
 ```
 
-> 装配后自动链默认 **off**（不挂载，零成本）；星标通道常在。设置卡壳 + 星标按钮 +
-> 消息列表度量可视化按 [docs/11 §5](docs/11-structure.md) 接线，设置项载荷唯一入口
-> `client/field-model.ts`。
+后续发布形态计划：
+
+- npm 包：`dsh plugin add dsh-context-economy`
+- tarball：`dsh plugin add ./dsh-context-economy-0.0.1.tgz`
+
+## 快速开始
+
+```text
+/init 我要做一个上下文管理插件
+/init confirm
+
+/task 设计命令面
+/task
+/task close
+```
+
+## 配置
+
+当前配置集中在 `discriminator` 命名空间。
+
+| 配置 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `discriminator.auto` | boolean | `false` | 自动断面总开关 |
+| `discriminator.provider` | string | `deepseek-official` | 辅助 LLM provider |
+| `discriminator.model` | string | `deepseek-v4-flash-vision-exp` | 辅助 LLM 模型 |
+
+## 命令
+
+| 命令 | 作用 |
+|---|---|
+| `/task <描述>` | 显式开启新任务 |
+| `/task close` | 显式闭合当前任务 |
+| `/task` | 查看当前任务状态 |
+| `/init <项目目标>` | 发起项目帧初始化提案 |
+| `/init confirm` | 确认并写入项目帧 v1 |
+| `/init cancel` | 取消当前提案 |
+| `/init` | 查看当前项目帧 |
+| `/optimize-prompt` | 手动断面入口（P14b 接入后开放） |
+
+## 会话事实
+
+所有自定义事件均为 log-only，带 `ignorable: true`。
+
+| 事件 | 含义 |
+|---|---|
+| `context-economy/task-boundary` | 任务边界事实 |
+| `context-economy/judge-recorded` | 自动判别记录 |
+| `context-economy/judge-error` | 判别失败记录 |
+| `context-economy/judge-verdict` | 新任务判定 |
+
+## 文档
+
+- [docs/00-overview.md](docs/00-overview.md) —— 系统导览与公共契约
+- [docs/01-architecture.md](docs/01-architecture.md) —— 架构总纲
+- [docs/02-discriminator.md](docs/02-discriminator.md) —— 优化判别器
+- [docs/03-shear.md](docs/03-shear.md) —— 剪切层
+- [docs/04-compactor.md](docs/04-compactor.md) —— 压缩器
+- [docs/05-constitution.md](docs/05-constitution.md) —— 宪法与守卫
+- [docs/09-state.md](docs/09-state.md) —— 状态与版本协议
+- [docs/10-wiring.md](docs/10-wiring.md) —— 挂点与接线
+- [docs/11-structure.md](docs/11-structure.md) —— 工程结构
+- [docs/12-platform-capabilities.md](docs/12-platform-capabilities.md) —— 平台能力契约
+- [docs/implement/00-master.md](docs/implement/00-master.md) —— 施工总纲
+
+## 开发
+
+```bash
+# 类型检查 + 测试 + 结构断言
+npm run gate
+
+# 测试类型检查
+npm run typecheck:tests
+
+# 单工单验收
+node scripts/verify-p13.mjs
+```
+
+核心纪律：
+
+- `core/` 零 harness import
+- `context-economy/*` 事件必须 `ignorable: true`
+- 改史唯一通道：`session.append` + `surfaceOp replace`
+- LLM 产物先版本化落盘再复用
+
+## 兼容性
+
+- 验证基于 DSH harness checkout `ea04b581a5`
+- peer dependency 范围见 `package.json`
+- 依赖 harness ignorable 会话事实通道
+- 通道缺失时降级为 KV 事实镜像，行为仍安全
+
+## 已知限制 / 开发路线
+
+### 当前未完成
+
+- 尚未发布 npm / tarball
+- P14a 星标按钮 UI 未接入
+- P14b host 方法与断面回填未接入
+- R3 剪切域、R4 压缩域尚未实现
+- 构建依赖本地 DSH source checkout，尚未提供自包含 `prepare`
+
+### Roadmap
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| R1 | 平台面：事件、存储、技能、LLM、历史、工具 | 已完成 |
+| R2 | 判别域：任务边界、项目帧、自动/手动断面 | 进行中 |
+| R3 | 剪切域 | 未开始 |
+| R4 | 压缩域 | 未开始 |
+
+## 贡献
+
+欢迎提交 Issue 和 PR。提交前请确保：
+
+```bash
+npm run gate
+```
+
+全绿。
+
+## License
+
+[BSD-3-Clause](LICENSE)
+
+> 本项目与 DeepSeek 官方无隶属关系。
