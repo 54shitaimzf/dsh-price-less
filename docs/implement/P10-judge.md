@@ -148,7 +148,7 @@ export function stripL0Text(text: string): string
 export function matchL0Continue(text: string): boolean
 
 // —— L1 精确缓存键 ——
-export function freezeJudgeConfig(config: Record<string, unknown>): string
+export function freezeJudgeConfig(value: unknown): string
 export interface JudgeL1Scope { sessionId: string; seq: number; text: string; configFingerprint: string }
 export function judgeL1CacheKey(scope: JudgeL1Scope, promptVersion?: number): string
 
@@ -271,9 +271,9 @@ export function foldJudgeLedger(records: JudgeRecord[]): JudgeLedger
 
 用例（九组，命名含 `judge`）：
 
-1. **L0 词表**：`matchL0Continue('好')`、`matchL0Continue('ok')`、`matchL0Continue('继续吧')`
-   为 true；`'继续做'`、`'好的，请继续'`、`''`、`'帮我写个测试'` 为 false；词表包含
-   `'继续'`、`'好的'`、`'ok'`、`'k'`；`stripL0Text` 对标点/空白/全角标点的删除与 lower-case
+1. **L0 词表**：`matchL0Continue('好')`、`matchL0Continue('ok')`、`matchL0Continue('继续吧')`、
+   `matchL0Continue('继续做')` 为 true；`'好的，请继续'`、`''`、`'帮我写个测试'` 为 false；词表包含
+   `'继续'`、`'好的'`、`'ok'`、`'k'`、`'继续做'`；`stripL0Text` 对标点/空白/全角标点的删除与 lower-case
    与手写期望一致。
 2. **L1 缓存键**：同一 scope 与 promptVersion 生成同一 key；不同 session/seq/text/config
    生成不同 key；`freezeJudgeConfig({b:1,a:2}) === freezeJudgeConfig({a:2,b:1})`；
