@@ -11,6 +11,7 @@ logs/
 # 实验产物：原始大件不入库（账本小件 scorecard/boundaries/audit 仍提交）
 reports/
 .zcode/
+archive/
 
 # 已废弃的本地 embedding（granite-97m 曾误入历史，2026-09 已从历史与工作区移除）
 models/

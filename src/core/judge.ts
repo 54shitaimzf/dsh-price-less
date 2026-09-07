@@ -26,7 +26,7 @@ export const JUDGE_PROMPT_RULES_CLAUSES = `先决排除：
 否则 = continue，包括：同一工作进行、细化、推进、对工作本身的讨论等。`
 export const JUDGE_PROMPT_OUTPUT = '输出（仅 JSON，无其他文本）：\n{"decision":"new_task"|"continue","class":"action"|"pureQ"|"verifyQ"}'
 
-// —— L0 延续词表（与 scripts/attic/phase_a_l0.mjs 同源冻结） ——
+// —— L0 延续词表（冻结口径；同源文件 scripts/attic/phase_a_l0.mjs 已于 2026-09 清理，原内容保留在 git 历史） ——
 export const L0_CONTINUE_WORDS: readonly string[] = [
   '继续', '继续吧', '继续继续', '好的', '好的好的', '好', '好哦', '好呀', '好吧', '行', '行吧', '嗯', '嗯嗯',
   '对', '对的', '是的', '没错', '确实', '明白了', '明白', '知道了', '可以', '可以了', '没问题', '收到', '好滴',
