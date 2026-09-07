@@ -70,7 +70,7 @@ export function assembleOptimizeInput(input: OptimizeInput): OptimizeAssembled {
 function renderSkillCatalog(catalog: SkillCatalogSnapshot | undefined): string {
   if (catalog === undefined || catalog.complete === false) return '(目录不可用)'
   const skills = normalizeSkillCatalog(catalog).skills
-  return skills.length === 0 ? '(无)' : skills.map((s) => `- ${s.name}: ${s.description}`).join('\n')
+  return skills.length === 0 ? '(无)' : skills.map((s) => s.whenToUse === undefined ? `- ${s.name}: ${s.description}` : `- ${s.name}: ${s.description} (whenToUse: ${s.whenToUse})`).join('\n')
 }
 
 export function renderOptimizePrompt(input: OptimizeInput): OptimizeRender {
