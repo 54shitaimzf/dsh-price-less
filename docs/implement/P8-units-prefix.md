@@ -1,6 +1,6 @@
 # P8 分划单位 + 稳定前缀（映射 R2；依赖 P3,P4,P2；尺寸 M）
 
-> 状态：**已施工（commit `fa8fdab`）；真机接线修正待提交（`dsh web` 复盘见 §3.4 注/§8.2）**。
+> 状态：**已施工（commit `fa8fdab` + 真机接线修正 `037b413`；`node scripts/verify-p8.mjs` 输出 `P8 VERIFY PASS`）**。
 > 当前完成情况：R1 平台面已完成——P0–P7 全部施工（P7 commit `5a8c8f2`）；P8 已施工（commit `fa8fdab`），R2 判别域进行中。
 > 设计正典：[01 §3.5](../01-architecture.md)（分划单位正典）/
 > [02 §2/§3/§6](../02-discriminator.md)（输入栈、段状态机、事件与度量）/

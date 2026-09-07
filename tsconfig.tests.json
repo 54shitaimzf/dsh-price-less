@@ -27,6 +27,7 @@
     "tests/history.spec.ts",
     "tests/units.spec.ts",
     "tests/prefix.spec.ts",
-    "tests/prefix-wiring.spec.ts"
+    "tests/prefix-wiring.spec.ts",
+    "tests/dossier.spec.ts"
   ]
 }
