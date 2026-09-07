@@ -1,6 +1,7 @@
-# P10 判据与对表（映射 R2；依赖 P9,P5,P2；契约前置 P8；尺寸 M）
+# P10 判据与对表（映射 R2；依赖 P9,P5,P2,P8；契约前置 P8；尺寸 M）
 
-> 状态：**未执行（待施工）**。前序：P8 已施工（commit `fa8fdab` + fix `037b413`）；P9 卷宗纯核已施工
+> 状态：**已施工（commit `e00fbd7`；`node scripts/verify-p10.mjs` 输出 `P10 VERIFY PASS`）**。
+> 前序：P8 已施工（commit `fa8fdab` + fix `037b413`）；P9 卷宗纯核已施工
 > （commit `78f33ad`；`node scripts/verify-p9.mjs` 输出 `P9 VERIFY PASS`）。
 > 本单交付 `core/judge.ts` 纯核，**不做运行期接线**：不订阅 `input/user-message`、不调用
 > `streamCeLlm`、不写 KV、不发事实。运行期消费归 P12 自动断面服务（`domains/input.ts`）与
