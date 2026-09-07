@@ -69,7 +69,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P7 | 工具端口（已施工 commit `5a8c8f2`；扩写工单见 [P7-tools.md](P7-tools.md)） | R1 | `platform/tools.ts`（H6 `tools/post-execute` accept content 覆盖/追加 = T-entry/T-note；`tools/execute` 仅信号/计量）；补 peerDep `dsh-tools` | P1 | S |
 | P8 | 分划单位 + 稳定前缀（已施工 commit `fa8fdab` + fix `037b413`；真机接线修正已提交，见 [P8-units-prefix.md](P8-units-prefix.md) §3.4/§8.2） | R2 | `core/units.ts`（[01 §3.5](../01-architecture.md) 状态机）+ `core/prefix.ts`（技能目录快照**本地重声明同构类型** + 项目帧 vN；`prefixRebuildCause`；字节稳定断言，[02 §2](../02-discriminator.md)/[06 §4](../06-cache.md)；**watch 经 P4 端口在 index 装配根接线**） | P3,P4,**P2** | M |
 | P9 | 卷宗（已施工 commit `78f33ad`；扩写工单见 [P9-dossier.md](P9-dossier.md)） | R2 | `core/dossier.ts`（append-only / 三分类标注 / 回填 / 边界清空；02 §2） | P3,P8 | M |
-| P10 | 判据与对表（已施工 commit `e00fbd7`；扩写工单见 [P10-judge.md](P10-judge.md)） | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5,P2,**P8** | M |
+| P10 | 判据与对表（已施工 commit `e00fbd7` + 修正 `7d435b2`；扩写工单见 [P10-judge.md](P10-judge.md)） | R2 | `core/judge.ts`（L0 词表 / L1 缓存键 / 对表层；tableHitRate 入账；fail-lazy） | P9,P5,P2,**P8** | M |
 | P11 | 星标断面 | R2 | `core/optimize.ts`（输入栈装配 / 双通道解析 / 行级容错 / 四道机械闸，02 §4）+ 断面 prompt 资产版本化落盘 | P8,P9,P5,**P2** | M |
 | P12 | 自动断面服务 | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3,P8,P9 | M |
 | P13 | 命令面 + init 项目帧 | R2 | `/task` 系列 + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3 | M |
@@ -110,7 +110,7 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > 结构断言全绿（M/S/D1–D8）、R1 出门门槛核对（docs/11 §8 R1 行：JSONL 回放 + ignorable 断言 +
 > platform 七端口齐）通过；下一段 = R2 判别域。
 
-> R2 进行中（2026-09-07）：P8/P9/P10 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7`；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs` 与 `node scripts/verify-p10.mjs` 均输出 PASS）。
+> R2 进行中（2026-09-07）：P8/P9/P10 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs` 与 `node scripts/verify-p10.mjs` 均输出 PASS）。
 
 > P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
 > P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b/P19/P21a 补 P3）。
