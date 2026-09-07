@@ -20,6 +20,7 @@
   "include": [
     "tests/ce-logger.spec.ts",
     "tests/llm-purpose.spec.ts",
+    "tests/llm-stream-robustness.spec.ts",
     "tests/storage.spec.ts",
     "tests/skills.spec.ts",
     "tests/history.spec.ts"

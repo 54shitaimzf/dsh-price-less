@@ -16,11 +16,7 @@ const run = (cmd, args, opts = {}) => spawnSync(cmd, args, { cwd: ROOT, encoding
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8')
 const exists = (p) => fs.existsSync(path.join(ROOT, p))
 
-const gate = run('npm', ['run', 'gate'])
-if (gate.status !== 0) fail('npm run gate failed')
-const t = run('npm', ['run', 'typecheck:tests'])
-if (t.status !== 0) fail('npm run typecheck:tests failed')
-
+// P6.1 补正：build 先于 gate（干净环境依赖 junction 先行，build.sh 补齐；checkout 缺失仍 SKIP）。
 const checkout = process.env.DSH_CHECKOUT || 'G:/deepseek-harness'
 if (fs.existsSync(path.join(checkout, 'packages'))) {
   const build = run('npm', ['run', 'build'], { env: { ...process.env, DSH_CHECKOUT: checkout } })
@@ -29,6 +25,11 @@ if (fs.existsSync(path.join(checkout, 'packages'))) {
 } else {
   note(`SKIP build: DSH_CHECKOUT not found (${checkout})`)
 }
+
+const gate = run('npm', ['run', 'gate'])
+if (gate.status !== 0) fail('npm run gate failed')
+const t = run('npm', ['run', 'typecheck:tests'])
+if (t.status !== 0) fail('npm run typecheck:tests failed')
 
 const a1 = run('node', ['scripts/assert-structure.mjs', '--json'])
 const a2 = run('node', ['scripts/assert-structure.mjs', '--json'])

@@ -76,7 +76,7 @@ export interface CeLlmUsageReceipt {
 }
 
 export interface CeLlmStreamHooks {
-  /** usage 块首次到达时单次回调；无 usage 不回调。 */
+  /** usage 块首次到达时单次回调；无 usage 不回调。回调抛错只 warn 不外溢（不中断流）。 */
   onUsage?: (receipt: CeLlmUsageReceipt) => void
   /** fail-lazy 诊断通道；未提供时仅以终止块表达失败（不静默）。 */
   logger?: { warn: (...args: unknown[]) => void }
@@ -98,13 +98,14 @@ export function toCeLlmUsage(usage: TokenUsage): CeLlmUsage {
 /**
  * 辅助 LLM 调用端口：resolveLlmService → toHarnessGenerateOptions → llm.stream。
  * 服务缺失：warn + yield CE_LLM_UNAVAILABLE 终止块（fail-lazy，不抛）。
- * usage 回执：首个 usage 块触发 hooks.onUsage 一次；流块全部原样透传。
+ * usage 回执：首个 usage 块触发 hooks.onUsage 一次；onUsage 抛错只 warn 不外溢（不中断流）；
+ * 流块全部原样透传。消费者提前 break（iterator.return）时内层流随之关闭且不回执。
  */
 export async function* streamCeLlm(
   ctx: Pick<Context, 'llm'>,
   options: CeGenerateOptions,
   hooks?: CeLlmStreamHooks,
-): AsyncIterable<StreamChunk> {
+): AsyncGenerator<StreamChunk, void, unknown> {
   const service = resolveLlmService(ctx)
   if (service == null) {
     hooks?.logger?.warn('context-economy: llm service unavailable (fail-lazy)')
@@ -125,12 +126,19 @@ export async function* streamCeLlm(
   for await (const chunk of service.stream(toHarnessGenerateOptions(options))) {
     if (chunk.type === 'usage' && !usageSeen) {
       usageSeen = true
-      hooks?.onUsage?.({
-        purpose: options.purpose,
-        provider: options.provider,
-        model: options.model,
-        usage: toCeLlmUsage(chunk.usage),
-      })
+      try {
+        hooks?.onUsage?.({
+          purpose: options.purpose,
+          provider: options.provider,
+          model: options.model,
+          usage: toCeLlmUsage(chunk.usage),
+        })
+      } catch (e) {
+        hooks?.logger?.warn(
+          'context-economy: llm usage receipt callback failed (contained)',
+          e instanceof Error ? e.message : String(e),
+        )
+      }
     }
     yield chunk
   }

@@ -86,10 +86,11 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D6', 'src/domains/a.ts', "ctx.llm.stream({ purpose: 'x' })\n")).not.toEqual(NO_ISSUES)
     expect(check('D6', 'src/platform/events.ts', "import type { GenerateOptions } from '@deepseek-ai/dsh-llm'\n")).not.toEqual(NO_ISSUES)
   })
-  it('D7：history 协议概念越出 platform/history.ts → issue（docs/10 §1 H4/H5 + docs/11 §2）', () => {
+  it('D7：history 协议概念（含 compaction/summary）越出 platform/history.ts → issue（docs/10 §1 H4/H5 + docs/11 §2）', () => {
     expect(check('D7', 'src/domains/a.ts', "port.beginCompaction({ compactionId: CompactionId('c') })\n")).not.toEqual(NO_ISSUES)
     expect(check('D7', 'src/platform/events.ts', "session.append('compaction/start', d)\n")).not.toEqual(NO_ISSUES)
     expect(check('D7', 'src/core/a.ts', "import { toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'\n")).not.toEqual(NO_ISSUES)
+    expect(check('D7', 'src/domains/a.ts', "session.append('compaction/summary', d)\n")).not.toEqual(NO_ISSUES)
   })
 })
 
@@ -141,7 +142,7 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D6').check({ path: 'src/platform/events.ts', text: "import type { ContentBlock } from '@deepseek-ai/dsh-llm'" }, new Map())).toEqual(NO_ISSUES)
   })
   it('D7：history 协议概念只许在 platform/history.ts（docs/10 §1 H4/H5 + docs/11 §2）', () => {
-    const historyFile = "import { CompactionId, toolPairingBalancedAfter } from '@deepseek-ai/dsh-compaction'\nsession.append('compaction/start', d)\nsession.append('compaction/prune', d)"
+    const historyFile = "import { CompactionId, toolPairingBalancedAfter } from '@deepseek-ai/dsh-compaction'\nsession.append('compaction/start', d)\nsession.append('compaction/prune', d)\nsession.append('compaction/summary', d)"
     expect(rule('D7').check({ path: 'src/platform/history.ts', text: historyFile }, new Map())).toEqual(NO_ISSUES)
   })
 })

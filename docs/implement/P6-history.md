@@ -81,6 +81,7 @@ peerDeps/build 链接 → 行数预算 → P6 VERIFY PASS。
 - [x] `tests/history.spec.ts` 10 用例全过
 - [x] assert `--json` 双跑字节一致，D7 pass
 - [x] 行数预算不超
+- [x] P6.1 补正（2026-09-07 收尾工单）：verify 改 build-first（干净环境可复现）；docs/13 补 §3.8 dsh-compaction 核验节；D7 覆盖 `compaction/summary`；真实 Session 改史冒烟（`tests/history-real-session.spec.ts`）
 
 ## 5. 完成动作
 

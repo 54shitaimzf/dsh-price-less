@@ -137,6 +137,9 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   `toHarnessGenerateOptions`/`resolveLlmService`），P5 已补齐调用面：`streamCeLlm` 消费
   `CeGenerateOptions` 并透传 `StreamChunk`；`CeLlmUsageReceipt`/`toCeLlmUsage` 提供 usage 与
   缓存观测回执；服务缺失时 yield `CE_LLM_UNAVAILABLE` 终止块（fail-lazy）。
+- 事实面（P5.1 锁定）：`streamCeLlm` 返回 `AsyncGenerator<StreamChunk, void, unknown>`；
+  `onUsage` 回调抛错只 warn 不外溢（文案 `context-economy: llm usage receipt callback failed (contained)`，
+  不中断辅助 LLM 流）。
 
 ### 3.6 `ctx.storageDomain.open(defineDomain({...}))`（持久 KV，P3 使用）
 
@@ -163,7 +166,23 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   model-invocable 目录快照、`skillCatalogContains` 引用守卫查表、`watchSkillCatalog`
   订阅 `skills/change` 热更新；不手写 `SKILL.md` 扫描。
 
-### 3.8 `tools/*` 事件（P7/P15b 使用）
+### 3.8 `@deepseek-ai/dsh-compaction`（改史/压缩事务类型与配对平衡守卫，P6 使用）
+
+- `CompactionId`：`packages/compaction/compaction/src/brand.ts:11`（brand 工厂，无校验；
+  同名类型导出）。
+- 配对平衡守卫：`toolPairingBalancedBefore`/`toolPairingBalancedAfter`：
+  `packages/compaction/compaction/src/tool-pairing.ts:111/123`——基于**当前表面序**的增量
+  fold（`session.surface.nodes`/`replaceGeneration`，surface 重写后重建）；seq 不在当前表面
+  或配对不完整会 throw，调用侧须先经 `balanceRange` 收缩（P6 端口封装）。
+- `compaction/*` SessionEventMap 声明合并：`packages/compaction/compaction/src/types.ts:17-90`
+  （全部 log-only，非 surface 事件）：`compaction/start`/`end` 为事务锁标记对（start 持锁、
+  end 释放，ID/turn 必须匹配）；`compaction/summary`/`prune` 为影子计价协议（summary 内容在
+  `data.summary`，其表面替换由紧随其后的 `user/message` replace 承载——紧邻契约；
+  `prune` 是无模型价的替换前计价）。
+- 当前插件：`src/platform/history.ts` 已施工（P6）——`createHistoryPort` 消费上述符号
+  （H4 replace 唯一改史通道 + H5 事务对 + 可注入配对守卫），见 [10 §1 H4/H5](../10-wiring.md)。
+
+### 3.9 `tools/*` 事件（P7/P15b 使用）
 
 - `tools/execute` 与 `tools/post-execute` 都是 waterfall：
   `packages/core/tools/src/index.ts:155-175`。
@@ -172,7 +191,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   `tools/post-execute` accept `content` 覆盖/追加。
 - 当前插件：尚未订阅；P7 落 `platform/tools.ts`。
 
-### 3.9 客户端接口（client 半边）
+### 3.10 客户端接口（client 半边）
 
 - 客户端插件包声明 `dsh.client`（platform/web、inject 列表、`exports["./client"]`）。
 - 当前插件 client 注入：`['slots','settingsScope','remote','remote.session','connection']`
