@@ -4,7 +4,7 @@
  */
 import type { CommonLedger, LedgerFact, LedgerSessionEvent, PricingTable } from './types.ts'
 import { DEFAULT_CHARS_PER_TOKEN } from './types.ts'
-import { TASK_BOUNDARY_FACT_TYPE, countFactsOfType } from './facts.ts'
+import { foldSegmentState } from '../units.ts'
 export type { CommonLedger } from './types.ts'
 export interface FoldOptions {
   facts?: LedgerFact[]
@@ -108,7 +108,12 @@ export function foldCommon(events: LedgerSessionEvent[], options: FoldOptions = 
     }
   }
 
-  const taskCount = Math.max(1, 1 + countFactsOfType(facts, TASK_BOUNDARY_FACT_TYPE))
+  const segmentState = foldSegmentState(facts, {
+    stepStartCount: eventCounts.stepStart,
+    sessionFirstSeq: events[0]?.seq,
+    sessionLastSeq: events.at(-1)?.seq,
+  })
+  const taskCount = segmentState.taskCount
   const stepStartCount = eventCounts.stepStart
   const totalUsage = {
     ...usage,

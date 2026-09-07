@@ -22,11 +22,54 @@ import { ceLogger, registerFactMirror } from './platform/logger.ts'
 import { attachDiagSink } from './platform/diag-sink.ts'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import { openContextEconomyStorage, type ContextEconomyStorage } from './platform/storage.ts'
+import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.ts'
+import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
 
 export const name = '@dsh-external/dsh-context-economy'
+export const inject = ['skills']
+const PROJECT_FRAME_TABLE = 'project_frame' as const
 
 // 入口铁律（docs/11 §1）：host 半边导出 name/Config/apply——Config = schema + interface 同名双面。
 export { Config } from './config.ts'
+
+function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): () => void {
+  const log = ceLogger(ctx)
+  const key = projectFrameStorageKey(process.cwd().replaceAll('\\', '/'))
+  return watchSkillCatalog(ctx, (catalog: SkillCatalogSnapshot | undefined) => {
+    try {
+      const stored = storage.getEntity(PROJECT_FRAME_TABLE, key)
+      const current: ProjectFrameRecord | undefined = stored == null
+        ? undefined
+        : { version: stored.version, body: stored.body as ProjectFrameBody }
+      const result = reconcileProjectFrame(current, catalog, 'skill')
+      if (result == null) {
+        log.info('context-economy: prefix unavailable until init frame (skill watch active, no project_frame yet)')
+        return
+      }
+      if (!result.rebuilt) return
+      void storage.putEntity(
+        PROJECT_FRAME_TABLE,
+        key,
+        result.body,
+        {
+          taskId: 'project-frame',
+          eventType: 'prefix-rebuild',
+          evidence: {
+            cause: result.cause,
+            fromVersion: result.fromVersion,
+            toVersion: result.version,
+            prefixTokens: result.prefixTokens,
+          },
+        },
+        { baseVersion: stored?.version ?? 0 },
+      ).catch((e: unknown) => {
+        log.warn('context-economy: project frame rebuild failed (contained, fail-lazy)', e instanceof Error ? e.message : String(e))
+      })
+    } catch (e) {
+      log.warn('context-economy: project frame reconcile failed (contained, fail-lazy)', e instanceof Error ? e.message : String(e))
+    }
+  })
+}
 
 export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   // 诊断落盘 sink 最先挂载（P1.1：此后所有 named 诊断行——含本函数的引导行——均落盘）。
@@ -52,10 +95,12 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   ctx.inject(['storageDomain'], (storageCtx) => {
     storageCtx.effect(() => {
       let storage: ContextEconomyStorage | undefined
+      let stopSkillWatch: (() => void) | undefined
       let disposed = false
       const disposer = async () => {
         if (disposed) return
         disposed = true
+        stopSkillWatch?.()
         registerFactMirror(undefined)
         await storage?.close()
       }
@@ -67,6 +112,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           }
           storage = opened
           registerFactMirror((type, data) => opened.writeFactMirror(type, data))
+          stopSkillWatch = startStablePrefixWatch(ctx, opened)
         })
         .catch((e) => {
           registerFactMirror(undefined)
