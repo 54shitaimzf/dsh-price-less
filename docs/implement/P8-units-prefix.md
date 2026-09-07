@@ -382,6 +382,8 @@ function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): (
    `await storage?.close()`。
 3. 不使用 timer、不直接监听 `skills/change`（watch 已由 P4 封装）、不 import core 之外的新
    harness 包。
+4. 入口导出 `export const inject = ['skills']`：harness 服务读取要求先声明依赖，确保
+   `startStablePrefixWatch` 能在装配根安全读取 `ctx.skills`（P4 端口消费面）。
 
 ### 3.5 `tests/units.spec.ts`（新，≤220 行；全部 fake 事实与事件，零 cordis 运行时 import）
 
