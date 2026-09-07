@@ -6,7 +6,7 @@
 > 事实源三链：① 插件开发规范（dsh-super-injector 插件开发指南 + 脚手架模板：
 > 四形态 / manifest / build 闭环 / 铁律）；② harness API 面（源码逐条核验，见 10 §1）；
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
-> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；R2 判别域进行中（P8/P9/P10/P11/P12/P13 已施工），§9。
+> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；R2 判别域进行中（P8/P9/P10/P11/P12/P13/P14a 已施工；P14b 待接真实 bridge），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -20,7 +20,7 @@
 
 四形态（toolkit / daemon-loop / ui-panel / hybrid）里选 **hybrid**：host 半 = 事件驱动
 （判别/剪切/压缩全是事件触发，**无 timer**——不用 daemon-loop 的轮询循环）；client 半 =
-设置卡 + 星标按钮（`settings.plugin.item` / `conversation.view` 槽，壳已保留）。
+设置卡 + 星标按钮（`settings.plugin.item` / `conversation.input.right` 槽，壳已保留）。
 注入即完整生效（host+client）、卸载即净。
 
 **manifest 合规清单**（规范 vs 现状，R0 核对表）：
@@ -111,7 +111,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
   Card/controller/components 壳（**零改动**）→ **`field-model.ts` 是唯一载荷入口**。
 - 对应律：`ECONOMY_FIELD_SPECS` ↔ Config 字段一一对应（扩配置 = Config + field-model
   两处同扩，测试断言一致性）。配置面（§6）按此重填。
-- **星标按钮**：`conversation.view` 槽注册 → host 断面方法（时序 B，[10 §4](10-wiring.md)）
+- **星标按钮**：`conversation.input.right` 槽注册 → host 断面方法（时序 B，[10 §4](10-wiring.md)）
   → 预览 diff 弹层（复用壳的 popover/fixed 弹层基建）。
 - **度量消息列表可视化**（加分项，R3+）：client 渲染 `context-economy/*` 会话事件为
   消息流内轻量条目（剪除了多少、压缩了什么——用户可见可审计）。

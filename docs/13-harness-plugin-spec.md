@@ -5,8 +5,8 @@
 > 而是 docs/00–12 之外“harness 现状是什么”的事实层；正典冲突时以 docs/00–11 为准，harness
 > 事实冲突时以源码为准。
 >
-> 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`，2026-09-06 审查）。
-> 当前插件：`dsh-price-less`（`D:/deepseek-plugin`，P4 已施工）。
+> 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`；2026-09-06 首审，2026-09-08 P14a client 面增补）。
+> 当前插件：`dsh-price-less`（`D:/deepseek-plugin`，P14a 已施工；R2 判别域 P8–P13 + P14a 完成）。
 > 使用方式：后续工单（P2 起）凡涉及 harness API，先查本文 §3/§4 的“核验源”列；表中未列的符号
 > 仍按总纲铁律逐条 grep 到定义处才准 import。
 
@@ -197,11 +197,137 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 
 ### 3.10 客户端接口（client 半边）
 
-- 客户端插件包声明 `dsh.client`（platform/web、inject 列表、`exports["./client"]`）。
-- 当前插件 client 注入：`['slots','settingsScope','remote','remote.session','connection']`
-  （`client/index.ts`）；`ctx.slots.inject('settings.plugin.item', function* () { yield ctx.slots.register({...}, Card) })`
-  是官方卡槽注册形态。命名空间 `context-economy` 与 host `settings.ts` 同值。
-- 依赖面全部 type-only 拉 Context merge（`@deepseek-ai/dsh-api-remotes/client` 等）。
+> P14a 后按实际核验源码固化。以下路径均在 `G:/deepseek-harness/packages/client/...`。
+> 客户端 SlotMap 声明通过 `import type {} from 'xxx/client'` 拉入 TypeScript 全局 merge，
+> **不产生运行时依赖**；client 侧禁止 import `src/`（结构断言 S4）。
+
+#### 3.10.1 包与导出（后续 client 工单直接查此表）
+
+| 包 | checkout 路径 | `/client` 主要导出 | 用途 |
+|---|---|---|---|
+| `@deepseek-ai/dsh-client-ui-slots` | `packages/client/ui-slots` | `PropsRuntime`、`InjectFace`、`PropsRenderSlots`、`SlotComponent`、`register` 类型 | 槽位注册/组件 props 合成的唯一底层类型 |
+| `@deepseek-ai/dsh-client-ui-renderer` | `packages/client/ui-renderer` | Context merge：`ctx.slots`、`ctx.uiRenderer` | **必须 type-only import**，否则槽注入不生效 |
+| `@deepseek-ai/dsh-client-ui-session` | `packages/client/ui-session` | `useSession`、`sessionId`、`useProjection`、`useSessions` | Session scope 标准 props |
+| `@deepseek-ai/dsh-client-ui-conversation` | `packages/client/ui-conversation` | `InputState`、`InputActions`、`SessionStandardProps`、`conversation.*` SlotMap | 会话 UI 槽与输入面 |
+| `@deepseek-ai/dsh-client-ui-settings` | `packages/client/ui-settings` | `SettingsScope`、`SettingsScopeSnapshot` | 设置卡 scope 绑定 |
+| `@deepseek-ai/dsh-client-ui-settings-plugins` | `packages/client/ui-settings-plugins` | `settings.plugin.item` SlotMap 声明 | 设置卡槽注册 |
+| `@deepseek-ai/dsh-api-remotes` | `packages/api/remotes` | `ClientRemote`、`ModelProviderGroup` | `ctx.remote.session` 模型目录 |
+| `@deepseek-ai/dsh-session/types` | `packages/core/session` | `SessionId`（brand） | 槽 inject 参数类型 |
+
+关键约定：
+- `import type {} from '.../client'` 是 **declaration merge 副作用导入**，必须写；否则
+  `PropsRuntime<'conversation.input.right'>` 在编译期会因 `SlotMap` 缺失而报错。
+- 运行期 `inject` 数组（当前 `client/index.ts`）只需要 `slots`、`settingsScope`、
+  `remote`、`remote.session`、`connection`；conversation/session 包只做类型面，不挂 runtime inject。
+
+#### 3.10.2 SlotMap 关键槽位（P14a 已核验）
+
+定义源：`packages/client/ui-conversation/src/client/contract/slots.ts`
+（`interface SlotMap` 声明合并，约 119–161 行）；实际声明/渲染点：
+`packages/client/ui-conversation/src/client/apply.ts`（约 262/280/302 行）。
+
+| 槽 | kind | scope | 组件额外标准 props | 备注 |
+|---|---|---|---|---|
+| `settings.plugin.item` | keyed | root | 无 session 标准面；注册带 `key` | 当前插件设置卡（`key=context-economy`） |
+| `conversation.session` | single | session | useSession/sessionId/useConversation/useInput/inputActions | 会话正文 |
+| `conversation.session.header.actions` | list | session | 同上 | 会话头右操作，**不是星标主选** |
+| `conversation.view` | list | session | 同上 + `ConvViewOwnerProps`（viewTarget/openView/completeViewRequest） | **是“会话视图页签”列表**，不是放按钮的槽 |
+| `conversation.input.right` | list | session | 同上 | 输入栏右侧工具区，**P14a 星标主选** |
+| `conversation.input.left` | list | session | 同上 | 输入栏左侧 |
+| `conversation.input.plan` | single | session | 同上 + `InputControlOwnerProps`（locked） | Plan 控制 |
+| `conversation.input.model` | single | session | 同上 + `InputControlOwnerProps`（locked） | 模型选择 |
+| `conversation.input.dock` | list | session | 同上 + `InputZone`（session/input snapshot） | 编辑器上方 |
+| `conversation.hero.workspace` | single | root | `useSessions` 等 global 面 | 无会话 Hero |
+| `conversation.composer` | chain | session | 同上 + `ComposerChainProps` | 组合器接管链 |
+
+#### 3.10.3 Session scope 标准 props（由 ui-session + ui-conversation 合并）
+
+组件在 session-scope 槽上自动获得：
+
+```ts
+// ui-session/src/client/index.ts 的 SessionStandardProps
+useSession: SnapshotSelectorHook<SessionSnapshot>
+sessionId: SessionId
+useProjection: UseProjection
+// ui-conversation/src/client/contract/slots.ts 的 SessionStandardProps
+useConversation: SnapshotSelectorHook<ConversationSnapshot>
+useInput: SnapshotSelectorHook<InputState>
+inputActions: InputActions
+```
+
+`session-maybe` 槽则将 `sessionId`/`useSession`/`useInput`/`inputActions` 变为可缺省：
+`sessionId: SessionId | undefined`、`useInput: MaybeSnapshotSelectorHook<InputState>`、
+`inputActions: InputActions | undefined`。
+
+#### 3.10.4 `InputActions` 与 `InputState`
+
+定义源：`packages/client/ui-conversation/src/client/contract/input.ts`。
+
+```ts
+export interface InputActions {
+  setDraft(text: string): void       // 替换整个草稿（P14a 应用终稿入口）
+  addAttachments(ids: readonly DraftAttachmentId[]): boolean
+  removeAttachment(id: DraftAttachmentId): boolean
+  pruneAttachments(ids: readonly DraftAttachmentId[]): void
+  submit(): void
+}
+
+export interface InputState {
+  draft: string                      // 剪贴板投影文本（星标按钮读取）
+  attachmentIds: readonly DraftAttachmentId[]
+  draftRev: number
+  phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
+  claim?: { token: string; hint?: string; attachments?: boolean }
+  occurrences: readonly Occurrence[]
+  queue: readonly QueuedMessage[]
+}
+```
+
+注意：`inputActions` 没有 `notify`；会话级通知在 `SessionInput.notify` 上，不通过槽组件
+标准 props 暴露（P14a 用本地 toast）。
+
+#### 3.10.5 注册骨架（P14a 当前形态）
+
+```ts
+// client/index.ts 的 apply(ctx) 内
+const starBridge = createMockStarBridge()
+ctx.slots.inject('conversation.input.right', function* () {
+  yield ctx.slots.register({
+    name: 'conversation.input.right',
+    id: 'context-economy-star',
+    order: 10,
+    inject: (sessionId: SessionId) => ({ star: starBridge }),
+  }, StarButton)
+})
+```
+
+要点：
+- `ctx.slots.inject(key, callback)` 会把 callback 放入 `ctx.effect`（声明生命周期）；
+  callback 返回 generator 时逐个 yield disposer，卸载时逆序清理。
+- 列表槽必须带 `id`；`order` 只影响同槽内展示顺序（不参与影子优先级）。
+- `inject` 工厂参数由 slot 的 `scope` 决定：session 槽收 `sessionId`；root 槽不收参数。
+- 组件 props 使用 `PropsRuntime<K> & InjectFace<I>` 合成；`I` 来自 `inject` 返回类型。
+
+#### 3.10.6 build.sh 链接清单（client typecheck 必需）
+
+`scripts/build.sh` 的 client 预备区必须包含：
+
+```bash
+link_pkg @deepseek-ai/dsh-client-ui-conversation packages/client/ui-conversation
+link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
+```
+
+这两个包自身的 checkout `node_modules` 已带齐 `dsh-api-session-controller`、
+`dsh-api-workspace-controller` 等传递依赖，因此只 link 顶层两个包即可通过
+`npm run typecheck:client`。
+
+#### 3.10.7 当前插件 client 现状（P14a）
+
+- client 注入：`['slots','settingsScope','remote','remote.session','connection']`
+- 已注册槽：`settings.plugin.item`（设置卡）、`conversation.input.right`（星标按钮）
+- 星标使用 `StarHostBridge` 接口（见 `docs/implement/P14a-star-button-ui.md` §2.3）；
+  P14b 只需替换 `createMockStarBridge()` 为真实 bridge，UI/类型不变。
+- `docs/11 §5` 与 `docs/10 §1 H11` 已同步为 `conversation.input.right`。
 
 ## 4. 会话日志兼容契约（本插件最关键的 4 条）
 
@@ -215,7 +341,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 4. **模型可见 ⟺ 已落盘**：一切进入模型请求的内容必须能从会话日志重建；新模型可见输入必须
    新增 `SessionEventMap` 事件类型。
 
-## 5. 当前插件 ↔ 接口落位表（2026-09-06 现状）
+## 5. 当前插件 ↔ 接口落位表（2026-09-08 现状）
 
 | 当前文件 | 使用接口 | 状态 |
 |---|---|---|
@@ -231,7 +357,8 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent` | 已施工（P7） |
-| `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session` | 已施工（壳保留） |
+| `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
+| `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft`、`useInput`、`StarHostBridge` | 已施工（P14a） |
 
 ## 6. 复用方法（后续工单的核验流程）
 
