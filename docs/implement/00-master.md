@@ -110,7 +110,7 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > 结构断言全绿（M/S/D1–D8）、R1 出门门槛核对（docs/11 §8 R1 行：JSONL 回放 + ignorable 断言 +
 > platform 七端口齐）通过；下一段 = R2 判别域。
 
-> R2 进行中（2026-09-07）：P8/P9/P10 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs` 与 `node scripts/verify-p10.mjs` 均输出 PASS）。
+> R2 进行中（2026-09-07）：P8/P9/P10/P11 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b`；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p10.mjs` 与 `node scripts/verify-p11.mjs` 均输出 PASS）。
 
 > P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
 > P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b/P19/P21a 补 P3）。
