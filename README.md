@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icons/whale-ring.png" alt="dsh-price-less — the DeepSeek whale behind a context token ring" width="120" />
+
 # dsh-price-less
 
 **Context management plugin for DeepSeek Harness**

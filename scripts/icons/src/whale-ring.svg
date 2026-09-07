@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1F2F6E"/>
+      <stop offset="1" stop-color="#4D6BFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- 环：缺口正对鲸尾，尾部从缺口中穿过 -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="30"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-dasharray="640.9 1068.1" transform="rotate(44 256 256)"/>
+  <!-- 官方鲸鱼（体心 250,264） -->
+  <path d="{{FISH}}" fill="#FFFFFF" transform="translate(152 117) scale(14)"/>
+</svg>

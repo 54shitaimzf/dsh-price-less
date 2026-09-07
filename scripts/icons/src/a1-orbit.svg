@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1F2F6E"/>
+      <stop offset="1" stop-color="#4D6BFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- 环：轨道围绕整只鲸 -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="26"/>
+  <!-- 已用 60%：缺口正对鲸尾（tail 处 = 未消耗 40%） -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" stroke-dasharray="716.3 1193.8" transform="rotate(44 256 256)"/>
+  <path d="{{FISH}}" fill="#FFFFFF" transform="translate(174.4 144.6) scale(10.8)"/>
+</svg>

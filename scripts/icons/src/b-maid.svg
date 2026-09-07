@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1F2F6E"/>
+      <stop offset="1" stop-color="#4D6BFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- 环：缺口正对鲸尾 -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="30"/>
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-dasharray="640.9 1068.1" transform="rotate(44 256 256)"/>
+  <!-- 官方鲸鱼（体心 250,264） -->
+  <path d="{{FISH}}" fill="#FFFFFF" transform="translate(152 117) scale(14)"/>
+  <!-- 女仆帽：细褶边带（头顶，避开眼睛） -->
+  <path d="M153.2 228.8 A103 103 0 0 1 337.3 209.4" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="160.8" cy="212.5" r="7.5" fill="#FFFFFF"/>
+  <circle cx="175.6" cy="192.7" r="7.5" fill="#FFFFFF"/>
+  <circle cx="194.7" cy="177.1" r="7.5" fill="#FFFFFF"/>
+  <circle cx="216.8" cy="166.5" r="7.5" fill="#FFFFFF"/>
+  <circle cx="241.0" cy="161.4" r="7.5" fill="#FFFFFF"/>
+  <circle cx="265.7" cy="162.2" r="7.5" fill="#FFFFFF"/>
+  <circle cx="289.4" cy="168.8" r="7.5" fill="#FFFFFF"/>
+  <circle cx="310.9" cy="180.9" r="7.5" fill="#FFFFFF"/>
+  <circle cx="328.9" cy="197.8" r="7.5" fill="#FFFFFF"/>
+  <!-- 蝴蝶结：头顶正中 -->
+  <circle cx="238" cy="144" r="9" fill="#F2C94C"/>
+  <circle cx="262" cy="144" r="9" fill="#F2C94C"/>
+  <circle cx="250" cy="146" r="6.5" fill="#F2C94C"/>
+</svg>

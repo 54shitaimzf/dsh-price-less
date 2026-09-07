@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icons/whale-ring.png" alt="dsh-price-less —— 官方鲸鱼与上下文 token 消耗环" width="120" />
+
 # dsh-price-less
 
 **DeepSeek Harness 上下文管理插件**
