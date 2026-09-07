@@ -26,7 +26,7 @@ const SHARED = [
 ]
 
 export default defineConfig({
-  name: '@dsh-external/dsh-context-economy/client',
+  name: 'dsh-price-less/client',
   entry: { client: 'client/index.ts' },
   outDir: 'lib',
   format: 'cjs',
@@ -42,7 +42,7 @@ export default defineConfig({
   outputOptions: {
     entryFileNames: 'client.js',
     sourcemapExcludeSources: false,
-    banner: 'window.__ModuleLoader__.load({ id: "@dsh-external/dsh-context-economy", factory: (require) => {',
+    banner: 'window.__ModuleLoader__.load({ id: "dsh-price-less", factory: (require) => {',
     footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
   },

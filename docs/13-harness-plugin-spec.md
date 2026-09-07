@@ -6,7 +6,7 @@
 > 事实冲突时以源码为准。
 >
 > 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`，2026-09-06 审查）。
-> 当前插件：`@dsh-external/dsh-context-economy`（`D:/deepseek-plugin`，P4 已施工）。
+> 当前插件：`dsh-price-less`（`D:/deepseek-plugin`，P4 已施工）。
 > 使用方式：后续工单（P2 起）凡涉及 harness API，先查本文 §3/§4 的“核验源”列；表中未列的符号
 > 仍按总纲铁律逐条 grep 到定义处才准 import。
 
@@ -50,7 +50,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   实现：`vendor/include/src/index.ts:52-100`（`applyEntryPatches`）。
 - 行顺序无加载语义（激活由服务可用性驱动）；同 id 后写覆盖前写（last write winning per row）。
 - 当前插件 bundle 层（模板态）只有一行插入：
-  `- insert: [{ id: dsh-context-economy, name: '@dsh-external/dsh-context-economy' }]`。
+  `- insert: [{ id: dsh-price-less, name: 'dsh-price-less' }]`。
 
 ### 1.3 profile 分层与调试
 

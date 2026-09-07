@@ -315,7 +315,7 @@ export function isDossierShort(body: DossierBody, gate: DossierGate): boolean
 - [ ] `dev_self_test` 全 PASS（准备注入前必跑）
 - [ ] `dev_build_plugin /d/deepseek-plugin` 产出 tgz
 - [ ] `dev_inject_plugin /d/deepseek-plugin` 注入成功（宿主运行中才可执行）
-- [ ] `dev_plugin_status` 显示 `@dsh-external/dsh-context-economy` 已装配且 fiber 状态正常
+- [ ] `dev_plugin_status` 显示 `dsh-price-less` 已装配且 fiber 状态正常
 - [ ] 宿主日志中无 `cannot get property "skills" without inject`；`logs/context-economy.log`
       可见 `prefix unavailable until init frame`（P8 预期行为）
 

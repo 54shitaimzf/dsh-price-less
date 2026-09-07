@@ -1,8 +1,10 @@
 <div align="center">
 
-# dsh-context-economy
+# dsh-price-less
 
 **DeepSeek Harness 上下文管理插件**
+
+> **留下无价的想法，省去有价的过程。**
 
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-development-yellow.svg)]()
@@ -34,7 +36,7 @@
 
 ## 项目介绍
 
-`dsh-context-economy` 是非官方的 DeepSeek Harness 上下文管理插件，致力于让“送进模型的每个 token”更有价值：
+`dsh-price-less` 是非官方的 DeepSeek Harness 上下文管理插件，致力于让“送进模型的每个 token”更有价值：
 
 - 建立显式任务边界
 - 通过用户确认初始化项目帧
@@ -94,13 +96,13 @@ npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --no-packag
 DSH_CHECKOUT=/path/to/deepseek-harness npm run build
 
 # 3. 注入到 DSH 实例
-dev_inject_plugin /path/to/dsh-context-economy
+dev_inject_plugin /path/to/dsh-price-less
 ```
 
 计划中的发布形态：
 
-- npm：`dsh plugin add dsh-context-economy`
-- tarball：`dsh plugin add ./dsh-context-economy-0.0.1.tgz`
+- npm：`dsh plugin add dsh-price-less`
+- tarball：`dsh plugin add ./dsh-price-less-0.0.1.tgz`
 
 ## 使用
 

@@ -561,7 +561,7 @@ fake ctx 需提供：`logger`（可调用 named logger）、`effect`（收 dispo
 - [ ] `dev_self_test` 全 PASS（注入器自检；仅当准备执行真实注入时必跑）
 - [ ] `dev_build_plugin /d/deepseek-plugin` 产出 tgz（打包链路含新 core 文件）
 - [ ] `dev_inject_plugin /d/deepseek-plugin` 注入成功（宿主运行中才可执行）
-- [ ] `dev_plugin_status` 显示 `@dsh-external/dsh-context-economy` 已装配且 fiber 状态正常
+- [ ] `dev_plugin_status` 显示 `dsh-price-less` 已装配且 fiber 状态正常
 - [ ] 宿主日志/`logs/context-economy.log` 中可见 `prefix unavailable until init frame`
       （技能 watch 已激活、无项目帧不创建——P8 预期行为，非错误）
 

@@ -1,8 +1,10 @@
 <div align="center">
 
-# dsh-context-economy
+# dsh-price-less
 
 **Context management plugin for DeepSeek Harness**
+
+> **Priceless thoughts. Price-less costs.**
 
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-development-yellow.svg)]()
@@ -34,7 +36,7 @@
 
 ## About The Project
 
-`dsh-context-economy` is a non-official DeepSeek Harness plugin focused on context economy. It helps reduce token waste by:
+`dsh-price-less` is a non-official DeepSeek Harness plugin focused on context economy. It helps reduce token waste by:
 
 - Establishing explicit task boundaries
 - Initializing a project frame through user confirmation
@@ -94,13 +96,13 @@ npm install --legacy-peer-deps --ignore-scripts --no-audit --no-fund --no-packag
 DSH_CHECKOUT=/path/to/deepseek-harness npm run build
 
 # 3. Inject into a DSH instance
-dev_inject_plugin /path/to/dsh-context-economy
+dev_inject_plugin /path/to/dsh-price-less
 ```
 
 Planned distribution forms:
 
-- npm: `dsh plugin add dsh-context-economy`
-- tarball: `dsh plugin add ./dsh-context-economy-0.0.1.tgz`
+- npm: `dsh plugin add dsh-price-less`
+- tarball: `dsh plugin add ./dsh-price-less-0.0.1.tgz`
 
 ## Usage
 

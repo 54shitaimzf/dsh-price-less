@@ -1,5 +1,5 @@
 /**
- * @dsh-external/dsh-context-economy — 主插件入口（P12 自动断面接线）。
+ * dsh-price-less — 主插件入口（P12 自动断面接线）。
  *
  * 装配顺序：settings 注册 → H1/H7/H12 facts 事件泵 → 持久面 → 可选 llm 子 fiber 挂载自动断面。
  * llm/skills 均经 ctx.inject 子 fiber 读取，避免设为主插件硬依赖。
@@ -17,7 +17,7 @@ import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, t
 import { mountAutoDiscriminator } from './domains/input.ts'
 import { mountCommandFace } from './domains/commands.ts'
 
-export const name = '@dsh-external/dsh-context-economy'
+export const name = 'dsh-price-less'
 const PROJECT_FRAME_TABLE = 'project_frame' as const
 
 export { Config } from './config.ts'

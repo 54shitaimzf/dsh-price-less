@@ -61,7 +61,7 @@ export const RULES = [
   { id: 'M1', canon: 'docs/11 §1 表', appliesTo: (p) => p === 'package.json', check: (f) => {
     const pkg = JSON.parse(f.text)
     return [
-      ...(pkg.name !== '@dsh-external/dsh-context-economy' ? [{ message: `name must be '@dsh-external/dsh-context-economy', got ${JSON.stringify(pkg.name ?? null)}` }] : []),
+      ...(pkg.name !== 'dsh-price-less' ? [{ message: `name must be 'dsh-price-less', got ${JSON.stringify(pkg.name ?? null)}` }] : []),
       ...(!/^\d+\.\d+\.\d+/.test(String(pkg.version)) ? [{ message: `version must match /^\\d+\\.\\d+\\.\\d+/, got ${JSON.stringify(pkg.version ?? null)}` }] : []),
     ] } },
   { id: 'M2', canon: 'docs/11 §1 表', appliesTo: (p) => p === 'package.json', check: (f) => {

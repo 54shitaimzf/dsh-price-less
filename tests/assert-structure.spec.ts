@@ -19,7 +19,7 @@ const NO_ISSUES: never[] = []
 describe('负样本（每规则 ≥1）', () => {
   it('M1：name 错误 / version 非语义化 → issue', () => {
     expect(check('M1', 'package.json', JSON.stringify({ name: 'other', version: '0.0.1' })).length).toBeGreaterThanOrEqual(1)
-    expect(check('M1', 'package.json', JSON.stringify({ name: '@dsh-external/dsh-context-economy', version: 'dev' })).length).toBeGreaterThanOrEqual(1)
+    expect(check('M1', 'package.json', JSON.stringify({ name: 'dsh-price-less', version: 'dev' })).length).toBeGreaterThanOrEqual(1)
   })
   it('M2：peerDep 缺键 / 硬编码精确版本 → issue', () => {
     expect(check('M2', 'package.json', JSON.stringify({ peerDependencies: { schemastery: '3.18.0' } })).length).toBeGreaterThanOrEqual(1)
@@ -101,7 +101,7 @@ describe('负样本（每规则 ≥1）', () => {
 describe('正样本（干净文件 → 0 issue）', () => {
   it('M1–M4：合规 package.json', () => {
     const pkg = JSON.stringify({
-      name: '@dsh-external/dsh-context-economy', version: '0.0.1',
+      name: 'dsh-price-less', version: '0.0.1',
       peerDependencies: { '@deepseek-ai/cordis': '>=4 <5', '@deepseek-ai/dsh-settings': '>=0.1.3 <2', schemastery: '^3.18.0' },
       dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['react', '@deepseek-ai/dsh-client-ui-slots'] } },
       exports: { './client': { default: './lib/client.js' } },

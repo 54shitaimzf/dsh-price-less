@@ -24,7 +24,7 @@
 
 | 项 | 规范要求 |
 |---|---|
-| name/version | `@dsh-external/dsh-context-economy` / 0.0.1 |
+| name/version | `dsh-price-less` / 0.0.1 |
 | peerDeps | 范围声明不硬编码版本 |
 | dsh.bundle.patch | `./cordis.patch.yml` |
 | dsh.client.* | inject + platform + `exports["./client"]` |
@@ -125,7 +125,7 @@ export function main(): void                                      // CLI 入口
 
 | id | canon | appliesTo | check 语义 | 零位预期 |
 |---|---|---|---|---|
-| M1 | 11 §1 表 | package.json | `name === '@dsh-external/dsh-context-economy'` 且 `version` 匹配 `/^\d+\.\d+\.\d+/` | pass |
+| M1 | 11 §1 表 | package.json | `name === 'dsh-price-less'` 且 `version` 匹配 `/^\d+\.\d+\.\d+/` | pass |
 | M2 | 11 §1 表 | package.json | peerDependencies 必含 `@deepseek-ai/cordis`、`@deepseek-ai/dsh-settings`、`schemastery` 三键，且每键值匹配 `/[<^~>=]/`（范围声明，禁硬编码精确版本） | pass |
 | M3 | 11 §1 表 | package.json + 文件集 | `dsh.bundle.patch === './cordis.patch.yml'` 且文件集含 `cordis.patch.yml` | pass |
 | M4 | 11 §1 表 + package.json | package.json | `dsh.client.platform === 'web'`；`dsh.client.inject` 为数组且含 `react` 与 `@deepseek-ai/dsh-client-ui-slots`；`exports['./client']` 存在 | pass |
@@ -181,7 +181,7 @@ R0 门「注入/卸载净」的**离线替身**：手写 FakeCtx（禁 import co
 ### 3.4 入口导出补齐（各 1 行）
 
 - `src/index.ts`：+ `export { Config } from './config.ts'`（host 侧 interface + schema 同名双面一并带出）。
-- `client/index.ts`：+ `export const name = '@dsh-external/dsh-context-economy'`（与 tsdown banner 的
+- `client/index.ts`：+ `export const name = 'dsh-price-less'`（与 tsdown banner 的
   ModuleLoader load id 一致）。
 
 ### 3.5 `package.json` scripts（+2）

@@ -26,7 +26,7 @@ import { EconomyCard } from './Card.tsx'
 import { EconomyCardController, type EconomyCardFace } from './controller.ts'
 
 /** 插件名（与 tsdown banner 的 ModuleLoader load id 一致；入口铁律 docs/11 §1 client 行）。 */
-export const name = '@dsh-external/dsh-context-economy'
+export const name = 'dsh-price-less'
 
 /** 本插件配置 namespace（与 host 半边 src/settings.ts 同值；client 不得依赖 host 包）。 */
 export const CONTEXT_ECONOMY_NS = 'context-economy'
