@@ -60,8 +60,8 @@ function freezeValue(value: unknown): string {
   return JSON.stringify(value) ?? String(value)
 }
 
-export function freezeJudgeConfig(config: Record<string, unknown>): string {
-  return freezeValue(config)
+export function freezeJudgeConfig(value: unknown): string {
+  return freezeValue(value)
 }
 
 export interface JudgeL1Scope {
