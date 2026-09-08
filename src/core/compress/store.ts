@@ -146,6 +146,8 @@ export interface CompressSpanKeyInput {
   readonly regionText: string
   readonly unitIds: readonly string[]
   readonly priorChainTexts: readonly string[]
+  /** 装配/压缩策略指纹（热尾预算、档案帽、估计器；缺省 = 版本号已覆盖）。 */
+  readonly policyKey?: string
 }
 
 /**
@@ -160,6 +162,7 @@ export function compressSpanHash(input: CompressSpanKeyInput): string {
   feed(state, input.regionText)
   feed(state, input.unitIds.join('\u0000'))
   feed(state, input.priorChainTexts.join('\u0000'))
+  feed(state, input.policyKey ?? '')
   const a = state.a.toString(16).padStart(8, '0')
   const b = state.b.toString(16).padStart(8, '0')
   return `${a}${b}`

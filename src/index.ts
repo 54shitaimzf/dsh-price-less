@@ -18,6 +18,9 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import { mountAutoDiscriminator } from './domains/input.ts'
 import { mountShearDomain } from './domains/shear.ts'
 import { mountAssembleDomain } from './domains/assemble.ts'
+import { mountCompactionDomain } from './domains/compaction.ts'
+import { onAgentPreStep } from './platform/agent-step.ts'
+import { createMeterPort, type MeterPort } from './platform/meter.ts'
 import { createFilesPort, type FilesPort } from './platform/files.ts'
 import { mountCommandFace } from './domains/commands.ts'
 import { mountStarHost, readSessionId, renderPreviewCommandText } from './domains/star.ts'
@@ -92,7 +95,16 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   const assemble = mountAssembleDomain({ pump, logger: ceLogger(ctx), getFiles: () => files })
   ctx.effect(() => () => assemble.dispose())
 
+  // P19b：H7 计量端口（影子价同源；服务缺失 = 本地估算降级）。
+  let meter: MeterPort | undefined
+  ctx.inject(['tokenMeter'], (meterCtx) => {
+    meter = createMeterPort(meterCtx)
+    meterCtx.effect(() => () => { meter = undefined })
+  })
+
   let stopAuto: (() => void) | undefined
+  let stopPreStep: (() => void) | undefined
+  let compaction: ReturnType<typeof mountCompactionDomain> | undefined
   let skillsCtx: Context | undefined
   let llmCtx: Context | undefined
   let stopCommands: (() => void) | undefined
@@ -109,6 +121,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
         disposed = true
         stopSkillWatch?.()
         stopAuto?.()
+        stopPreStep?.()
+        compaction?.dispose()
         stopCommands?.()
         starHost?.dispose()
         await stopStarBridge?.()
@@ -137,6 +151,20 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
               getConfig,
               logger: ceLogger(llmCtx),
             }).dispose
+          })
+          // P19b：边界压缩域（H2 闭合触发 → 调用 → 装配 → 档案 vN → 事务替换）。
+          compaction = mountCompactionDomain({
+            storage: opened,
+            getConfig,
+            logger: ceLogger(ctx),
+            assemble,
+            getMeter: () => meter,
+            getLlm: () => llmCtx,
+            workspace: process.cwd().replaceAll('\\', '/'),
+          })
+          stopPreStep = onAgentPreStep(ctx, {
+            logger: ceLogger(ctx),
+            handler: ({ session, turn }) => compaction?.onPreStep({ session, turn }) ?? Promise.resolve(),
           })
           ctx.inject(['sessions'], (sessionsCtx) => {
             if (disposed) return

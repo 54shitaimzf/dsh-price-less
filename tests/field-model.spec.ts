@@ -89,19 +89,21 @@ describe('模型路由', () => {
 })
 
 describe('模板态壳不变量（分组 + 字段 spec）', () => {
-  it('4 个组壳保留；assembly 挂 auto + 剪切开关，discern 挂推理档，其余组为空', () => {
+  it('4 个组壳保留；assembly 挂 auto + 剪切 + 压缩开关，discern 挂推理档，tune 挂压缩标定', () => {
     expect(ECONOMY_FIELD_GROUPS.map(g => g.id)).toEqual(['assembly', 'discern', 'tune', 'advanced'])
     const assembly = ECONOMY_FIELD_GROUPS.find(g => g.id === 'assembly')!
-    expect(assembly.fields.map(f => f.field)).toEqual(['discriminator.auto', 'shear.enabled'])
+    expect(assembly.fields.map(f => f.field)).toEqual(['discriminator.auto', 'shear.enabled', 'compression.boundary', 'compression.pressure'])
     const discern = ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')!
     expect(discern.fields.map(f => f.field)).toEqual(['discriminator.reasoningEffort'])
     expect(discern.routeSelector).toBe(true)
-    for (const g of ECONOMY_FIELD_GROUPS.filter(x => x.id === 'tune' || x.id === 'advanced')) expect(g.fields).toEqual([])
+    const tune = ECONOMY_FIELD_GROUPS.find(g => g.id === 'tune')!
+    expect(tune.fields.map(f => f.field)).toEqual(['compression.retainTokens', 'compression.thresholdTokens', 'compression.domainTokens', 'compression.archiveCapTokens'])
+    expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'advanced')!.fields).toEqual([])
   })
 
-  it('ECONOMY_FIELD_SPECS = 5 个：auto + 剪切开关 + 推理档（core）+ provider/model（hidden），无观察模式', () => {
+  it('ECONOMY_FIELD_SPECS = 11 个：判别 + 剪切 + 压缩六字段 + 推理档 + provider/model（hidden）', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(ECONOMY_FIELD_SPECS).toHaveLength(5)
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(11)
     expect(specs.has('discriminator.mode')).toBe(false)
     expect(specs.get('discriminator.auto')?.type).toBe('bool')
     expect(specs.get('discriminator.auto')?.visibility).toBe('core')
@@ -114,6 +116,21 @@ describe('模板态壳不变量（分组 + 字段 spec）', () => {
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
     expect(CLIENT_DEFAULTS.discriminator.auto).toBe(false)
     expect(defaultForPath('discriminator.reasoningEffort')).toBeUndefined()
+  })
+
+  it('压缩字段（P19）：开关默认开、数值默认与 host 同值、parse 校验', () => {
+    const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
+    expect(specs.get('compression.boundary')?.type).toBe('bool')
+    expect(specs.get('compression.boundary')?.parse('false')).toEqual({ kind: 'set', values: { 'compression.boundary': false } })
+    expect(CLIENT_DEFAULTS.compression.boundary).toBe(true)
+    expect(CLIENT_DEFAULTS.compression.pressure).toBe(true)
+    expect(defaultForPath('compression.retainTokens')).toBe(10000)
+    expect(defaultForPath('compression.thresholdTokens')).toBe(100000)
+    expect(defaultForPath('compression.domainTokens')).toBe(125000)
+    expect(defaultForPath('compression.archiveCapTokens')).toBe(15000)
+    expect(specs.get('compression.retainTokens')?.parse('20000')).toEqual({ kind: 'set', values: { 'compression.retainTokens': 20000 } })
+    expect(specs.get('compression.retainTokens')?.parse('10').kind).toBe('error')
+    expect(ECONOMY_FIELD_COPY['compression.boundary'].hint).toContain('默认开启')
   })
 
   it('推理档字段（P14f）：选项含 off、parse 校验、空 = 跟随模型默认（clear）', () => {

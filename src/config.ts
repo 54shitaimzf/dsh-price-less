@@ -20,6 +20,21 @@ export interface Config {
     /** 工具剪切总开关（默认 true；关闭后四档零行为）。 */
     enabled: boolean
   }
+  /** 压缩域配置区（docs/11 §6 装配开关；P19 落位边界路径）。 */
+  compression: {
+    /** 边界路径总开关（task 闭合触发；默认 true）。 */
+    boundary: boolean
+    /** 压力路径总开关（生产者 = P20a；默认 true）。 */
+    pressure: boolean
+    /** 压缩域窗口（docs/04 §5 标定；压力触发基准）。 */
+    domainTokens: number
+    /** 热尾保留预算（绝对设计值 10K；docs/04 §5）。 */
+    retainTokens: number
+    /** 压力阈值（绝对设计值 100K）；不变量 retain < threshold。 */
+    thresholdTokens: number
+    /** 档案区硬帽（绝对设计值 15K；docs/04 §6）。 */
+    archiveCapTokens: number
+  }
   /** 判别器/引擎配置区。 */
   discriminator: {
     /** 模型路由（可选；空 = 跟随会话路由）。 */
@@ -39,6 +54,14 @@ export const Config = z.object({
   shear: z.object({
     enabled: z.boolean().default(true),
   }),
+  compression: z.object({
+    boundary: z.boolean().default(true),
+    pressure: z.boolean().default(true),
+    domainTokens: z.number().default(125000),
+    retainTokens: z.number().default(10000),
+    thresholdTokens: z.number().default(100000),
+    archiveCapTokens: z.number().default(15000),
+  }),
   discriminator: z.object({
     provider: z.string().min(1),
     model: z.string().min(1),
@@ -51,6 +74,14 @@ export const Config = z.object({
 export const CONFIG_DEFAULTS = {
   shear: {
     enabled: true,
+  },
+  compression: {
+    boundary: true,
+    pressure: true,
+    domainTokens: 125000,
+    retainTokens: 10000,
+    thresholdTokens: 100000,
+    archiveCapTokens: 15000,
   },
   discriminator: {
     auto: false,
@@ -65,8 +96,16 @@ export function reasoningEffortSetting(config: Config): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
-/** 把"可能部分"的 config 补全成完整形状（discriminator 深合并）。 */
+/** 压缩域不变量（docs/04 §5 硬规则）：retain < threshold 且两者为正。 */
+export function compressionInvariantOk(compression: Config['compression']): boolean {
+  return Number.isFinite(compression.retainTokens) && Number.isFinite(compression.thresholdTokens)
+    && compression.retainTokens > 0
+    && compression.thresholdTokens > compression.retainTokens
+}
+
+/** 把"可能部分"的 config 补全成完整形状（shear/compression/discriminator 深合并）。 */
 export function resolveConfig(config: Partial<Config> | undefined): Config {
+  const compression = { ...CONFIG_DEFAULTS.compression, ...(config?.compression ?? {}) }
   return {
     ...CONFIG_DEFAULTS,
     ...(config ?? {}),
@@ -74,6 +113,10 @@ export function resolveConfig(config: Partial<Config> | undefined): Config {
       ...CONFIG_DEFAULTS.shear,
       ...(config?.shear ?? {}),
     },
+    // 不变量违例 → 回退设计值（失败方向 = 正典标定，不猜用户意图）。
+    compression: compressionInvariantOk(compression)
+      ? compression
+      : { ...CONFIG_DEFAULTS.compression },
     discriminator: {
       ...CONFIG_DEFAULTS.discriminator,
       ...(config?.discriminator ?? {}),

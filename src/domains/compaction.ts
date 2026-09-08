@@ -1,0 +1,487 @@
+/**
+ * P19b 边界路径编排（docs/04 §2 时序 A + §1 缩水校验 + §6 档案区；docs/10 §3 时序 A；
+ * docs/09 §2 边界档案 vN；docs/11 §2 domains/compaction.ts 行）。
+ *
+ * 一次边界压缩（全部失败路径 = 不落刀 + 如实记账）：
+ *   H2 闭合发现 → 区间落表面（配对平衡）→ 单元清单 + 区间转写 → 内容寻址复用（命中 = 零调用）
+ *   → 边界 prompt → H12 单次调用 → P18 产物校验 → P17 装配 → 缩水校验（重试 1）
+ *   → 档案 vN 落盘（CAS；落盘成功才落刀）→ H4/H5 事务（prune 影子价 + 官方 checkpoint 提交）
+ *   → compress-run 事实 + T-boundary 搭车补账。
+ *
+ * 模块: domains 压缩域编排（core 纯核 + platform 端口）
+ * 平面: L0/L2（机械装配 + 单次语义调用；模型只产坐标与排序）
+ * 回退链步数: 3（缓存复用 → 缩水重试 1 → 保留原文；服务缺失 = 全路径 fail-lazy）
+ * 审查清单: 改史只经 platform/history（S2/D7）；llm 只经 platform/llm（D6）；H2 只经 platform/agent-step（D14）；
+ *           计量只经 platform/meter（D15）；事实只经 logger.emitCeFact（S3/D3）；无 timer（S5）。
+ * 度量: context-economy/compress-run（fold 见 core/compress/ledger.ts；07 压缩族）。
+ */
+import type { Session } from '@deepseek-ai/dsh-session'
+import type { Context } from '@deepseek-ai/cordis'
+import { compactFact, factsFromSessionEvents } from '../core/ledger/facts.ts'
+import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
+import { foldSurfaceNodes } from '../core/ledger/surface.ts'
+import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
+import { foldSegmentState, type TaskSegment } from '../core/units.ts'
+import { DEFAULT_ASSEMBLE_POLICY, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
+import {
+  COMPRESS_PROMPT_VERSION,
+  COMPRESS_POLICY_VERSION,
+  DEFAULT_COMPRESS_POLICY,
+  appendArchiveEntry,
+  compressSpanHash,
+  lookupCachedProduct,
+  parseCompressProduct,
+  planTailConsumption,
+  priorChainFor,
+  putCachedProduct,
+  readArchiveStore,
+  renderBoundaryPrompt,
+  renderRegionTranscript,
+  type ArchiveStoreBody,
+  type BoundaryProduct,
+  type CompressPolicy,
+} from '../core/compress/index.ts'
+import {
+  SHEAR_APPLIED_FACT_TYPE,
+  SHEAR_DECISION_FACT_TYPE,
+  SHEAR_POLICY_VERSION,
+  type ShearAppliedFactData,
+  type ShearDecisionFactData,
+} from '../core/shear/index.ts'
+import { toolCategory } from '../core/shear/tool.ts'
+import { emitCeFact } from '../platform/logger.ts'
+import { createHistoryPort } from '../platform/history.ts'
+import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
+import { readSessionModel, type CeLogger } from '../platform/events.ts'
+import type { ContextEconomyStorage } from '../platform/storage.ts'
+import type { MeterPort } from '../platform/meter.ts'
+import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
+import { resolveJudgeModel } from './input.ts'
+import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
+import { COMPRESS_RUN_FACT_TYPE, type CompressRunFactData } from './compaction-facts.ts'
+
+const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
+
+export interface CompactionDomainDeps {
+  storage: ContextEconomyStorage
+  getConfig: () => ConfigShape
+  logger: CeLogger
+  /** 装配域（单元清单 + 共享事务执行器）。 */
+  assemble: AssembleDomain
+  /** 计量端口（影子价同源）；缺省 = 本地估算并在事实里标注。 */
+  getMeter?: () => MeterPort | undefined
+  /** 辅助调用上下文（H12）；缺省 = 压缩不可用（fail-lazy）。 */
+  getLlm?: () => Pick<Context, 'llm'> | undefined
+  workspace?: string
+  now?: () => number
+}
+
+export interface CompactionDomainStats {
+  preSteps: number
+  triggers: number
+  compactions: number
+  cacheHits: number
+  skips: number
+  rangeSkips: number
+  errors: number
+}
+
+export interface CompactionDomain {
+  dispose(): void
+  stats(): CompactionDomainStats
+  /** H2 步准入回调体：一次尝试至多压一个闭合 task（挂点收口见 platform/agent-step.ts）。 */
+  onPreStep(payload: { session: Session; turn: number }): Promise<void>
+}
+
+/** 会话内参与段状态 fold 的原始事件上限（超出丢最老；只影响超老段的发现）。 */
+export const COMPACTION_EVENT_LIMIT = 4000
+
+/** 档案区实体键（workspace 隔离；docs/09 §1）。 */
+export function boundaryArchiveKey(workspace: string): string {
+  return `boundary_archive:${workspace}`
+}
+
+function sessionIdOf(session: Session): string {
+  const s = session as unknown as { header?: { id?: unknown }; id?: unknown }
+  const header = s.header?.id
+  return typeof header === 'string' ? header : String(s.id ?? 'session')
+}
+
+function ledgerEventsOf(session: Session): LedgerSessionEvent[] {
+  const snapshot = (session as unknown as { snapshotEvents?: () => readonly unknown[] }).snapshotEvents?.() ?? []
+  const out: LedgerSessionEvent[] = []
+  for (const raw of snapshot) {
+    const event = raw as { type?: unknown; seq?: unknown; time?: unknown; data?: unknown; surfaceOp?: unknown }
+    if (typeof event.type !== 'string' || typeof event.seq !== 'number') continue
+    out.push({
+      type: event.type,
+      seq: event.seq,
+      time: typeof event.time === 'number' ? event.time : 0,
+      data: event.data,
+      ...(event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp }),
+    })
+  }
+  return out.slice(-COMPACTION_EVENT_LIMIT)
+}
+
+function firstUserSeq(events: readonly LedgerSessionEvent[]): number {
+  for (const event of events) if (event.type === 'user/message' && event.surfaceOp === 'append') return event.seq
+  return events[0]?.seq ?? 0
+}
+
+/** 已尝试过的 task（事实键，重放可判）：除 llm-unavailable 外一律不再尝试（防每步重复计费）。 */
+function attemptedTaskIds(facts: readonly LedgerFact[]): Set<string> {
+  const attempted = new Set<string>()
+  for (const fact of facts) {
+    if (fact.type !== COMPRESS_RUN_FACT_TYPE) continue
+    const data = (fact.data ?? {}) as Partial<CompressRunFactData>
+    if (typeof data.taskId !== 'string' || data.taskId === '') continue
+    if (data.outcome === 'skipped' && data.reason === 'llm-unavailable') continue
+    attempted.add(data.taskId)
+  }
+  return attempted
+}
+
+/** 区间内 hold 的老调用对（T-boundary 搭车会计面；坐标来自剪切事实 + 事件）。 */
+function heldPairsInRange(
+  events: readonly LedgerSessionEvent[],
+  facts: readonly LedgerFact[],
+  range: { startSeq: number; endSeq: number },
+): Array<{ callId: string; resultSeq: number; name: string; text: string }> {
+  const holdCallIds = new Set<string>()
+  for (const fact of facts) {
+    if (fact.type !== SHEAR_DECISION_FACT_TYPE) continue
+    const data = (fact.data ?? {}) as Partial<ShearDecisionFactData>
+    if (data.decision !== 'hold' || typeof data.callId !== 'string' || data.callId === '') continue
+    holdCallIds.add(data.callId)
+  }
+  if (holdCallIds.size === 0) return []
+  const nameByCallId = new Map<string, string>()
+  for (const event of events) {
+    if (event.type !== 'tool/call') continue
+    const data = (event.data ?? {}) as Record<string, unknown>
+    if (typeof data.callId === 'string' && typeof data.name === 'string') nameByCallId.set(data.callId, data.name)
+  }
+  const out: Array<{ callId: string; resultSeq: number; name: string; text: string }> = []
+  for (const event of events) {
+    if (event.type !== 'tool/result' || event.seq < range.startSeq || event.seq > range.endSeq) continue
+    const data = (event.data ?? {}) as Record<string, unknown>
+    const message = (data.message ?? data) as { content?: unknown }
+    const content = message.content
+    const block = Array.isArray(content) && content.length > 0 ? (content[0] as { toolCallId?: unknown }) : undefined
+    const callId = typeof block?.toolCallId === 'string' ? block.toolCallId : undefined
+    if (callId === undefined || !holdCallIds.has(callId)) continue
+    out.push({ callId, resultSeq: event.seq, name: nameByCallId.get(callId) ?? '', text: extractTextFromToolResult(event.data) })
+  }
+  return out
+}
+
+interface ProductAttempt {
+  readonly product: BoundaryProduct
+  readonly dropped: HotTailDropCounts
+  readonly calls: number
+  readonly cacheHit: boolean
+  readonly usage?: CeLlmUsage
+  readonly rawOutput?: string
+  readonly rendered: string
+  readonly productTokens: number
+  readonly truncation: { count: number; tokens: number }
+  readonly entries: number
+}
+
+export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDomain {
+  const { storage, getConfig, logger, now = Date.now } = deps
+  const workspace = deps.workspace ?? process.cwd().replaceAll('\\', '/')
+  const storeKey = boundaryArchiveKey(workspace)
+  const counts: CompactionDomainStats = { preSteps: 0, triggers: 0, compactions: 0, cacheHits: 0, skips: 0, rangeSkips: 0, errors: 0 }
+  const busy = new WeakSet<Session>()
+  let disposed = false
+
+  const policiesOf = (config: ConfigShape): { assemble: AssemblePolicy; compress: CompressPolicy } => ({
+    assemble: {
+      ...DEFAULT_ASSEMBLE_POLICY,
+      hotTailTokens: config.compression.retainTokens,
+      archiveTokens: config.compression.archiveCapTokens,
+    },
+    compress: { ...DEFAULT_COMPRESS_POLICY },
+  })
+
+  /** 档案实体写入（CAS 冲突重读重试 1；纯 mutate 在新体上重放）。 */
+  const writeStore = async (
+    mutate: (body: ArchiveStoreBody) => { body: ArchiveStoreBody; entries: number },
+    baseVersion: number | undefined,
+    taskId: string,
+  ): Promise<number | undefined> => {
+    const source = { taskId, eventType: 'boundary-archive', evidence: { workspace } }
+    try {
+      const result = mutate(readArchiveStore(storage.getEntity('boundary_archive', storeKey)?.body, workspace))
+      await storage.putEntity('boundary_archive', storeKey, result.body, source, { baseVersion: baseVersion ?? 0 })
+      return result.entries
+    } catch {
+      const current = storage.getEntity('boundary_archive', storeKey)
+      if (current === undefined || current.version === baseVersion) return undefined
+      try {
+        const result = mutate(readArchiveStore(current.body, workspace))
+        await storage.putEntity('boundary_archive', storeKey, result.body, source, { baseVersion: current.version })
+        return result.entries
+      } catch {
+        return undefined
+      }
+    }
+  }
+
+  const compactSegment = async (
+    session: Session,
+    turn: number,
+    events: readonly LedgerSessionEvent[],
+    facts: readonly LedgerFact[],
+    segment: TaskSegment,
+    nextStartSeq: number,
+  ): Promise<void> => {
+    const config = getConfig()
+    const sid = sessionIdOf(session)
+    const scopedTaskId = `${sid}:${segment.taskId}`
+    const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
+    const base = {
+      at: now(), layer: 'boundary' as const,
+      promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+      taskId: scopedTaskId,
+    }
+    const skip = (reason: string, extra: Partial<CompressRunFactData> = {}): void => {
+      counts.skips++
+      emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({ ...base, outcome: 'skipped' as const, reason, ...extra }), logger)
+    }
+
+    // ① 区间落表面（尾必须排除下一段起点 = 新 task 首条消息 = 权威段）。
+    const surface = foldSurfaceNodes(events)
+    const start = surface.find((seq) => seq >= (segment.startSeq ?? 0))
+    const end = start === undefined ? undefined : [...surface].reverse().find((seq) => seq >= start && seq < nextStartSeq)
+    if (start === undefined || end === undefined) { counts.rangeSkips++; return }
+    const history = createHistoryPort(session)
+    const balanced = history.balanceRange({ start: start as never, end: end as never })
+    if (balanced === null) { counts.rangeSkips++; return }
+    const range = { startSeq: Number(balanced.start), endSeq: Number(balanced.end) }
+    const regionText = renderRegionTranscript(events, range)
+    if (regionText === '') { counts.rangeSkips++; return }
+    const units = deps.assemble.unitList(session, range)
+
+    // ② 档案体 + 续传链（机制 A）+ 内容寻址键。
+    const existing = storage.getEntity('boundary_archive', storeKey)
+    const storeBody = readArchiveStore(existing?.body, workspace)
+    const priorChain = priorChainFor(storeBody, scopedTaskId, sid)
+    if (!planTailConsumption({ priorChain, layer: 'boundary' }).ok) { skip('chain-invalid'); return }
+    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.charsPerToken}`
+    const key = compressSpanHash({
+      promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'boundary',
+      regionText, unitIds: units.map((unit) => unit.id), priorChainTexts: priorChain.map((entry) => entry.text), policyKey,
+    })
+    const cached = lookupCachedProduct(storeBody, key)
+    const shadowedTokens = estimateTokens(regionText, compressPolicy.charsPerToken)
+
+    // ③ 产物获取：缓存复用（零调用）或单次调用 + 解析；每次装配后做缩水校验。
+    const llm = deps.getLlm?.()
+    let calls = 0
+    let usage: CeLlmUsage | undefined
+    let renderedPromptTokens: number | undefined
+    const attemptProduct = async (useCache: boolean): Promise<ProductAttempt | undefined> => {
+      let product: BoundaryProduct
+      let dropped: HotTailDropCounts = ZERO_DROPS
+      let cacheHit = false
+      let rawOutput: string | undefined
+      let provider = ''
+      let model = ''
+      if (useCache && cached !== undefined && cached.product.mode === 'boundary') {
+        product = cached.product
+        dropped = cached.dropped ?? ZERO_DROPS
+        cacheHit = true
+      } else {
+        if (llm === undefined) { skip('llm-unavailable', { calls }); return undefined }
+        const rendered = renderBoundaryPrompt({ regionText, units, priorChain, policy: compressPolicy })
+        renderedPromptTokens = estimateTokens(rendered.prompt, compressPolicy.charsPerToken)
+        const route = resolveJudgeModel(config, readSessionModel(session))
+        provider = route.provider
+        model = route.model
+        const desired = reasoningEffortSetting(config)
+        const sentEffort = desired === undefined ? undefined : await resolveReasoningEffort(llm, provider, model, desired, logger)
+        const options: CeGenerateOptions = {
+          provider, model,
+          messages: [{ role: 'user', content: [{ type: 'text', text: rendered.prompt }], source: { kind: 'user' }, id: 'compress' }] as never,
+          purpose: 'context-economy-compaction',
+          temperature: 0,
+          ...(sentEffort === undefined ? {} : { reasoningEffort: sentEffort }),
+        }
+        let llmText = ''
+        let failure: { code?: string; message: string } | undefined
+        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger })) {
+          if (chunk.type === 'text-delta') llmText += chunk.text
+          if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
+            const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
+            failure = { code: reason.failure?.code, message: reason.failure?.message ?? 'non-stop finish' }
+            break
+          }
+        }
+        if (failure !== undefined) {
+          const unavailable = failure.code === 'CE_LLM_UNAVAILABLE'
+          skip(unavailable ? 'llm-unavailable' : 'llm-error', { calls: unavailable ? calls : calls + 1, ...(usage === undefined ? {} : { llmUsage: usage }) })
+          return undefined
+        }
+        calls++
+        const parsed = parseCompressProduct(llmText, 'boundary', units)
+        if (!parsed.ok) {
+          emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({ ...base, outcome: parsed.reason, calls, ...(usage === undefined ? {} : { llmUsage: usage }) }), logger)
+          return undefined
+        }
+        product = parsed.product as BoundaryProduct
+        dropped = parsed.dropped
+        rawOutput = llmText
+      }
+      const outcome = await deps.assemble.assemble({
+        session, taskId: scopedTaskId, range, layer: 'boundary',
+        digest: product.digest, hotTail: product.hotTail, priorChain,
+      })
+      if (!outcome.ok) {
+        emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+          ...base, outcome: outcome.reason === 'no-units' ? 'skipped' : 'schema',
+          ...(outcome.reason === 'no-units' ? { reason: 'no-units' } : {}),
+          calls, cacheHit,
+        }), logger)
+        if (outcome.reason === 'no-units') counts.skips++
+        return undefined
+      }
+      const append = appendArchiveEntry(
+        storeBody,
+        { taskId: scopedTaskId, kind: 'boundary', text: outcome.result.rendered, sessionId: sid, layer: 'boundary', at: now() },
+        assemblePolicy,
+      )
+      return {
+        product, dropped, calls, cacheHit, rendered: outcome.result.rendered,
+        productTokens: estimateTokens(outcome.result.rendered, compressPolicy.charsPerToken),
+        truncation: append.truncation, entries: append.kept,
+        ...(usage === undefined ? {} : { usage }),
+        ...(rawOutput === undefined ? {} : { rawOutput }),
+      }
+    }
+
+    let chosen: ProductAttempt | undefined
+    let attempts = 0
+    for (let attempt = 0; attempt <= 1 && chosen === undefined; attempt++) {
+      attempts++
+      const candidate = await attemptProduct(attempt === 0)
+      if (candidate === undefined) return
+      if (candidate.productTokens < shadowedTokens) chosen = candidate
+    }
+    const retry = Math.max(0, attempts - 1)
+    if (chosen === undefined) {
+      skip('shrink', { calls, retry, shadowedTokens, ...(usage === undefined ? {} : { llmUsage: usage }) })
+      return
+    }
+    if (chosen.cacheHit) counts.cacheHits++
+
+    // ④ 档案 vN 落盘（落盘成功才落刀；09 §6「LLM 产物未落盘不被引用」）。
+    const entries = await writeStore((body) => {
+      const appended = appendArchiveEntry(
+        body,
+        { taskId: scopedTaskId, kind: 'boundary', text: chosen!.rendered, sessionId: sid, layer: 'boundary', at: now() },
+        assemblePolicy,
+      )
+      return {
+        body: chosen!.cacheHit
+          ? appended.body
+          : putCachedProduct(appended.body, { key, at: now(), layer: 'boundary', product: chosen!.product, dropped: chosen!.dropped }),
+        entries: appended.kept,
+      }
+    }, existing?.version, scopedTaskId)
+    if (entries === undefined) {
+      skip('storage', { calls: chosen.calls, retry, shadowedTokens, productTokens: chosen.productTokens, cacheHit: chosen.cacheHit, ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }) })
+      return
+    }
+
+    // ⑤ 事务：open → prune（影子价）→ summary+checkpoint 替换 → close。
+    const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, range.startSeq, range.endSeq) ?? shadowedTokens
+    const plan = planTxn({
+      txnId: `ce-compact-boundary-${segment.taskId}-${range.startSeq}-${range.endSeq}`,
+      layer: 'boundary', taskId: scopedTaskId, range: { start: range.startSeq, end: range.endSeq },
+      shadowedTokenCount: shadowPrice, replaceKind: 'digest', turn,
+    })
+    const txn = runCompactionTxn(history, plan, (h) => {
+      h.recordPrune({ start: range.startSeq as never, end: range.endSeq as never, shadowedTokenCount: shadowPrice })
+      h.commitCheckpoint({
+        compactionId: plan.txnId,
+        text: chosen!.rendered,
+        summary: chosen!.rendered,
+        range: { start: range.startSeq as never, end: range.endSeq as never },
+        shadowedTokenCount: shadowPrice,
+        provider: chosen!.cacheHit ? '' : resolveJudgeModel(config, readSessionModel(session)).provider,
+        model: chosen!.cacheHit ? '' : resolveJudgeModel(config, readSessionModel(session)).model,
+        ...(chosen!.usage === undefined ? {} : { usage: chosen!.usage }),
+        ...(chosen!.rawOutput === undefined ? {} : { rawOutput: chosen!.rawOutput }),
+      })
+    })
+    if (!txn.ok) {
+      skip(`txn-${txn.code ?? 'fail'}`, { calls: chosen.calls, retry, shadowedTokens, productTokens: chosen.productTokens, cacheHit: chosen.cacheHit, ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }) })
+      return
+    }
+    counts.compactions++
+
+    // ⑥ T-boundary 搭车补账（会计；折叠由大 replace 构造性完成）。
+    const held = heldPairsInRange(events, facts, range)
+    for (const pair of held) {
+      const beforeTokens = estimateTokens(pair.text, compressPolicy.charsPerToken)
+      const data: ShearAppliedFactData = compactFact({
+        policyVersion: SHEAR_POLICY_VERSION, tier: 'T-boundary', kind: 't-boundary',
+        callId: pair.callId, resultSeq: pair.resultSeq, at: now(), category: toolCategory(pair.name),
+        beforeTokens, afterTokens: 0, savedTokens: beforeTokens, breakTokens: 0, tailNodes: 0,
+      })
+      emitCeFact(session, SHEAR_APPLIED_FACT_TYPE, data, logger)
+    }
+
+    emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+      ...base, outcome: 'ok', calls: chosen.calls, cacheHit: chosen.cacheHit, retry,
+      regionTokens: shadowedTokens,
+      ...(renderedPromptTokens === undefined ? {} : { promptTokens: renderedPromptTokens }),
+      productBytes: new TextEncoder().encode(chosen.rendered).length,
+      shadowedTokens, productTokens: chosen.productTokens,
+      droppedHotTail: chosen.dropped.badDecl + chosen.dropped.unknownUnit,
+      carried: priorChain.length, archiveEntries: entries,
+      archiveTruncateCount: chosen.truncation.count, archiveTruncateTokens: chosen.truncation.tokens,
+      shearFolded: held.length, dossierRetired: true,
+      ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
+    }), logger)
+  }
+
+  const onPreStep = async (payload: { session: Session; turn: number }): Promise<void> => {
+    if (disposed) return
+    const { session, turn } = payload
+    counts.preSteps++
+    const config = getConfig()
+    if (config.compression?.boundary === false) return
+    if (!compressionInvariantOk(config.compression)) return
+    if (busy.has(session)) return
+    busy.add(session)
+    try {
+      const events = ledgerEventsOf(session)
+      const facts = factsFromSessionEvents(events)
+      const segments = foldSegmentState(facts, { sessionFirstSeq: firstUserSeq(events) }).segments
+      if (segments.length < 2) return
+      const sid = sessionIdOf(session)
+      const attempted = attemptedTaskIds(facts)
+      const index = segments.findIndex((segment, i) => segment.closed && i < segments.length - 1 && !attempted.has(`${sid}:${segment.taskId}`))
+      if (index < 0) return
+      const nextStartSeq = segments[index + 1]?.startSeq
+      if (typeof nextStartSeq !== 'number') return
+      counts.triggers++
+      await compactSegment(session, turn, events, facts, segments[index] as TaskSegment, nextStartSeq)
+    } catch (e) {
+      counts.errors++
+      logger.warn('context-economy: boundary compaction failed (fail-lazy, original history preserved)', e instanceof Error ? e.message : String(e))
+    } finally {
+      busy.delete(session)
+    }
+  }
+
+  return {
+    dispose() { disposed = true },
+    stats: () => ({ ...counts }),
+    onPreStep,
+  }
+}

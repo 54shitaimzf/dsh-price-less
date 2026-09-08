@@ -17,6 +17,7 @@ import {
   type AutoDiscriminatorDeps,
 } from '../src/domains/input.ts'
 import { judgeRecordToFactData, factDataToJudgeRecord } from '../src/domains/judge-facts.ts'
+import { resolveConfig } from '../src/config.ts'
 
 interface FakeStorageRecord { version: number; body: unknown }
 interface FakeStorage {
@@ -65,7 +66,7 @@ const llmStream = (text: string) => ({ stream: async function* () {
 } })
 
 
-const cfg = (auto: boolean, provider?: string, model?: string) => ({
+const cfg = (auto: boolean, provider?: string, model?: string) => resolveConfig({
   shear: { enabled: true },
   discriminator: { auto, ...(provider ? { provider } : {}), ...(model ? { model } : {}) },
 })

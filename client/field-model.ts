@@ -34,6 +34,15 @@ export interface EconomyCardSettingsShape {
   shear?: {
     enabled?: boolean
   }
+  /** 压缩域开关与标定（与 host Config.compression 同步对；P19）。 */
+  compression?: {
+    boundary?: boolean
+    pressure?: boolean
+    domainTokens?: number
+    retainTokens?: number
+    thresholdTokens?: number
+    archiveCapTokens?: number
+  }
   discriminator?: {
     provider?: string
     model?: string
@@ -210,6 +219,14 @@ export function economyPathField(
 
 export const CLIENT_DEFAULTS = {
   shear: { enabled: true },
+  compression: {
+    boundary: true,
+    pressure: true,
+    domainTokens: 125000,
+    retainTokens: 10000,
+    thresholdTokens: 100000,
+    archiveCapTokens: 15000,
+  },
   discriminator: { auto: false },
 } as const
 
@@ -323,6 +340,36 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
   'discriminator.auto': { label: '自动判别', hint: '开启后逐消息判断任务边界；默认关闭。', docs: '自动断面总开关；关闭时零成本，不挂载判别器。' },
   'shear.enabled': { label: '剪切（工具结果剪枝）', hint: '默认开启：命令类长输出落账前整形、被写入超越的旧读剪除。', docs: '工具剪切总开关。开启后：命令类长输出在写入历史前保留首尾与错误行（T-entry，断裂成本 0）；被后续写超越的旧读取剪为一句结论（T0/T0-R，仅贴近尾部时执行）。关闭后四档全部零行为，历史保持原样。' },
+  'compression.boundary': {
+    label: '边界压缩',
+    hint: '默认开启：task 结束时把整段历史折叠成摘要 + 热尾材料。',
+    docs: 'task 边界压缩总开关。开启后：判别器发现任务闭合（或 /task close）时，压缩器把该段历史折叠为类型化摘要 + 热尾材料（≤10K），后续轮次不再逐字背着。失败默认保留原文，不影响对话。',
+  },
+  'compression.pressure': {
+    label: '压力压缩',
+    hint: '默认开启：单任务过长时按 40% 阈值保尾压头（接线随 P20a）。',
+    docs: '压力路径总开关：任务内历史涨到压缩域窗口的 40% 时，保留最近一段原文、把更早内容折成进行时检查点。是判别器失灵时的兜底。',
+  },
+  'compression.retainTokens': {
+    label: '热尾预算',
+    hint: '默认 10000：新任务保留的材料上限。',
+    docs: '热尾（任务材料）预算，绝对设计值 10000 token。压缩器按重要性申报、装配器贪心累加到该值即停；材料只是缓存，丢了可从磁盘与会话账本重推导。',
+  },
+  'compression.thresholdTokens': {
+    label: '压力阈值',
+    hint: '默认 100000：超过即走压力路径（须大于热尾预算）。',
+    docs: '压力触发阈值（绝对设计值 100000 token）。与压缩域窗口配套标定；必须大于热尾预算，否则配置自动回退设计值。',
+  },
+  'compression.domainTokens': {
+    label: '压缩域窗口',
+    hint: '默认 125000：按任务尺度标定的窗口。',
+    docs: '压缩域窗口（≈任务峰值上下文）。压力阈值按它标定，不按模型裸窗口——裸窗口会让触发门永不过。',
+  },
+  'compression.archiveCapTokens': {
+    label: '档案区上限',
+    hint: '默认 15000：档案堆硬帽，超限从最老整条截断。',
+    docs: '边界档案区硬上限（绝对设计值 15000 token）。超限时从最老的档案条目起整条机械截断（不合并、不重压）；被截条目仍可从档案快照回溯。',
+  },
   'discriminator.reasoningEffort': {
     label: '思考强度',
     hint: '留空=跟随模型默认；关闭思考可能降低边界判断与改写质量。',
@@ -359,6 +406,18 @@ const discriminatorAutoField = economyBoolField('discriminator.auto', { visibili
 /** P15b：工具剪切总开关（默认开启；关闭 = 四档零行为）。 */
 const shearEnabledField = economyBoolField('shear.enabled', { visibility: 'core', default: true, deflabel: '默认开启' })
 
+/** P19：压缩域开关（边界 / 压力）。 */
+const compressionBoundaryField = economyBoolField('compression.boundary', { visibility: 'core', default: true, deflabel: '默认开启' })
+const compressionPressureField = economyBoolField('compression.pressure', { visibility: 'core', default: true, deflabel: '默认开启' })
+
+/** P19：压缩域标定数值（模型与调优组）。 */
+const compressionNumberFields = [
+  economyNumberField('compression.retainTokens', { min: 1000, max: 100000, step: 1000, unit: 'token', visibility: 'tune', default: 10000, deflabel: '默认 10000' }),
+  economyNumberField('compression.thresholdTokens', { min: 10000, max: 1000000, step: 10000, unit: 'token', visibility: 'tune', default: 100000, deflabel: '默认 100000' }),
+  economyNumberField('compression.domainTokens', { min: 10000, max: 2000000, step: 10000, unit: 'token', visibility: 'tune', default: 125000, deflabel: '默认 125000' }),
+  economyNumberField('compression.archiveCapTokens', { min: 1000, max: 200000, step: 1000, unit: 'token', visibility: 'tune', default: 15000, deflabel: '默认 15000' }),
+]
+
 /** P14f：辅助调用推理档（留空 = 跟随模型默认）。 */
 const reasoningEffortField = economySelectField('discriminator.reasoningEffort', [
   { value: 'off', label: '关闭思考（off）', pitch: '最省最快；可能明显降低边界判断与改写质量。' },
@@ -377,7 +436,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-business-primary)',
     tint: 'var(--dsw-alias-state-business-tertiary)',
     defaultOpen: true,
-    fields: [discriminatorAutoField, shearEnabledField],
+    fields: [discriminatorAutoField, shearEnabledField, compressionBoundaryField, compressionPressureField],
   },
   {
     id: 'discern',
@@ -398,7 +457,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-warn-primary)',
     tint: 'var(--dsw-alias-state-warn-tertiary)',
     defaultOpen: false,
-    fields: [],
+    fields: [...compressionNumberFields],
   },
   {
     id: 'advanced',
@@ -422,6 +481,9 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
 export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
   discriminatorAutoField,
   shearEnabledField,
+  compressionBoundaryField,
+  compressionPressureField,
+  ...compressionNumberFields,
   reasoningEffortField,
   economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
   economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),

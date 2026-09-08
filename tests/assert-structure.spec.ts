@@ -220,7 +220,7 @@ describe('真实树集成', () => {
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
       D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass', D8: 'pass', D9: 'pass', D10: 'pass',
-      D11: 'pass', D12: 'pass', D13: 'pass', D14: 'pass',
+      D11: 'pass', D12: 'pass', D13: 'pass', D14: 'pass', D15: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

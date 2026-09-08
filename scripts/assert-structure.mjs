@@ -183,6 +183,15 @@ export const RULES = [
       [/\bMath\.random\(/, /\bDate\.now\(/, /\bnew Date\(/]
         .filter((re) => re.test(f.text))
         .map((re) => ({ message: `core/assemble must stay deterministic (no clock/random), matches ${re}` })) },
+  { id: 'D15', canon: 'docs/10 §1 H7 + docs/04 §1（影子价同源）',
+    appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
+    check: (f) =>
+      // 计量服务收口（P19b）：token-meter 概念只许居于 platform/meter.ts（index.ts 接线允许）——
+      // 影子价必须与 harness 固定估计器同源，换估计器只改这一处。
+      /(ctx\.tokenMeter|@deepseek-ai\/dsh-token-meter|\bTokenMeter\b|\bTokenMeasurement\b|\bheuristicTokens\b)/.test(f.text)
+        && f.path !== 'src/platform/meter.ts' && f.path !== 'src/index.ts'
+        ? [{ message: 'token-meter concepts must only appear in src/platform/meter.ts (index.ts wiring allowed, docs/04 §1 影子价同源)' }]
+        : [] },
   { id: 'D14', canon: 'docs/10 §1 H2 + docs/11 §2（步准入端口收口）',
     appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
     check: (f) =>

@@ -91,6 +91,8 @@ link_pkg @deepseek-ai/dsh-commands packages/interaction/commands
 link_pkg @deepseek-ai/dsh-compaction packages/compaction/compaction
 # P19a：H2 步准入端口类型面（agent/pre-step waterfall；type-only peerDep）
 link_pkg @deepseek-ai/dsh-agent packages/core/agent
+# P19b：H7 计量端口类型面（ctx.tokenMeter；影子价同源）
+link_pkg @deepseek-ai/dsh-token-meter packages/llm/token-meter
 link_pkg @deepseek-ai/dsh-llm packages/llm/llm
 # P4：技能目录端口（ctx.skills 官方注册表；只 import dsh-skill，不手写文件扫描）
 link_pkg @deepseek-ai/dsh-skill packages/skill/skill
