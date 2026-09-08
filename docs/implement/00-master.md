@@ -88,6 +88,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P19 | 边界路径编排（**已施工** commit `ee39076` P19a + `0844aa1` P19b；工单 [P19-boundary-path.md](P19-boundary-path.md)；快照 §46） | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 档案区落盘 + 15K 硬帽调用〔纯核已由 P17c 交付〕+ `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车）+ **缩水校验 = replace 前置**（04 §1）+ **内容寻址复用**（P18 N5 归属）+ `platform/agent-step.ts`（H2 收口 D14）/ `platform/meter.ts`（影子价同源 D15）+ `compression.*` 配置面（[11 §6](../11-structure.md)）；**L → 工单内拆 P19a/P19b** | P17,P18,P2,P3 | L（拆 a/b） |
 | P20a | 压力路径（**已施工** commit `0810a83`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 上半：`core/compress/pressure.ts`（触发阈 = thresholdTokens 绝对设计值 + 0.4×domain fallback / 断路器 3 / 重试 2 / 检查点渲染 / 机制 A 续传 + 机制 B 折叠区材料转写）+ `domains/compaction.ts` 压力折叠（选缝 → 调用 → 缩水校验 → 档案 checkpoint → 事务 → `pressure-fired`/`compress-run`）+ `platform/meter.ts` `wireTokens`（`measure().totalTokens` = provider 锚 + 增量，04 §5）+ `ArchiveRecord.cutPointSeq/rangeEndSeq` | P19 | M（实测超线，见工单 §6） |
 | P20b | 保险丝（**已施工** commit `8952cfc`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 下半：`core/compress/fuse.ts`（地板 0.8×窗口 + 武装谓词 + `hard-truncate` fold）+ `platform/agent-step.ts` `onAgentRequestError`（H3 收口，D14 扩面）+ `platform/llm.ts` `resolveContextWindow`/溢出码 + 紧急压力折叠（地板以上 / `CONTEXT_WINDOW_EXCEEDED` → retry）+ `cordis.patch.yml` compaction-basic `auto:false` | P19 | S（实测超线，见工单 §6） |
+| P20c | 压力阀门按窗口比例（**已施工** commit `d57eb7b`；工单 [P20c-pressure-valve-ratio.md](P20c-pressure-valve-ratio.md)；快照 §48） | R4 修正 | 用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针改取主会话路由（`readSessionModel`，修正 P20b 保险丝口径）；保险丝紧急折叠可越过断路器（硬上限 +3）；client 同步 | P20a,P20b | S（实测在预算内，见工单 §6） |
 | P21a | 恢复编排 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练；`restore/*` 事实发射） | P20a,P20b,P3 | M |
 | P21b | 全链验收 + 可视化 | R4 | 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P21a | M |
 
@@ -209,6 +210,18 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > assert +8。**诚实声明**：真机回放 44 会话 / 开 task 44 / 折叠候选 41（折叠区体量 avg 302K、peak 3.4M）、
 > 字节漂移 0；live `pressure-run` / `pressure-fired` / `hard-truncate` = **0 / 0 / 0**（需重启加载新构建 +
 > 真实 wire 达阈；wire 锚定需 provider usage 锚）。
+> **下一未执行单元 = P21a 恢复编排**（H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。
+
+> P20c 阀门修正（2026-09-09）：压力阀门按窗口比例已施工（commit `d57eb7b`；
+> 工单 [P20c-pressure-valve-ratio.md](P20c-pressure-valve-ratio.md)；快照 §48；`node scripts/verify-p20.mjs` PASS **35 checks**，
+> gate **512 用例 / 49 文件**，结构断言 D1–D15）。
+> **用户裁定（正典修订）**：压力触发阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**
+> （一般认为占用超过窗口约 35% 后模型能力开始下降）；修订 docs/04 §3/§4/§5 旧口径
+> 「裸模型窗口永不作为压缩触发」与 docs/00 §6 / docs/10 H3 / docs/11 §6。
+> 阈值优先级：主模型窗口比例 → 假定窗口 `domainTokens`（模型未声明窗口）→ 绝对安全网 `thresholdTokens`。
+> 附带修正：① 窗口探针改取**主会话路由**（`readSessionModel`）——P20b 保险丝原取辅助调用路由；
+> ② 保险丝/溢出接管的**紧急折叠可越过断路器**（硬上限链长 +3），否则 35% 阀门提前耗尽断路器后保险丝形同虚设。
+> 尺寸：src 净增 **97**（config 13 / pressure 27 / compaction 57；估计 ≤150，**在预算内**）；client +9、spec +26、verify +16。
 > **下一未执行单元 = P21a 恢复编排**（H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为

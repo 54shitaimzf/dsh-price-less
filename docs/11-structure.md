@@ -10,7 +10,7 @@
 > 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；**P17c 修正**：HT 软门 + 档案区 15K 硬帽 + 追加式链两形态 + 计数修复
 > （快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**（快照 [§45](ledger-history.md)）；**P19 边界路径编排已施工**（`core/compress/{region,store}.ts` + `platform/{agent-step,meter}.ts` + `domains/compaction.ts` + `compression.*` 配置面；快照 [§46](ledger-history.md)）；**P20 压力路径 + 保险丝已施工**（`core/compress/{pressure,fuse}.ts` +
 > `domains/compaction.ts` 压力折叠/紧急折叠 + `platform/{agent-step,meter,llm}.ts` 端口扩面 + `cordis.patch.yml` auto:false；
-> 快照 [§47](ledger-history.md)）；下一单 = P21a 恢复编排）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
+> 快照 [§47](ledger-history.md)）；**P20c 阀门修正**（压力阀门 = 0.35 × 主模型窗口 + 假定窗口/绝对安全网回退 + 主会话路由窗口探针；快照 [§48](ledger-history.md)）；下一单 = P21a 恢复编排）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -141,8 +141,9 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | `discriminator.reasoningEffort` | 空（跟随模型默认） | 判别/断面 | 辅助调用（自动判别 / ★）推理档（adapter 词汇 off/low/medium/high/max）；**默认不覆盖**——关闭思考可能明显影响任务边界判断与改写质量；模型未声明所选档时自动回退为跟随（P14f） |
 | `shear.enabled` | true | 剪切 | 工具剪切 + 对话剪切总开关（分层可再关 T-note / T0-R）；**P15b 落位、P16 复用**（host `config.ts` ↔ client `field-model.ts`，设置卡可关） |
 | `compression.boundary` | true | 压缩 | task 边界压缩（**P19 已落位**：H2 闭合触发 → 调用 → 装配 → 缩水校验 → 档案 vN → 事务替换；关闭 = 零行为） |
-| `compression.pressure` | true | 压缩 | 压力路径 + 保险丝（**P20 已落位**：wire 锚定触发阈 = `thresholdTokens` 绝对设计值〔0.4×域窗作 fallback〕→ 检查点 + 保留区逐字 + 断路器；地板 = 0.8×模型窗口的紧急折叠 + `request-error` 溢出接管；关闭 = 零行为） |
-| `compression.domainTokens` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 压缩域标定（[04 §5](04-compactor.md) 硬规则；**P19 落位**；`retain < threshold` 违例自动回退设计值） |
+| `compression.pressure` | true | 压缩 | 压力路径 + 保险丝（**P20/P20c 已落位**：wire 锚定触发阈 = `pressureRatio`（默认 0.35）× 主模型窗口〔缺失 → 假定窗口 → 绝对安全网〕→ 检查点 + 保留区逐字 + 断路器；地板 = 0.8×模型窗口的紧急折叠〔可越过断路器，硬上限 +3〕+ `request-error` 溢出接管；关闭 = 零行为） |
+| `compression.pressureRatio` | 0.35 | 压缩 | 压力阀门比例（**P20c 落位**：模型能力在窗口约 35% 后下降；不变量 `0 < ratio < 0.8`，违例整块回退设计值） |
+| `compression.domainTokens` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 标定（[04 §5](04-compactor.md)；**P19 落位 + P20c 改义**）：`domainTokens` = 模型未声明窗口时的**假定窗口**；`retainTokens` = 边界热尾预算；`thresholdTokens` = **末位绝对安全网**；`retain < threshold` 违例自动回退设计值 |
 | `compression.archiveCapTokens` | 15K | 压缩 | 档案区硬上限；超限截断最老条目（[04 §6](04-compactor.md)；**P19 落位**） |
 
 关闭任一层其余功能完整；`cordis.patch.yml` 已覆写 compaction-basic `auto:false`（**P20b 落位**：自动压力与溢出恢复唯一提供者 = 本插件，防双触发）。

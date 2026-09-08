@@ -2129,3 +2129,35 @@ spec ≈ **622**、`verify-p19.mjs` **379**、`assert-structure.mjs` **+9**。**
 
 **R4 进行中**：P17（+P17c）/ P18 / P19（a+b）/ P20（a+b）完成；**下一未执行单元 = P21a 恢复编排**
 （H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。
+
+## §48 P20c 压力阀门按窗口比例（2026-09-09；commit `d57eb7b`）
+
+**工单**：`docs/implement/P20c-pressure-valve-ratio.md`（R4 修正单；用户裁定，正典修订）。
+**裁定**：「压力触发阀门，我设定应该为 35% 上下文窗口，一般认为这个尺度后，模型能力会下降」。
+
+| 面 | P20 后 | P20c 后 |
+|---|---|---|
+| 触发基准 | thresholdTokens 绝对设计值（0.4×域窗 fallback） | `pressureRatio`（默认 **0.35**）× **主模型上下文窗口** |
+| 窗口来源 | 无（不探窗口） | `readSessionModel` → `llm.resolveModelInfo().context.contextWindow`（主会话路由；route 缓存） |
+| 回退链 | 绝对 → 0.4×域窗 | 窗口比例 → 假定窗口 `domainTokens` 比例 → 绝对安全网 `thresholdTokens` |
+| 保险丝口径 | 辅助调用路由窗口（P20b 缺陷） | 与压力共用**主会话路由**窗口（修正） |
+| 断路器 | 常规压力上限 3 | 常规 3；**紧急折叠可越过**（保险丝/溢出接管），硬上限链长 +3 = 6 |
+| 配置 | compression 六字段 | + `pressureRatio`（0.35；不变量 `0 < ratio < 0.8`）= 七字段 |
+| client | 11 字段 | 12 字段（`compression.pressureRatio`） |
+
+**正典修订（docs/04 §3/§4/§5 + docs/00 §6 + docs/10 H3 + docs/11 §6）**：
+旧「裸模型窗口归保险丝专用、永不作为压缩触发」的限制由用户裁定解除；触发基准从「任务峰值尺度」
+改为「模型能力下降点（窗口比例）」。1M 窗的风险（阀门后移到很少触达）由断路器 + 保险丝承担；
+窗口缺失时退回假定窗口/绝对安全网（宁晚不误压）。
+
+**验收**：
+- `npm run gate` 绿（**512 用例 / 49 文件**；M1–M5 / S1–S5 / D1–D15 全 PASS，ok=true vacuous=[]）；typecheck:tests 绿；build 绿
+- `node scripts/verify-p20.mjs` → `P20 VERIFY PASS (35 checks)`
+- 回归：verify-p19（27）/ verify-p18（45）/ verify-p17（54）/ verify-p16（30）/ verify-p15b（19）→ PASS
+- 扩 spec：compress-pressure 9 / compaction-domain 29 / field-model 13
+
+**尺寸申报**：src 净增 **97**（config 13 / pressure 27 / compaction 57；估计 ≤150，**在预算内**）；
+client +9、spec ≈ +26、`verify-p20.mjs` +16。
+
+**R4 进行中**：P17（+P17c）/ P18 / P19（a+b）/ P20（a+b）/ P20c 完成；**下一未执行单元 = P21a 恢复编排**
+（H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。

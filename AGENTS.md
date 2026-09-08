@@ -2,7 +2,7 @@
 
 dsh-price-less：DSH 的**全自动上下文管理工具**——双核心
 （优化判别器 `docs/02` / 压缩器 `docs/04`）+ 四层防御（交换对剪切 `docs/03` /
-task 边界压缩+热尾 / 40% 压力路径 / 防溢出保险丝）+ 五条节约理念（缓存复用 / 软件架构经验
+task 边界压缩+热尾 / 35% 窗口比例压力路径 / 防溢出保险丝）+ 五条节约理念（缓存复用 / 软件架构经验
 提取 / 无关内容剪枝 / 执行路线确定化 / 多做·相信用户决策·必要才探索，正典 `docs/05 §1`）。
 宪法与回退链在 `docs/05`，缓存纪律 `docs/06`，状态协议 `docs/09`。
 完整设计在 `docs/`，本文件只给可执行的高信号指令。
@@ -27,7 +27,7 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 检查点渲染 / 折叠区材料转写 / 地板 0.8×窗口；`domains/compaction.ts`：wire 锚定触发 → 选缝 → 检查点 + 保留区逐字 →
 缩水校验 → 档案 checkpoint → 事务，以及地板以上/溢出码紧急折叠 + `agent/request-error` retry；
 `platform/{agent-step,meter,llm}.ts` 端口扩面〔H3 收口 D14 扩面〕；`cordis.patch.yml` 覆写 compaction-basic `auto:false`；
-快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。`platform/`（十一文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。**P20c 阀门修正**（用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针取主会话路由 `readSessionModel`；保险丝紧急折叠可越过断路器〔硬上限 +3〕；快照 §48）。`platform/`（十一文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
@@ -61,10 +61,10 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 - 插件侧 vitest：设置壳不变量（`tests/field-model.spec.ts`）+ P0 冒烟/断言自测
   （`apply-smoke` / `assert-structure`）+ P1 事件面（`events-pump` / `ce-logger` /
   `harness-session` 真集成）；机制测试以回放/注入/确定性为主，不做臂对照（`docs/08` 已封存为历史方法学，不再作为施工门禁）。
-- **压缩域标定常数（实验结论已固化，施工直接引用，不再重跑）**：压缩域窗口 ≈ 任务峰值
-  上下文（2026-09 实测峰值 233K ⇒ domain=125K）⇒ `thresholdTokens=100K`、`retainTokens=10K`
-  （绝对值，比例派生只作 fallback）；估计器 `CHARS_PER_TOKEN=1.5` 校准；不变量
-  `retain < thresholdTokens`、`retainRatio < thresholdRatio`。**触发器语义**：task 边界
+- **压缩域标定常数（实验结论 + P20c 用户裁定）**：压力阀门 = `pressureRatio`（默认 **0.35**）
+  × 主模型上下文窗口；窗口缺失 → 假定窗口 `domainTokens=125K`（2026-09 实测峰值 233K 标定）
+  → 绝对安全网 `thresholdTokens=100K`；`retainTokens=10K`（边界热尾）；估计器
+  `CHARS_PER_TOKEN=1.5` 校准；不变量 `retain < thresholdTokens`、`0 < pressureRatio < 0.8`。**触发器语义**：task 边界
   自动触发 = `agent/pre-step` 发现 `status==='closed' && !compactedTaskIds` 的 task 就压
   （`docs/10` 时序 A），不是 `trigger.tokenThreshold`（那是 DSH 压力/溢出触发）。
 - **上下文窗口硬截断（仅防溢出安全阀）**：独立于压缩域逻辑，平时 no-op；只做防溢出，

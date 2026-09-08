@@ -20,7 +20,7 @@ H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.rig
 |---|---|---|---|
 | H1 | 判别器输入 | `session/event` → `user/message` | 输入面过滤同 [02 §2](02-discriminator.md)（append + `source.kind==='user'` + 主会话 + u≥1）；同步 post-commit 派发，监听器异常不外溢 |
 | H2 | 边界/步准入 | `agent/pre-step`（waterfall） | task 闭合发现（边界信号成立 → 触发边界压缩）；**必须 `return next()`**。**P19 已接线**：收口 = `platform/agent-step.ts`（唯一持有 `agent/pre-step` 字面与 `dsh-agent` 类型面，D14 断言锁定）；域侧 `domains/compaction.ts` `onPreStep` 恒放行、异常只 warn（fail-lazy） |
-| H3 | 压力触发 | `agent/pre-step`（压力计量）+ `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | `pressureRatio=0.4` × 压缩域窗口按 wire 锚定计量（[04 §3](04-compactor.md)）；溢出恢复走 request-error 接管 |
+| H3 | 压力触发 | `agent/pre-step`（压力计量）+ `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | `pressureRatio=0.35` × 主模型上下文窗口按 wire 锚定计量（[04 §3](04-compactor.md)；P20c 修订：窗口缺失 → 假定窗口 → 绝对安全网）；溢出恢复走 request-error 接管 |
 | H4 | **改史唯一通道** | `session.append(type, data, {surfaceOp:{op:'replace',start,end}, sourceEventSeqs})` | replace 的 `sourceEventSeqs` 必含全部被遮蔽节点；紧邻契约：`compaction/summary` ↔ 替换 `user/message`；`compaction/prune` 影子计价紧随同步 append。**P19 落位**：`platform/history.ts` `commitCheckpoint` 原子提交 summary（影子价）+ 官方 checkpoint `user/message`（`compactCheckpointSource`，`sourceEventSeqs=[start,summary,...shadowed]`） |
 | H5 | 压缩事务 | `compaction/start` … `compaction/end`（log-only 标记对） | 持锁幂等（`turn:null` 独立事务）；`assertNoActiveCompaction` 防重入 |
 | H6 | 剪切层挂点 | `tools/post-execute` accept `content` 覆盖 = T-entry 写时整形（落账前）；accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车；`tools/execute` 仅作信号/计量 around-wrapper | 工具自有 `finalizeContent` 属定义侧（仅自有工具）；P1.2 契约闭合核验见 [03 §2](../03-shear.md) 表后注；**P15b 已接线**：T-entry/T-note 贴注 = `platform/tools.ts` `createShearToolPort`（同步相），T-loop/T0/T0-R/T-note 剪除 = `domains/shear.ts` 经 H4 执行（异步相），快照 §39；**P16 已接线**：run 冲刷 = **多节点区间** replace → `user/message`（`source:{kind:'plugin',plugin:'context-economy',form:'notice'}`，官方 `compaction/summary`+checkpoint 同构；结论消息构造收拢于 `platform/history.ts` `buildNoticeUserMessage`），快照 §40/§41 |
@@ -83,7 +83,7 @@ turn/end → 自动断面边界信号成立（或 /task close）
 ## 5. 时序 C：压力触发与保险丝
 
 ```text
-每请求前 wire 锚定计量 ≥ 0.4 × 压缩域窗口
+每请求前 wire 锚定计量 ≥ 0.35 × 主模型窗口（窗口缺失 → 假定窗口 → 绝对安全网）
   → 压力压缩（H4/H5）：选缝（末段子任务起点）→ 检查点 + [cutPoint..end] 全量逐字
   → 断路器（单 task 上限 3–4）；fail-lazy 重试一档
 保险丝（独立兜底）：估算 ≥ contextWindow × 0.8 → 重建消息表（保 [system, task] 前缀 +

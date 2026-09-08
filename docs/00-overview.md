@@ -68,7 +68,7 @@ dsh-price-less —— 全自动上下文管理工具
 | 热尾单池 | 10K token | 贪心停机（可少不多），装配器独占算术（[04 §2](04-compactor.md)） |
 | 保留尾 | retainTokens = 10K（绝对值） | `retain < thresholdTokens` 校验强制 |
 | 档案区硬上限 | 15K token（绝对值） | 超限截断最老档案条目，不合并不重压（[04 §6](04-compactor.md)） |
-| 压力触发 | pressureRatio = 0.4 × 压缩域窗口 | wire 锚定计量 |
+| 压力触发 | pressureRatio = 0.35 × 主模型窗口（窗口缺失 → 假定窗口 → 绝对安全网） | wire 锚定计量 |
 | 结论句 | 每句上限，超长截断（截断安全） | 行式裁决钳制（[02 §4](02-discriminator.md)） |
 | 断面输入栈 | 卷宗 + 稳定前缀 + prompt，预算钳制 | 门控（P14c）：本次提示词极短才短路 |
 
