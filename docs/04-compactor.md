@@ -6,8 +6,11 @@
 > 状态：**R4 进行中**——P17 边界装配器已施工（`core/assemble/` 双通道坐标 + 版本重映射 + 贪心停机 + 地板/兜底 +
 > 共享事务原语；`platform/files.ts` 盘上取真 H15；`domains/assemble.ts` 装配域 + `assemble-run` 事实；
 > 快照 [§42](ledger-history.md)/[§43](ledger-history.md)）；**P17c 修正**（HT 软门 + 档案区 15K 硬帽机械截断 +
-> 追加式链两形态校验 + `clipped`/丢弃归因计数修复；快照 [§44](ledger-history.md)）；压缩调用 / 边界编排（档案区落盘）/
-> 压力 / 保险丝见 P18–P20b（搭建序见 [11](11-structure.md) R4）。
+> 追加式链两形态校验 + `clipped`/丢弃归因计数修复；快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**
+> （`core/compress/` 两模式 prompt 组装〔模板在前 + 清单在尾 + 零预算泄漏〕+ 产物 schema 校验〔仅解析/schema fatal；
+> 坏热尾申报降级计数〕+ 共享消费模块〔机制 A 续传 / 机制 B 折叠 + 四触发次序闭合表〕+ `compress-run` 调用账本
+> 〔`compressionCallCount`/`compressionCacheHitRate` fold 路径打通〕；**零调用零接线**，快照 [§45](ledger-history.md)）；
+> 边界编排（档案区落盘）/ 压力 / 保险丝见 P19–P20b（搭建序见 [11](11-structure.md) R4）。
 
 ## 0. 它解决什么问题（人话版）
 

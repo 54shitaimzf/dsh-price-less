@@ -8,7 +8,7 @@
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
 > 状态：**R4 进行中**（P17 边界装配器已施工：`core/assemble/` 纯核 + `platform/files.ts` 盘上取真 H15 + `domains/assemble.ts` 装配域；
 > 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；**P17c 修正**：HT 软门 + 档案区 15K 硬帽 + 追加式链两形态 + 计数修复
-> （快照 [§44](ledger-history.md)）；下一单 = P18 压缩调用）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
+> （快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**（快照 [§45](ledger-history.md)）；下一单 = P19 边界路径编排）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -67,7 +67,7 @@ src/
 │  ├─ prefix.ts      # 稳定前缀：技能目录快照 + 项目帧 vN、版本 bump 语义（02 §2/06 §4）
 │  ├─ init.ts        # init 项目帧采集：prompt v1 渲染与 fail-lazy 解析（02 §2）
 │  ├─ shear/         # 剪切纯核（已施工：types/t0r/tool/run/ledger/index，P15a+P15b+P16）（03）
-│  ├─ compress/      # 两模式压缩 prompt 组装 + 产物 schema 校验 + 共享消费模块（04）
+│  ├─ compress/      # 两模式压缩 prompt 组装 + 产物 schema 校验 + 共享消费模块 + compress-run 调用账本（04 §2/§3；P18）
 │  ├─ assemble/      # 装配器（P17 已施工，P17c 修正）：坐标链 vN 重映射、热尾双通道取真、贪心停机 + 共享事务原语 + HT 软门 + 档案硬帽/追加式链（04 §1/§2/§3/§6；档案区落盘 = P19）
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
@@ -147,7 +147,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 |---|---|---|
 | 模型可见工具（tools 数组） | **恒 0**——全层走官方缝（H2/H4/H6）；唯一例外通道 = T-note 注记贴在工具结果内容内（非 schema） | [03 §2.1](03-shear.md) |
 | 主模型系统提示词 | **恒 0**——知识出口唯一 = 优化后 prompt（用户确认后可见替换） | [01 §4](01-architecture.md) |
-| 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式）· T-note 注记模板 · 机械摘句规则（对表打分非 LLM） | 02/03/04 各域 |
+| 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式；版本化常量 + 字节稳定断言，P18）· T-note 注记模板 · 机械摘句规则（对表打分非 LLM） | 02/03/04 各域 |
 | 斜杠命令 | `/task` 系列（Tier-0 边界）· `/optimize-prompt`（星标命令形态） | [10 §2](10-wiring.md) |
 | 预设 | **不提供**（首批预设候选见 [00](00-overview.md) 路线图：预设开发结合系统提示词改造） | 路线图 |
 | client 工具 | 设置卡壳 + 星标按钮 + 度量消息列表可视化 | 本文 §5 |

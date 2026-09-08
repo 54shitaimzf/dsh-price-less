@@ -84,7 +84,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P15b | 工具剪切调度（**已施工**；工单 [P15b-shear-scheduling.md](P15b-shear-scheduling.md)；快照 §39） | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账 = 独立 `core/shear/ledger.ts` fold）+ `shear.enabled` 开关；实测 src 净增 883 行（预算 700 / 红线 800，见 §39 尺寸申报） | P15a,P6,P7,P12,P2 | M |
 | P16 | 对话剪切（**已施工** commit `9add76d`+`6abb7c0`；工单 [P16-dialogue-shear.md](P16-dialogue-shear.md)；快照 §40/§41） | R3 | `core/shear/run.ts` run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + `domains/shear.ts` run 冲刷 H4（03 §3）；★ `CLASS` 回填作分类输入、G10 尾部窗；阈值常数按 03 §8 既有结论初值落位（不做对照实验）；**L → 工单内拆 P16a/P16b 两单两提交** | P15b | M |
 | P17 | 边界装配器（**已施工** commit `24c30a5`+`67de3cd`+`6c9cbaf` + **P17c 修正**；工单 [P17-boundary-assembler.md](P17-boundary-assembler.md)；快照 §42/§43/§44） | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机 + 地板/兜底）+ 共享事务原语（04 §1）+ `platform/files.ts`（H15 盘上取真）+ `domains/assemble.ts` 装配域 + `assemble-run` 事实 + P17c 修正（HT 软门 / 档案区 15K 硬帽纯核 / 追加式链两形态 / 丢弃归因）；**L → 工单内拆 P17a/P17b + P17c 修正单** | P6,P8,P9 | L |
-| P18 | 压缩调用 | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验；模板在前 + datasets 同源断言，04 §7） | P5,P9 | M |
+| P18 | 压缩调用（**已施工** commit `eab06ab`；工单 [P18-compress-call.md](P18-compress-call.md)；快照 §45） | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验 + 共享消费模块 + `compress-run` 调用账本；模板在前 + **版本化常量/字节稳定断言**〔原「datasets 同源断言」无资产可断，P18 §8 修正 #2〕，04 §2/§3/§8） | P5,P9 | M（实测超线，见工单 §6） |
 | P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 档案区落盘 + 15K 硬帽调用〔纯核已由 P17c 交付〕+ `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2,P3 | M |
 | P20a | 压力路径 | R4 | 时序 C：wire 锚定计量（估计器 `CHARS_PER_TOKEN=1.5` 校准，04 §5）+ 检查点/断路器 | P19 | M |
 | P20b | 保险丝 | R4 | hard-truncate no-op 语义 + `request-error` 接管；`cordis.patch.yml` 加 compaction-basic `auto:false` | P19 | S |
@@ -163,6 +163,21 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > 真机归因：44 会话 / 版本链 60（链断 3）/ 重映射 chain-break 21 = **write 屏障 9 + 定位失败 12**（不猜位置，丢弃 + 计数）。
 > 尺寸：P17c src 净增 **217**（预算 ≤300，在预算内）；P17 合计 1,842。
 > **下一未执行单元 = P18 压缩调用**（边界/压力两模式 prompt 组装 + 产物 schema 校验；依赖 P5,P9）。
+
+> P18 施工记录（R4 第二单，2026-09-08）：压缩调用纯核已施工（commit `eab06ab`；
+> 快照 §45；`node scripts/verify-p18.mjs` PASS **45 checks**，gate **440 用例 / 42 文件**，结构断言 D1–**D13**）。
+> 交付 = `core/compress/`（两模式 prompt 组装〔模板在前 / 清单在尾 / 零预算泄漏 / 机制 A 续传〕+ 产物 schema 校验
+> 〔围栏剥离 + 平衡抽取 + `validateDigest`/`gateHotTailDecls` 复用 + `validateCutPoint` 缝两校验〕+ 共享消费模块
+> 〔摘要块续传 / 材料块折叠 + 四触发次序闭合表〕+ `compress-run` 调用账本〔`compressionCallCount`/
+> `compressionCacheHitRate` fold 路径打通，生产者 = P19/P20a〕）；**零模型调用零接线**。
+> 计划修正（工单 §8 八项）：04 节号纠错（§2/§3/§8）· 删除 datasets 同源断言（无资产；改版本化常量 + 字节稳定断言）·
+> 组合复用 P17 校验器 · 消费模块建在 P17c 链校验之上 · 度量先行 · 缝两校验落点 · usage 字段缺口上报 ·
+> 真机只读回放口径。
+> 尺寸：P18 src 净增 **567**（新 6 文件 544 + `assemble/ledger.ts` +23），预算 400 / 红线 480，**超 87**
+> （合规自证头约 66 行 + 度量先行 fold 路径；不拆单理由见工单 §6）。
+> **诚实声明**：真机回放 44 会话 / 37 会话含单元 / 单元 4,462 / 渲染 74 次 prompt（平均 6,402 token、峰值 26,581）、
+> 字节漂移 0、模板预算泄漏 0、清单帽省略 4,117 条；live `compress-run` = **0**（调用归 P19/P20a）。
+> **下一未执行单元 = P19 边界路径编排**（触发 H2 + 档案 vN + 卷宗清空 + T-boundary 搭车 + 缩水校验）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、

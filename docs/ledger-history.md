@@ -1973,6 +1973,58 @@ P17c 补齐的是机械面，压缩触发与档案区生产者是 P19。
 P17 合计 src 净增 **1,842**（P17a 1,223 + P17b 402 + P17c 217）。
 
 **R4 进行中**：P17 修正完成；**下一未执行单元 = P18 压缩调用**（边界/压力两模式 prompt 组装 + 产物 schema 校验）。
+---
+
+## 45. 账本快照 §45：压缩调用纯核（P18，R4 第二单）
+
+> 触发：R4 第二单——把「压缩器调用」的两半做成纯核：**两模式 prompt 组装**（边界/压力）+ **产物 schema 校验**
+> + **共享消费模块**（机制 A 续传 / 机制 B 折叠 / 四触发次序闭合）；并把 07 压缩族
+> `compressionCallCount`/`compressionCacheHitRate` 的 fold 路径打通（P17 N5 显式留 0 归属本单）。
+> **零模型调用、零接线、零落盘**——实际 `llm.stream` 调用、档案 vN、卷宗清空、缩水校验归 P19/P20a。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| 压缩调用 prompt | 无（P17 只交付装配侧） | `core/compress/prompt.ts`：两模式静态模板（模板在前）+ 机制 A 续传面 + 单元清单机械追加（04 §2）+ `regionTokens` 机械计量；**模板零预算数字**（N2） |
+| 产物校验 | P17 有 `validateDigest`/`gateHotTailDecls`（装配侧） | `core/compress/product.ts`：围栏剥离 + 平衡抽取 + 复用既有校验器；**仅解析/schema fatal**；坏热尾申报降级计数；压力模式补 `validateCutPoint`（单元存在 + 缝不切工具对，04 §3） |
+| 共享消费模块（04 §3 生产/消费不对称律） | P17c 只有链形态 / append-only | `core/compress/consume.ts`：`classifyTailBlock`（摘要块 → 续传 / 材料块 → 折叠）+ `planTailConsumption` **四触发次序闭合表**（边→边 / 边→压 / 压→边 / 压→压） |
+| `compressionCallCount` | 恒 0（P17 N5 归属 P18） | `compress-run` 事实 + `foldCompressCalls` + 合并进 `foldCompressionLedger`（复用零调用；**生产者 = P19/P20a**） |
+| `compressionCacheHitRate` | 恒 0 | 分母 = `compress-run` 事实数、分子 = `cacheHit` 数；**键/KV 实现归 P19**（04 §6；core 无加密依赖，N5） |
+| `compressionLayer` | 由 `assemble-run` 计数 | 不变（**防双计**：一次压缩 = 装配事实 + 调用事实，层归属只由装配事实记，N6） |
+| 结构断言 | D1–D12 | **+ D13**（`core/compress/**` 无时钟/随机；负/正样本 + 零位快照同步） |
+
+**真机会话只读回放**（44 会话；`scripts/verify-p18.mjs`；不做臂对照；会话随本机活动增长，绝对值只作口径）：
+
+| 指标 | 读数 |
+|---|---|
+| 含单元会话 / 单元（tool 对） | **37 / 44** · **4,462** |
+| 渲染 prompt 次数（边界 + 压力） | **74** |
+| prompt 体量（含区域载荷） | 平均 **6,402** token / 峰值 **26,581** token |
+| 字节漂移（双跑） | **0** |
+| 模板预算泄漏 | **0**（零泄漏口径 = 区域前的模板段；区域载荷是真实会话字节） |
+| 清单帽（10 条）省略单元 | **4,117** |
+| live `compress-run` 事实 | **0**（调用归 P19/P20a） |
+
+**读数解读（诚实声明）**：本单是纯核——回放只证明**渲染确定性 / 零模板泄漏 / 清单帽生效**，不证明压缩质量或节省
+（无调用、无落刀）。平均 6.4K token 里绝大部分是**区域载荷**（闭合段原文，必然调用口径），模板段是固定小常数；
+峰值 26.6K 来自长会话尾部 20 单元。`live compress-run = 0` 与 P17 的 `assemble-run = 0` 同因：触发与生产者在 P19/P20a。
+
+**验收**：
+- `npm run gate` 绿（**440 用例 / 42 文件**；M1–M5 / S1–S5 / **D1–D13** 全 PASS，`ok=true vacuous=[]`）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p18.mjs` → `P18 VERIFY PASS (45 checks)`
+- 新增 4 spec：`compress-prompt` **7** / `compress-product` **6** / `compress-consume` **3** / `compress-ledger` **5**
+- `node scripts/verify-p17.mjs`（54）/ `verify-p16.mjs`（30）→ PASS（无回归）
+
+**尺寸申报**：P18 估计 src 净增 ≤400（红线 480）。实测 **src 净增 567**（新 6 文件 **544**：
+`types.ts` 127 / `prompt.ts` 118 / `product.ts` 141 / `consume.ts` 48 / `ledger.ts` 101 / `index.ts` 9；
+`assemble/ledger.ts` **+23/−2**），另 spec **+364**（4 新 355 + `assert-structure.spec` +9）、`assert-structure.mjs` +7、
+`verify-p18.mjs` +343。**超红线 87**——合规自证头（docs/05 §6 强制：平面 / 回退链 / 审查清单 / 度量）6 文件合计约 66 行，
+其余为度量先行 fold 路径与两模式模板；**不拆单理由** = 四文件互为同一验收面（prompt → 产物 → 消费 → 账本），
+拆开会产生跨提交悬空导出（P15b 先例：超线申报、单提交）。
+
+**R4 进行中**：P17（+P17c）/ P18 完成；**下一未执行单元 = P19 边界路径编排**（触发 H2 + 档案 vN + 卷宗清空 +
+T-boundary 搭车；**owns 缩水校验 = replace 前置**）。
 
 
 
