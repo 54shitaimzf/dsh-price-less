@@ -11,7 +11,6 @@
  *           （S3/D3）；无 timer（S5）；配置关闭 = 零行为；不读盘、不调模型。
  * 度量: context-economy/shear-applied|shear-decision|shear-error（fold 见 core/shear/ledger.ts）。
  */
-import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import {
   DEFAULT_RUN_POLICY,
@@ -39,7 +38,7 @@ import {
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
 import { buildNoticeUserMessage, createHistoryPort, type HistoryPort } from '../platform/history.ts'
 import { emitCeFact } from '../platform/logger.ts'
-import { createShearToolPort, type ToolResultView } from '../platform/tools.ts'
+import { createShearToolPort, type ShearToolPortContext, type ToolResultView } from '../platform/tools.ts'
 import type { CeDomainEvents, CeLogger, EventPump } from '../platform/events.ts'
 import type { Config } from '../config.ts'
 import {
@@ -172,7 +171,7 @@ function replacementTextOf(op: ShearOp): string {
   }
 }
 
-export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps): ShearDomain {
+export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDeps): ShearDomain {
   const { pump, getConfig, logger, now = Date.now } = deps
   const policy = deps.policy ?? DEFAULT_SHEAR_POLICY
   const runPolicy = deps.runPolicy ?? DEFAULT_RUN_POLICY

@@ -2272,3 +2272,38 @@ N3 影子模式 → N4 剪除执行 → N5 闸门退避 → N6 验收）。
 语义判断主体 = 消费该结果的主模型（CUT-OK 自证）。
 
 **验收**：归档后全仓引用无悬挂；`npm run gate` 绿（文档改动，用例数不变）；`verify-p21b` 子进程复跑全档 PASS。
+
+## §52 N1 工具身份通道与可剪集合（2026-09-09）——**N 系列首单已施工**
+
+**交付**：`src/core/shear/classify.ts`（171 行，纯核分类器）· `src/platform/tools.ts`（178→224，描述符增
+`args/meta/kind/card/resultBytes` + `ToolSignatureSource`，`presentCall` 软取签名、异常降级）·
+`src/domains/shear.ts`（ctx 类型扩面，零逻辑改动）· `tests/shear-classify.spec.ts`（175 行 / 16 用例）·
+`scripts/probe-n1.mjs`（174 行，只读回放探针）。
+
+**验收**：
+- `npm run gate` 绿（**568 用例 / 54 文件**；M1–M5 / S1–S5 / D1–D17 全 PASS，`ok=true vacuous=[]`）
+- `npm run typecheck:tests` 绿；`npm run build` 绿
+- `node scripts/probe-n1.mjs` 零写零网络，产出覆盖率 / 判定 / basis / 判据 / 对照组五组读数
+
+**探针读数（44 会话 / 5,032 条 `tool/result` / ≥2KB 2,160 条 = 42.9%）**：
+
+| 项 | 数值 |
+|---|---|
+| 判定 | **cuttable 625（28.9%）** / never 1,535（71.1%） |
+| 定音阶段 | shape 2,094（96.9%） / identity 66（3.1%） |
+| basis（全部 ≥2KB） | command 1,342（62.1%） / name 752（34.8%） / signature 55（2.5%） / none 11（0.5%） |
+| **cuttable 的 basis** | **name 402（64.3%） / command 223（35.7%） / signature 0** |
+| cuttable 的工具 | run_code 402 · bash 209 · pwsh 14 |
+| 签名覆盖（≥2KB 加权） | kind 37.3% / card 64.7% / meta 2.5% / 静态表未收录 0.5% |
+| never 判据 | corpus 553 · truncated 374 · error-output 339 · side-effect 203 · file-fact 38 · search-fact 15 · unknown 11 · write-history 2 |
+| 对照组 | 8 / 1,535（1% 确定性采样） |
+
+**关键结论**：① 可剪面（28.9%）高于设计期估计（20.6%）；② 候选集中在 `run_code` + `bash`/`pwsh` 两类载荷，
+N2 结论契约必须同时覆盖；③ **`signature` basis 可剪数 = 0**（55 条 signature 全为 never 的文件/检索/改史事实）
+→ **N4 白名单实际起步为空集**，完全由影子数据晋升 `command`/`name` 两组（N1 §4.4 / 总纲 §6-8 已修正）；
+④ 未收录工具仅 0.5%（探针静态表口径，运行期 `ctx.tools.get` 补齐）。
+
+**尺寸申报**：src 净增 **217**（classify 171 + tools 46 + domains 0 逻辑）；tests 175；探针 174；工单 130。
+工单预估 M（≤400 净行），实测 M 内。
+
+**下一单元**：**N2 结论契约与协商模板 v2**（`docs/implement/N2-conclusion-contract.md`），随后 N3 影子模式（落地目标）。

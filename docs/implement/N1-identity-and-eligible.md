@@ -1,6 +1,6 @@
 # N1 · 工具身份通道与可剪集合
 
-> **状态**：**定稿**（2026-09-09 用户裁定），待开工。
+> **状态**：**已施工**（2026-09-09，N 系列首单）；探针报告与验收见 §9。
 > **依赖**：无（R1–R4 已封存）。**总纲**：[`00-master.md`](00-master.md) §2/§3/§6。
 > **正典**：[`docs/03 §2`](../03-shear.md)（四档时机 + 生命周期谓词）· [`docs/06 §2`](../06-cache.md)（断裂成本）·
 > [`docs/11 §7`](../11-structure.md)（资产登记）· `docs/13 §3.9`（H6 挂点）。
@@ -47,7 +47,7 @@
    ```
 
    `ToolDescriptor` = `{ name, kind?, card?, args?, meta?, resultText, resultBytes }`——**平台只供字段，判定全在纯核**。
-3. **只读探针**（`scripts/probe-n1.mjs`）：真实会话回放上统计签名覆盖率 / 三档分布 / basis 分布 /
+3. **只读探针**（`scripts/probe-n1.mjs`）：真实会话回放上统计签名覆盖率 / 判定分布 + 定音阶段 / basis 分布 /
    `needs-result` 子类分布（**无写、无网络**）。
 
 ## §4 分类规则（定稿）
@@ -95,7 +95,7 @@
 | 消费者 | 采用集合 | 误判代价 |
 |---|---|---|
 | **N3 影子模式**（只挂注记不剪） | `verdict==='cuttable'`（**任意 basis**）+ 1% never 对照组 | ≈0（多几十 token） |
-| **N4 剪除执行**（不可逆） | 起步 `verdict==='cuttable' && basis==='signature'`，按报告**逐 basis 晋升** | 信息永久消失 |
+| **N4 剪除执行**（不可逆） | 白名单 = `basis==='signature'` ∪ 影子晋升集；**实测 signature 组可剪 = 0（§9）**，故实际起步 = **空集**，完全由晋升驱动 | 信息永久消失 |
 
 **晋升规则**：某 basis 组样本 ≥30 且 CUT-HOLD 率 <5% 且 保真率 ≥95% → 写入 N4 白名单。
 白名单不拍脑袋，**拿影子数据一条条升上去**。
@@ -112,7 +112,7 @@
 
 - `npm run gate` 绿 + `npm run typecheck:tests` 绿。
 - `node scripts/probe-n1.mjs` 产出：按工具的签名覆盖率（有 kind / 有 card / 有 meta 占比）、
-  三档分布、**basis 分布**、`needs-result` 子类分布、对照组采样率；**零写零网络**。
+  判定分布 + 定音阶段、**basis 分布**（含 cuttable 的 basis / 工具分布）、判据命中、对照组采样率；**零写零网络**。
 - 新增结构断言：`core/shear/classify.ts` 零 harness import（S1 既有规则覆盖）；
   `platform/tools.ts` 仍是唯一取 harness 工具类型的文件（D 规则）。
 - 单测：每档 / 每 basis ≥1 用例；异常降级（`ctx.tools.get` 抛错、`presentCall` 返回 undefined）；
@@ -143,3 +143,29 @@
 | 3 | **`run_code` 由 cuttable 改 needs-result**：kind=execute 且无 presentResult，身份分不出"算数/改盘"→ 扫程序源码副作用特征 |
 | 4 | **`basis` 证据等级 + 两档阈值**：影子宽（任意 basis 挂注记）、剪除严（起步仅 signature），按 basis 逐组晋升 |
 | 5 | **1% never 对照组**：只问不剪，用来检验"永不剪"是否过保守；采样确定性可回放 |
+
+## §9 施工记录与探针报告（2026-09-09）
+
+**交付**：`src/core/shear/classify.ts`（纯核分类器）· `src/platform/tools.ts`（描述符增 args/meta/kind/card/resultBytes + `ToolSignatureSource`）· `tests/shear-classify.spec.ts`（16 用例）· `scripts/probe-n1.mjs`（只读探针）。
+
+**验收**：`npm run gate` 绿（**568 用例 / 54 文件**）· `npm run typecheck:tests` 绿 · D1–D17 + M/S 全 PASS（`ok=true vacuous=[]`）· 探针零写零网络。
+
+**探针读数**（44 会话 / 5,032 条 `tool/result` / ≥2KB **2,160 条（42.9%）**；数据源 = 已解压会话 JSONL，`node scripts/probe-n1.mjs [--dir <目录>]`）：
+
+| 项 | 数值 |
+|---|---|
+| 判定 | **cuttable 625（28.9%）** / never 1,535（71.1%） |
+| 定音阶段 | shape 2,094（96.9%） / identity 66（3.1%） |
+| basis（全部 ≥2KB） | command 1,342（62.1%） / name 752（34.8%） / signature 55（2.5%） / none 11（0.5%） |
+| **cuttable 的 basis** | **name 402（64.3%） / command 223（35.7%） / signature 0** |
+| cuttable 的工具 | run_code 402 · bash 209 · pwsh 14 |
+| 签名覆盖（≥2KB 加权） | kind 37.3% / card 64.7% / meta 2.5% / 静态表未收录 0.5% |
+| never 判据 | corpus 553 · truncated 374 · error-output 339 · side-effect 203 · file-fact 38 · search-fact 15 · unknown 11 · write-history 2 |
+| 对照组 | 8 / 1,535（1% 确定性采样） |
+
+**关键结论**：
+
+1. **可剪面比设计期估计更大**（28.9% vs 20.6%）：结果形态把"成功结论"与"错误 / 语料 / 截断"分开，后者一律 never。
+2. **候选高度集中在两类载荷**：`run_code`（402）与 `bash`/`pwsh`（223）——**N2 结论契约必须同时覆盖**（终端判定输出 vs 程序化结论）。
+3. **`signature` basis 的可剪数 = 0**（55 条 signature 全是 never 的文件 / 检索 / 改史事实）→ **N4 不能从 signature 起步**；白名单实际起步为空集，完全靠影子数据把 `command` / `name` 两组升上来。§4.4 已按此修正。
+4. 未收录工具仅 0.5%（探针静态表口径）；运行期由 `ctx.tools.get` 补齐，真实覆盖更高。

@@ -9,6 +9,9 @@
  * 构造）；T-entry/T-note 的业务判据归 P15a/P15b，本单不内置任何剪切规则。
  * P15b 增 `createShearToolPort`：把 harness 执行视图收敛成 `ToolResultView`（domains 零
  * harness 类型，D8 归口不变），只挂 post-execute，子分发/subagent 直接委托 next()。
+ * N1 描述符扩面：`ToolResultView` 增 args/meta/kind/card/resultBytes——kind/card 取
+ * `ctx.tools.get(name, agent).presentCall(args)`（软校验、只读、异常即降级为空），meta 取
+ * `result.meta`（已算好，不调 presentResult）；任何取签名失败都只降级、不打断工具执行。
  *
  * 模块: platform 工具事件端口（唯一 harness 触点层）
  * 平面: L0（确定性规则：注册 + 计量 + 决策转发；无模型、无机制逻辑）
@@ -123,7 +126,18 @@ export function createToolPort(
   }
 }
 
-/** 工具结果视图（P15b；本地结构面，domains 不接触 harness 类型）。 */
+/** 工具签名来源（N1）：只取 presentCall 的 kind/card，结构性最小面，避免绑死 harness 类型。 */
+export interface ToolSignatureSource {
+  get(
+    name: string,
+    scope?: unknown,
+  ): { presentCall?(args: unknown): { card?: unknown; kind?: unknown } | undefined } | undefined
+}
+
+/** 剪切工具端口 ctx（N1）：`tools` 可选——缺省即无签名通道，分类器退化为 `none`（失败默认保留）。 */
+export type ShearToolPortContext = Pick<Context, 'on'> & { tools?: ToolSignatureSource }
+
+/** 工具结果视图（P15b；N1 扩面；本地结构面，domains 不接触 harness 类型）。 */
 export interface ToolResultView {
   readonly callId: string
   readonly name: string
@@ -134,6 +148,16 @@ export interface ToolResultView {
   readonly hasNonText: boolean
   /** 会话来源（subagent 会话不裁）。 */
   readonly origin?: string
+  /** resultText 的 UTF-8 字节数（N1 候选下限判据）。 */
+  readonly resultBytes: number
+  /** 解析后调用参数（`ToolExecution.arguments`；N1 副作用扫描源）。 */
+  readonly args?: unknown
+  /** `ToolExecutionResult.meta`（presentationMeta 投影；N2/N3 结论与重取句柄原料）。 */
+  readonly meta?: unknown
+  /** presentCall 声明的类别（read/edit/delete/move/search/execute/fetch/other）。 */
+  readonly kind?: string
+  /** presentCall 声明的卡片（generic/terminal/diff）。 */
+  readonly card?: string
 }
 
 /** 剪切判定钩子（纯函数语义；返回 undefined = 不动刀，委托 next()）。 */
@@ -150,19 +174,44 @@ function textOfContent(blocks: readonly ContentBlock[]): string {
   return text
 }
 
-function toToolResultView(exec: ToolExecution, result: Readonly<ToolExecutionResult>): ToolResultView {
+/** 取工具签名（N1）：presentCall 软校验、只读、异常/缺失一律降级为空对象（不打断执行）。 */
+function signatureOf(
+  tools: ToolSignatureSource | undefined,
+  exec: ToolExecution,
+): { kind?: string; card?: string } {
+  try {
+    const view = tools?.get(exec.name, exec.agent)?.presentCall?.(exec.arguments)
+    if (view === undefined) return {}
+    const card = typeof view.card === 'string' ? view.card : undefined
+    const kind = typeof view.kind === 'string' ? view.kind : undefined
+    return { ...(card === undefined ? {} : { card }), ...(kind === undefined ? {} : { kind }) }
+  } catch {
+    return {}
+  }
+}
+
+function toToolResultView(
+  exec: ToolExecution,
+  result: Readonly<ToolExecutionResult>,
+  tools?: ToolSignatureSource,
+): ToolResultView {
   const content = result.content
   let hasNonText = false
   for (const block of content) if (block.type !== 'text') hasNonText = true
   const agent = exec.agent as { session?: { header?: { origin?: unknown } } } | undefined
   const origin = agent?.session?.header?.origin
+  const resultText = textOfContent(content)
   return {
     callId: String(exec.callId),
     name: exec.name,
-    resultText: textOfContent(content),
+    resultText,
     isError: result.isError,
     hasNonText,
+    resultBytes: Buffer.byteLength(resultText, 'utf8'),
     ...(typeof origin === 'string' ? { origin } : {}),
+    ...(exec.arguments === undefined ? {} : { args: exec.arguments }),
+    ...(result.meta === undefined ? {} : { meta: result.meta }),
+    ...signatureOf(tools, exec),
   }
 }
 
@@ -172,14 +221,14 @@ function toToolResultView(exec: ToolExecution, result: Readonly<ToolExecutionRes
  * 含非 text 块时不整形；异常由 createToolPort 遏制为 warn + next()（失败默认保留）。
  */
 export function createShearToolPort(
-  ctx: Pick<Context, 'on'>,
+  ctx: ShearToolPortContext,
   hooks: ShearToolHooks,
   logger?: { warn: (...args: unknown[]) => void },
 ): ToolPort {
   return createToolPort(ctx, {
     onPostExecute: (exec, result) => {
       if (exec.parent !== undefined) return undefined
-      const view = toToolResultView(exec, result)
+      const view = toToolResultView(exec, result, ctx.tools)
       if (view.origin === 'subagent') return undefined
       if (!view.hasNonText) {
         const shaped = hooks.shapeEntry(view)
