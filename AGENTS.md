@@ -38,7 +38,7 @@ client/ 设置壳**全保留**（星标按钮 +
 快照 §60）→ **F9 压缩产物重构**（F9a 区间权威 + F9b schema v2 + F9c 热尾事实载体 + F9d 双预算/存储 v2/
 单调守卫 + F9e 路径压缩；快照 §62–§66）→ **F10 契约 v3**（总分零指针 + 热尾指向档案 + 档案只存总分 +
 错误不进热尾；快照 §69）→ **F11/F12/F13 真机复盘修正**（列表类命令不剪 / 影子模式零字节〔注记只记事实〕/
-判别器 v4 任务定义〔同一工作对象或同类目标持续改进；子task 不分流〕；快照 §70）→ **N 系列协商线退役**（真机 44 会话 / 633 选样 / 68 挂注记 → **CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**，叠加 N2 探针 0/134；`shear.negotiate` 配置 + `core/shear/{negotiate,conclusion}.ts` + 两型 `shear-negotiation-*` 事实 + 账本协商段 + T-note 标记协议 + 预设 persona 协议段全部删除；N1 分类器保留；快照 §71）→ **写时确定性剪除方向**（剪点必须在结果入账前定死 = T-entry；禁模型回应依赖、禁行为信号〔缓存断裂〕）），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
+判别器 v4 任务定义〔同一工作对象或同类目标持续改进；子task 不分流〕；快照 §70）→ **N 系列协商线退役**（真机 44 会话 / 633 选样 / 68 挂注记 → **CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**，叠加 N2 探针 0/134；`shear.negotiate` 配置 + `core/shear/{negotiate,conclusion}.ts` + 两型 `shear-negotiation-*` 事实 + 账本协商段 + T-note 标记协议 + 预设 persona 协议段全部删除；N1 分类器保留；快照 §71）→ **写时确定性剪除方向**（剪点必须在结果入账前定死 = T-entry；禁模型回应依赖、禁行为信号〔缓存断裂〕；T-entry 准入收紧为**过程日志白名单**：失败/数据查询/列表原文保留，账本 §73）），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。

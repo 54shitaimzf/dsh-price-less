@@ -18,7 +18,8 @@ import {
 import type { LedgerFact, LedgerSessionEvent } from '../src/core/ledger/index.ts'
 
 const envelope = ['1: const a = 1', '2: export const x = 2', '3: const b = 3', '4: export const y = 4', '5: const c = 5'].join('\n')
-const longLog = Array.from({ length: 400 }, (_, i) => `line ${i}`).join('\n')
+/** W2：过体积门槛的过程日志（400 行 × ~70 字符 ≈ 28 KB）。 */
+const longLog = Array.from({ length: 400 }, (_, i) => `line ${i}: ${'x'.repeat(60)}`).join('\n')
 
 const events: LedgerSessionEvent[] = [
   { type: 'user/message', seq: 1, time: 1, surfaceOp: 'append', data: { content: [{ type: 'text', text: '改一下 index' }] } },

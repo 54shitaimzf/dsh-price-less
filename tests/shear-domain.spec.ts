@@ -54,6 +54,8 @@ const BIG_ENVELOPE = Array.from({ length: 40 }, (_, i) => `${i + 1}: const v${i}
 const BIG = 'x'.repeat(9000)
 const MID = Array.from({ length: 5 }, (_, i) => `line ${i} ${'y'.repeat(800)}`).join('\n')
 const LONG_READ = Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n')
+/** W2：过体积门槛的过程日志（400 行 × ~50 字符 ≈ 20 KB）。 */
+const LOG_400 = Array.from({ length: 400 }, (_, i) => `line ${i}: ${'x'.repeat(40)}`).join('\n')
 
 function makeEnv(options: { enabled?: boolean } = {}) {
   const listeners = new Map<string, Array<(...args: any[]) => unknown>>()
@@ -134,28 +136,37 @@ function fakeExec(overrides: { callId?: string; name?: string; arguments?: unkno
 }
 const fakeResult = (text: string, isError = false) => ({ isError, content: [textBlock(text)] } as unknown as ToolExecutionResult)
 
-describe('P15b 同步相：T-entry 整形与 T-note 贴注', () => {
-  it('T-entry：cmd 长输出落账前整形（省略标记），结果事件到达后发 shear-applied 事实', async () => {
+describe('P15b 同步相：T-entry 整形（W2 保守准入）', () => {
+  it('T-entry：过程日志大输出落账前整形（省略标记），结果事件到达后发 shear-applied 事实', async () => {
     const env = makeEnv()
-    const { decision, nextCalls } = await env.postExecute(fakeExec({ name: 'bash' }), fakeResult(LONG_READ))
+    const exec = fakeExec({ name: 'bash', arguments: { command: 'npm test' } })
+    const { decision, nextCalls } = await env.postExecute(exec, fakeResult(LOG_400))
     expect(nextCalls).toBe(0)
     const content = (decision as { content: Array<{ text: string }> }).content
     expect(content[0]!.text).toContain('省略')
     env.appendUser('跑个命令')
-    env.appendAssistant([toolCallBlock('c1', 'bash', { command: 'x' })])
-    env.appendCall('c1', 'bash', { command: 'x' })
+    env.appendAssistant([toolCallBlock('c1', 'bash', { command: 'npm test' })])
+    env.appendCall('c1', 'bash', { command: 'npm test' })
     env.appendResult('c1', content[0]!.text)
     const applied = env.applied()
     expect(applied).toHaveLength(1)
     expect(applied[0]!.data).toMatchObject({ tier: 'T-entry', kind: 'shape-entry', callId: 'c1', category: 'cmd' })
     expect(env.replacements()).toHaveLength(0)
   })
-  it('T-entry 门槛：低于 8 行 / read 类 / subagent / 子分发 → 不整形（委托 next）', async () => {
+  it('T-entry 门槛：失败 / 数据查询 / 体积不足 / read 类 / subagent / 子分发 → 不整形（委托 next）', async () => {
     const env = makeEnv()
-    expect((await env.postExecute(fakeExec({ name: 'bash' }), fakeResult('a\nb\nc'))).nextCalls).toBe(1)
-    expect((await env.postExecute(fakeExec({ name: 'read' }), fakeResult(LONG_READ))).nextCalls).toBe(1)
-    expect((await env.postExecute(fakeExec({ name: 'bash', origin: 'subagent' }), fakeResult(LONG_READ))).nextCalls).toBe(1)
-    expect((await env.postExecute(fakeExec({ name: 'bash', parent: Symbol('p') }), fakeResult(LONG_READ))).nextCalls).toBe(1)
+    const bash = (args: unknown) => fakeExec({ name: 'bash', arguments: args })
+    // 过程日志但体积不足（100 行 < 120 行门槛）
+    expect((await env.postExecute(bash({ command: 'npm test' }), fakeResult(LONG_READ))).nextCalls).toBe(1)
+    expect((await env.postExecute(bash({ command: 'npm test' }), fakeResult(Array.from({ length: 100 }, (_, i) => `line ${i}`).join('\n')))).nextCalls).toBe(1)
+    // W2：数据查询类命令即使超体积门槛也不整形
+    expect((await env.postExecute(bash({ command: 'git log --oneline' }), fakeResult(LOG_400))).nextCalls).toBe(1)
+    expect((await env.postExecute(bash({ command: 'Get-Content README.md' }), fakeResult(LOG_400))).nextCalls).toBe(1)
+    // 失败方向 = 保留
+    expect((await env.postExecute(bash({ command: 'npm test' }), fakeResult(`${LOG_400}\n[exit code: 1]`))).nextCalls).toBe(1)
+    expect((await env.postExecute(fakeExec({ name: 'read' }), fakeResult(LOG_400))).nextCalls).toBe(1)
+    expect((await env.postExecute(fakeExec({ name: 'bash', origin: 'subagent' }), fakeResult(LOG_400))).nextCalls).toBe(1)
+    expect((await env.postExecute(fakeExec({ name: 'bash', parent: Symbol('p') }), fakeResult(LOG_400))).nextCalls).toBe(1)
     expect(env.facts()).toHaveLength(0)
   })
   it('G1：enabled=false → 同步相与异步相全部零行为', async () => {

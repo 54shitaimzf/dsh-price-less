@@ -1,6 +1,7 @@
 /**
  * 工具剪切纯核：谓词、四档准入与确定性 fold（docs/03 §2/§2.1/§2.2/§2.3；P15a）。
- * 纯函数：T-entry 整形、T0 超越、T0-R 修复（T-note 协商与 T-loop 思考后截断均已退役）。
+ * 纯函数：T-entry 整形（W2 保守准入：仅过程日志；失败与数据查询原文保留）、T0 超越、T0-R 修复
+ *（T-note 协商与 T-loop 思考后截断均已退役）。
  * 判据全内置（类别启发式 + 体积/年龄规则）——无工具自声明注入缝。
  * core 零 harness/platform import；不抛错，失败一律默认保留（协商不成不动刀，零重试）。
  * 平面: L0（无模型/IO/状态）｜回退链步数: 2（类别启发式 → 通用体积年龄规则）
@@ -34,15 +35,28 @@ const WRITE_TOOLS = new Set(['edit', 'write', 'str_replace_editor', 'apply_patch
 const SEARCH_TOOLS = new Set(['grep', 'glob', 'search', 'find'])
 const CMD_TOOLS = new Set(['bash', 'pwsh', 'run', 'shell', 'terminal', 'exec'])
 
-export const ENTRY_KEEP_HEAD = 2
-export const ENTRY_KEEP_TAIL = 2
-export const ENTRY_MIN_LINES = 8
-export const ENTRY_MAX_ERROR_LINES = 8
+/**
+ * W2 保守准入（用户裁定 2026-09-09，账本 §73）：T-entry 只对**过程日志**（构建/测试/安装/检查）
+ * 保头尾整形，且必须同时过体积门槛；失败、数据查询、列表一律原文保留（失败方向 = 保留）。
+ */
+export const ENTRY_KEEP_HEAD = 12
+export const ENTRY_KEEP_TAIL = 12
+export const ENTRY_MIN_LINES = 120
+export const ENTRY_MIN_BYTES = 16_384
 export const ENTRY_FAILURE_RE = /\[exit code: [1-9]\d*\]|\b(?:error|failed|failure|exception|traceback|fatal)\b/i
 export const GENERIC_CUT_MIN_BYTES = 16_384
 export const GENERIC_CUT_MIN_AGE_MS = 600_000
 /** W1 列表识别（docs/03 §2.1）：列表载荷 = 名字集合，保头尾会丢名字 → T-entry 一律不整形。 */
 export const LISTING_COMMAND_RE = /(?:^\s*|[\n|;&("']\s*)(?:get-childitem|gci|ls|dir|tree|fd|find)\b|\brg\b[^\n]{0,60}--files/i
+/** W1 列表识别的最小行数（与整形门槛解耦：短列表也要记 entry-skip-listing 事实）。 */
+export const LISTING_MIN_LINES = 8
+/**
+ * W2 过程日志命令白名单（docs/03 §2，账本 §73）：只有「跑构建/测试/安装/检查」这类过程日志
+ * 允许保头尾整形。判据 = 命令名出现在 shell 语句起点 + 同行出现构建/测试动词；
+ * **数据查询类命令**（git / Get-Content / Select-String / 目录列表 / npm ls …）不在白名单 →
+ * 原文保留——载荷在中间，保头尾会丢答案（真机 typst-ecd9 seq 44/75/78 等）。
+ */
+export const LOG_COMMAND_RE = /(?:^\s*|[\n|;&]\s*)(?:npm|pnpm|yarn|bun|npx|node|deno|vitest|jest|mocha|ava|playwright|pytest|tox|ruff|mypy|cargo|rustc|tsc|eslint|biome|prettier|make|cmake|ninja|meson|bazel|gradle|mvn|dotnet|pip|poetry|uv|pipenv|golangci-lint|gcc|clang|go|python)(?=[^\n]{0,200}?\b(?:test|build|check|lint|compile|install|ci|run|clippy|typecheck|verify|gate|pytest|vitest|jest|tsc|eslint|biome|prettier)\b)/i
 
 export function toolCategory(name: string): ShearToolCategory {
   if (READ_TOOLS.has(name)) return 'read'
@@ -52,18 +66,27 @@ export function toolCategory(name: string): ShearToolCategory {
   return 'other'
 }
 
-/** 列表类命令参数扫描（args 优先，argsText 兜底；纯函数、无 IO）。 */
-function listingCommandIn(call: ShearToolCall, args?: unknown): boolean {
+/** 命令文本抽取（args 优先，argsText 解析兜底，最后回退原始 argsText；纯函数、无 IO）。 */
+function commandValuesOf(call: ShearToolCall, args?: unknown): string[] {
   const values: string[] = []
-  if (typeof args === 'object' && args !== null) {
-    for (const key of ['command', 'cmd', 'script', 'args']) {
-      const value = (args as Record<string, unknown>)[key]
-      if (typeof value === 'string') values.push(value)
-      else if (Array.isArray(value)) values.push(value.filter((item): item is string => typeof item === 'string').join(' '))
-    }
+  const push = (value: unknown): void => {
+    if (typeof value === 'string') values.push(value)
+    else if (Array.isArray(value)) values.push(value.filter((item): item is string => typeof item === 'string').join(' '))
   }
-  if (call.argsText !== '') values.push(call.argsText)
-  return values.some((value) => LISTING_COMMAND_RE.test(value))
+  const source = typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : parseToolArgs(call)
+  if (source !== undefined) for (const key of ['command', 'cmd', 'script', 'args']) push(source[key])
+  if (values.length === 0 && call.argsText !== '') values.push(call.argsText)
+  return values
+}
+
+/** W1：列表类命令参数扫描（args 优先，argsText 兜底；纯函数、无 IO）。 */
+function listingCommandIn(call: ShearToolCall, args?: unknown): boolean {
+  return commandValuesOf(call, args).some((value) => LISTING_COMMAND_RE.test(value))
+}
+
+/** W2：过程日志命令扫描（白名单 + 同行构建/测试动词；数据查询命令不在内）。 */
+function logCommandIn(call: ShearToolCall, args?: unknown): boolean {
+  return commandValuesOf(call, args).some((value) => LOG_COMMAND_RE.test(value))
 }
 
 /**
@@ -72,7 +95,7 @@ function listingCommandIn(call: ShearToolCall, args?: unknown): boolean {
  */
 export function looksLikeListing(call: ShearToolCall, resultText: string, args?: unknown): boolean {
   if (toolCategory(call.name) !== 'cmd') return false
-  if (resultText.split('\n').length <= ENTRY_MIN_LINES) return false
+  if (resultText.split('\n').length <= LISTING_MIN_LINES) return false
   return listingCommandIn(call, args)
 }
 
@@ -169,27 +192,26 @@ export interface Admission {
   readonly op?: ShearOp
 }
 
-/** T-entry 写时整形（落账前，断裂成本 0）：cmd 类成功保首尾、失败保错因；只保原文行 + 中性省略标记。 */
+/**
+ * T-entry 写时整形（落账前，断裂成本 0）：**只对过程日志**（构建/测试/安装/检查）保头尾。
+ * 五道门槛全过才动刀，任一不过 = 原文保留（失败方向 = 保留，账本 §73）：
+ * ① cmd 类；② 输出 ≥ ENTRY_MIN_LINES 行且 ≥ ENTRY_MIN_BYTES 字节；
+ * ③ 非失败（无非零退出码/错误词）；④ 非列表类（W1）；⑤ 命令在过程日志白名单内（W2）。
+ */
 export function shapeEntryContent(call: ShearToolCall, resultText: string, args?: unknown): string | undefined {
   if (toolCategory(call.name) !== 'cmd' || resultText === '') return undefined
   const lines = resultText.split('\n')
   if (lines.length <= ENTRY_MIN_LINES) return undefined
-  // W1：列表载荷 = 名字集合，保头尾会丢名字 → 不整形（记 entry-skip-listing）。
+  if (utf8ByteLength(resultText) < ENTRY_MIN_BYTES) return undefined
+  // ③ 失败方向 = 保留：非零退出码 / 错误词 → 原文不动刀（不再「保错因」式切片）。
+  if (ENTRY_FAILURE_RE.test(resultText)) return undefined
+  // ④ W1：列表载荷 = 名字集合，保头尾会丢名字 → 不整形（记 entry-skip-listing）。
   if (looksLikeListing(call, resultText, args)) return undefined
+  // ⑤ W2：数据查询类命令（git / Get-Content / Select-String …）原文保留——答案在中间。
+  if (!logCommandIn(call, args)) return undefined
   const keep: number[] = []
-  if (ENTRY_FAILURE_RE.test(resultText)) {
-    keep.push(0)
-    let hits = 0
-    for (let i = 1; i < lines.length && hits < ENTRY_MAX_ERROR_LINES; i++) {
-      if (!ENTRY_FAILURE_RE.test(lines[i] as string)) continue
-      keep.push(i)
-      hits++
-    }
-    keep.push(lines.length - 1)
-  } else {
-    for (let i = 0; i < Math.min(ENTRY_KEEP_HEAD, lines.length); i++) keep.push(i)
-    for (let i = Math.max(0, lines.length - ENTRY_KEEP_TAIL); i < lines.length; i++) keep.push(i)
-  }
+  for (let i = 0; i < Math.min(ENTRY_KEEP_HEAD, lines.length); i++) keep.push(i)
+  for (let i = Math.max(0, lines.length - ENTRY_KEEP_TAIL); i < lines.length; i++) keep.push(i)
   const unique = [...new Set(keep)].sort((a, b) => a - b)
   if (unique.length >= lines.length) return undefined
   const out: string[] = []

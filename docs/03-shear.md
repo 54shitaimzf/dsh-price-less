@@ -35,7 +35,7 @@
 
 | 档 | 时机 | 挂点 | 断裂成本 | 准入与动作 |
 |---|---|---|---|---|
-| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因；**列表类命令（Get-ChildItem/gci/ls/dir/tree/fd/find）不整形**——载荷 = 名字集合，保头尾会丢名字，记 `entry-skip-listing` |
+| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | **W2 保守准入（账本 §73）**：仅**过程日志**（构建/测试/安装/检查，`LOG_COMMAND_RE` 白名单）且输出 ≥120 行 **且** ≥16 KiB 才保头尾（12/12）；**失败（非零退出码/错误词）原文保留**；**列表类命令（W1）与数据查询类命令（git / Get-Content / Select-String / npm ls …）一律不整形**——载荷在中间，保头尾会丢答案，列表记 `entry-skip-listing` |
 | T0 / T0-R | 读后写超越 / 读件修复（§2.2） | surfaceOp replace | 中段剪（仅限被写超越的旧读；重推导兜底） | read@t1 被写@t2>t1 超越 → 旧读剪；声明表文件读后写 → 原位修复 |
 | T-boundary | 边界搭车 | task 压缩大 replace | 已付（搭车） | **老调用对唯一合法去处**，绝不中段独立剪 |
 
@@ -45,6 +45,12 @@
 > （写时整形 + 机械超越修复），不做思考后截断。代码面：`ShearOp.stub-replace`、
 > `ShearTier`/`ShearAppliedTier` 的 `T-loop`、`ShearPolicy.loopMaxConclusionChars`
 > 全部删除（`SHEAR_POLICY_VERSION` 2→3）。
+
+> **W2 保守准入（用户裁定 2026-09-09，账本 §73）**：真机回放发现 T-entry「保头 2 尾 2」对**数据查询类**
+> 命令是净损失——`git status` 的 fatal 被切片、`git log | Measure-Object` 的答案（提交数/标签）连同
+> README 头被整段丢掉（模型被迫重跑）。据此收紧：**失败方向 = 保留**（不再「保错因」式切片）；
+> 白名单之外一律原文保留；体积门槛 8 行 → **120 行 + 16 KiB**；保头尾 2/2 → **12/12**。
+> 判据仍是 L0 纯函数（命令名 + 体积/年龄），不依赖工具自声明、不依赖模型回应。
 
 > 挂点核验（P1.2 契约闭合）：harness `tools/execute` 的返回结果会经
 > `normalizeDispatchResult` 按 `value` 重新渲染 content，wrapper 只改 content 会丢失；
@@ -160,7 +166,8 @@
 ## 7. 验收标准（协议级断言）
 
 - [ ] 各档各有 ≥1 自动化用例；T-entry 断裂成本 0（落账前整形，账本无完整版）；
-- [ ] T-entry 列表类命令不整形（W1；`entry-skip-listing` 可观测）；
+- [ ] T-entry 保守准入（W2）：失败原文保留 / 列表类命令不整形（W1；`entry-skip-listing` 可观测）/
+  数据查询类命令不整形 / 仅过程日志且 ≥120 行与 16 KiB 才整形；
 - [ ] run 冲刷：吸收证明到达即剪（机械），run 范围 = 最大连续段（配对平衡断言）；
 - [ ] 结论句预算（截断安全）与中立叙述体（无指令词黑名单）；
 - [ ] T0-R 三硬规则注入测试：跨事件/跨行/streak 打断各退回正确路径；

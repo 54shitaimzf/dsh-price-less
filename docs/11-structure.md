@@ -54,7 +54,7 @@ src/
 ├─ platform/         # 适配面（唯一 harness 触点；升级只改这里）
 │  ├─ events.ts      # H1 firehose 订阅 → 进程内领域事件（异步队列旁路，§5 纪律②）
 │  ├─ history.ts     # H4/H5 改史端口：surfaceOp replace + compaction 事务 + prune 计价
-│  ├─ tools.ts       # H6 post-execute 端口（T-entry content 覆盖 / T-note 追加）+ tools/execute 信号计量；签名经 getTools 注入（F1）
+│  ├─ tools.ts       # H6 post-execute 端口（T-entry content 覆盖，W2 保守准入）+ tools/execute 信号计量；签名经 getTools 注入（F1）
 │  ├─ llm.ts         # H12 辅助调用端口（CeAuxPurpose 单点适配 + purpose 路由 + usage/缓存观测回执）
 │  ├─ storage.ts     # H10 storageDomain 封装（四实体表声明、版本化读写、CAS）
 │  ├─ skills.ts      # H13 技能目录枚举 + watch（稳定前缀原料 + 引用守卫查表）

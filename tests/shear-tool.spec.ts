@@ -1,6 +1,6 @@
 /**
  * P15a 工具剪切纯核测试（docs/implement/archive/P15a-shear-tool-core.md §5；docs/03 §7 协议级断言）。
- * 八组：谓词与三级回退 / T-entry / T-note / T0 / T0-R / 配对与边界搭车 / 确定性 / P15b 接线缝。
+ * 八组：谓词与三级回退 / T-entry（W1 列表 + W2 保守准入）/ T0 / T0-R / 配对与边界搭车 / 确定性 / P15b 接线缝。
  * 纯核测试：零 cordis 运行时、零 IO、零模型。
  */
 import { describe, expect, it } from 'vitest'
@@ -69,30 +69,38 @@ describe('P15a §1 谓词与三级回退', () => {
     expect(pathOfCall(read)).toBeUndefined()
   })
   it('策略初值集中且版本化（docs/03 §8）', () => {
-    expect(SHEAR_POLICY_VERSION).toBe(3)
-    expect(DEFAULT_SHEAR_POLICY).toEqual({ version: 3, t0rMaxSegments: 4, t0rMaxIndent: 1 })
+    expect(SHEAR_POLICY_VERSION).toBe(4)
+    expect(DEFAULT_SHEAR_POLICY).toEqual({ version: 4, t0rMaxSegments: 4, t0rMaxIndent: 1 })
   })
 })
 
-describe('P15a §2 T-entry 写时整形', () => {
-  it('cmd 成功长输出 → 保首尾 + 中性省略标记（零转写、无插件标签）', () => {
-    const shaped = shapeEntryContent({ seq: 1, time: 0, callId: 'c1', name: 'bash', argsText: '{}' }, bigLog(20))
+describe('P15a §2 T-entry 写时整形（W2 保守准入，账本 §73）', () => {
+  const logCall = (callId: string, command = 'npm test') => ({ seq: 1, time: 0, callId, name: 'bash', argsText: JSON.stringify({ command }) })
+  it('过程日志大输出 → 保头尾 + 中性省略标记（零转写、无插件标签）', () => {
+    const shaped = shapeEntryContent(logCall('c1'), bigLog(400))
     expect(shaped).toBeDefined()
     expect(shaped).toContain('line 1:')
-    expect(shaped).toContain('line 20:')
+    expect(shaped).toContain('line 400:')
     expect(shaped).toContain('省略')
     expect(shaped).not.toContain('T-entry')
-    const admission = admitEntry({ seq: 1, time: 0, callId: 'c1', name: 'bash', argsText: '{}' }, bigLog(20))
+    const admission = admitEntry(logCall('c1'), bigLog(400))
     expect(admission.decision).toBe('cut')
     expect(admission.op?.kind).toBe('shape-entry')
   })
-  it('失败 → 保错因；read 类与短输出 → 不动刀', () => {
-    const failed = ['$ build', ...Array.from({ length: 10 }, (_, i) => `noise ${i}`), 'ERROR: boom', '[exit code: 1]'].join('\n')
-    const shaped = shapeEntryContent({ seq: 1, time: 0, callId: 'c1', name: 'pwsh', argsText: '{}' }, failed)
-    expect(shaped).toContain('ERROR: boom')
-    expect(shaped).toContain('[exit code: 1]')
-    expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c2', name: 'read', argsText: '{}' }, bigLog(20))).toBeUndefined()
-    expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c3', name: 'bash', argsText: '{}' }, 'ok\n')).toBeUndefined()
+  it('失败 → 原文保留（不整形）；数据查询 / read 类 / 小输出 → 不动刀', () => {
+    const failed = ['$ build', ...Array.from({ length: 200 }, (_, i) => `noise ${i}`), 'ERROR: boom', '[exit code: 1]'].join('\n')
+    expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c1', name: 'pwsh', argsText: JSON.stringify({ command: 'npm run build' }) }, failed)).toBeUndefined()
+    // W2：数据查询类命令（git / Get-Content / Select-String）即使超体积门槛也不整形——载荷在中间。
+    expect(shapeEntryContent(logCall('c2', "git -c safe.directory='*' log --oneline"), bigLog(400))).toBeUndefined()
+    expect(shapeEntryContent(logCall('c3', 'Get-Content README.md -TotalCount 400'), bigLog(400))).toBeUndefined()
+    expect(shapeEntryContent(logCall('c4', 'Select-String -Path README.md -Pattern foo'), bigLog(400))).toBeUndefined()
+    expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c5', name: 'read', argsText: '{}' }, bigLog(400))).toBeUndefined()
+    expect(shapeEntryContent(logCall('c6'), 'ok\n')).toBeUndefined()
+  })
+  it('体积门槛：行数或字节不足 → 不动刀', () => {
+    expect(shapeEntryContent(logCall('c1'), bigLog(100))).toBeUndefined()
+    const fewBigLines = Array.from({ length: 30 }, () => 'y'.repeat(2000)).join('\n')
+    expect(shapeEntryContent(logCall('c2'), fewBigLines)).toBeUndefined()
   })
 })
 
@@ -105,7 +113,7 @@ describe('W1 列表识别（目录列表不整形）', () => {
     expect(looksLikeListing(toolCall('c2', 'bash', { command: 'ls -la' }), listing)).toBe(true)
     expect(looksLikeListing(toolCall('c3', 'pwsh', { command: 'Get-Content C:\\dir\\x.log' }), listing)).toBe(false)
     expect(looksLikeListing(toolCall('c4', 'bash', { command: 'npm test' }), bigLog(20))).toBe(false)
-    expect(shapeEntryContent(toolCall('c5', 'bash', { command: 'npm test' }), bigLog(20))).toBeDefined()
+    expect(shapeEntryContent(toolCall('c5', 'bash', { command: 'npm test' }), bigLog(400))).toBeDefined()
   })
   it('read 类 / 短输出 / args 缺失时回退 argsText', () => {
     expect(looksLikeListing(toolCall('c1', 'read', { file_path: 'a.ts' }), listing)).toBe(false)
@@ -191,7 +199,7 @@ describe('P15a §7 确定性', () => {
     readResult,
     call(3, 20, 'e1', 'edit', { file_path: 'src/index.ts', old_string: 'export const x = 2', new_string: 'export const x = 9' }),
     call(4, 30, 'b1', 'bash', { command: 'npm test' }),
-    result(5, 31, 'b1', bigLog(20)),
+    result(5, 31, 'b1', bigLog(400)),
     assistant(6, 32, '测试全绿。'),
   ]
   it('同输入双跑逐字节一致，且输入不被 mutate', () => {

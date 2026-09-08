@@ -73,8 +73,8 @@ export interface ShearPolicy {
   readonly t0rMaxIndent: number
 }
 
-/** v3：T-loop 思考后截断退役，`loopMaxConclusionChars` 随之删除（账本 §72）。 */
-export const SHEAR_POLICY_VERSION = 3
+/** v4：T-entry 保守准入（失败原文保留 / 仅过程日志整形 / 体积门槛），账本 §73。 */
+export const SHEAR_POLICY_VERSION = 4
 export const DEFAULT_SHEAR_POLICY: ShearPolicy = {
   version: SHEAR_POLICY_VERSION,
   t0rMaxSegments: 4,

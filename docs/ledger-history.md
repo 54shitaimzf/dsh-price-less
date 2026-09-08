@@ -2910,3 +2910,48 @@ build 绿（host + client）。`src/`、`client/` 全量 grep 已无 `negotiate`
 **版本**：`SHEAR_POLICY_VERSION` 2 → 3（策略面删除 `loopMaxConclusionChars`）。
 
 **验收**：`npm run gate` = **608 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿。
+
+---
+
+## §73 T-entry 保守准入 W2：失败原文保留 / 仅过程日志整形 / 数据查询不剪（2026-09-09；提交 = 本账本同提交）
+
+**触发**：用户投诉「给我看看你的失败截断……你连 git 都敢截断」——T-entry「保头 2 尾 2」对**失败结果**与
+**数据查询类命令**是净损失，违反「失败默认保留」。
+
+**真机证据（只读回放，47 会话 / 34 条 `shear-applied`，全部 T-entry/shape-entry）**：
+
+| 会话 | resultSeq | 命令 | 后果 |
+|---|---|---|---|
+| `session-ecd9ff40`（resume） | 44 | `git log --oneline -15; git status --short`（`fatal: detected dubious ownership`） | 失败路径仍切片：`… (省略 1 行)` / `… (省略 4 行)`，错误全文不完整 |
+| 同上 | 75 | `=== RootUp git ===` + `git log \| Measure-Object` + `git tag` + `Get-Content README.md -TotalCount 40` | 841 → **14** token：答案（提交数 / 标签 / README 头）整段删除，模型被迫重跑 |
+| 同上 | 78 | `=== card git count ===` + 同上 | 772 → **15** token：同上 |
+| 同上 | 101/130/143/146 | `Select-String README.md` / `Get-Content README.md` / `Get-Content resume-1999.typ`（逐行抽取） | 数据查询载荷在中间被丢（模型需要那些行） |
+
+**用户裁定**：更保守——**失败方向 = 保留**；数据查询类命令不剪；只对「过程日志」（构建/测试/安装/检查）
+做写时整形。
+
+**修复（W2 保守准入，五道门槛全过才动刀）**：
+
+| # | 门槛 | 旧 | 新 |
+|---|---|---|---|
+| ① | 工具类别 | `cmd` | 不变 |
+| ② | 体积 | ≥ 9 行（`ENTRY_MIN_LINES=8`） | **≥ 120 行 且 ≥ 16 KiB**（`ENTRY_MIN_BYTES=16_384`） |
+| ③ | 失败 | 保错因（仍切片） | **原文保留**（非零退出码 / `error|failed|failure|exception|traceback|fatal`） |
+| ④ | 列表 | W1 不整形 | 不变（`LISTING_MIN_LINES=8` 与体积门槛解耦，事实照记） |
+| ⑤ | 命令白名单 | 无 | **仅过程日志**（`LOG_COMMAND_RE`：npm/pnpm/yarn/npx/vitest/jest/pytest/cargo/tsc/eslint/make/… + 同行构建/测试动词）；`git` / `Get-Content` / `Select-String` / `npm ls` 等数据查询不在内 |
+| — | 保头尾 | 2 / 2 | **12 / 12** |
+
+**版本**：`SHEAR_POLICY_VERSION` 3 → 4。
+
+**落点**：`core/shear/tool.ts`（`ENTRY_*` / `LOG_COMMAND_RE` / `commandValuesOf` / `logCommandIn` /
+`shapeEntryContent`）、`core/shear/types.ts`、`tests/shear-tool.spec.ts`（W2 三例）、
+`tests/shear-domain.spec.ts`（同步相 T-entry + 门槛组）、`tests/shear-ledger.spec.ts`（体积夹具）。
+
+**验收**：`npm run gate` = **609 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿。
+
+**口径同步**：`docs/03` §2 表 + W2 注 + §7、`docs/11` §2（tools.ts 行）、`AGENTS.md`。
+
+**已知残余风险 / 待补**：
+1. 白名单是**命令名 + 动词**启发式；漏列只损失一次节省（不动刀），不丢内容；误列风险由体积门槛（120 行 + 16 KiB）与失败门槛兜住。
+2. 需 DSH 重启加载新构建（`lib` 已最新）后真机复跑：resume 会话 `git` / `Get-Content` 结果应 0 次整形，`shear-applied` 仅剩过程日志。
+3. `scripts/verify-p15a/p15b.mjs` 仍陈旧（§71 已记，不在 gate）。
