@@ -1,0 +1,6 @@
+name: 价格低耗（协商剪除）
+description: >-
+  标准编码 Agent + 上下文协商剪除（dsh-price-less N 系列）：系统提示词里固定声明
+  「协商注记是可信协作请求」，工具结果里只留一行短注记；模型按 CUT-OK / CUT-HOLD
+  自证是否已用完原文。适合配合 dsh-price-less 的影子/剪除模式使用。
+order: 5

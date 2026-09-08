@@ -160,7 +160,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | 主模型系统提示词 | **恒 0**——知识出口唯一 = 优化后 prompt（用户确认后可见替换） | [01 §4](01-architecture.md) |
 | 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式；版本化常量 + 字节稳定断言，P18）· T-note 注记模板 · 机械摘句规则（对表打分非 LLM） | 02/03/04 各域 |
 | 斜杠命令 | `/task` 系列（Tier-0 边界）· `/optimize-prompt`（星标命令形态） | [10 §2](10-wiring.md) |
-| 预设 | **不提供**（首批预设候选见 [00](00-overview.md) 路线图：预设开发结合系统提示词改造） | 路线图 |
+| 预设 | **提供 1 个**：`presets/price-less/`（价格低耗·协商剪除）——persona 段声明协商协议（通道 A）+ 工具结果短注记（通道 C）；`node scripts/install-preset.mjs` 装到 `$DSH_HOME/.agent-presets/` | N3 §2.1 |
 | client 工具 | 设置卡壳 + 星标按钮 + 度量消息列表可视化 | 本文 §5 |
 
 新资产先进本表再写码。

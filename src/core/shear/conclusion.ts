@@ -18,9 +18,7 @@ export const SHEAR_CONCLUSION_VERSION = 2
  * v1 模板（`types.ts:SHEAR_NOTE_TEMPLATE`）保留供历史回放，不再新增使用。
  */
 export const SHEAR_CONCLUSION_TEMPLATE =
-  '（本结果较长。若你已从中得出结论，请在本次回复最后一行给出：\n' +
-  'CUT-OK: 结论〈一句话〉｜事实〈路径/数值/版本/引号内文字，逐字，分号分隔〉｜重取〈再拿到原文的最小句柄〉\n' +
-  '若后续仍需原文，请改为输出 CUT-HOLD:〈原因〉。不要为此额外调用工具。）'
+  '（协商：本结果较长。若已用完，请在本次回复最后一行写 CUT-OK: 结论｜事实｜重取；若仍需原文，写 CUT-HOLD: 原因。）'
 
 /** 模型可见注记（= 模板；保留函数形态便于 N3 接线与版本断言）。 */
 export function negotiationNote(): string {

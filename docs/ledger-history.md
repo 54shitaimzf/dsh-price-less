@@ -2339,3 +2339,27 @@ N2 结论契约必须同时覆盖；③ **`signature` basis 可剪数 = 0**（55
 预算 S–M，实测 M 内。
 
 **下一单元**：**N3 影子模式**（`docs/implement/N3-shadow-mode.md`）——**先拍板通道**，再 N3a 小样本试验 → N3b 全量影子。
+
+## §54 N3 通道 A+C 落地：自有预设 + 短注记（2026-09-09）
+
+**裁定**（用户）：通道 = **A（用户可控指令）+ C（缩短注记）**；A 的载体 = **我们自己的预设**。
+
+**交付**：
+- `presets/price-less/`（`preset.yml` + `agent.cordis.yml`：自 shipped `standard` 拷贝，persona 段固定声明协商协议）
+- `scripts/install-preset.mjs`（只写 `$DSH_HOME/.agent-presets/<name>/`，幂等；`--dry-run` 可预演）
+- `package.json` `files` 增 `presets`（随包发布）
+- `SHEAR_CONCLUSION_TEMPLATE` 缩短为一行（约 60 字，原约 150 字）
+
+**系统提示词装配点（已核实运行态）**：DSH 以 `tsx apps/cli/src/bin.ts web` 跑 checkout 源码；系统提示 =
+persona（prefix/suffix，预设 scope 内 shadow 部署 persona）+ agent-instructions（`~/.dsh/AGENTS.md` + 项目 AGENTS.md）
++ 各插件 section。预设 = 完整 composition 拷贝（无继承），随 DSH 升级需手工同步。
+
+**缓存**：协议段静态、零 `{{}}` 动态、会话开始定型 → 一次性前缀成本，无中途断裂（符合 docs/06 §2）。
+
+**版本陷阱（顺带发现）**：用户已有预设（router-pro 等）persona 用 `text:`，而当前 checkout 的 `dsh-persona`
+要求 `prefix:`/`suffix:`（2026-09-06 提交 40792330c0）→ 这些预设可能已失效，待用户自行迁移。
+
+**验收**：`npm run gate` 绿 · `typecheck:tests` 绿 · `node scripts/install-preset.mjs` 幂等 ·
+`presets/price-less/` 与 `~/.dsh/.agent-presets/price-less/` 逐字节一致。
+
+**下一步**：用 `price-less` 预设开新会话 → N3a 观察配合率（底线 30%）→ N3b 全量影子（需重启加载新构建）。
