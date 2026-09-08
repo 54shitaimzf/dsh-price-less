@@ -1,8 +1,8 @@
 /**
- * 工具剪切账本 fold（docs/07 §0.5 剪切族；docs/03 §6；P15b）。
+ * 剪切账本 fold（docs/07 §0.5 剪切族；docs/03 §6；P15b 工具半边 + P16 对话半边）。
  * 纯函数：同输入同账；输入 = 原始事件序（append 语义）+ context-economy/shear-* 事实。
- * `shearDecision` 来自重跑 foldToolShear（本会怎么判）；`cut*`/`tableRepair` 来自已发射事实（实际落刀）——分列不混算。
- * `cutMisfireDetected` / `questionBacklogDepth` / `thinkingCutTokens` 归 P16：字段在位、值显式 0。
+ * `shearDecision` 来自重跑 foldToolShear + foldRunShear（本会怎么判）；`cut*`/`tableRepair` 来自已发射事实（实际落刀）——分列不混算。
+ * P16：`cutEvents.question` / `questionBacklogDepth` / `cutMisfireDetected` 由重折 run 状态机得出；`thinkingCutTokens` 显式 0（N5）。
  *
  * 模块: core 剪切账本 fold（零 harness/platform import）
  * 平面: L0（确定性重放；无模型、无 IO）
@@ -14,13 +14,16 @@ import type { LedgerFact, LedgerSessionEvent } from '../ledger/types.ts'
 import { estimateTokens, extractTextFromToolResult } from '../ledger/fold.ts'
 import { DEFAULT_SHEAR_POLICY, type ShearEvent, type ShearPolicy, type ShearToolCategory } from './types.ts'
 import { foldToolShear, pathOfCall, toolCategory, type FoldToolShearOptions } from './tool.ts'
+import { DEFAULT_RUN_POLICY, foldRunShear, RUN_CLASS_FACT_TYPE, type RunEvent, type RunPolicy } from './run.ts'
 
 export const SHEAR_APPLIED_FACT_TYPE = 'context-economy/shear-applied' // ignorable
 export const SHEAR_DECISION_FACT_TYPE = 'context-economy/shear-decision' // ignorable
 export const SHEAR_ERROR_FACT_TYPE = 'context-economy/shear-error' // ignorable
+/** 星标剪切清单事实（P16；星标 = 用户明确动作 = 吸收证明，清单来自断面行记录）。 */
+export const SHEAR_RUN_PLAN_FACT_TYPE = 'context-economy/shear-run-plan' // ignorable
 
-export type ShearAppliedKind = 'shape-entry' | 'stub-replace' | 'note-cut' | 't0-supersede' | 't0r-repair'
-export type ShearAppliedTier = 'T-entry' | 'T-loop' | 'T-note' | 'T0' | 'T0-R'
+export type ShearAppliedKind = 'shape-entry' | 'stub-replace' | 'note-cut' | 't0-supersede' | 't0r-repair' | 'run-flush'
+export type ShearAppliedTier = 'T-entry' | 'T-loop' | 'T-note' | 'T0' | 'T0-R' | 'run'
 
 /** 每次落刀一条（cut 相；失败不落此事实，落 shear-error）。 */
 export interface ShearAppliedFactData {
@@ -41,6 +44,19 @@ export interface ShearAppliedFactData {
   readonly segments?: number
   readonly windowLines?: number
   readonly repairCoverage?: number
+  // —— P16 对话半边（kind = 'run-flush' 时在位） ——
+  readonly startSeq?: number
+  readonly endSeq?: number
+  readonly runPairs?: number
+  readonly runClass?: string
+  readonly conclusionTier?: string
+}
+
+/** 星标剪切清单载荷（P16；选坐标不造坐标：坐标与结论都来自断面行记录）。 */
+export interface ShearRunPlanFactData {
+  readonly at: number
+  readonly source: 'star'
+  readonly items: readonly { readonly startSeq: number; readonly endSeq: number; readonly note: string }[]
 }
 
 /** hold / note-attached 相（keep 不发射，由重算 fold 得出）。 */
@@ -159,12 +175,14 @@ function appliedFacts(facts: readonly LedgerFact[]): ShearAppliedFactData[] {
  * 剪切族账本 fold：事实（实际落刀）+ 事件序（裁决分布与误伤信号重算）。
  * @param events 会话事件序（含 surfaceOp；replace 事件不参与纯核重折，只参与表面 fold）。
  * @param facts context-economy/shear-* 事实（会话 ignorable 事件或 KV 镜像，同口径）。
- * @param policy 策略阈值（默认 docs/03 §8 初值）。
+ * @param policy 工具策略阈值（默认 docs/03 §8 初值）。
+ * @param runPolicy 对话 run 策略阈值（默认 docs/03 §8 初值）。
  */
 export function foldShearLedger(
   events: readonly LedgerSessionEvent[],
   facts: readonly LedgerFact[],
   policy: ShearPolicy = DEFAULT_SHEAR_POLICY,
+  runPolicy: RunPolicy = DEFAULT_RUN_POLICY,
 ): ShearLedger {
   const ledger = emptyLedger()
   const original = events.filter((event) => {
@@ -203,6 +221,12 @@ export function foldShearLedger(
   let repairLines = 0
   let windowLines = 0
   for (const fact of applied) {
+    if (fact.kind === 'run-flush') {
+      ledger.cutEvents.question++
+      ledger.cutTokensSaved += fact.savedTokens
+      ledger.cutBreakCost += fact.breakTokens
+      continue
+    }
     ledger.cutEvents.tool++
     ledger.cutTokensSaved += fact.savedTokens
     ledger.cutBreakCost += fact.breakTokens
@@ -233,6 +257,52 @@ export function foldShearLedger(
     if (fact.type !== SHEAR_DECISION_FACT_TYPE) continue
     const data = fact.data as ShearDecisionFactData
     if (data.decision === 'note-attached') ledger.shearNoteAttached++
+  }
+
+  // —— P16 对话半边：重折 run 状态机（分类读 judge-recorded 事实，清单读 shear-run-plan 事实） ——
+  const runEvents: RunEvent[] = []
+  for (const event of original) {
+    if (event.type === 'user/message' || event.type === 'assistant/message' || event.type === 'tool/result') {
+      const kind = event.type === 'user/message' ? 'user-message' : event.type === 'assistant/message' ? 'assistant-message' : 'tool-result'
+      runEvents.push({ kind, seq: event.seq, time: event.time, text: ledgerEventText(event) })
+    }
+  }
+  for (const fact of facts) {
+    const data = (fact.data ?? {}) as Record<string, unknown>
+    if (fact.type === RUN_CLASS_FACT_TYPE) {
+      const anchorSeq = Number(data.seq)
+      if (!Number.isInteger(anchorSeq) || anchorSeq <= 0) continue
+      const decision = data.decision === 'new-task' ? 'new-task' : 'continue'
+      const klass = data.class
+      runEvents.push({
+        kind: 'verdict', seq: fact.seq ?? fact.time, time: fact.time, anchorSeq, decision,
+        ...(klass === 'action' || klass === 'pureQ' || klass === 'verifyQ' ? { klass } : {}),
+      })
+    } else if (fact.type === SHEAR_RUN_PLAN_FACT_TYPE) {
+      const items = Array.isArray(data.items) ? (data.items as { startSeq?: unknown; endSeq?: unknown; note?: unknown }[]) : []
+      runEvents.push({
+        kind: 'star-plan', seq: fact.seq ?? fact.time, time: fact.time,
+        items: items
+          .filter((item) => Number.isInteger(item.startSeq) && Number.isInteger(item.endSeq) && typeof item.note === 'string')
+          .map((item) => ({ startSeq: Number(item.startSeq), endSeq: Number(item.endSeq), note: String(item.note) })),
+      })
+    }
+  }
+  const runPlan = foldRunShear(runEvents, runPolicy)
+  for (const record of runPlan.records) ledger.shearDecision[record.decision]++
+  ledger.questionBacklogDepth = runPlan.backlogDepth
+  const salientByRun = new Map<string, readonly string[]>()
+  for (const record of runPlan.records) {
+    if (record.decision === 'cut') salientByRun.set(`${record.startSeq}..${record.endSeq}`, record.salient)
+  }
+  const userTexts = runEvents.filter((event) => event.kind === 'user-message') as Extract<RunEvent, { kind: 'user-message' }>[]
+  for (const fact of applied) {
+    if (fact.kind !== 'run-flush' || fact.startSeq === undefined || fact.endSeq === undefined) continue
+    const salient = salientByRun.get(`${fact.startSeq}..${fact.endSeq}`) ?? []
+    if (salient.length === 0) continue
+    // 误剪信号 = 剪后用户又提到被剪内容（重问/重读；指纹可检出，不静默）。
+    const misfire = userTexts.some((user) => user.seq > (fact.endSeq as number) && salient.some((token) => user.text.toLowerCase().includes(token)))
+    if (misfire) ledger.cutMisfireDetected++
   }
   return ledger
 }

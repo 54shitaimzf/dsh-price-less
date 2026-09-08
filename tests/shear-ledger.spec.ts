@@ -5,8 +5,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  RUN_CLASS_FACT_TYPE,
   SHEAR_APPLIED_FACT_TYPE,
   SHEAR_DECISION_FACT_TYPE,
+  SHEAR_RUN_PLAN_FACT_TYPE,
   foldShearLedger,
   foldSurfaceNodes,
   formatShearLedger,
@@ -113,5 +115,76 @@ describe('表面 fold 与尾部计价', () => {
     const tail = surfaceTailTokens(events, 3)
     expect(tail).toBeGreaterThan(0)
     expect(surfaceTailTokens(events, 999)).toBe(0)
+  })
+})
+
+// —— P16 对话半边：cutEvents{question} / questionBacklogDepth / cutMisfireDetected / thinkingCutTokens ——
+const runEvents: LedgerSessionEvent[] = [
+  { type: 'user/message', seq: 1, time: 1, surfaceOp: 'append', data: { content: [{ type: 'text', text: '为什么要用 src/core/shear/run.ts？' }] } },
+  { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: '因为它纯核。' }] } } },
+  { type: 'user/message', seq: 3, time: 3, surfaceOp: 'append', data: { content: [{ type: 'text', text: '动手' }] } },
+  { type: 'user/message', seq: 7, time: 7, surfaceOp: 'append', data: { content: [{ type: 'text', text: '再讲一遍 src/core/shear/run.ts 的边界' }] } },
+]
+const classFacts: LedgerFact[] = [
+  { type: RUN_CLASS_FACT_TYPE, seq: 4, time: 4, data: { seq: 1, decision: 'continue', class: 'pureQ' } },
+  { type: RUN_CLASS_FACT_TYPE, seq: 5, time: 5, data: { seq: 3, decision: 'continue', class: 'action' } },
+]
+const runFlushFact: LedgerFact = {
+  type: SHEAR_APPLIED_FACT_TYPE, seq: 6, time: 6,
+  data: {
+    policyVersion: 1, tier: 'run', kind: 'run-flush', callId: '', resultSeq: 2, at: 6, category: 'other',
+    beforeTokens: 100, afterTokens: 30, savedTokens: 70, breakTokens: 5, tailNodes: 1,
+    startSeq: 1, endSeq: 2, runPairs: 1, runClass: 'pureQ', conclusionTier: 'mechanical-quote',
+  } satisfies ShearAppliedFactData,
+}
+
+describe('foldShearLedger · P16 对话半边', () => {
+  it('run 落刀事实 → cutEvents.question / cutTokensSaved / cutBreakCost / shearDecision', () => {
+    const ledger = foldShearLedger(runEvents, [...classFacts, runFlushFact])
+    expect(ledger.cutEvents).toEqual({ question: 1, tool: 0 })
+    expect(ledger.cutTokensSaved).toBe(70)
+    expect(ledger.cutBreakCost).toBe(5)
+    expect(ledger.shearDecision.cut).toBe(1)
+    expect(ledger.thinkingCutTokens).toBe(0)
+  })
+
+  it('吸收证明未到 → questionBacklogDepth 计数、零落刀', () => {
+    const ledger = foldShearLedger(runEvents.slice(0, 3), [classFacts[0]!])
+    expect(ledger.cutEvents.question).toBe(0)
+    expect(ledger.questionBacklogDepth).toBe(1)
+    expect(ledger.shearDecision.hold).toBe(1)
+  })
+
+  it('剪后重问被剪内容 → cutMisfireDetected（指纹检出，不静默）', () => {
+    const withMisfire = foldShearLedger(runEvents, [...classFacts, runFlushFact])
+    expect(withMisfire.cutMisfireDetected).toBe(1)
+    const withoutMisfire = foldShearLedger(runEvents.slice(0, 3), [...classFacts, runFlushFact])
+    expect(withoutMisfire.cutMisfireDetected).toBe(0)
+  })
+
+  it('星标剪切清单事实 = 吸收证明 + 结论来源（star-note 落刀）', () => {
+    const starEvents: LedgerSessionEvent[] = [
+      { type: 'user/message', seq: 1, time: 1, surfaceOp: 'append', data: { content: [{ type: 'text', text: 'Q1' }] } },
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: 'A1' }] } } },
+      { type: 'user/message', seq: 3, time: 3, surfaceOp: 'append', data: { content: [{ type: 'text', text: 'Q2' }] } },
+      { type: 'assistant/message', seq: 4, time: 4, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: 'A2' }] } } },
+      { type: 'user/message', seq: 5, time: 5, surfaceOp: 'append', data: { content: [{ type: 'text', text: 'Q3' }] } },
+      { type: 'assistant/message', seq: 6, time: 6, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: 'A3' }] } } },
+    ]
+    const starFacts: LedgerFact[] = [
+      { type: RUN_CLASS_FACT_TYPE, seq: 7, time: 7, data: { seq: 1, decision: 'continue', class: 'pureQ' } },
+      { type: RUN_CLASS_FACT_TYPE, seq: 8, time: 8, data: { seq: 3, decision: 'continue', class: 'pureQ' } },
+      { type: RUN_CLASS_FACT_TYPE, seq: 9, time: 9, data: { seq: 5, decision: 'continue', class: 'pureQ' } },
+      { type: SHEAR_RUN_PLAN_FACT_TYPE, seq: 10, time: 10, data: { at: 10, source: 'star', items: [{ startSeq: 1, endSeq: 6, note: '结论是 A' }] } },
+    ]
+    const ledger = foldShearLedger(starEvents, starFacts)
+    expect(ledger.shearDecision.cut).toBe(1)
+    expect(ledger.questionBacklogDepth).toBe(0)
+  })
+
+  it('同输入同账（含 run 半边）', () => {
+    const first = JSON.stringify(foldShearLedger(runEvents, [...classFacts, runFlushFact]))
+    const second = JSON.stringify(foldShearLedger(runEvents, [...classFacts, runFlushFact]))
+    expect(second).toBe(first)
   })
 })

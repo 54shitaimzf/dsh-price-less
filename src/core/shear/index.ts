@@ -5,4 +5,5 @@
 export * from './types.ts'
 export * from './t0r.ts'
 export * from './tool.ts'
+export * from './run.ts'
 export * from './ledger.ts'
