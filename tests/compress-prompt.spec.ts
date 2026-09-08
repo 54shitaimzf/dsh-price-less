@@ -99,11 +99,17 @@ describe('P18 prompt：两模式组装', () => {
     expect(renderBoundaryPrompt({ regionText: '', units: [] }).prompt.length).toBeGreaterThan(0)
   })
 
+  it('F10 边界规则：总分零指针（无 refs）+ 错误信息不进热尾', () => {
+    const prompt = renderBoundaryPrompt({ regionText: 'x', units: [unit('a')] }).prompt
+    expect(prompt).not.toContain('refs')
+    expect(prompt).toContain('错误信息（报错、异常、失败输出）一律不进 hotTail')
+  })
+
   it('同输入同字节（双跑逐字节一致）', () => {
     const input = { regionText: 'raw\nwork', units: [unit('a'), unit('b')], priorChain: [entry('t', 'boundary', 'D')] }
     expect(renderBoundaryPrompt(input).prompt).toBe(renderBoundaryPrompt(input).prompt)
     expect(renderPressurePrompt(input).prompt).toBe(renderPressurePrompt(input).prompt)
     expect(renderPriorChain([])).toBe('')
-    expect(COMPRESS_POLICY_VERSION).toBe(2)
+    expect(COMPRESS_POLICY_VERSION).toBe(3)
   })
 })

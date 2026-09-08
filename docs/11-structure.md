@@ -76,8 +76,8 @@ src/
 │  │                 #   + pressure.ts 压力触发/检查点/折叠区转写（P20a）+ fuse.ts 保险丝地板（P20b）
 │  │                 #   + fact-leak.ts 摘要事实泄漏机械扫描（F9：path/version/quote/command/code/number，只计数）
 │  ├─ assemble/      # 装配器（P17 已施工；F9 v2）：坐标链 vN 重映射、热尾双通道取真 + 消息单元、
-│  │                 #   Zipf 预算分配 + 份额帽 + 仅指针降级、总述/分步/热尾 1:1 指针渲染 + 共享事务原语 +
-│  │                 #   HT 软门 + 档案硬帽/单调追加守卫 + paths.ts 路径相对化/短 ID 表（04 §1/§2/§3/§6）
+│  │                 #   Zipf 预算分配 + 份额帽 + 配额丢弃、总述/分步零指针 + 热尾指向档案 vN 渲染 + 共享事务原语 +
+│  │                 #   HT 软门 + 档案硬帽/单调追加守卫 + paths.ts 路径相对化（F10：短 ID 表退役）（04 §1/§2/§3/§6）
 │  ├─ meter/         # token 估算纯核（F8a，04 §5）：对齐 DSH token-meter/estimate.ts 结构模型（块/角色价 + 递归块价），密度改两桶（CJK 1.5 / 其余 2.9 字符/token）+ token→字符反解 + 标定比
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
@@ -151,7 +151,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | `compression.pressure` | true | 压缩 | 压力路径 + 保险丝（**P20/P20c 已落位**：wire 锚定触发阈 = `pressureRatio`（默认 0.35）× 主模型窗口〔缺失 → 假定窗口 → 绝对安全网〕→ 检查点 + 保留区逐字 + 断路器；地板 = 0.8×模型窗口的紧急折叠〔可越过断路器，硬上限 +3〕+ `request-error` 溢出接管；关闭 = 零行为） |
 | `compression.pressureRatio` | 0.35 | 压缩 | 压力阀门比例（**P20c 落位**：模型能力在窗口约 35% 后下降；不变量 `0 < ratio < 0.8`，违例整块回退设计值） |
 | `compression.domainTokens` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 标定（[04 §5](04-compactor.md)；**P19 落位 + P20c 改义**）：`domainTokens` = 模型未声明窗口时的**假定窗口**；`retainTokens` = 边界热尾预算；`thresholdTokens` = **末位绝对安全网**；`retain < threshold` 违例自动回退设计值 |
-| `compression.archiveCapTokens` | 15K | 压缩 | 档案区硬上限；超限截断最老条目（[04 §6](04-compactor.md)；**P19 落位**） |
+| `compression.archiveCapTokens` | 10K | 压缩 | 档案区硬上限（只计总分；热尾单列）；超限截断最老条目（[04 §6](04-compactor.md)；**P19 落位 + F9d/F10 改值**） |
 
 关闭任一层其余功能完整；`cordis.patch.yml` 已覆写 compaction-basic `auto:false`（**P20b 落位**：自动压力与溢出恢复唯一提供者 = 本插件，防双触发）。
 

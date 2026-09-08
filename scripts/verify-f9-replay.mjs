@@ -76,7 +76,6 @@ const steps = (oldProduct.digest?.blocks ?? [])
   .map((block) => ({
     type: block.type === 'wrap' ? 'note' : ['plan', 'impl', 'verify'].includes(block.type) ? block.type : 'note',
     text: block.text.trim(),
-    refs: [],
   }))
 const hotTail = (Array.isArray(oldProduct.hotTail) ? oldProduct.hotTail : []).map((decl) => ({ unitId: decl.unitId }))
 const outcome = assembleArchive({
@@ -92,14 +91,12 @@ const oldText = (summary.summary ?? []).map((block) => block.text ?? '').join(''
 const density = DEFAULT_ASSEMBLE_POLICY.density
 const oldEst = estimateTokens(oldText, density)
 console.log('')
-console.log('| 口径 | 旧产物（真机） | F9 重装配（同申报） |')
+console.log('| 口径 | 旧产物（真机） | F10 重装配（同申报） |')
 console.log('|---|---|---|')
 console.log('| 字符 | ' + oldText.length + ' | ' + (outcome.ok ? outcome.result.rendered.length : '—') + ' |')
 console.log('| est（两桶） | ' + oldEst + ' | ' + (outcome.ok ? estimateTokens(outcome.result.rendered, density) : '—') + ' |')
-console.log('| 摘要头 est | — | ' + (outcome.ok ? outcome.result.digestPlan.tokens : '—') + ' |')
+console.log('| 档案正文 est | — | ' + (outcome.ok ? outcome.result.digestPlan.tokens : '—') + ' |')
 console.log('| 热尾 est | — | ' + (outcome.ok ? outcome.result.hotTail.tokens : '—') + ' |')
-console.log('| 路径表条目 | 0 | ' + (outcome.ok ? outcome.result.pathTableEntries : '—') + ' |')
-console.log('| 路径字节省 | 0 | ' + (outcome.ok ? outcome.result.pathBytesSaved : '—') + ' |')
 console.log('| 事实泄漏 | 未观测 | ' + (outcome.ok ? outcome.result.digestPlan.factLeaks : '—') + ' |')
 console.log('')
 if (!outcome.ok) {

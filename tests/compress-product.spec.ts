@@ -42,7 +42,7 @@ describe('P18 产物：机械抽取', () => {
 })
 
 describe('P18/F9 产物：边界模式（宽松修复 > 拒单）', () => {
-  it('合法产物 → ok（gist/steps/refs + 热尾申报）', () => {
+  it('合法产物 → ok（gist/steps 零指针 + 热尾申报）', () => {
     const result = parseCompressProduct(boundaryJson, 'boundary', [unit('a')])
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -50,13 +50,13 @@ describe('P18/F9 产物：边界模式（宽松修复 > 拒单）', () => {
     if (result.product.mode !== 'boundary') return
     expect(result.product.digest.gist).toBe('目标与方向')
     expect(result.product.digest.steps).toEqual([
-      { type: 'plan', text: '先做一', refs: [1] },
-      { type: 'impl', text: '再做二', refs: [] },
+      { type: 'plan', text: '先做一' },
+      { type: 'impl', text: '再做二' },
     ])
     expect(result.product.hotTail).toEqual([
       { unitId: 'a', coord: { path: 'src/a.ts', version: 2, lineRange: { start: 1, end: 3 } } },
     ])
-    expect(result.dropped).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 })
+    expect(result.dropped).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0, error: 0 })
   })
 
   it('围栏 + 前后噪声仍可解析（格式噪声不杀死一次有效压缩）', () => {

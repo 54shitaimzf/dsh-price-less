@@ -11,8 +11,8 @@
  */
 import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
-/** 策略版本（阈值口径可复现；docs/03 §4 同哲学）。 */
-export const ASSEMBLE_POLICY_VERSION = 2
+/** 策略版本（阈值口径可复现；docs/03 §4 同哲学）。v3 = F10：总分零指针 + 热尾指向档案。 */
+export const ASSEMBLE_POLICY_VERSION = 3
 
 /** 1-based 闭区间行号（原生 read 信封口径）。 */
 export interface LineRange {
@@ -49,11 +49,13 @@ export interface HotTailDecl {
 export type DigestStepType = 'plan' | 'impl' | 'verify' | 'decide' | 'note'
 export const DIGEST_STEP_TYPES: readonly DigestStepType[] = ['plan', 'impl', 'verify', 'decide', 'note']
 
-/** 一条分步：text = 落地过程（按发生顺序）；refs = 热尾序号（1-based；模型零算术）。 */
+/**
+ * 一条分步：text = 落地过程（按发生顺序）。
+ * F10：总分内零指针（refs 退役）——事实定位归热尾，热尾指向档案。
+ */
 export interface DigestStep {
   readonly type: DigestStepType
   readonly text: string
-  readonly refs: readonly number[]
 }
 
 /** 边界摘要 v2（F9）：总述（零事实，只指涉总目标与改动方向）+ 分步（带引用）。 */
@@ -112,10 +114,8 @@ export interface AssembleUnit {
 /** 热尾选中项（tier = 申报 / 地板；source = 盘上取真 / 账本取真 / 仅摘抄）。 */
 export interface HotTailSelection {
   readonly unitId: string
-  /** 1-based 指针序号（渲染 `▸n`；= 申报序，地板项续号；摘要 refs 引用它）。 */
+  /** 1-based 序号（渲染 `▸n`；= 装配序，地板项续号）。 */
   readonly rank: number
-  /** 指针行（机械渲染；`[文件] §1@vN:a-b` / `[历史] 会话 a-b` / `[摘抄] path`）。 */
-  readonly pointer: string
   readonly tier: 'model' | 'floor' | 'fallback'
   readonly seqStart: number
   readonly seqEnd: number
@@ -127,14 +127,12 @@ export interface HotTailSelection {
   readonly truncated?: boolean
   /** 重映射出界裁剪（clipped）标记。 */
   readonly clipped?: boolean
-  /** 仅指针（配额不足以放内容）：仍保留定位价值，计 pointerOnlyCount。 */
-  readonly pointerOnly?: boolean
 }
 
 export type HotTailStopReason = 'budget' | 'list-end'
 
 /** 丢弃归因（HT 软门 / 重映射 / 取真；总数 = HotTailPlan.dropped）。 */
-export type HotTailDropReason = 'badDecl' | 'unknownUnit' | 'remap' | 'fetch' | 'dup' | 'factReject'
+export type HotTailDropReason = 'badDecl' | 'unknownUnit' | 'remap' | 'fetch' | 'dup' | 'factReject' | 'error'
 export interface HotTailDropCounts {
   readonly badDecl: number
   readonly unknownUnit: number
@@ -144,6 +142,8 @@ export interface HotTailDropCounts {
   readonly dup?: number
   /** F9：fact 不是该单元原文子串（防自造事实）。 */
   readonly factReject?: number
+  /** F10：错误/失败单元不进热尾（错误信息不占事实预算）。 */
+  readonly error?: number
 }
 export type HotTailSource = 'model' | 'positional-fallback'
 
@@ -162,8 +162,10 @@ export interface HotTailPlan {
   /** 出界裁剪数。 */
   readonly clipped: number
   readonly truncated: number
-  /** 仅指针条目数（配额不足退化）。 */
-  readonly pointerOnly: number
+  /** 配额不足被丢弃条数（F10：热尾无内容 = 无定位价值，不再退化为空指针条目）。 */
+  readonly quotaDrops: number
+  /** 热尾指向的档案引用（渲染进热尾头；F10：`vN` = 本 task 边界档案版本）。 */
+  readonly archiveRef: string
   readonly tokens: number
   readonly budgetTokens: number
 }
@@ -175,10 +177,6 @@ export interface DigestPlan {
   readonly gistBytes: number
   readonly stepCount: number
   readonly stepTokens: number
-  /** 被 step 引用的热尾序号总数（去重后）。 */
-  readonly refCount: number
-  /** 越界/非法被丢弃的引用数。 */
-  readonly refDrops: number
   /** 摘要中的事实泄漏命中数（机械扫描，只记账不拒单）。 */
   readonly factLeaks: number
   readonly tokens: number
@@ -190,16 +188,15 @@ export interface AssembleResult {
   readonly digest: TaskDigest
   readonly digestPlan: DigestPlan
   readonly hotTail: HotTailPlan
-  /** 路径压缩度量（F9e）。 */
-  readonly pathBytesSaved: number
-  readonly pathTableEntries: number
   /** 渲染根（相对路径基准；档案条目落盘时随条目保存，跨会话重放不串档）。 */
   readonly root?: string
   readonly rootKind?: 'session' | 'cwd' | 'none'
   /** 本次产物的档案形态（priorChain 为空 = 单块；否则续传 + 追加）。 */
   readonly archiveForm: ArchiveForm
   readonly unitCount: number
-  /** 事实层 + 热尾（装配序 = transcript 序，字节稳定）。 */
+  /** 档案落盘正文（F10：仅总分 = 总述 + 分步；零指针、零热尾）。 */
+  readonly digestText: string
+  /** 事实层 + 热尾（装配序 = transcript 序，字节稳定；替换入上下文用）。 */
   readonly rendered: string
 }
 
@@ -219,8 +216,6 @@ export interface AssemblePolicy {
   readonly density: TokenDensity
   /** 地板：逐字末次验证 ≤3 条。 */
   readonly floorVerifyLines: number
-  /** 地板：逐字失败/错误行 ≤5 条。 */
-  readonly floorErrorLines: number
   /** 单次装配最多向端口请求的坐标数（防御申报洪泛）。 */
   readonly maxFetchUnits: number
   /** 单单元超帽尾截断时保留的头部字符数下限（保证非空可读）。 */
@@ -230,8 +225,6 @@ export interface AssemblePolicy {
   readonly gistMaxChars: number
   /** 单条分步硬帽（字符）。 */
   readonly stepMaxChars: number
-  /** 单条分步引用上限（去重后）。 */
-  readonly maxStepRefs: number
   /** 摘要硬帽（估算 token；超限机械尾截断）。 */
   readonly digestMaxTokens: number
   // —— F9 热尾预算 ——
@@ -249,12 +242,10 @@ export const DEFAULT_ASSEMBLE_POLICY: AssemblePolicy = {
   archiveTokens: 10000,
   density: DEFAULT_TOKEN_DENSITY,
   floorVerifyLines: 3,
-  floorErrorLines: 5,
   maxFetchUnits: 64,
   minTruncatedChars: 200,
   gistMaxChars: 80,
   stepMaxChars: 120,
-  maxStepRefs: 8,
   digestMaxTokens: 1000,
   hotTailMaxShare: 0.4,
   hotTailMinShare: 0.05,

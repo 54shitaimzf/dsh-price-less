@@ -18,7 +18,7 @@ ignorableChannelAvailable({ SESSION_LOG_INTENT: 1 })
 
 const WORKSPACE = 'w'
 const ARCHIVE_KEY = boundaryArchiveKey(WORKSPACE)
-const VALID_PRODUCT = JSON.stringify({ gist: '目标与方向', steps: [{ type: 'plan', text: '先做一', refs: [1] }], hotTail: [{ unitId: 'c1' }] })
+const VALID_PRODUCT = JSON.stringify({ gist: '目标与方向', steps: [{ type: 'plan', text: '先做一' }], hotTail: [{ unitId: 'c1' }] })
 
 interface FakeEvent { type: string; seq: number; time: number; data: any; surfaceOp?: any; sourceEventSeqs?: unknown; ignorable?: true }
 
@@ -98,9 +98,9 @@ function fakeAssemble(options: { rendered?: string; ok?: boolean } = {}) {
         ok: true,
         result: {
           layer: 'boundary', digest: request.digest, digestBytes: 10, digestEntryCount: 1,
-          hotTail: { selections: [], stopReason: 'list-end', source: 'model', floorFilled: false, declaredUnits: 0, dropped: 0, dropReasons: { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }, clipped: 0, truncated: 0, tokens: 0, budgetTokens: 10000 },
+          hotTail: { entries: [], stopReason: 'list-end', source: 'model', floorFilled: false, declaredUnits: 0, dropped: 0, dropReasons: { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0, error: 0 }, clipped: 0, truncated: 0, quotaDrops: 0, archiveRef: 'v1', tokens: 0, budgetTokens: 10000 },
           archiveForm: { form: 'single', checkpointCount: 0 }, unitCount: 1,
-          rendered: options.rendered ?? 'R',
+          rendered: options.rendered ?? 'R', digestText: options.rendered ?? 'R',
         },
       }
     },

@@ -230,6 +230,8 @@ interface ProductAttempt {
   readonly usage?: CeLlmUsage
   readonly rawOutput?: string
   readonly rendered: string
+  /** F10：档案落盘正文（仅总分；热尾每次抛弃，不入档案）。 */
+  readonly digestText: string
   readonly productTokens: number
   readonly truncation: { count: number; tokens: number }
   readonly entries: number
@@ -427,11 +429,11 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       }
       const append = appendArchiveEntry(
         storeBody,
-        { taskId: scopedTaskId, kind: 'boundary', text: outcome.result.rendered, sessionId: sid, layer: 'boundary', at: now() },
+        { taskId: scopedTaskId, kind: 'boundary', text: outcome.result.digestText, sessionId: sid, layer: 'boundary', at: now() },
         assemblePolicy,
       )
       return {
-        product, dropped, calls, cacheHit, rendered: outcome.result.rendered,
+        product, dropped, calls, cacheHit, rendered: outcome.result.rendered, digestText: outcome.result.digestText,
         productTokens: estimateTokens(outcome.result.rendered, compressPolicy.density),
         truncation: append.truncation, entries: append.kept,
         ...(usage === undefined ? {} : { usage }),
@@ -458,7 +460,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const written = await writeStore((body) => {
       const appended = appendArchiveEntry(
         body,
-        { taskId: scopedTaskId, kind: 'boundary', text: chosen!.rendered, sessionId: sid, layer: 'boundary', at: now(), root },
+        { taskId: scopedTaskId, kind: 'boundary', text: chosen!.digestText, sessionId: sid, layer: 'boundary', at: now(), root },
         assemblePolicy,
       )
       return {

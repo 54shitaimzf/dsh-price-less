@@ -27,16 +27,17 @@ export const COMPRESS_BOUNDARY_HEAD = [
   '本消息中 <闭合段原文> 是一段已经完成的工作；你的唯一职责是把它压成一份可供后续任务直接使用的档案。',
 ].join('\n')
 
-/** 边界硬规则（04 §2 / F9：总述零事实 + 分步带引用 + 热尾承载全部事实）。 */
+/** 边界硬规则（04 §2 / F10：总述零事实 + 分步零指针 + 热尾承载全部事实、错误信息除外）。 */
 export const COMPRESS_BOUNDARY_RULES = [
   '硬规则（逐条遵守）：',
   '1. 只压缩 <闭合段原文> 这一段。<已归档检查点> 是既有字节：原样续传，绝不重写、绝不并入新结构。',
   '2. 只输出一个 JSON 对象：无正文、无代码块围栏、无解释、无元注释。',
   '3. gist = 总述：只写总目标与改动方向，≤80 字，**零事实**——不写路径、版本号、数字、命令、引号内文本。',
   '4. steps = 总目标的落地过程，按发生顺序（不是按类别拆分）；type ∈ plan|impl|verify|decide|note；每条 ≤120 字；',
-  '   refs = 该步依赖的热尾条目序号（hotTail 数组下标 + 1；没有依赖就省略）；不要算预算、不要凑数量。',
-  '5. 所有事实（路径、版本、行号、命令、数值、错误串、引号内文本）一律放进 hotTail——那里逐字保真。',
-  '6. hotTail = 下一个任务开工真正要用的任务材料，按重要性降序申报；每项 = 1 条指针 : 1 条内容；禁止任何预算计算。',
+  '   不写引用序号（总分零指针）；不要算预算、不要凑数量。',
+  '5. 所有事实（路径、版本、行号、命令、数值、引号内文本）一律放进 hotTail——那里逐字保真；',
+  '   **错误信息（报错、异常、失败输出）一律不进 hotTail**。',
+  '6. hotTail = 下一个任务开工真正要用的任务材料，按重要性降序申报；每项 = 1 条内容；禁止任何预算计算。',
   '7. hotTail 每项 = {"unitId":"<清单 ID>","coord":{"path":"...","version":N,"lineRange":{"start":a,"end":b}},"fact":"逐字摘抄（可选）"}；',
   '   coord 仅文件类单元可带；fact 必须是该单元原文的逐字子串（机器校验，不匹配即丢弃）。',
   '8. coord 的 path 与 version 只能从 <单元清单> 抄写（选坐标不造坐标）；行号用你见过的版本；不确定就省略 lineRange。',
@@ -44,7 +45,7 @@ export const COMPRESS_BOUNDARY_RULES = [
 
 export const COMPRESS_BOUNDARY_OUTPUT = [
   '输出 JSON 形状（严格）：',
-  '{"gist":"...","steps":[{"type":"plan|impl|verify|decide|note","text":"...","refs":[1,3]}],"hotTail":[{"unitId":"...","coord":{"path":"...","version":1,"lineRange":{"start":1,"end":10}},"fact":"可选逐字摘抄"}]}',
+  '{"gist":"...","steps":[{"type":"plan|impl|verify|decide|note","text":"..."}],"hotTail":[{"unitId":"...","coord":{"path":"...","version":1,"lineRange":{"start":1,"end":10}},"fact":"可选逐字摘抄"}]}',
 ].join('\n')
 
 /** 压力 persona（静态常量）。 */

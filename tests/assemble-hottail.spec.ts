@@ -85,7 +85,7 @@ describe('P17a 热尾：贪心停机与预算', () => {
 })
 
 describe('P17a 热尾：地板填充与位置兜底', () => {
-  it('run 类目未覆盖且预算有余 → 验证尾 + 错误行逐字补入', () => {
+  it('run 类目未覆盖且预算有余 → 验证尾逐字补入（错误行地板退役：F10）', () => {
     const units = [
       unit('a', 1, 'X'.repeat(20)),
       unit('v', 5, 'run summary\n307 tests passed', { isVerification: true }),
@@ -95,9 +95,8 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     if (!outcome.ok) throw new Error('expected ok')
     const plan = outcome.result.hotTail
     expect(plan.floorFilled).toBe(true)
-    expect(plan.entries.map((s) => [s.unitId, s.tier])).toEqual([['a', 'model'], ['v', 'floor'], ['e', 'floor']])
+    expect(plan.entries.map((s) => [s.unitId, s.tier])).toEqual([['a', 'model'], ['v', 'floor']])
     expect(plan.entries[1]!.text).toBe('307 tests passed')
-    expect(plan.entries[2]!.text).toBe('Error: boom\n[exit code: 1]')
   })
 
   it('run 类目已覆盖 → 不填地板', () => {
@@ -111,12 +110,23 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
   it('地板同单元 ID 去重（已选单元不再补）', () => {
     const units = [
       unit('v', 1, 'ok\n5 tests passed', { isVerification: true }),
-      unit('e', 5, 'Error: boom', { isError: true }),
+      unit('v2', 5, 'build ok', { isVerification: true }),
     ]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'v' }], policy: policy({ hotTailTokens: 200 }) })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['v', 'e'])
+    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['v', 'v2'])
     expect(outcome.result.hotTail.entries[0]!.tier).toBe('model')
+  })
+
+  it('错误单元不进热尾：申报丢弃（error 归因）+ 地板不补 + 兜底跳过', () => {
+    const units = [unit('e', 1, 'start\nError: boom\n[exit code: 1]', { isError: true })]
+    const declared = assembleArchive({ units, hotTail: [{ unitId: 'e' }], policy: policy({ hotTailTokens: 200 }) })
+    if (!declared.ok) throw new Error('expected ok')
+    expect(declared.result.hotTail.entries).toHaveLength(0)
+    expect(declared.result.hotTail.dropReasons.error).toBe(1)
+    const fallback = assembleArchive({ units, policy: policy({ hotTailTokens: 200 }) })
+    if (!fallback.ok) throw new Error('expected ok')
+    expect(fallback.result.hotTail.entries).toHaveLength(0)
   })
 
   it('预算不足不填地板', () => {
@@ -124,7 +134,8 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: policy({ hotTailTokens: 20 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.floorFilled).toBe(false)
-    expect(outcome.result.hotTail.entries.length).toBe(1)
+    expect(outcome.result.hotTail.entries.length).toBe(0)
+    expect(outcome.result.hotTail.quotaDrops).toBe(1)
   })
 
   it('申报缺失 → 位置兜底反向累加（source = positional-fallback）', () => {
@@ -146,7 +157,7 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['b', 'a'])
   })
 
-  it('装配序 = 申报序（F9：▸n = 数组下标 + 1，摘要引用与指针同源）', () => {
+  it('装配序 = 申报序（F10：▸n = 数组下标 + 1）', () => {
     const units = [unit('a', 1, 'A'.repeat(6)), unit('b', 5, 'B'.repeat(6))]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'b' }, { unitId: 'a' }], policy: policy() })
     if (!outcome.ok) throw new Error('expected ok')
@@ -197,30 +208,30 @@ describe('P17a 热尾：通道 A 取真', () => {
 })
 
 describe('F9 事实层：摘要 schema 与渲染', () => {
-  it('渲染 = 【总述】+ 分步（带 ▸n 引用）+ 【热尾】（1 指针 : 1 内容）', () => {
+  it('渲染 = 【总述】+ 分步（零指针）+ 【热尾｜档案 vN】（F10）', () => {
     const units = [unit('a', 1, '材料A'), unit('b', 5, '材料B')]
     const outcome = assembleArchive({
       units,
       digest: {
         gist: '总目标与方向',
-        steps: [{ type: 'plan', text: '先做一', refs: [2] }, { type: 'verify', text: '再验二', refs: [1, 2] }],
+        steps: [{ type: 'plan', text: '先做一' }, { type: 'verify', text: '再验二' }],
       },
       hotTail: [{ unitId: 'a' }, { unitId: 'b' }],
       policy: policy(),
     })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.rendered).toBe(
-      '【总述】总目标与方向\n【计划】先做一 (▸2)\n【验证】再验二 (▸1,▸2)\n\n【热尾】\n▸1 [历史] 会话 1-2\n材料A\n▸2 [历史] 会话 5-6\n材料B',
+      '【总述】总目标与方向\n【计划】先做一\n【验证】再验二\n\n【热尾｜档案 v1】\n▸1 材料A\n▸2 材料B',
     )
+    expect(outcome.result.digestText).toBe('【总述】总目标与方向\n【计划】先做一\n【验证】再验二')
+    expect(outcome.result.hotTail.archiveRef).toBe('v1')
     expect(outcome.result.digestPlan.stepCount).toBe(2)
-    expect(outcome.result.digestPlan.refCount).toBe(2)
-    expect(outcome.result.digestPlan.refDrops).toBe(0)
     expect(outcome.result.digestPlan.bytes).toBe(
-      new TextEncoder().encode('【总述】总目标与方向\n【计划】先做一 (▸2)\n【验证】再验二 (▸1,▸2)').length,
+      new TextEncoder().encode('【总述】总目标与方向\n【计划】先做一\n【验证】再验二').length,
     )
   })
 
-  it('机械归一化：坏形状一律修复（未知 type→note / 坏 refs 丢弃 / 缺 gist 接受）', () => {
+  it('机械归一化：坏形状一律修复（未知 type→note / refs 机械剥离 / 缺 gist 接受）', () => {
     const n = normalizeDigest({
       gist: 42,
       steps: [
@@ -232,21 +243,20 @@ describe('F9 事实层：摘要 schema 与渲染', () => {
     })
     expect(n.digest.gist).toBe('')
     expect(n.digest.steps).toEqual([
-      { type: 'note', text: 'x', refs: [] },
-      { type: 'plan', text: 'ok', refs: [1, 2] },
+      { type: 'note', text: 'x' },
+      { type: 'plan', text: 'ok' },
     ])
     expect(n.stepDrops).toBe(2)
-    expect(n.refDrops).toBe(4)
   })
 
-  it('摘要硬帽：超限从最后一条分步起整条丢弃（引用一起丢）', () => {
+  it('摘要硬帽：超限从最后一条分步起整条丢弃', () => {
     const outcome = assembleArchive({
       units: [unit('a', 1, '材料')],
       digest: {
         gist: 'g',
         steps: [
-          { type: 'plan', text: 'A'.repeat(60), refs: [1] },
-          { type: 'plan', text: 'B'.repeat(60), refs: [1] },
+          { type: 'plan', text: 'A'.repeat(60) },
+          { type: 'plan', text: 'B'.repeat(60) },
         ],
       },
       hotTail: [{ unitId: 'a' }],
@@ -254,7 +264,7 @@ describe('F9 事实层：摘要 schema 与渲染', () => {
     })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.digestPlan.stepCount).toBe(0)
-    expect(outcome.result.digestPlan.refDrops).toBe(2)
+    expect(outcome.result.digestText).toBe('【总述】g')
   })
 
   it('摘要事实泄漏只记账不拒单（factLeaks）', () => {
@@ -412,7 +422,7 @@ describe('F9c 热尾：事实载体与预算（份额帽 / 仅指针 / 去重 / 
     expect(outcome.result.hotTail.tokens).toBeLessThanOrEqual(400)
   })
 
-  it('配额不足 → 仅指针降级（仍保留定位价值）', () => {
+  it('配额不足 → 丢弃（F10：无内容 = 无定位价值；quotaDrops 计数）', () => {
     const units = [unit('a', 1, 'A'.repeat(100))]
     const outcome = assembleArchive({
       units,
@@ -420,12 +430,8 @@ describe('F9c 热尾：事实载体与预算（份额帽 / 仅指针 / 去重 / 
       policy: policy({ hotTailTokens: 10, pointerOverheadTokens: 0, minTruncatedChars: 20 }),
     })
     if (!outcome.ok) throw new Error('expected ok')
-    const entry = outcome.result.hotTail.entries[0]!
-    expect(entry.pointerOnly).toBe(true)
-    expect(entry.text).toBe('')
-    expect(entry.tokens).toBe(0)
-    expect(outcome.result.hotTail.pointerOnly).toBe(1)
-    expect(entry.pointer).toBe('[历史] 会话 1-2')
+    expect(outcome.result.hotTail.entries).toHaveLength(0)
+    expect(outcome.result.hotTail.quotaDrops).toBe(1)
   })
 
   it('重复 unitId 只留首次（dup 归因）', () => {

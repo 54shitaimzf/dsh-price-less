@@ -2767,4 +2767,40 @@ fact-leak.ts）；`AGENTS.md`（双预算 + 产物形状 + F9 进度）；`docs/
 
 **F9 收口状态**：F9a–F9f ✅；F9g 回放脚本 ✅（真机重启冒烟 + 新 prompt 实产样本待 DSH 重启后补）。
 
+## §69 F10 契约 v3：总分零指针 + 热尾指向档案 + 档案只存总分 + 错误不进热尾（2026-09-09；提交 = 本账本同提交）
+
+**用户裁定（四项）**：① 总分（总述 + 分步）里的指针删除；② 热尾改为指向档案；③ 热尾每次直接抛弃，
+就不用担心档案失效；④ 错误信息不要放到热尾里。并澄清预算口径：`archiveCapTokens` = 跨任务「总分」
+累积帽，**不含热尾**。
+
+**契约 v3**（`ASSEMBLE_POLICY_VERSION` 3 / `COMPRESS_PROMPT_VERSION` 3 / `COMPRESS_POLICY_VERSION` 3）：
+
+- 产物 `{gist, steps, hotTail}`：`DigestStep.refs` 退役（模型夹带即机械剥离；`normalizeDigest` 不再解析）；
+  `DigestPlan.refCount/refDrops` 退役。
+- 渲染：`【总述】…` → `【计划】…`（**零指针**）→ `【热尾｜档案 vN】` + 逐条 `▸n <逐字内容>`；
+  `vN` = 本 task 边界档案版本（= 续传链长 + 1，`archiveRefOf` 机械推出）。文件/历史/摘抄三形态指针与
+  `【路径】` 短 ID 表全部退役（`paths.ts` 只剩 `normalizeRoot/relativePath`；`root` 仍供单元清单相对化）。
+- `AssembleResult.digestText`（新）= **档案落盘正文**（仅总分：零指针、零事实、零热尾）；
+  `domains/compaction.ts` 两处 `appendArchiveEntry` 改存 `digestText`，替换入上下文的 `rendered`
+  仍 = 续传链 + 总分 + 热尾。**热尾从此不入档案** → 档案区 10K 只计总分，事实漂移不再使档案失效。
+- **错误信息不进热尾**：`dropReasons.error`（新）+ `errorDrops`（新事实/账本位）；错误行地板
+  （`floorErrorLines`）退役；`isError` 单元在申报趟与位置兜底趟都跳过。边界 prompt 规则 4/5 重写
+  （总分零指针；错误信息不进 hotTail）。
+- 配额不足不再产空指针条目 → **丢弃**并计 `quotaDrops`（原 `pointerOnlyCount`；热尾无内容 = 无定位价值）。
+- 策略面退役：`AssemblePolicy.floorErrorLines` / `maxStepRefs`；结果面退役：`pathBytesSaved/pathTableEntries`。
+
+**度量**：assemble-run / CompressionLedger —— −`refCount` −`refDrops` −`pathBytesSaved` −`pathTableEntries`；
+`pointerOnlyCount` → `quotaDrops`；+ `errorDrops`（07 字段表同迁）。
+
+**验收**：`npm run gate` = **647 tests / 58 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；
+`node scripts/verify-f9.mjs` = **16/16 `ok=true`**（合成夹具：档案正文 **38 est** / 热尾 **417 est** /
+产物 **322 est**）；build 绿（host + client）。
+
+**文档同步**：`docs/04` §2/§6（契约 v3 + 档案只存总分 + 路径面收口）、`docs/07`（字段退役/更名）、
+`docs/00` §6（档案 10K 只计总分）、`docs/09` §2、`docs/11`（模块行 + `archiveCapTokens=10K`）、
+`AGENTS.md`、`docs/implement/TODO.md`（F10 行）。
+
+**待补**：DSH 重启后真机冒烟（新 prompt 实产样本 + `logs/context-economy.log` 的档案条目体量对照）；
+`scripts/verify-f9-replay.mjs` 已随契约 v3 更新为「档案正文 / 热尾」分列，真机日志重跑待补。
+
 

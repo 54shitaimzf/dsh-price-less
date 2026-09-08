@@ -15,7 +15,7 @@ import { gateHotTailDecls } from '../assemble/gate.ts'
 import type { AssembleUnit, HotTailDropCounts } from '../assemble/types.ts'
 import type { CompressCheckpoint, CompressMode, CompressParseResult, CutPointDecl } from './types.ts'
 
-const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 }
+const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0, error: 0 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

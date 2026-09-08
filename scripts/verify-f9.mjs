@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * F9 验收（docs/implement/TODO.md §2 F9a–F9g）。
- * ① 模块面可导入；② 宽松解析/归一化；③ 产物装配六项判据（总述/分步/引用/热尾/份额帽/路径）；
- * ④ 热尾事实载体（消息单元 + tool-call 转写 + Zipf + 仅指针 + fact 子串）；⑤ 存储 v1→v2 + 单调守卫；
- * ⑥ 区间守卫回归标记；⑦ 产物体量对照（真机缺陷产物 8,209 est → F9 目标 ≤5,000）。
+ * F9 验收（F10 起契约 v3 修订：总分零指针 + 热尾指向档案 + 档案只存总分 + 错误不进热尾）。
+ * ① 模块面可导入；② 宽松解析/归一化；③ 产物装配判据（总述/分步零指针/热尾/份额帽/配额丢弃）；
+ * ④ 热尾事实载体（消息单元 + tool-call 转写 + Zipf + fact 子串）；⑤ 存储 v1→v2 + 单调守卫；
+ * ⑥ 区间守卫回归标记；⑦ 产物体量对照（档案正文 vs 热尾分列）。
  * 纯回放：无网络、无模型；需先 build（import ../lib）。
  */
 import fs from 'node:fs'
@@ -13,13 +13,11 @@ import {
   DEFAULT_ASSEMBLE_POLICY,
   archiveChainMonotone,
   assembleArchive,
-  buildPathTable,
   foldAssembleInputs,
   foldFileChains,
   normalizeDigest,
   normalizeRoot,
   relativePath,
-  renderPathTable,
 } from '../lib/core/assemble/index.js'
 import {
   ARCHIVE_STORE_VERSION,
@@ -55,19 +53,19 @@ const unit = (id, seqStart, text, extra = {}) => ({
 })
 
 // ① 模块面
-check('F9 模块面可导入（paths / fact-leak / 装配 / 存储）',
-  [normalizeRoot, relativePath, buildPathTable, renderPathTable, assembleArchive, normalizeDigest,
+check('F10 模块面可导入（paths / 装配 / 存储）',
+  [normalizeRoot, relativePath, assembleArchive, normalizeDigest,
     archiveChainMonotone, isArchiveStoreVersion, readArchiveStore, appendArchiveEntry, scanFacts]
     .every((fn) => typeof fn === 'function'))
 
-// ② 宽松解析 / 归一化
+// ② 宽松解析 / 归一化（refs 机械剥离）
 const repaired = normalizeDigest({ gist: 42, steps: [{ type: 'bogus', text: 'x' }, { type: 'plan', text: 'ok', refs: [0, 1, '2', 2] }, 'junk'] })
-check('F9b 宽松归一化：坏形状机械修复（未知 type→note / 坏 refs 丢弃）',
+check('F10 宽松归一化：坏形状机械修复（未知 type→note / refs 剥离）',
   repaired.digest.gist === '' && repaired.digest.steps.length === 2
-  && repaired.digest.steps[0].type === 'note' && JSON.stringify(repaired.digest.steps[1].refs) === '[1,2]'
-  && repaired.refDrops === 2 && repaired.stepDrops === 1)
+  && repaired.digest.steps[0].type === 'note' && repaired.digest.steps[1].refs === undefined
+  && repaired.stepDrops === 1)
 
-// ③ 产物装配六项判据
+// ③ 产物装配判据
 const regionTokens = 2000
 const built = assembleArchive({
   units: [
@@ -82,8 +80,8 @@ const built = assembleArchive({
   digest: {
     gist: '收敛上下文压缩产物结构',
     steps: [
-      { type: 'plan', text: '先重写产物契约', refs: [1] },
-      { type: 'verify', text: '再跑门禁确认', refs: [2, 3] },
+      { type: 'plan', text: '先重写产物契约' },
+      { type: 'verify', text: '再跑门禁确认' },
     ],
   },
   chains: foldFileChains([{ seq: 9, path: 'D:/proj/src/a.ts', kind: 'write', content: 'src line' }]),
@@ -97,45 +95,51 @@ const built = assembleArchive({
   policy: policy({ hotTailTokens: 10000 }),
 })
 const okBuilt = built.ok === true
-check('F9b 产物渲染：总述 + 分步（带 ▸n）+ 路径表 + 热尾 1 指针 : 1 内容',
+check('F10 产物渲染：总述 + 分步（零指针）+ 热尾指向档案',
   okBuilt && built.result.rendered.includes('【总述】收敛上下文压缩产物结构')
-  && built.result.rendered.includes('【计划】先重写产物契约 (▸1)')
-  && built.result.rendered.includes('【路径】') && built.result.rendered.includes('▸1 ')
+  && built.result.rendered.includes('【计划】先重写产物契约')
+  && !built.result.rendered.includes('(▸')
+  && built.result.rendered.includes('【热尾｜档案 v1】')
+  && !built.result.rendered.includes('[文件]') && !built.result.rendered.includes('【路径】')
   && built.result.hotTail.entries.length === 4
-  && built.result.hotTail.entries.every((entry) => typeof entry.pointer === 'string' && entry.rank >= 1))
-check('F9b 摘要零事实：干净 gist → factLeaks = 0；引用可解析 → refDrops = 0',
-  okBuilt && built.result.digestPlan.factLeaks === 0 && built.result.digestPlan.refDrops === 0
-  && built.result.digestPlan.refCount === 3)
+  && built.result.hotTail.archiveRef === 'v1')
+check('F10 档案正文仅总分：零事实（路径 / 验证串不进档案）',
+  okBuilt && built.result.digestText.includes('【总述】收敛上下文压缩产物结构')
+  && !built.result.digestText.includes('src/a.ts')
+  && !built.result.digestText.includes('307 tests passed')
+  && built.result.digestPlan.factLeaks === 0)
 const dirty = assembleArchive({
   units: [unit('a', 1, 'x')],
   digest: { gist: '改 D:/proj/src/a.ts 到 v2', steps: [] },
   hotTail: [{ unitId: 'a' }],
   policy: policy(),
 })
-check('F9b 事实泄漏只记账不拒单（脏 gist → factLeaks > 0 且产物照常）',
+check('F10 事实泄漏只记账不拒单（脏 gist → factLeaks > 0 且产物照常）',
   dirty.ok === true && dirty.result.digestPlan.factLeaks > 0)
-check('F9c 份额帽：热尾预算落在 [minShare, maxShare] × 区间 内且未超支',
+check('F10c 份额帽：热尾预算落在 [minShare, maxShare] × 区间 内且未超支',
   okBuilt
   && built.result.hotTail.budgetTokens >= Math.ceil(regionTokens * DEFAULT_ASSEMBLE_POLICY.hotTailMinShare)
   && built.result.hotTail.budgetTokens <= Math.ceil(regionTokens * DEFAULT_ASSEMBLE_POLICY.hotTailMaxShare)
   && built.result.hotTail.tokens <= built.result.hotTail.budgetTokens)
-check('F9c Zipf 分配：重要者多分（首条 > 次条 > 末条）',
+check('F10c Zipf 分配：重要者多分（首条 > 次条 > 末条）',
   okBuilt && built.result.hotTail.entries[0].tokens > built.result.hotTail.entries[1].tokens
   && built.result.hotTail.entries[1].tokens > built.result.hotTail.entries[2].tokens)
-const pointerOnly = assembleArchive({
+const quota = assembleArchive({
   units: [unit('a', 1, 'A'.repeat(200))],
   hotTail: [{ unitId: 'a' }],
   policy: policy({ hotTailTokens: 10, minTruncatedChars: 20 }),
 })
-check('F9c 配额不足 → 仅指针降级（pointerOnly + 定位价值保留）',
-  pointerOnly.ok === true && pointerOnly.result.hotTail.pointerOnly === 1
-  && pointerOnly.result.hotTail.entries[0].text === ''
-  && pointerOnly.result.hotTail.entries[0].pointer.includes('会话'))
-check('F9e 路径压缩：相对化 + 短 ID 表 + pathBytesSaved',
-  okBuilt && built.result.pathTableEntries >= 1 && built.result.pathBytesSaved > 0
-  && built.result.rendered.includes('§1 = src/a.ts')
-  && built.result.rendered.includes('▸3 [文件] §1@v1:1-1'))
-check('F9c fact 子串校验：命中并入内容；未命中丢弃计数',
+check('F10c 配额不足 → 丢弃（quotaDrops 计数；不再产空指针条目）',
+  quota.ok === true && quota.result.hotTail.quotaDrops === 1 && quota.result.hotTail.entries.length === 0)
+const errored = assembleArchive({
+  units: [unit('e', 1, 'boom\n[exit code: 1]', { isError: true })],
+  hotTail: [{ unitId: 'e' }],
+  policy: policy(),
+})
+check('F10b 错误信息不进热尾（error 归因 + 零条目）',
+  errored.ok === true && errored.result.hotTail.entries.length === 0
+  && errored.result.hotTail.dropReasons.error === 1)
+check('F10c fact 子串校验：命中并入内容；未命中丢弃计数',
   okBuilt && built.result.hotTail.entries[1].text.includes('307 tests passed')
   && built.result.hotTail.dropReasons.factReject === 0)
 
@@ -145,7 +149,7 @@ const folded = foldAssembleInputs([
   { type: 'assistant/message', seq: 1, time: 2, data: { message: { content: [{ type: 'text', text: '结论' }, { type: 'tool-call', toolCallId: 'c1', name: 'bash', arguments: '{"command":"npm test"}' }] } } },
   { type: 'user/message', seq: 2, time: 3, data: { content: [{ type: 'text', text: 'C1' }], source: { kind: 'plugin', plugin: 'compact' } } },
 ])
-check('F9c 消息单元：user/assistant 成单元（插件检查点排除）+ tool-call 块转写',
+check('F10c 消息单元：user/assistant 成单元（插件检查点排除）+ tool-call 块转写',
   folded.units.length === 2
   && folded.units[0].kind === 'message' && folded.units[0].text === '约束：不得改 X'
   && folded.units[1].text.includes('[tool-call] bash {"command":"npm test"}'))
@@ -156,17 +160,17 @@ const migrated = readArchiveStore({
   entries: [{ taskId: 't1', kind: 'boundary', text: '旧档案' }],
   cache: { k1: { key: 'k1', at: 1, layer: 'boundary', product: { mode: 'boundary', digest: { gist: '', steps: [] }, hotTail: [] } } },
 }, 'w')
-check('F9d 存储 v1→v2：条目保留 / 旧产物缓存丢弃',
+check('F10d 存储 v1→v2：条目保留 / 旧产物缓存丢弃',
   migrated.schemaVersion === ARCHIVE_STORE_VERSION && migrated.entries.length === 1
   && Object.keys(migrated.cache).length === 0 && isArchiveStoreVersion(1) && isArchiveStoreVersion(2))
 const cp = (text) => ({ taskId: 't1', kind: 'checkpoint', text })
 const bd = (text) => ({ taskId: 't1', kind: 'boundary', text })
-check('F9d 单调追加守卫：截断+追加合法；改写幸存条目违规',
+check('F10d 单调追加守卫：截断+追加合法；改写幸存条目违规',
   archiveChainMonotone([cp('c1')], [cp('c1'), bd('d')])
   && archiveChainMonotone([cp('c1'), cp('c2')], [cp('c2'), bd('d')])
   && !archiveChainMonotone([cp('c1'), cp('c2')], [cp('c1'), cp('c2x'), bd('d')]))
 const over = appendArchiveEntry(emptyArchiveStore('w'), { ...bd('x'.repeat(80)), layer: 'boundary', at: 1 }, { ...DEFAULT_ASSEMBLE_POLICY, density: flatDensity(1), archiveTokens: 30 })
-check('F9d overCap 入账（单条超帽保最新 + 标记）', over.overCap === true && over.kept === 1)
+check('F10d overCap 入账（单条超帽保最新 + 标记）', over.overCap === true && over.kept === 1)
 
 // ⑥ 区间守卫回归标记
 const domainText = readText('src/domains/compaction.ts')
@@ -174,20 +178,19 @@ check('F9a 区间守卫在位（两路径 surfaceNodes + balanceRange；缝越�
   (domainText.match(/history\.balanceRange\(/g) ?? []).length >= 2
   && (domainText.match(/history\.surfaceNodes\(\)/g) ?? []).length >= 2
   && /cutSeq < replaceStart \|\| cutSeq > replaceEnd/.test(domainText))
+check('F10 档案落盘只存总分（compaction 两处 append 用 digestText）',
+  (domainText.match(/text: (outcome\.result|chosen!)\.digestText/g) ?? []).length === 2)
 
-// ⑦ 产物体量对照（真机缺陷产物 = 8,209 est：摘要 1,512 + 热尾 6,697）
+// ⑦ 产物体量对照（档案正文 vs 热尾分列）
 const summaryTokens = okBuilt ? built.result.digestPlan.tokens : 0
 const hotTailTokens = okBuilt ? built.result.hotTail.tokens : 0
-const productTokens = okBuilt
-  ? Math.ceil(built.result.rendered.length / 1.5)
-  : 0
+const productTokens = okBuilt ? Math.ceil(built.result.rendered.length / 1.5) : 0
 console.log('')
-console.log('| 口径 | 真机缺陷产物 | F9 合成夹具 |')
+console.log('| 口径 | 真机缺陷产物 | F10 合成夹具 |')
 console.log('|---|---|---|')
-console.log('| 摘要 est | 1,512 | ' + summaryTokens + ' |')
+console.log('| 档案正文 est | 1,512 | ' + summaryTokens + ' |')
 console.log('| 热尾 est | 6,697 | ' + hotTailTokens + ' |')
 console.log('| 产物 est | 8,209 | ' + productTokens + ' |')
-console.log('| 路径表条目 | 0 | ' + (okBuilt ? built.result.pathTableEntries : 0) + ' |')
 console.log('| 事实泄漏 | 未观测 | ' + (okBuilt ? built.result.digestPlan.factLeaks : 0) + ' |')
 console.log('')
 console.log('checks = ' + checks.length + ' / failures = ' + failures.length)

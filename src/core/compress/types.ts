@@ -20,10 +20,10 @@ import type {
 import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
 /** prompt 模板版本（改模板必须升版本：产物 schema 与模板同版演进）。 */
-export const COMPRESS_PROMPT_VERSION = 2
+export const COMPRESS_PROMPT_VERSION = 3
 
 /** 调用策略版本（计量口径可复现；同 docs/03 §4 哲学）。 */
-export const COMPRESS_POLICY_VERSION = 2
+export const COMPRESS_POLICY_VERSION = 3
 
 /** 压缩层 = 生产签名（边界产热尾、压力产检查点 + 末段子任务；04 §3）。 */
 export type CompressMode = 'boundary' | 'pressure'
@@ -90,7 +90,7 @@ export interface CompressPromptInput {
   readonly units: readonly AssembleUnit[]
   /** 已归档检查点链（机制 A 续传面；只接受 empty/prefix/single/chain 形态）。 */
   readonly priorChain?: readonly ArchiveEntry[]
-  /** 渲染根（F9e：单元清单路径相对化基准）。 */
+  /** 渲染根（单元清单路径相对化基准）。 */
   readonly root?: string
   readonly policy?: CompressPolicy
 }

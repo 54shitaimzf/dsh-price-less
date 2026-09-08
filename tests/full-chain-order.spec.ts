@@ -18,7 +18,7 @@ ignorableChannelAvailable({ SESSION_LOG_INTENT: 1 })
 
 const WORKSPACE = 'w'
 const ARCHIVE_KEY = boundaryArchiveKey(WORKSPACE)
-const VALID_PRODUCT = JSON.stringify({ gist: '目标与方向', steps: [{ type: 'plan', text: '先做一', refs: [1] }], hotTail: [{ unitId: 'c1' }] })
+const VALID_PRODUCT = JSON.stringify({ gist: '目标与方向', steps: [{ type: 'plan', text: '先做一' }], hotTail: [{ unitId: 'c1' }] })
 const PRESSURE_PRODUCT = JSON.stringify({
   checkpoint: { progress: '已完成 A', currentState: 'B 已就绪', nextStep: '做 C', liveConstraints: ['不要改 D'] },
   cutPoint: { unitId: 'c2' },
@@ -84,8 +84,8 @@ function fakeAssemble() {
         ok: true,
         result: {
           layer: request.layer, digest: request.digest, digestBytes: 10, digestEntryCount: 1,
-          hotTail: { selections: [], stopReason: 'list-end', source: 'model', floorFilled: false, declaredUnits: 0, dropped: 0, dropReasons: { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }, clipped: 0, truncated: 0, tokens: 0, budgetTokens: 10000 },
-          archiveForm: { form: 'single', checkpointCount: 0 }, unitCount: 2, rendered: 'R',
+          hotTail: { entries: [], stopReason: 'list-end', source: 'model', floorFilled: false, declaredUnits: 0, dropped: 0, dropReasons: { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0, error: 0 }, clipped: 0, truncated: 0, quotaDrops: 0, archiveRef: 'v1', tokens: 0, budgetTokens: 10000 },
+          archiveForm: { form: 'single', checkpointCount: 0 }, unitCount: 2, rendered: 'R', digestText: 'R',
         },
       }
     },

@@ -45,6 +45,7 @@
 | **F9c** | **热尾事实载体**：user/assistant 消息单元 + tool-call 块转写 + Zipf `1/i` 分配 + 份额帽 + 仅指针降级 + `fact` 子串校验 + dup 去重 | ✅ | `core/assemble/assemble.ts`、`core/compress/region.ts`、`domains/{assemble,compaction}.ts`；快照 §64 |
 | **F9d** | **双预算 10K/10K + 存储 v2**：`archiveCapTokens` 15K→10K；`ARCHIVE_STORE_VERSION` 2 + v1 条目兼容迁移；`archiveChainMonotone` 运行时守卫；`overCap` 入账 | ✅ | `config.ts`、`client/field-model.ts`、`core/compress/store.ts`、`core/assemble/archive.ts`、`core/restore/plan.ts`；快照 §65 |
 | **F9e** | **路径压缩**：`root`（session.header.cwd）+ 相对化 + 同路径 ≥2 次短 ID 表；单元清单同源相对化；`policyKey` 含 root | ✅ | `core/assemble/paths.ts`（新）、`core/assemble/assemble.ts`、`core/compress/prompt.ts`、`domains/compaction.ts`；快照 §66 |
+| **F10** | **契约 v3**：总分零指针（`refs` 退役）+ 热尾头指向档案 `vN` + 档案落盘只存总分（`digestText`）+ 错误信息不进热尾 + 配额不足改丢弃 + 路径短 ID 表退役 | ✅ | `core/assemble/{types,assemble,paths,ledger}.ts`、`core/compress/{prompt,product,types}.ts`、`domains/{assemble,compaction}.ts`、`scripts/verify-f9.mjs`；快照 §69 |
 | **F9g** | **回放验收**：`scripts/verify-f9.mjs` 15/15 + `scripts/verify-f9-replay.mjs` 真机对照（旧申报重装配 10,022 vs 旧 8,209——Zipf 用满预算；**产物总量下降待用户定 `retainTokens`**）；真机重启冒烟待补 | ✅ | `scripts/verify-f9{,-replay}.mjs`；快照 §68 |
 
 **F5a 说明**：只改渲染面（块序 + 标签），产物 schema 与校验序（`DIGEST_BLOCK_ORDER`）不变；若要真正的「总述块」需第 5 种块型，属 schema 变更，另行拍板。
@@ -77,3 +78,5 @@
 - **2026-09-09** 更新：新增 F8a/F8b（token 估算重构 + 标定对账，已落地，账本 §61）；F8c 口径统一待真机样本。
 - **2026-09-09** 更新：新增 **F9 压缩产物重构**（F9a–F9e 已落地：区间权威/schema v2/热尾事实载体/双预算 10K+存储 v2/路径压缩；
   F9g 回放验收待跑；F5b 由 F9e 落地，F3 仍待立项；账本 §62–§66）。
+- **2026-09-09** 更新：用户裁定契约 v3（**F10**）：总分里指针删除、热尾改为指向档案且每次直接抛弃、
+  错误信息不进热尾；档案落盘只存总分（`archiveCapTokens` 只计总分）。账本 §69。

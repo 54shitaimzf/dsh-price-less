@@ -36,19 +36,18 @@ export interface AssembleRunFactData {
   readonly gistBytes?: number
   readonly stepCount?: number
   readonly stepTokens?: number
-  readonly refCount?: number
-  readonly refDrops?: number
   readonly factLeaks?: number
-  readonly pointerOnlyCount?: number
+  /** F10：配额不足被丢弃条数（原 pointerOnlyCount）。 */
+  readonly quotaDrops?: number
   readonly factRejects?: number
   readonly dupDrops?: number
+  /** F10：错误/失败单元不进热尾的丢弃数。 */
+  readonly errorDrops?: number
   readonly hotTailPointers?: number
   /** F9f：申报洪泛被 maxFetchUnits 截断的坐标数（明账，原为静默 break）。 */
   readonly fetchCapped?: number
-  /** F9d/F9e（档案硬帽与路径压缩面；生产者逐步接入）。 */
+  /** F9d（档案硬帽面；生产者逐步接入）。 */
   readonly archiveOverCap?: boolean
-  readonly pathBytesSaved?: number
-  readonly pathTableEntries?: number
   readonly rootKind?: string
   readonly hotTailTokens: number
   readonly hotTailDeclaredUnits: number
@@ -76,17 +75,14 @@ export interface CompressionLedger {
   gistBytes: number
   stepCount: number
   stepTokens: number
-  refCount: number
-  refDrops: number
   factLeaks: number
-  pointerOnlyCount: number
+  quotaDrops: number
   factRejects: number
   dupDrops: number
+  errorDrops: number
   hotTailPointers: number
   fetchCapped: number
   archiveOverCap: number
-  pathBytesSaved: number
-  pathTableEntries: number
   archiveTruncate: { count: number; tokens: number }
   compressionCallCount: number
   compressionCacheHitRate: number
@@ -139,17 +135,14 @@ export function emptyCompressionLedger(): CompressionLedger {
     gistBytes: 0,
     stepCount: 0,
     stepTokens: 0,
-    refCount: 0,
-    refDrops: 0,
     factLeaks: 0,
-    pointerOnlyCount: 0,
+    quotaDrops: 0,
     factRejects: 0,
     dupDrops: 0,
+    errorDrops: 0,
     hotTailPointers: 0,
     fetchCapped: 0,
     archiveOverCap: 0,
-    pathBytesSaved: 0,
-    pathTableEntries: 0,
     archiveTruncate: { count: 0, tokens: 0 },
     compressionCallCount: 0,
     compressionCacheHitRate: 0,
@@ -207,17 +200,14 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     ledger.gistBytes += numberField(data.gistBytes)
     ledger.stepCount += numberField(data.stepCount)
     ledger.stepTokens += numberField(data.stepTokens)
-    ledger.refCount += numberField(data.refCount)
-    ledger.refDrops += numberField(data.refDrops)
     ledger.factLeaks += numberField(data.factLeaks)
-    ledger.pointerOnlyCount += numberField(data.pointerOnlyCount)
+    ledger.quotaDrops += numberField(data.quotaDrops)
     ledger.factRejects += numberField(data.factRejects)
     ledger.dupDrops += numberField(data.dupDrops)
+    ledger.errorDrops += numberField(data.errorDrops)
     ledger.hotTailPointers += numberField(data.hotTailPointers)
     ledger.fetchCapped += numberField(data.fetchCapped)
     if (data.archiveOverCap === true) ledger.archiveOverCap++
-    ledger.pathBytesSaved += numberField(data.pathBytesSaved)
-    ledger.pathTableEntries += numberField(data.pathTableEntries)
     ledger.hotTailTokens += numberField(data.hotTailTokens)
     ledger.hotTailDeclaredUnits += numberField(data.hotTailDeclaredUnits)
     ledger.assembleDropped += numberField(data.dropped)

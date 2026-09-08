@@ -36,7 +36,8 @@ client/ 设置壳**全保留**（星标按钮 +
 （历史记录，只读）；**新设计 = N 系列「协商剪除」（语义层）**，总纲 `docs/implement/00-master.md`
 （**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 ✅ 影子模式**（`core/shear/negotiate.ts` 纯核 + 域接线 + `shear-negotiation-note|reply` 两型 ignorable 事实 + 账本 fold + `shear.negotiate` 三态〔默认 off〕+ `scripts/probe-n3.mjs`；通道 A+C：预设 `presets/price-less/` persona 段声明协议 + 措辞纪律、**固定 native 呈现** + 短注记；**待真机采样**）；**2026-09-09 真机复盘修复 F1–F5**（H6 端口 `ctx.tools` 未 inject 空转 → F1 修；边界压缩加 60s 判词屏障 F2；诊断日志去重 F4；档案渲染结论先行+标签 F5a；F3 工作区隔离待立项 / F5b 路径相对化已由 **F9e** 落地〔每档案条目带 root + 相对化 + 短 ID 表〕；
 快照 §60）→ **F9 压缩产物重构**（F9a 区间权威 + F9b schema v2 + F9c 热尾事实载体 + F9d 双预算/存储 v2/
-单调守卫 + F9e 路径压缩；快照 §62–§66）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
+单调守卫 + F9e 路径压缩；快照 §62–§66）→ **F10 契约 v3**（总分零指针 + 热尾指向档案 + 档案只存总分 +
+错误不进热尾；快照 §69）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。
@@ -67,8 +68,9 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 - **压缩域标定常数（实验结论 + P20c 用户裁定）**：压力阀门 = `pressureRatio`（默认 **0.35**）
   × 主模型上下文窗口；窗口缺失 → 假定窗口 `domainTokens=125K`（2026-09 实测峰值 233K 标定）
   → 绝对安全网 `thresholdTokens=100K`；`retainTokens=10K`（边界热尾）；**F9 双预算**：
-  档案区 `archiveCapTokens=10K`（与热尾分列）；产物 = 总述（≤80 字零事实）+ 分步（≤120 字/条，
-  带 ▸n 引用）+ 热尾（1 指针 : 1 内容，事实载体）；热尾配额 Zipf `1/i` + 份额帽
+  档案区 `archiveCapTokens=10K`（**只计总分**；与热尾分列）；产物（F10 契约 v3）= 总述（≤80 字零事实）
+  + 分步（≤120 字/条，**零指针**）+ 热尾（头指档案 vN + `▸n` 逐字内容，事实载体；**错误信息不进**）——
+  档案落盘正文 = 仅总分，热尾每次压缩直接抛弃（档案不因事实漂移失效）；热尾配额 Zipf `1/i` + 份额帽
   `hotTailMaxShare=0.4`（防缩水打回）；估计器 = **两桶密度**
   （CJK 1.5 / 其余 2.9 字符/token；结构模型对齐 DSH `token-meter/estimate.ts`，`core/meter/estimate.ts`）；不变量 `retain < thresholdTokens`、`0 < pressureRatio < 0.8`。**触发器语义**：task 边界
   自动触发 = `agent/pre-step` 发现 `status==='closed' && !compactedTaskIds` 的 task 就压

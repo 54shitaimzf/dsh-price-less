@@ -182,7 +182,7 @@ describe('P17b 装配域：双通道取真', () => {
     const fact = env.session.appends.find((entry) => entry.type === ASSEMBLE_RUN_FACT_TYPE)
     expect(fact!.data.archiveTruncateCount).toBe(2)
     expect(fact!.data.archiveTruncateTokens).toBe(700)
-    expect(fact!.data.dropReasons).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 })
+    expect(fact!.data.dropReasons).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0, error: 0 })
   })
 
   it('单元清单按范围过滤（供 P18 prompt 枚举）', () => {
