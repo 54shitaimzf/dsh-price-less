@@ -80,7 +80,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P14d | 断面产品契约 + 弹层瘦身（**已施工** [P14d-optimize-product-and-ui.md](P14d-optimize-product-and-ui.md)） | R2 修正 | prompt v2：关键事实保真（路径/引号/数值必保）+ 大胆重写 + 禁标签/元注释；候选段事实级预抽；元注释机械剥离入账；弹层删 diff/统计、裁决折叠、禁点侧面关闭、确认即发送 | P14c | M |
 | P14e | ★ 结果复用（**已施工** commit `dfbac32`；快照 [§36](../ledger-history.md)） | R2 修正 | 同会话 + 同 prompt + 同输入指纹的二次点击回放缓存（零调用/零事实/零等待；apply 后失效重断面）+ client `cached` 态（连桥调用都省） | P14d | M |
 | P14f | 推理档做成设置项 + 弹层去噪（**已施工** commit `4711849`；快照 [§37](../ledger-history.md)） | R2 修正 | `discriminator.reasoningEffort`（留空 = 跟随模型默认 / off/low/medium/high/max）**判别与 ★ 共用**，能力探测后只传模型声明的档，账本记 `requestedEffort`/`sentEffort`；删除"已发送"提示 | P14e | M |
-| P15a | 工具剪切纯核 | R3 | `core/shear/` 工具半边（ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则；[03 §2](../03-shear.md)） | P2 | M |
+| P15a | 工具剪切纯核（**已施工** commit `0274e4a`；工单 [P15a-shear-tool-core.md](P15a-shear-tool-core.md)；快照 §38） | R3 | `core/shear/` 工具半边（生命周期谓词 + 三级回退 / 四档准入 T-entry/T-loop/T-note/T0-R / T-note 协商；[03 §2](../03-shear.md)）；**纯核未接线**（接线 = P15b）；实测 632 行（预算 M、实际 L、未拆单，见 §38 尺寸申报） | P2 | M |
 | P15b | 工具剪切调度 | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面） | P15a,P6,P7,P12,P2 | M |
 | P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15b | M |
 | P17 | 边界装配器 | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机）+ 共享事务原语（04 §1） | P6,P8,P9 | L（拆纯核/接线两份） |
@@ -126,6 +126,9 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > P14d（断面产品契约 + 弹层瘦身，commit `040f07e`，快照 §35）、P14e（★ 结果复用，commit `dfbac32`，快照 §36）、
 > P14f（推理档做成设置项（默认跟随）+ 删除"已发送"提示，commit `4711849`，快照 §37）均已施工；
 > 依赖链 P14c → P14d → P14e → P14f 挂在 P14b2 之后，**不改变 R2–R4 主干依赖**；下一未执行单元仍 = P15a。
+
+> P15a 施工记录（R3 开工，2026-09-08）：工具剪切纯核已施工（commit `0274e4a`；快照 §38；`node scripts/verify-p15a.mjs` PASS，gate 274 用例 / 30 文件）。
+> **下一未执行单元 = P15b**（`domains/shear.ts` 调度：四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面；依赖 P15a,P6,P7,P12,P2）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、

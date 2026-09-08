@@ -1695,3 +1695,43 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 （设置面含推理档、判别与 ★ 都走设置、★ 不再硬编码 off、"已发送"提示已移除）；
 `tests/star-host.spec.ts` 1（缺省不传档）/ 2c（配置 off + 模型声明 → 传 off）/ 2d（配置 off + 模型未声明 → 回退跟随）；
 `tests/field-model.spec.ts` 推理档字段（选项 / parse / 清空=跟随）。
+
+## 38. 账本快照 §38：工具剪切纯核（P15a，R3 首单）
+
+> 触发：总纲 §3 下一未执行单元 = P15a（R3 剪切域首单，`core/shear/` 工具半边）。本单只做纯核决策，
+> **未接线**（事件接线 / 改史执行 / 事实发射 / fold 扩展 = P15b）——故 live 账本 Δ = 0，
+> 快照 = 纯核 fixture 回放 + T0-R 真机会话探针（先立度量）。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| live 账本（`cut*` / `shear*` / `tableRepair`） | 未接线，全 0 | **仍全 0**（本单零运行时行为变化；入账归 P15b） |
+| `core/shear/` 模块 | 不存在 | 4 文件（types / t0r / tool / index），零 harness import（S1 绿），确定性双跑逐字节一致 |
+| 阈值初值 | 未固化（§8 只写"以实验结论固化值"，正文无数字） | **本单固定**：`noteMinBytes=8192` / `loopMaxConclusionChars=120` / `t0rMaxSegments=4` / `t0rMaxIndent=1`（版本 1）；真机观测再微调 |
+
+**T0-R 真机会话探针**（`docs/03 §8` 实现前复核；44 个会话日志全量回放，`scripts/verify-p15a.mjs` 产出）：
+
+| 指标 | 读数 |
+|---|---|
+| 文件类工具调用 | 153（`str_replace_editor` 占比 **31.4%**——双工具栈事实成立，v1 只覆盖 tool-fs 栈） |
+| 相邻读写对 | **7**（声明表占比 **0.0%**） |
+| hunk 跨度（行） | old min=1 / median=3 / max=21；new min=1 / median=5 / max=21 |
+| 假想节省额 | 可修复 6/7；读窗→修复摘抄净省 **115 bytes** |
+
+**读数解读（诚实声明）**：当前语料声明表类读写对为 **0**，T0-R 暂无真实触发样本；hunk 中位数 3 行说明
+写区极小，字节节省天然有限——机制经济性由 `rereadAfterRepair`（P15b 入账）在真机观测判定，
+本单只固定实现与初值，**不据此改阈值**（探针只记录分布）。
+
+**验收**：
+- `npm run gate` 绿（**274 用例 / 30 文件**；结构断言 M1–M5 / S1–S5 / D1–D9 全 PASS）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p15a.mjs` → `P15A VERIFY PASS (10 checks)`（导出面 / 零 harness import / 未接线 / 确定性双跑 / 输入不 mutate / 策略初值 / spec 覆盖 / 探针）
+- `node scripts/verify-p14c.mjs` → `P14C VERIFY PASS`（无回归）
+- `tests/shear-tool.spec.ts` 19 用例（四档各 ≥1；T-note 无标记/坏标记/超时三路 → 全保留；T0-R 跨事件/跨行/段数超限各退回；配对与 hold 语义；确定性）
+
+**尺寸申报（偏差留档）**：工单预算 4 文件 ≤400 行净增（红线 450）。实测 **632 行**
+（types 89 / t0r 165 / tool 371 / index 7）——**超红线，但范围未变、未增第 5 个文件、验收全绿**。
+按总纲 §3 尺寸表，P15a 实际为 **L** 而非 M（四条机械规则 + 本地重声明类型面 + T0-R 状态机）。
+未拆单的理由：拆分只会把同一 commit 内的 `tool.ts`（fold 的 T0-R 分支）与 `t0r.ts` 切成名义两单，
+工程上无收益；若需守线，下一轮可把 T0-R 改为注入式 hook 拆为 P15a2。
+
