@@ -15,6 +15,11 @@
 import z from 'schemastery'
 
 export interface Config {
+  /** 剪切层开关区（docs/11 §6：工具剪切 + 对话剪切总开关）。 */
+  shear: {
+    /** 工具剪切总开关（默认 true；关闭后四档零行为）。 */
+    enabled: boolean
+  }
   /** 判别器/引擎配置区。 */
   discriminator: {
     /** 模型路由（可选；空 = 跟随会话路由）。 */
@@ -31,6 +36,9 @@ export interface Config {
 }
 
 export const Config = z.object({
+  shear: z.object({
+    enabled: z.boolean().default(true),
+  }),
   discriminator: z.object({
     provider: z.string().min(1),
     model: z.string().min(1),
@@ -41,6 +49,9 @@ export const Config = z.object({
 
 /** 配置默认值（与 schema 默认同源；部分 config 对象装配路径的兜底）。 */
 export const CONFIG_DEFAULTS = {
+  shear: {
+    enabled: true,
+  },
   discriminator: {
     auto: false,
   },
@@ -59,6 +70,10 @@ export function resolveConfig(config: Partial<Config> | undefined): Config {
   return {
     ...CONFIG_DEFAULTS,
     ...(config ?? {}),
+    shear: {
+      ...CONFIG_DEFAULTS.shear,
+      ...(config?.shear ?? {}),
+    },
     discriminator: {
       ...CONFIG_DEFAULTS.discriminator,
       ...(config?.discriminator ?? {}),

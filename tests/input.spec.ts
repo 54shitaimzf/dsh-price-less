@@ -66,6 +66,7 @@ const llmStream = (text: string) => ({ stream: async function* () {
 
 
 const cfg = (auto: boolean, provider?: string, model?: string) => ({
+  shear: { enabled: true },
   discriminator: { auto, ...(provider ? { provider } : {}), ...(model ? { model } : {}) },
 })
 

@@ -126,7 +126,7 @@ export const RULES = [
     // logger.ts 发射路径）——越界即红，保证上游合并后机制代码零改动的原子删除。
     // 能力探测 = 结构化常量 SESSION_LOG_INTENT（ea04b581a5），不再匹配 append.toString；
     // import/调用 emitFact 的路径同样锁死（事实发射只准经 logger.ts 的 emitCeFact 词汇表门）。
-    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts' && f.path !== 'src/domains/task-facts.ts' && f.path !== 'src/domains/optimize-facts.ts'
+    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts' && f.path !== 'src/domains/task-facts.ts' && f.path !== 'src/domains/optimize-facts.ts' && f.path !== 'src/domains/shear-facts.ts'
       ? [{ message: 'ignorable-channel concepts must stay in the removable unit (platform/ignorable-channel.ts + logger.ts emit path, docs/12 §2)' }]
       : [] },
     { id: 'D4', canon: 'docs/09 §1/§2 + docs/11 §2 + docs/13 §3.6',
@@ -163,6 +163,11 @@ export const RULES = [
       && f.path !== 'src/platform/star-bridge.ts' && f.path !== 'src/index.ts'
       ? [{ message: 'connection RPC bridge concepts must only appear in src/platform/star-bridge.ts (index.ts wiring allowed, docs/13 §3.11)' }]
       : [] },
+  { id: 'D10', canon: 'docs/05 确定性优先 + docs/11 §9', appliesTo: (p) => p.startsWith('src/core/shear/'), check: (f) =>
+    // 剪切纯核 = 确定性 fold（同输入同账）：时钟/随机一律不许出现（P15b 起进 CI）。
+    [/\bMath\.random\(/, /\bDate\.now\(/, /\bnew Date\(/]
+      .filter((re) => re.test(f.text))
+      .map((re) => ({ message: `core/shear must stay deterministic (no clock/random), matches ${re}` })) },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */

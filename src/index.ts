@@ -16,6 +16,7 @@ import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.
 import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { mountAutoDiscriminator } from './domains/input.ts'
+import { mountShearDomain } from './domains/shear.ts'
 import { mountCommandFace } from './domains/commands.ts'
 import { mountStarHost, readSessionId, renderPreviewCommandText } from './domains/star.ts'
 import { registerStarBridge, type StarConnectionFace } from './platform/star-bridge.ts'
@@ -75,6 +76,10 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
 
   const pump = createEventPump(ctx, ceLogger(ctx))
   ctx.effect(() => () => pump.dispose())
+
+  // P15b：工具剪切调度（独立于 storage/llm——纯机械四档 + 事实发射；开关 = config.shear.enabled）。
+  const shear = mountShearDomain(ctx, { pump, getConfig, logger: ceLogger(ctx) })
+  ctx.effect(() => () => shear.dispose())
 
   let stopAuto: (() => void) | undefined
   let skillsCtx: Context | undefined

@@ -7,6 +7,8 @@
  * 见 docs/13 §3.9）；`tools/post-execute` 监听器返回 `PostToolDecision` 即短路
  * （覆盖 = T-entry 写时整形、追加 = T-note 贴注，由 replaceContent/appendContent
  * 构造）；T-entry/T-note 的业务判据归 P15a/P15b，本单不内置任何剪切规则。
+ * P15b 增 `createShearToolPort`：把 harness 执行视图收敛成 `ToolResultView`（domains 零
+ * harness 类型，D8 归口不变），只挂 post-execute，子分发/subagent 直接委托 next()。
  *
  * 模块: platform 工具事件端口（唯一 harness 触点层）
  * 平面: L0（确定性规则：注册 + 计量 + 决策转发；无模型、无机制逻辑）
@@ -119,4 +121,73 @@ export function createToolPort(
       return { ...stats }
     },
   }
+}
+
+/** 工具结果视图（P15b；本地结构面，domains 不接触 harness 类型）。 */
+export interface ToolResultView {
+  readonly callId: string
+  readonly name: string
+  /** result.content 的 text 块拼接（非 text 块不计）。 */
+  readonly resultText: string
+  readonly isError: boolean
+  /** 含非 text 块（图片等）——此时不做 T-entry 整形（保原块）。 */
+  readonly hasNonText: boolean
+  /** 会话来源（subagent 会话不裁）。 */
+  readonly origin?: string
+}
+
+/** 剪切判定钩子（纯函数语义；返回 undefined = 不动刀，委托 next()）。 */
+export interface ShearToolHooks {
+  /** T-entry 写时整形：返回覆盖后的完整文本；undefined = 不整形。 */
+  shapeEntry(view: ToolResultView): string | undefined
+  /** T-note 贴注：返回追加文本；undefined = 不贴注。 */
+  attachNote(view: ToolResultView): string | undefined
+}
+
+function textOfContent(blocks: readonly ContentBlock[]): string {
+  let text = ''
+  for (const block of blocks) if (block.type === 'text') text += block.text
+  return text
+}
+
+function toToolResultView(exec: ToolExecution, result: Readonly<ToolExecutionResult>): ToolResultView {
+  const content = result.content
+  let hasNonText = false
+  for (const block of content) if (block.type !== 'text') hasNonText = true
+  const agent = exec.agent as { session?: { header?: { origin?: unknown } } } | undefined
+  const origin = agent?.session?.header?.origin
+  return {
+    callId: String(exec.callId),
+    name: exec.name,
+    resultText: textOfContent(content),
+    isError: result.isError,
+    hasNonText,
+    ...(typeof origin === 'string' ? { origin } : {}),
+  }
+}
+
+/**
+ * P15b 剪切工具端口：只挂 `tools/post-execute`（T-entry 覆盖 / T-note 追加）。
+ * 子分发（`parent !== undefined`，run_code 内）与 subagent 会话直接委托 next()；
+ * 含非 text 块时不整形；异常由 createToolPort 遏制为 warn + next()（失败默认保留）。
+ */
+export function createShearToolPort(
+  ctx: Pick<Context, 'on'>,
+  hooks: ShearToolHooks,
+  logger?: { warn: (...args: unknown[]) => void },
+): ToolPort {
+  return createToolPort(ctx, {
+    onPostExecute: (exec, result) => {
+      if (exec.parent !== undefined) return undefined
+      const view = toToolResultView(exec, result)
+      if (view.origin === 'subagent') return undefined
+      if (!view.hasNonText) {
+        const shaped = hooks.shapeEntry(view)
+        if (shaped !== undefined) return replaceContent([{ type: 'text', text: shaped }])
+      }
+      const note = hooks.attachNote(view)
+      if (note !== undefined) return appendContent(result, [{ type: 'text', text: note }])
+      return undefined
+    },
+  }, logger)
 }

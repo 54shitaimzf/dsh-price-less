@@ -1,6 +1,6 @@
 /**
  * P15a 工具剪切纯核测试（docs/implement/P15a-shear-tool-core.md §5；docs/03 §7 协议级断言）。
- * 八组：谓词与三级回退 / T-entry / T-loop / T-note / T0 / T0-R / 配对与边界搭车 / 确定性。
+ * 九组：谓词与三级回退 / T-entry / T-loop / T-note / T0 / T0-R / 配对与边界搭车 / 确定性 / P15b 接线缝。
  * 纯核测试：零 cordis 运行时、零 IO、零模型。
  */
 import { describe, expect, it } from 'vitest'
@@ -12,18 +12,23 @@ import {
   admitLoop,
   admitNote,
   assertPairing,
+  SHEAR_NOTE_TEMPLATE,
+  SHEAR_NOTE_TEMPLATE_VERSION,
   buildLoopStub,
+  buildSupersededStub,
   foldToolShear,
   genericCutEligible,
   indentLevelOf,
   isBoundaryRideCandidate,
   isDeclarationTable,
+  noteEligible,
   parseNoteMarker,
   parseReadEnvelope,
   pathOfCall,
   repairReadAfterWrite,
   resolveLifecycle,
   shapeEntryContent,
+  textOfContentBlocks,
   toolCategory,
   utf8ByteLength,
   type ShearEvent,
@@ -145,7 +150,7 @@ describe('P15a §5 T0 超越与 T0-R 三硬规则', () => {
   })
   it('T0：同路径写超越 → 旧读整剪；异路径 / 逆序 → 不动刀', () => {
     const plan = foldToolShear([readCall, readResult, call(3, 20, 'w1', 'write', { file_path: 'src/index.ts', content: 'x' })])
-    expect(plan.ops).toEqual([{ kind: 't0-supersede', callId: 'r1' }])
+    expect(plan.ops).toEqual([{ kind: 't0-supersede', callId: 'r1', writeCallId: 'w1', path: 'src/index.ts' }])
     const other = foldToolShear([readCall, readResult, call(3, 20, 'w1', 'write', { file_path: 'src/other.ts', content: 'x' })])
     expect(other.ops).toHaveLength(0)
     const reversed = foldToolShear([call(3, 20, 'w1', 'write', { file_path: 'src/index.ts' }), readCall, readResult])
@@ -190,8 +195,8 @@ describe('P15a §5 T0 超越与 T0-R 三硬规则', () => {
 describe('P15a §6 配对与边界搭车', () => {
   it('配对完整性：孤儿调用 → 拒绝该 op', () => {
     const events = [call(1, 10, 'r1', 'read', { file_path: 'src/index.ts' }), result(2, 11, 'r1', readText)]
-    expect(assertPairing({ kind: 't0-supersede', callId: 'r1' }, events)).toBe(true)
-    expect(assertPairing({ kind: 't0-supersede', callId: 'ghost' }, events)).toBe(false)
+    expect(assertPairing({ kind: 't0-supersede', callId: 'r1', writeCallId: 'w1', path: 'src/index.ts' }, events)).toBe(true)
+    expect(assertPairing({ kind: 't0-supersede', callId: 'ghost', writeCallId: 'w1', path: 'src/index.ts' }, events)).toBe(false)
   })
   it('hold = T-boundary 搭车候选；cut/keep 不是', () => {
     expect(isBoundaryRideCandidate({ tier: 'T-note', decision: 'hold', reason: 'note-hold' })).toBe(true)
@@ -220,5 +225,39 @@ describe('P15a §7 确定性', () => {
     expect(utf8ByteLength('abc')).toBe(3)
     expect(utf8ByteLength('中文')).toBe(6)
     expect(utf8ByteLength('😀')).toBe(4)
+  })
+})
+
+describe('P15b 接线缝（纯核可选参数与模板）', () => {
+  it('noteEligible：体积阈值 / 非 read / 非问答', () => {
+    const cmd = { seq: 1, time: 10, callId: 'c1', name: 'bash', argsText: '{}' }
+    expect(noteEligible(cmd, bigLog(400))).toBe(true)
+    expect(noteEligible(cmd, 'small')).toBe(false)
+    expect(noteEligible({ ...cmd, name: 'read' }, bigLog(400))).toBe(false)
+    expect(noteEligible({ ...cmd, name: 'ask_user' }, bigLog(400))).toBe(false)
+  })
+  it('textOfContentBlocks：拼接 text 块、忽略非 text 块', () => {
+    expect(textOfContentBlocks([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }])).toBe('ab')
+    expect(textOfContentBlocks([])).toBe('')
+  })
+  it('buildSupersededStub 逐字含路径（零转写）', () => {
+    expect(buildSupersededStub('src/index.ts')).toContain('src/index.ts')
+  })
+  it('SHEAR_NOTE_TEMPLATE：版本 1、含 CUT-OK/CUT-HOLD 契约、可被 parseNoteMarker 解析', () => {
+    expect(SHEAR_NOTE_TEMPLATE_VERSION).toBe(1)
+    expect(SHEAR_NOTE_TEMPLATE).toContain('CUT-OK:')
+    expect(SHEAR_NOTE_TEMPLATE).toContain('CUT-HOLD:')
+    expect(parseNoteMarker('CUT-OK: 结论')).toEqual({ kind: 'cut', conclusion: '结论' })
+  })
+  it('entryShaped 选项：已整形调用跳过 T-note/T-loop（防双重剪）', () => {
+    const events: ShearEvent[] = [call(1, 10, 'b1', 'bash', { command: 'npm test' }), result(2, 11, 'b1', 'a\nb\nc\nd\ne'), assistant(3, 12, '测试全绿。')]
+    expect(foldToolShear(events).ops.map((op) => op.kind)).toEqual(['stub-replace'])
+    expect(foldToolShear(events, DEFAULT_SHEAR_POLICY, { entryShaped: new Set(['b1']) }).ops).toHaveLength(0)
+  })
+  it('lifecycles 选项：工具自声明 supersededBy 可覆盖类别启发式', () => {
+    const events: ShearEvent[] = [readCall, readResult, call(3, 20, 'w1', 'write', { file_path: 'src/index.ts', content: 'x' })]
+    expect(foldToolShear(events).ops.map((op) => op.kind)).toEqual(['t0-supersede'])
+    const frozen = { ...DEFAULT_LIFECYCLE, supersededBy: () => false }
+    expect(foldToolShear(events, DEFAULT_SHEAR_POLICY, { lifecycles: { write: frozen } }).ops).toHaveLength(0)
   })
 })

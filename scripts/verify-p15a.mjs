@@ -48,11 +48,19 @@ const sources = FILES.map((f) => fs.readFileSync(path.join(shearDir, f), 'utf8')
 check('core/shear 零 harness/platform import',
   sources.every((text) => !/from\s+['"](?:@deepseek-ai\/|cordis|[^'"]*platform)/.test(text)))
 
-// —— ③ 未接线（P15a 只做纯核；接线归 P15b） ——
-const domainFiles = fs.readdirSync(path.join(ROOT, 'src/domains')).filter((f) => f.endsWith('.ts')).map((f) => 'src/domains/' + f)
-const wiringTargets = ['src/index.ts', ...domainFiles]
-const wired = wiringTargets.filter((p) => fs.readFileSync(path.join(ROOT, p), 'utf8').includes('core/shear'))
-check('未接线（src/index.ts 与 domains 不引用 core/shear）', wired.length === 0, wired.join(','))
+// —— ③ 接线白名单（P15b 起允许；白名单外引用 = 违规） ——
+const ALLOWED_WIRING = new Set(['src/index.ts', 'src/domains/shear.ts', 'src/domains/shear-facts.ts'])
+const walkTs = (dir, out = []) => {
+  for (const name of fs.readdirSync(dir).sort()) {
+    const abs = path.join(dir, name)
+    if (fs.statSync(abs).isDirectory()) walkTs(abs, out)
+    else if (name.endsWith('.ts')) out.push(path.relative(ROOT, abs).split(path.sep).join('/'))
+  }
+  return out
+}
+const wired = walkTs(path.join(ROOT, 'src')).filter((p) => !p.startsWith('src/core/shear/') && fs.readFileSync(path.join(ROOT, p), 'utf8').includes('core/shear'))
+const wiredIllegal = wired.filter((p) => !ALLOWED_WIRING.has(p))
+check('接线白名单（仅 index.ts + domains/shear*.ts 可引用 core/shear）', wiredIllegal.length === 0, wiredIllegal.join(','))
 
 // —— ④ 确定性双跑 + 输入不 mutate ——
 const readText = ['1: const a = 1', '2: export const x = 2', '3: const b = 3'].join('\n')

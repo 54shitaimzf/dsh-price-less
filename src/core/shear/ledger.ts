@@ -1,0 +1,253 @@
+/**
+ * 工具剪切账本 fold（docs/07 §0.5 剪切族；docs/03 §6；P15b）。
+ * 纯函数：同输入同账；输入 = 原始事件序（append 语义）+ context-economy/shear-* 事实。
+ * `shearDecision` 来自重跑 foldToolShear（本会怎么判）；`cut*`/`tableRepair` 来自已发射事实（实际落刀）——分列不混算。
+ * `cutMisfireDetected` / `questionBacklogDepth` / `thinkingCutTokens` 归 P16：字段在位、值显式 0。
+ *
+ * 模块: core 剪切账本 fold（零 harness/platform import）
+ * 平面: L0（确定性重放；无模型、无 IO）
+ * 回退链步数: 0（纯计算）
+ * 审查清单: 不 import harness/platform（S1）；无时钟/随机（D10）；不写事实、不改史、不读盘。
+ * 度量: 本文件即剪切族账本 fold（07 回放管道消费面）。
+ */
+import type { LedgerFact, LedgerSessionEvent } from '../ledger/types.ts'
+import { estimateTokens, extractTextFromToolResult } from '../ledger/fold.ts'
+import { DEFAULT_SHEAR_POLICY, type ShearEvent, type ShearPolicy, type ShearToolCategory } from './types.ts'
+import { foldToolShear, pathOfCall, toolCategory, type FoldToolShearOptions } from './tool.ts'
+
+export const SHEAR_APPLIED_FACT_TYPE = 'context-economy/shear-applied' // ignorable
+export const SHEAR_DECISION_FACT_TYPE = 'context-economy/shear-decision' // ignorable
+export const SHEAR_ERROR_FACT_TYPE = 'context-economy/shear-error' // ignorable
+
+export type ShearAppliedKind = 'shape-entry' | 'stub-replace' | 'note-cut' | 't0-supersede' | 't0r-repair'
+export type ShearAppliedTier = 'T-entry' | 'T-loop' | 'T-note' | 'T0' | 'T0-R'
+
+/** 每次落刀一条（cut 相；失败不落此事实，落 shear-error）。 */
+export interface ShearAppliedFactData {
+  readonly policyVersion: number
+  readonly tier: ShearAppliedTier
+  readonly kind: ShearAppliedKind
+  readonly callId: string
+  readonly resultSeq: number
+  readonly at: number
+  readonly path?: string
+  readonly version?: number
+  readonly category: ShearToolCategory
+  readonly beforeTokens: number
+  readonly afterTokens: number
+  readonly savedTokens: number
+  readonly breakTokens: number
+  readonly tailNodes: number
+  readonly segments?: number
+  readonly windowLines?: number
+  readonly repairCoverage?: number
+}
+
+/** hold / note-attached 相（keep 不发射，由重算 fold 得出）。 */
+export interface ShearDecisionFactData {
+  readonly policyVersion: number
+  readonly tier: ShearAppliedTier
+  readonly decision: 'hold' | 'note-attached'
+  readonly reason: string
+  readonly callId?: string
+  readonly at: number
+  readonly noteBytes?: number
+}
+
+/** 执行失败（零重试；op 键已消费）。 */
+export interface ShearErrorFactData {
+  readonly at: number
+  readonly opKey: string
+  readonly tier?: string
+  readonly code: string
+  readonly message: string
+}
+
+export interface ShearLedger {
+  cutEvents: { question: number; tool: number }
+  cutTokensSaved: number
+  cutBreakCost: number
+  cutMisfireDetected: number
+  questionBacklogDepth: number
+  toolPruneByClass: Record<ShearToolCategory, number>
+  shearNoteAttached: number
+  shearDecision: { cut: number; hold: number; keep: number }
+  thinkingCutTokens: number
+  tableRepair: { count: number; tokens: number }
+  repairCoverage: number
+  rereadAfterRepair: number
+  rerunAfterCut: number
+}
+
+function emptyLedger(): ShearLedger {
+  return {
+    cutEvents: { question: 0, tool: 0 },
+    cutTokensSaved: 0,
+    cutBreakCost: 0,
+    cutMisfireDetected: 0,
+    questionBacklogDepth: 0,
+    toolPruneByClass: { read: 0, write: 0, search: 0, cmd: 0, other: 0 },
+    shearNoteAttached: 0,
+    shearDecision: { cut: 0, hold: 0, keep: 0 },
+    thinkingCutTokens: 0,
+    tableRepair: { count: 0, tokens: 0 },
+    repairCoverage: 0,
+    rereadAfterRepair: 0,
+    rerunAfterCut: 0,
+  }
+}
+
+/** 表面 fold（append 入尾 / replace 遮蔽区间换节点）；返回当前表面节点 seq 序。 */
+export function foldSurfaceNodes(events: readonly LedgerSessionEvent[]): number[] {
+  const nodes: number[] = []
+  for (const event of events) {
+    const op = (event as { surfaceOp?: unknown }).surfaceOp
+    if (op === 'append') { nodes.push(event.seq); continue }
+    if (typeof op !== 'object' || op === null) continue
+    const replace = op as { op?: unknown; start?: unknown; end?: unknown }
+    if (replace.op !== 'replace') continue
+    const start = Number(replace.start)
+    const end = Number(replace.end)
+    const si = nodes.indexOf(start)
+    const ei = nodes.indexOf(end)
+    if (si >= 0 && ei >= si) nodes.splice(si, ei - si + 1, event.seq)
+  }
+  return nodes
+}
+
+/** 事件模型可见文本（tool/result | assistant/message | user/message）。 */
+export function ledgerEventText(event: LedgerSessionEvent): string {
+  const data = event.data as Record<string, unknown> | undefined
+  if (event.type === 'tool/result') return extractTextFromToolResult(data)
+  const message = (data?.message ?? data) as { content?: unknown } | undefined
+  const content = message?.content
+  if (!Array.isArray(content)) return ''
+  let text = ''
+  for (const block of content) {
+    if (typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text') {
+      const part = (block as { text?: unknown }).text
+      if (typeof part === 'string') text += part
+    }
+  }
+  return text
+}
+
+/** 剪点（节点）之后存活表面的 token 估算——一次性断裂重价（docs/03 §1 / docs/07 §3）。 */
+export function surfaceTailTokens(events: readonly LedgerSessionEvent[], nodeSeq: number): number {
+  const nodes = foldSurfaceNodes(events)
+  const index = nodes.indexOf(nodeSeq)
+  if (index < 0) return 0
+  const bySeq = new Map(events.map((event) => [event.seq, event]))
+  let tokens = 0
+  for (const seq of nodes.slice(index + 1)) {
+    const event = bySeq.get(seq)
+    if (event !== undefined) tokens += estimateTokens(ledgerEventText(event))
+  }
+  return tokens
+}
+
+function appliedFacts(facts: readonly LedgerFact[]): ShearAppliedFactData[] {
+  const out: ShearAppliedFactData[] = []
+  for (const fact of facts) {
+    if (fact.type !== SHEAR_APPLIED_FACT_TYPE) continue
+    if (typeof fact.data === 'object' && fact.data !== null) out.push(fact.data as ShearAppliedFactData)
+  }
+  return out
+}
+
+/**
+ * 剪切族账本 fold：事实（实际落刀）+ 事件序（裁决分布与误伤信号重算）。
+ * @param events 会话事件序（含 surfaceOp；replace 事件不参与纯核重折，只参与表面 fold）。
+ * @param facts context-economy/shear-* 事实（会话 ignorable 事件或 KV 镜像，同口径）。
+ * @param policy 策略阈值（默认 docs/03 §8 初值）。
+ */
+export function foldShearLedger(
+  events: readonly LedgerSessionEvent[],
+  facts: readonly LedgerFact[],
+  policy: ShearPolicy = DEFAULT_SHEAR_POLICY,
+): ShearLedger {
+  const ledger = emptyLedger()
+  const original = events.filter((event) => {
+    const op = (event as { surfaceOp?: unknown }).surfaceOp
+    return typeof op !== 'object' || op === null
+  })
+  const applied = appliedFacts(facts)
+  const entryShaped = new Set(applied.filter((fact) => fact.kind === 'shape-entry').map((fact) => fact.callId))
+
+  const shearEvents: ShearEvent[] = []
+  for (const event of original) {
+    const data = (event.data ?? {}) as Record<string, unknown>
+    if (event.type === 'tool/call') {
+      shearEvents.push({ kind: 'tool-call', call: { seq: event.seq, time: event.time, callId: String(data.callId ?? ''), name: String(data.name ?? ''), argsText: String(data.arguments ?? '') } })
+    } else if (event.type === 'tool/result') {
+      const block = ((data.message ?? data) as { content?: unknown }).content
+      const first = Array.isArray(block) && block.length > 0 ? (block[0] as { toolCallId?: unknown }) : undefined
+      shearEvents.push({ kind: 'tool-result', result: { seq: event.seq, time: event.time, callId: String(first?.toolCallId ?? ''), text: extractTextFromToolResult(data) } })
+    } else if (event.type === 'assistant/message' || event.type === 'user/message') {
+      shearEvents.push({ kind: event.type === 'assistant/message' ? 'assistant-message' : 'user-message', seq: event.seq, time: event.time, text: ledgerEventText(event) })
+    }
+  }
+
+  const options: FoldToolShearOptions = { entryShaped }
+  const plan = foldToolShear(shearEvents, policy, options)
+  for (const decision of plan.decisions) ledger.shearDecision[decision.decision]++
+
+  const callsById = new Map<string, { name: string; argsText: string; seq: number }>()
+  const calls: Array<{ name: string; argsText: string; seq: number }> = []
+  for (const event of shearEvents) {
+    if (event.kind !== 'tool-call') continue
+    callsById.set(event.call.callId, { name: event.call.name, argsText: event.call.argsText, seq: event.call.seq })
+    calls.push({ name: event.call.name, argsText: event.call.argsText, seq: event.call.seq })
+  }
+
+  let repairLines = 0
+  let windowLines = 0
+  for (const fact of applied) {
+    ledger.cutEvents.tool++
+    ledger.cutTokensSaved += fact.savedTokens
+    ledger.cutBreakCost += fact.breakTokens
+    ledger.toolPruneByClass[fact.category] = (ledger.toolPruneByClass[fact.category] ?? 0) + 1
+    if (fact.kind === 't0r-repair') {
+      ledger.tableRepair.count++
+      ledger.tableRepair.tokens += fact.savedTokens
+      if (typeof fact.segments === 'number') repairLines += fact.segments
+      if (typeof fact.windowLines === 'number') windowLines += fact.windowLines
+      if (fact.path !== undefined) {
+        for (const call of calls) {
+          if (call.seq <= fact.resultSeq) continue
+          if (call.name !== 'read') continue
+          if (pathOfCall({ seq: call.seq, time: 0, callId: '', name: call.name, argsText: call.argsText }) === fact.path) { ledger.rereadAfterRepair++; break }
+        }
+      }
+    }
+    // rerunAfterCut = 命令类剪除后重跑同名同参（误伤信号）；read 类重读归 rereadAfterRepair，不重复计。
+    const origin = fact.category === 'cmd' ? callsById.get(fact.callId) : undefined
+    if (origin !== undefined) {
+      const rerun = calls.some((call) => call.seq > fact.resultSeq && call.name === origin.name && call.argsText === origin.argsText)
+      if (rerun) ledger.rerunAfterCut++
+    }
+  }
+  ledger.repairCoverage = windowLines === 0 ? 0 : repairLines / windowLines
+
+  for (const fact of facts) {
+    if (fact.type !== SHEAR_DECISION_FACT_TYPE) continue
+    const data = fact.data as ShearDecisionFactData
+    if (data.decision === 'note-attached') ledger.shearNoteAttached++
+  }
+  return ledger
+}
+
+/** 07 §6 报表模板的剪切段（纯字符串，无时间戳）。 */
+export function formatShearLedger(ledger: ShearLedger): string {
+  const lines: string[] = ['剪切：']
+  lines.push(`  cutEvents: question=${ledger.cutEvents.question} tool=${ledger.cutEvents.tool}`)
+  lines.push(`  cutTokensSaved: ${ledger.cutTokensSaved}`)
+  lines.push(`  cutBreakCost: ${ledger.cutBreakCost}`)
+  lines.push(`  toolPruneByClass: read=${ledger.toolPruneByClass.read} write=${ledger.toolPruneByClass.write} search=${ledger.toolPruneByClass.search} cmd=${ledger.toolPruneByClass.cmd} other=${ledger.toolPruneByClass.other}`)
+  lines.push(`  shearNoteAttached: ${ledger.shearNoteAttached}`)
+  lines.push(`  shearDecision: cut=${ledger.shearDecision.cut} hold=${ledger.shearDecision.hold} keep=${ledger.shearDecision.keep}`)
+  lines.push(`  tableRepair: count=${ledger.tableRepair.count} tokens=${ledger.tableRepair.tokens} coverage=${ledger.repairCoverage}`)
+  lines.push(`  rereadAfterRepair: ${ledger.rereadAfterRepair} / rerunAfterCut: ${ledger.rerunAfterCut}`)
+  lines.push(`  cutMisfireDetected: ${ledger.cutMisfireDetected} / questionBacklogDepth: ${ledger.questionBacklogDepth} / thinkingCutTokens: ${ledger.thinkingCutTokens}`)
+  return lines.join('\n')
+}

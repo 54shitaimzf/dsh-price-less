@@ -135,6 +135,18 @@ export function utf8ByteLength(text: string): number {
   return bytes
 }
 
+/** 拼接 content 块中的 text（非 text 块忽略）；供叙述/结果文本提取复用。 */
+export function textOfContentBlocks(blocks: readonly { readonly type?: string; readonly text?: string }[]): string {
+  let text = ''
+  for (const block of blocks) if (block.type === 'text' && typeof block.text === 'string') text += block.text
+  return text
+}
+
+/** T-note 贴注准入（docs/03 §2.1 L0）：体积 ≥ 阈值 ∧ 非 read ∧ 非问答。 */
+export function noteEligible(call: ShearToolCall, resultText: string, policy: ShearPolicy = DEFAULT_SHEAR_POLICY): boolean {
+  return utf8ByteLength(resultText) >= policy.noteMinBytes && toolCategory(call.name) !== 'read' && !QA_TOOLS.has(call.name)
+}
+
 export interface Admission {
   readonly decision: ShearDecision
   readonly reason: string
@@ -181,6 +193,11 @@ export function admitEntry(call: ShearToolCall, resultText: string): Admission {
 
 export function buildLoopStub(conclusion: string): string {
   return `（工具结果已剪除；结论：${conclusion}）`
+}
+
+/** T0 stub（纯痕迹；盘上在场 = 写即新真相，路径逐字保留，零转写）。 */
+export function buildSupersededStub(path: string): string {
+  return `（已剪除：${path} 的旧读取——该文件此后已被写入，盘上内容为准。）`
 }
 
 /** T-loop：cmd 类 + 当次结论极短 → stub 占位替换（保配对）；read 类排除。 */
@@ -247,6 +264,14 @@ export function isBoundaryRideCandidate(record: ShearDecisionRecord): boolean {
   return record.decision === 'hold'
 }
 
+/** fold 可选项（P15b 接线缝；全部可选，缺省 = P15a 行为逐字节一致）。 */
+export interface FoldToolShearOptions {
+  /** 已在落账前整形的调用（T-entry）：跳过 T-note/T-loop，防双重剪。 */
+  readonly entryShaped?: ReadonlySet<string>
+  /** 工具自声明生命周期（三级回退第一级）；缺省 = 类别启发式。 */
+  readonly lifecycles?: Readonly<Record<string, ToolContextLifecycle>>
+}
+
 interface ReadState {
   readonly call: ShearToolCall
   resultText?: string
@@ -262,7 +287,7 @@ interface ReadState {
  * T-entry 在结果到达时整形；T-note/T-loop 在紧随的叙述消息处裁决；
  * T0/T0-R 在同路径写到达时裁决（streak 原位刷新；异质操作冻结摘抄 → 后续编辑退普通 T0）。
  */
-export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy = DEFAULT_SHEAR_POLICY): ShearPlan {
+export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy = DEFAULT_SHEAR_POLICY, options: FoldToolShearOptions = {}): ShearPlan {
   const ops: ShearOp[] = []
   const decisions: ShearDecisionRecord[] = []
   const callsById = new Map<string, ShearToolCall>()
@@ -277,8 +302,8 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
   const freezeRepaired = (): void => {
     for (const states of readsByPath.values()) for (const state of states) if (state.repaired) state.frozen = true
   }
-  const cutPlainT0 = (state: ReadState): void => {
-    ops.push({ kind: 't0-supersede', callId: state.call.callId })
+  const cutPlainT0 = (state: ReadState, writeCallId: string): void => {
+    ops.push({ kind: 't0-supersede', callId: state.call.callId, writeCallId, path: pathOfCall(state.call) ?? '' })
     record('T0', 'cut', 't0-supersede', state.call.callId)
     state.cut = true
   }
@@ -314,14 +339,15 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
     if (event.kind === 'assistant-message') {
       const result = lastResultId === undefined ? undefined : resultsById.get(lastResultId)
       const call = lastResultId === undefined ? undefined : callsById.get(lastResultId)
-      if (call !== undefined && result !== undefined && !entryShaped.has(call.callId)) {
-        const noteEligible = utf8ByteLength(result.text) >= policy.noteMinBytes && toolCategory(call.name) !== 'read' && !QA_TOOLS.has(call.name)
-        const admission = noteEligible ? admitNote(call, result.text, event.text, {}, policy) : admitLoop(call, event.text, policy)
-        record(noteEligible ? 'T-note' : 'T-loop', admission.decision, admission.reason, call.callId)
+      if (call !== undefined && result !== undefined && !entryShaped.has(call.callId) && options.entryShaped?.has(call.callId) !== true) {
+        const eligible = noteEligible(call, result.text, policy)
+        const admission = eligible ? admitNote(call, result.text, event.text, {}, policy) : admitLoop(call, event.text, policy)
+        record(eligible ? 'T-note' : 'T-loop', admission.decision, admission.reason, call.callId)
         if (admission.op !== undefined) ops.push(admission.op)
       }
-      freezeRepaired()
-      streakPath = undefined
+      // docs/03 §2.2：streak 只被异质操作（其他文件）或用户轮打断——assistant 叙述不算打断
+      // （真实事件序 = assistant(含 tool-call) → tool/call → tool/result，若在此重置 streak，
+      //  T0-R 永远不可达）。
       lastResultId = undefined
       continue
     }
@@ -337,10 +363,11 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
       continue
     }
     if (WRITE_TOOLS.has(call.name) && path !== undefined) {
+      const lifecycle = resolveLifecycle(options.lifecycles?.[call.name])
       const states = readsByPath.get(path) ?? []
-      const superseded = states.filter((state) => state.resultText !== undefined && !state.cut && call.time > state.call.time)
+      const superseded = states.filter((state) => state.resultText !== undefined && !state.cut && lifecycle.supersededBy(state.call, call))
       const target = superseded[superseded.length - 1]
-      for (const state of superseded) if (state !== target) cutPlainT0(state)
+      for (const state of superseded) if (state !== target) cutPlainT0(state, call.callId)
       if (target !== undefined) {
         const edit = isEditCall(call) ? editArgsOf(call) : undefined
         const indent = edit === undefined ? Number.POSITIVE_INFINITY : indentLevelOf((edit.oldString.split('\n')[0] ?? ''))
@@ -349,7 +376,7 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
           target.version += 1
           const repair = repairReadAfterWrite(target.window, edit, path, target.version, policy)
           if (repair !== undefined) {
-            ops.push({ kind: 't0r-repair', readCallId: target.call.callId, writeCallId: call.callId, path, version: target.version, segments: repair.segments, anchor: repair.anchor, envelope: repair.envelope })
+            ops.push({ kind: 't0r-repair', readCallId: target.call.callId, writeCallId: call.callId, path, version: target.version, segments: repair.segments, windowLines: target.window.length, anchor: repair.anchor, envelope: repair.envelope })
             target.window = [...repair.window]
             target.repaired = true
             record('T0-R', 'cut', 't0r-repair', target.call.callId)
@@ -357,7 +384,7 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
             record('T0-R', 'keep', 't0r-fallback-keep', target.call.callId)
           }
         } else {
-          cutPlainT0(target)
+          cutPlainT0(target, call.callId)
         }
       }
       if (states.every((state) => state.cut)) readsByPath.delete(path)

@@ -89,22 +89,27 @@ describe('模型路由', () => {
 })
 
 describe('模板态壳不变量（分组 + 字段 spec）', () => {
-  it('4 个组壳保留；assembly 挂 auto，discern 挂推理档，其余组为空', () => {
+  it('4 个组壳保留；assembly 挂 auto + 剪切开关，discern 挂推理档，其余组为空', () => {
     expect(ECONOMY_FIELD_GROUPS.map(g => g.id)).toEqual(['assembly', 'discern', 'tune', 'advanced'])
     const assembly = ECONOMY_FIELD_GROUPS.find(g => g.id === 'assembly')!
-    expect(assembly.fields.map(f => f.field)).toEqual(['discriminator.auto'])
+    expect(assembly.fields.map(f => f.field)).toEqual(['discriminator.auto', 'shear.enabled'])
     const discern = ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')!
     expect(discern.fields.map(f => f.field)).toEqual(['discriminator.reasoningEffort'])
     expect(discern.routeSelector).toBe(true)
     for (const g of ECONOMY_FIELD_GROUPS.filter(x => x.id === 'tune' || x.id === 'advanced')) expect(g.fields).toEqual([])
   })
 
-  it('ECONOMY_FIELD_SPECS = 4 个：auto + 推理档（core）+ provider/model（hidden），无观察模式', () => {
+  it('ECONOMY_FIELD_SPECS = 5 个：auto + 剪切开关 + 推理档（core）+ provider/model（hidden），无观察模式', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(ECONOMY_FIELD_SPECS).toHaveLength(4)
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(5)
     expect(specs.has('discriminator.mode')).toBe(false)
     expect(specs.get('discriminator.auto')?.type).toBe('bool')
     expect(specs.get('discriminator.auto')?.visibility).toBe('core')
+    expect(specs.get('shear.enabled')?.type).toBe('bool')
+    expect(specs.get('shear.enabled')?.visibility).toBe('core')
+    expect(specs.get('shear.enabled')?.parse('false')).toEqual({ kind: 'set', values: { 'shear.enabled': false } })
+    expect(CLIENT_DEFAULTS.shear.enabled).toBe(true)
+    expect(defaultForPath('shear.enabled')).toBe(true)
     expect(specs.get('discriminator.provider')?.visibility).toBe('hidden')
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
     expect(CLIENT_DEFAULTS.discriminator.auto).toBe(false)

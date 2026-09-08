@@ -30,6 +30,10 @@ import type { Tone } from './theme.ts'
 
 /** 卡片编辑的配置形状（= host Config schema 的可写面；模板态最小集）。 */
 export interface EconomyCardSettingsShape {
+  /** 剪切层开关（与 host Config.shear 同步对）。 */
+  shear?: {
+    enabled?: boolean
+  }
   discriminator?: {
     provider?: string
     model?: string
@@ -205,6 +209,7 @@ export function economyPathField(
 /* -------------------------------------------------------------------------- */
 
 export const CLIENT_DEFAULTS = {
+  shear: { enabled: true },
   discriminator: { auto: false },
 } as const
 
@@ -317,6 +322,7 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般用模型路由下拉选择，自动同时设好服务商与模型。' },
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
   'discriminator.auto': { label: '自动判别', hint: '开启后逐消息判断任务边界；默认关闭。', docs: '自动断面总开关；关闭时零成本，不挂载判别器。' },
+  'shear.enabled': { label: '剪切（工具结果剪枝）', hint: '默认开启：命令类长输出落账前整形、被写入超越的旧读剪除。', docs: '工具剪切总开关。开启后：命令类长输出在写入历史前保留首尾与错误行（T-entry，断裂成本 0）；被后续写超越的旧读取剪为一句结论（T0/T0-R，仅贴近尾部时执行）。关闭后四档全部零行为，历史保持原样。' },
   'discriminator.reasoningEffort': {
     label: '思考强度',
     hint: '留空=跟随模型默认；关闭思考可能降低边界判断与改写质量。',
@@ -350,6 +356,9 @@ export interface EconomyFieldGroup {
  */
 const discriminatorAutoField = economyBoolField('discriminator.auto', { visibility: 'core', default: false, deflabel: '默认关闭' })
 
+/** P15b：工具剪切总开关（默认开启；关闭 = 四档零行为）。 */
+const shearEnabledField = economyBoolField('shear.enabled', { visibility: 'core', default: true, deflabel: '默认开启' })
+
 /** P14f：辅助调用推理档（留空 = 跟随模型默认）。 */
 const reasoningEffortField = economySelectField('discriminator.reasoningEffort', [
   { value: 'off', label: '关闭思考（off）', pitch: '最省最快；可能明显降低边界判断与改写质量。' },
@@ -368,7 +377,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-business-primary)',
     tint: 'var(--dsw-alias-state-business-tertiary)',
     defaultOpen: true,
-    fields: [discriminatorAutoField],
+    fields: [discriminatorAutoField, shearEnabledField],
   },
   {
     id: 'discern',
@@ -412,6 +421,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
  */
 export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
   discriminatorAutoField,
+  shearEnabledField,
   reasoningEffortField,
   economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
   economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),

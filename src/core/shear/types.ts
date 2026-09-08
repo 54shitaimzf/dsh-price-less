@@ -52,7 +52,7 @@ export type ShearOp =
   | { readonly kind: 'shape-entry'; readonly callId: string; readonly content: string }
   | { readonly kind: 'stub-replace'; readonly callId: string; readonly stub: string }
   | { readonly kind: 'note-cut'; readonly callId: string; readonly conclusion: string }
-  | { readonly kind: 't0-supersede'; readonly callId: string }
+  | { readonly kind: 't0-supersede'; readonly callId: string; readonly writeCallId: string; readonly path: string }
   | {
       readonly kind: 't0r-repair'
       readonly readCallId: string
@@ -60,6 +60,8 @@ export type ShearOp =
       readonly path: string
       readonly version: number
       readonly segments: readonly ShearRepairSegment[]
+      /** 修复前读窗行数（repairCoverage 分母；docs/07 剪切族）。 */
+      readonly windowLines: number
       readonly anchor: string
       readonly envelope: string
     }
@@ -81,6 +83,11 @@ export interface ShearPolicy {
   readonly t0rMaxSegments: number
   readonly t0rMaxIndent: number
 }
+/** T-note 贴注模板（docs/03 §2.1；docs/11 §7 已登记资产）。中性叙述、无插件标签、逐字确定。 */
+export const SHEAR_NOTE_TEMPLATE_VERSION = 1
+export const SHEAR_NOTE_TEMPLATE =
+  '（本结果较长。若你已从中得出结论，请在本次回复的最后一行输出 CUT-OK:〈一句结论〉——原始日志将被剪除、只保留该结论；若后续仍需原文，请输出 CUT-HOLD:〈原因〉。不要为此额外调用工具。）'
+
 export const SHEAR_POLICY_VERSION = 1
 export const DEFAULT_SHEAR_POLICY: ShearPolicy = {
   version: SHEAR_POLICY_VERSION,

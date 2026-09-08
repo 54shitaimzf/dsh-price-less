@@ -54,13 +54,13 @@ function makeFakeCtx(opts: { settings?: boolean } = {}) {
 const runAll = (disposers: Array<() => void>) => { for (const d of [...disposers]) d() }
 
 describe('apply 冒烟（R0 门离线替身）', () => {
-  it('组 1：无 settings 服务 → 不抛、settings 静默跳过；事件泵已挂（恰 1 disposer + 恰 1 监听器）', () => {
+  it('组 1：无 settings 服务 → 不抛、settings 静默跳过；事件泵 + 剪切域已挂（2 disposer + 2 监听器）', () => {
     const { ctx, logs, disposers, installed, listeners } = makeFakeCtx()
     expect(() => apply(ctx as never, {})).not.toThrow()
     expect(logs.some((l) => String(l.args[0]).includes('applying (template state)'))).toBe(true)
     expect(installed).toHaveLength(0)
-    expect(disposers).toHaveLength(1) // P1：ctx.effect 挂泵（P1 工单 §3.3）
-    expect(listeners).toHaveLength(1) // pump 的 session/event 订阅
+    expect(disposers).toHaveLength(2) // P1：ctx.effect 挂泵；P15b：ctx.effect 挂剪切域
+    expect(listeners).toHaveLength(3) // pump 的 session/event + 剪切端口 tools/execute + tools/post-execute
     expect(() => runAll(disposers)).not.toThrow()
   })
 
