@@ -140,6 +140,7 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
 - 事实面（P5.1 锁定）：`streamCeLlm` 返回 `AsyncGenerator<StreamChunk, void, unknown>`；
   `onUsage` 回调抛错只 warn 不外溢（文案 `context-economy: llm usage receipt callback failed (contained)`，
   不中断辅助 LLM 流）。
+- 推理档（P14f）：`GenerateOptions.reasoningEffort` 只在模型声明该档时传——先 `ctx.llm.resolveModelInfo(provider, model)` 读 `reasoning.efforts`（进程内缓存），未声明即回退为不传；宿主对不支持的档直接抛 `UNSUPPORTED_REASONING_EFFORT`（`packages/llm/llm/src/index.ts:868-887`，无静默回退）。设置项 = `discriminator.reasoningEffort`（缺省 = 跟随模型默认）。
 
 ### 3.6 `ctx.storageDomain.open(defineDomain({...}))`（持久 KV，P3 使用）
 

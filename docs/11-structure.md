@@ -6,7 +6,7 @@
 > 事实源三链：① 插件开发规范（dsh-super-injector 插件开发指南 + 脚手架模板：
 > 四形态 / manifest / build 闭环 / 铁律）；② harness API 面（源码逐条核验，见 10 §1）；
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
-> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)）；下一段 = R3 剪切域（P15a/P15b），§9。
+> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；下一段 = R3 剪切域（P15a/P15b），§9。
 
 ## 0. 它解决什么问题（人话版）
 

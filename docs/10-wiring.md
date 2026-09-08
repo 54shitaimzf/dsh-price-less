@@ -68,7 +68,7 @@ turn/end → 自动断面边界信号成立（或 /task close）
 ```text
 用户点星标（H11 conversation.input.right）或 /optimize-prompt
   → host 方法：装配输入栈（稳定前缀[技能目录+项目帧] + 卷宗 + 当前 prompt）
-  → H12 llm.stream({purpose:'context-economy-optimize'})：单次断面（temperature 0、无工具调用）
+  → H12 llm.stream({purpose:'context-economy-optimize'})：单次断面（temperature 0、无工具调用；推理档 = 设置 `discriminator.reasoningEffort`，缺省跟随模型默认）
   → 双通道解析：产品（自由文本）+ 行式裁决（行级容错）
   → client 渲染预览（P14d：无 diff、无统计噪声，裁决折叠在详情里）→ 用户确认/编辑（= 终稿）
   → 执行：确认即发送（`setDraft` + `submit()`）；判别回填落卷宗 vN+1（H10）；

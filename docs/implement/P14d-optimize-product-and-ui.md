@@ -49,10 +49,12 @@
 
 ## 6. 验收
 
-- [x] `npm run gate` 绿（253 用例 / 29 文件）
+- [x] `npm run gate` 绿（**255** 用例 / 29 文件；P14e/P14f 追加后）
 - [x] `npm run typecheck:tests` 绿
 - [x] `DSH_CHECKOUT=G:/deepseek-harness bash scripts/build.sh` 绿（host + client）
-- [x] `node scripts/verify-p14d.mjs` → `P14D VERIFY PASS (18 checks)`（双跑逐字节一致）
+- [x] `node scripts/verify-p14d.mjs` → `P14D VERIFY PASS (26 checks)`（P14d 时 18，P14e/P14f 追加后 26；双跑逐字节一致）
 - [x] `node scripts/verify-p14c.mjs` → `P14C VERIFY PASS`（无回归）
 - [x] ★ 结果复用：`tests/star-host.spec.ts` 12b（同 prompt 二次点击 calls 不增、facts 不增、stats.previewCacheHits=1；apply 后失效重断面）
-- [x] 账本快照 = `docs/ledger-history.md` §35 / §36
+- [x] 账本快照 = `docs/ledger-history.md` §35 / §36 / §37
+- [x] 推理档设置项（P14f）：`tests/field-model.spec.ts`（选项 / parse / 清空=跟随）+ `tests/star-host.spec.ts` 1/2c/2d（缺省不传 / 声明可传 / 未声明回退）
+- [x] 弹层"已发送"提示已移除（`scripts/verify-p14d.mjs` 断言 + client 无 `role="status"`）
