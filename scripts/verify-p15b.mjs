@@ -72,7 +72,8 @@ const shearFiles = fs.readdirSync(shearDir).filter((f) => f.endsWith('.ts'))
 check('core/shear 零 harness/platform import',
   shearFiles.every((f) => !/from\s+['"](?:@deepseek-ai\/|cordis|[^'"]*platform)/.test(fs.readFileSync(path.join(shearDir, f), 'utf8'))))
 
-const ALLOWED = new Set(['src/index.ts', 'src/domains/shear.ts', 'src/domains/shear-facts.ts'])
+// P19：domains/compaction.ts 是 T-boundary 搭车会计的第二生产者（只发 shear-applied 事实，不改剪切机制）。
+const ALLOWED = new Set(['src/index.ts', 'src/domains/shear.ts', 'src/domains/shear-facts.ts', 'src/domains/compaction.ts'])
 const walk = (dir, out = []) => {
   for (const name of fs.readdirSync(dir).sort()) {
     const abs = path.join(dir, name)
@@ -83,7 +84,7 @@ const walk = (dir, out = []) => {
 }
 const wired = walk(path.join(ROOT, 'src')).filter((rel) => !rel.startsWith('src/core/shear/') && fs.readFileSync(path.join(ROOT, rel), 'utf8').includes('core/shear'))
 const wiredIllegal = wired.filter((rel) => !ALLOWED.has(rel))
-check('接线白名单（仅 index + domains/shear*）', wiredIllegal.length === 0, wiredIllegal.join(','))
+check('接线白名单（index + domains/shear* + domains/compaction）', wiredIllegal.length === 0, wiredIllegal.join(','))
 check('index.ts 已挂载剪切域', fs.readFileSync(path.join(ROOT, 'src/index.ts'), 'utf8').includes('mountShearDomain'))
 
 const envText = ['1: const a = 1', '2: export const x = 2', '3: const b = 3', '4: export const y = 4'].join('\n')

@@ -149,6 +149,9 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
   }
   // P18：调用口径由 compress-run 事实汇总（compressionLayer 仍只由 assemble-run 计数，防双计）。
   const calls = foldCompressCalls(facts)
+  // P19：边界路径的档案硬帽截断经 compress-run 生产（装配路径经 assemble-run）——两源相加，各自唯一。
+  ledger.archiveTruncate.count += calls.archiveTruncate.count
+  ledger.archiveTruncate.tokens += calls.archiveTruncate.tokens
   ledger.compressionCallCount = calls.compressionCallCount
   ledger.compressionCacheHitRate = calls.compressionCacheHitRate
   ledger.compressInvocations = calls.invocations

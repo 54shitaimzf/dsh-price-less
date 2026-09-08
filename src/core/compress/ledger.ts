@@ -75,6 +75,8 @@ export interface CompressCallLedger {
   cacheHits: number
   /** 压缩调用 usage 自持位（07 缺压缩 usage 字段，见工单 N7）。 */
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
+  /** 档案区硬帽截断（07 字段；边界路径经 compress-run 生产，装配路径经 assemble-run，二者各自唯一）。 */
+  archiveTruncate: { count: number; tokens: number }
   parseFailures: number
   schemaFailures: number
   /** P19 自持观测位（不属 07 字段；同 `assembleRuns` 先例，07 缺压缩族细分字段）。 */
@@ -94,6 +96,7 @@ export function emptyCompressCallLedger(): CompressCallLedger {
     invocations: 0,
     cacheHits: 0,
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    archiveTruncate: { count: 0, tokens: 0 },
     parseFailures: 0,
     schemaFailures: 0,
     skips: 0,
@@ -130,6 +133,8 @@ export function foldCompressCalls(facts: readonly LedgerFact[]): CompressCallLed
     ledger.usage.outputTokens += numberField(usage.outputTokens)
     ledger.usage.cacheReadTokens += numberField(usage.cacheReadTokens)
     ledger.usage.cacheWriteTokens += numberField(usage.cacheWriteTokens)
+    ledger.archiveTruncate.count += numberField(data.archiveTruncateCount)
+    ledger.archiveTruncate.tokens += numberField(data.archiveTruncateTokens)
     if (data.outcome === 'parse') ledger.parseFailures++
     if (data.outcome === 'schema') ledger.schemaFailures++
     if (data.outcome === 'skipped') ledger.skips++

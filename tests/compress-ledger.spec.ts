@@ -94,6 +94,13 @@ describe('P18 账本：调用口径', () => {
     expect(ledger.compressShearBoundaryFolded).toBe(2)
   })
 
+  it('P19 档案硬帽截断：compress-run 源计入 07 archiveTruncate（与 assemble-run 源相加）', () => {
+    const ledger = foldCompressionLedger([
+      fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok', archiveTruncateCount: 2, archiveTruncateTokens: 30 }),
+    ])
+    expect(ledger.archiveTruncate).toEqual({ count: 2, tokens: 30 })
+  })
+
   it('同输入同账（双跑逐字节一致）', () => {
     const facts = [fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok' })]
     expect(JSON.stringify(foldCompressCalls(facts))).toBe(JSON.stringify(foldCompressCalls(facts)))
