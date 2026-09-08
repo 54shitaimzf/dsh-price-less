@@ -82,7 +82,7 @@ export interface ArchiveTruncation {
   readonly overCap?: boolean
 }
 
-/** 档案形态（04 §3 机制 A：单块总摘要 / [C…][D] 追加式链）。 */
+/** 档案形态（04 §3 机制 A：恒为追加式链；`single` = 链长 1，`chain` = 续传 + 追加）。 */
 export interface ArchiveForm {
   readonly form: 'single' | 'chain'
   readonly checkpointCount: number
@@ -191,7 +191,7 @@ export interface AssembleResult {
   /** 渲染根（相对路径基准；档案条目落盘时随条目保存，跨会话重放不串档）。 */
   readonly root?: string
   readonly rootKind?: 'session' | 'cwd' | 'none'
-  /** 本次产物的档案形态（priorChain 为空 = 单块；否则续传 + 追加）。 */
+  /** 本次产物的档案形态（恒为链：priorChain 为空 = 链长 1；否则续传 + 追加）。 */
   readonly archiveForm: ArchiveForm
   readonly unitCount: number
   /** 档案落盘正文（F10：仅总分 = 总述 + 分步；零指针、零热尾）。 */
