@@ -2386,3 +2386,30 @@ persona（prefix/suffix，预设 scope 内 shadow 部署 persona）+ agent-instr
 
 **待决**：① price-less 预设裁剪工具目录（预估省 **5–10K B/请求**）；② `AGENTS.md`「现状」段（约 4K）
 移入 `docs/ledger-history`（省 ≈ **3.7K tokens/请求**）。
+
+## §56 标准模式系统提示词盘点（**修正 §55 口径**）（2026-09-09）
+
+**§55 口径错误**：那组数字取自一个**非标准模式**会话（37 工具、含 11 个 `dev_*`、模型 `flash-vision-exp`）。
+本预设 `presets/price-less/` 基于 **standard（标准模式）**，正确口径如下（shipped standard 的
+golden 系统提示 `snapshots/web/ptc-round/system-prompt.expected.md`）：
+
+| 段 | 字节 | 占比 |
+|---|---|---|
+| 身份（harness identity） | 48 | 0.1% |
+| persona（模型身份；预设在此追加协议） | 62 | 0.2% |
+| PTC 说明 + `@路径` + 14 段工具指引 | ~4.9K | 14% |
+| **run_code SDK 类型声明（23 工具）** | **25.3K** | **74.6%** |
+| 收尾（改动引用 / checkout / Web GUI / cwd） | ~1.7K | 5% |
+| **合计** | **33,992 B ≈ 8.6K tokens** | 100% |
+
+（Windows 上 `bash`→`pwsh`，约 +0.3K B。）
+
+**我们的预设 = 标准模式 + 14 行**：`git diff --no-index` 显示与 shipped `standard/agent.cordis.yml`
+**仅 persona 段**有差异（14 insertions / 2 deletions），其余逐字节相同。
+
+**标准模式下的裁剪候选**（按 SDK 字节）：`ask_user_question` 2.76K · `subagent_fork` 1.35K ·
+`list_agents`+`send_message`+`interrupt_agent` 1.43K · `exit_plan_mode` 860B · `read_image` 549B ·
+`web_search`+`web_fetch` 470B · `ralph` 319B → 全砍 ≈ 7.7K；按需砍 **3–5K** 较合理。
+标准模式**没有** `dev_*` / `list_subagent_models`，§55 的"6.4K"不适用。
+
+**另一杠杆不变**：`AGENTS.md` **14,478 B**（≈3.7K tokens）。
