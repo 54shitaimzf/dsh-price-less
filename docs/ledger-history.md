@@ -1670,3 +1670,28 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 **验收**：`tests/star-host.spec.ts` 12b（同 prompt 二次点击 `calls` 1→1、`facts` 1→1、
 `previewCacheHits` 1、缓存预览仍可 apply、apply 后再点击重新断面、换 prompt 重新断面）；
 12 改用不同 prompt 以保持 pending 容量语义；`scripts/verify-p14d.mjs` 增两条静态断言。
+## 37. 账本快照 §37：推理档做成设置项（默认跟随）+ 去掉"已发送"提示（P14f）
+
+> 触发：用户要求——(1) 去掉左下角"已发送"提示（无实际用途）；(2) 把思考开关放进设置、
+> 默认跟随当前设置，因为关闭思考可能明显影响任务边界判断与准确性。
+
+**口径变化**：
+
+| 项 | §36 口径 | §37 口径 |
+|---|---|---|
+| ★ 推理档 | 硬编码 `off`（P14d） | **来自设置 `discriminator.reasoningEffort`**；缺省 = 跟随模型默认（不覆盖） |
+| 判别推理档 | 未设置（adapter 默认 high） | 同一设置项；缺省不变（跟随） |
+| 传档条件 | 探测到支持就传 off | 用户显式设置 **且** 模型声明该档才传；否则不传（fail-lazy） |
+| 观测 | ★ 事实 `requestedEffort`/`sentEffort` | 同上 + **判别事实新增 `requestedEffort`/`sentEffort`**（`judgeEffort`） |
+| 弹层 | 左下角绿色"已发送"提示 | **删除**（提交成功已由草稿清空 + 消息上屏表达） |
+
+**设置项**：`discriminator.reasoningEffort`（select：留空 = 跟随模型默认 / off / low / medium / high / max），
+进设置卡「识别与判断」组；`src/config.ts` 与 `client/field-model.ts` 手工同步对（`tests/field-model.spec.ts` 断言）。
+
+**为什么默认跟随**：实测 `off` 把 ★ 的输出从 9657 token 压到 36、延迟 34641ms → 571ms，但关闭思考
+同样作用于判别——边界判断是"不漏边界"的核心，不能默认牺牲；把选择权交给用户，默认与改前完全一致。
+
+**验收**：`npm run gate` 绿（255 用例 / 29 文件）；`scripts/verify-p14d.mjs` 新增/更新静态断言
+（设置面含推理档、判别与 ★ 都走设置、★ 不再硬编码 off、"已发送"提示已移除）；
+`tests/star-host.spec.ts` 1（缺省不传档）/ 2c（配置 off + 模型声明 → 传 off）/ 2d（配置 off + 模型未声明 → 回退跟随）；
+`tests/field-model.spec.ts` 推理档字段（选项 / parse / 清空=跟随）。

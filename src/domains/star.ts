@@ -28,7 +28,7 @@ import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import { readSessionModel, readSessionUserMessages, type CeLogger } from '../platform/events.ts'
 import { STAR_BRIDGE_CODES, STAR_PREVIEW_LIMIT, type StarBridgeOutcome } from '../platform/star-bridge.ts'
-import type { Config as ConfigShape } from '../config.ts'
+import { reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
 import { OPTIMIZE_RUN_FACT_TYPE, appliedRunFact, previewRunFact, type OptimizeRunFactData } from './optimize-facts.ts'
 
@@ -46,8 +46,8 @@ export const STAR_VERDICT_SUMMARY_MAX_CHARS = 120
 /** ★ 结果复用缓存容量（P14e；同会话同 prompt 同输入指纹的断面结果）。 */
 export const STAR_PREVIEW_CACHE_LIMIT = 32
 
-/** ★ 断面推理档（P14d §3）：改写任务不需要长思考；模型不支持时探测返回 undefined，按默认档发。 */
-export const OPTIMIZE_REASONING_EFFORT = 'off'
+// P14f：★ 断面的推理档来自设置（discriminator.reasoningEffort）；缺省 = 跟随模型默认（不覆盖）。
+// 关闭思考会明显影响改写质量与边界判断，故不默认强制——由用户显式选择。
 
 /** 八种 kind 的行文（长度钳制到 STAR_VERDICT_SUMMARY_MAX_CHARS）。 */
 export function summarizeVerdict(verdict: OptimizeVerdict): StarVerdictView {
@@ -215,11 +215,14 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     let latencyMs = 0
     let errorCode: string | undefined
     let sentEffort: string | undefined
+    const desiredEffort = reasoningEffortSetting(getConfig())
     if (deps.llmCtx === undefined) errorCode = STAR_BRIDGE_CODES.llmFailed
     else {
       const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
-      // P14d §3：推理档能力探测——模型未声明该档就不传（宿主对不支持的档直接抛错）。
-      sentEffort = await resolveReasoningEffort(deps.llmCtx, provider, model, OPTIMIZE_REASONING_EFFORT, logger)
+      // P14f：设置里的推理档 → 能力探测（模型未声明该档就不传；宿主对不支持的档直接抛错）。
+      sentEffort = desiredEffort === undefined
+        ? undefined
+        : await resolveReasoningEffort(deps.llmCtx, provider, model, desiredEffort, logger)
       const startedAt = now()
       const options: CeGenerateOptions = {
         provider, model, purpose: 'context-economy-optimize', temperature: 0,
@@ -253,7 +256,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       verdictCount: parsed?.verdicts.length ?? 0, droppedLines: parsed?.droppedLines ?? 0,
       keptSpanCount: enforcedSpanIndexes.length, missingAuthorityCount: missingAuthority.length,
       metaStrippedLines: stripped.stripped,
-      requestedEffort: OPTIMIZE_REASONING_EFFORT, sentEffort,
+      requestedEffort: desiredEffort, sentEffort,
       shearPairs: parsed?.shearItems.length ?? 0, shearTokens: parsed === undefined ? 0 : shearTokensOf(dossier, parsed.shearItems),
       latencyMs, llmUsage: usage, errorCode,
     }))

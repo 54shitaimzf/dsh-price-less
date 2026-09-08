@@ -34,6 +34,8 @@ export interface EconomyCardSettingsShape {
     provider?: string
     model?: string
     auto?: boolean
+    /** P14f：辅助调用推理档；缺省 = 跟随模型默认（不覆盖）。 */
+    reasoningEffort?: string
   }
 }
 
@@ -315,6 +317,11 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   'discriminator.provider': { label: '模型服务商', hint: '留空=跟随预设。', docs: '模型服务商覆盖；留空即跟随预设。一般用模型路由下拉选择，自动同时设好服务商与模型。' },
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
   'discriminator.auto': { label: '自动判别', hint: '开启后逐消息判断任务边界；默认关闭。', docs: '自动断面总开关；关闭时零成本，不挂载判别器。' },
+  'discriminator.reasoningEffort': {
+    label: '思考强度',
+    hint: '留空=跟随模型默认；关闭思考可能降低边界判断与改写质量。',
+    docs: '辅助调用（自动判别 / 星标断面）的推理档。默认跟随模型自身默认值、不覆盖；设为 off 最省最快，但可能明显影响任务边界判断准确性；low/medium/high/max 逐级更强。模型未声明所选档时自动回退为跟随（不报错）。',
+  },
 }
 
 /* -------------------------------------------------------------------------- */
@@ -343,6 +350,15 @@ export interface EconomyFieldGroup {
  */
 const discriminatorAutoField = economyBoolField('discriminator.auto', { visibility: 'core', default: false, deflabel: '默认关闭' })
 
+/** P14f：辅助调用推理档（留空 = 跟随模型默认）。 */
+const reasoningEffortField = economySelectField('discriminator.reasoningEffort', [
+  { value: 'off', label: '关闭思考（off）', pitch: '最省最快；可能明显降低边界判断与改写质量。' },
+  { value: 'low', label: '低（low）', pitch: '偏省，适合日常。' },
+  { value: 'medium', label: '中（medium）' },
+  { value: 'high', label: '高（high）', pitch: '模型默认档。' },
+  { value: 'max', label: '最高（max）', pitch: '最贵最慢，留给最难判断。' },
+], { visibility: 'core', placeholder: '跟随模型默认', deflabel: '跟随模型默认' })
+
 export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
   {
     id: 'assembly',
@@ -363,7 +379,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     tint: 'var(--dsw-alias-state-success-tertiary)',
     defaultOpen: true,
     routeSelector: true,
-    fields: [],
+    fields: [reasoningEffortField],
   },
   {
     id: 'tune',
@@ -396,6 +412,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
  */
 export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
   discriminatorAutoField,
+  reasoningEffortField,
   economyTextField('discriminator.provider', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
   economyTextField('discriminator.model', { visibility: 'hidden', placeholder: '跟随预设（空）' }),
 ]

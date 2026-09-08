@@ -93,7 +93,6 @@ export function StarButton(props: StarButtonProps) {
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   /** P14e：上次断面结果（按草稿文本保留）——同草稿再点只展开，不再调模型。 */
   const [cached, setCached] = useState<{ draft: string; data: StarPreviewData } | null>(null)
 
@@ -121,7 +120,6 @@ export function StarButton(props: StarButtonProps) {
     // P14e：同草稿已有结果 → 只展开，零调用、零等待。
     if (cachedHit) {
       setError(null)
-      setNotice(null)
       setPreview(cached.data)
       setEdited(cached.data.product ?? draft)
       setOpen(true)
@@ -129,7 +127,6 @@ export function StarButton(props: StarButtonProps) {
     }
     setLoading(true)
     setError(null)
-    setNotice(null)
     const result = await star.preview(sessionId, draft)
     setLoading(false)
     if (result.ok) {
@@ -146,7 +143,6 @@ export function StarButton(props: StarButtonProps) {
     if (preview === null || sessionId === undefined || applying) return
     setApplying(true)
     setError(null)
-    setNotice(null)
     const result = await star.apply(sessionId, { previewId: preview.previewId, editedProduct: edited })
     setApplying(false)
     if (result.ok) {
@@ -157,7 +153,6 @@ export function StarButton(props: StarButtonProps) {
       setCached(null)
       setOpen(false)
       setPreview(null)
-      setNotice('已发送')
     } else {
       // 失败默认保留草稿；同时失效缓存，使下次点击重新断面而非反复撞同一个坏预览。
       setCached(null)
@@ -170,7 +165,6 @@ export function StarButton(props: StarButtonProps) {
     setOpen(false)
     setPreview(null)
     setError(null)
-    setNotice(null)
   }
 
   const button: CSSProperties = {
@@ -216,21 +210,6 @@ export function StarButton(props: StarButtonProps) {
           maxWidth: 360,
           boxShadow: TOKEN.shadowLv3,
         }}>{error}</div>
-      ) : null}
-      {notice !== null ? (
-        <div role="status" style={{
-          position: 'fixed',
-          bottom: 16,
-          left: 16,
-          zIndex: Z_POPOVER,
-          background: TOKEN.successPrimary,
-          color: '#fff',
-          padding: '8px 12px',
-          borderRadius: 8,
-          fontSize: 12,
-          maxWidth: 360,
-          boxShadow: TOKEN.shadowLv3,
-        }}>{notice}</div>
       ) : null}
       {open && preview !== null ? (
         <div style={OVERLAY}>

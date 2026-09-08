@@ -236,6 +236,9 @@ export interface JudgeRecord {
   llmUsage?: JudgeLlmUsage
   error?: JudgeErrorInfo
   tableShadow?: JudgeTableShadow
+  /** P14f：设置里请求的推理档与实发档（缺省 = 跟随模型默认，两字段都不落）。 */
+  requestedEffort?: string
+  sentEffort?: string
 }
 
 export interface JudgeLedger {

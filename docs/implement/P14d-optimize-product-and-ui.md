@@ -24,14 +24,15 @@
 |---|---|
 | `src/core/optimize.ts` | prompt v2（关键事实保真 / 大胆重写 / 禁标签与元注释）；`extractAuthorityCandidates` 事实级 + `mandatory`；`mandatoryCandidateIndexes`；`stripProductMeta`；`metaStrippedLines` fold |
 | `src/platform/llm.ts` | `resolveReasoningEffort`（`resolveModelInfo` 探测 + 进程内缓存 + fail-lazy）；`CeGenerateOptions.reasoningEffort` 宽化（收窄仍在 `toHarnessGenerateOptions` 单点） |
-| `src/domains/star.ts` | ★ 传 `off`（探测后才传）；剥离/必保接入；账本记 `metaStrippedLines`/`requestedEffort`/`sentEffort`；`keptSpanIndexes` = 必保 ∪ KEEP |
+| `src/domains/star.ts` | 推理档来自设置（P14f，缺省跟随）；剥离/必保接入；账本记 `metaStrippedLines`/`requestedEffort`/`sentEffort`；`keptSpanIndexes` = 必保 ∪ KEEP |
 | `src/domains/optimize-facts.ts` | 三个可选字段 + fold |
 | `client/star/*` | 删 diff/`clampPreviewText`/`DiffLine`；`verdictSummary`；弹层只留正文 + 关键事实警告 + 无历史提示 + 折叠详情；点侧面不关闭；确认 → `setDraft` + `submit()`；**结果复用**（同草稿二次点击只展开） |
 | 结果复用（P14e 追加） | host `previewCache`（同会话 + 同 prompt + 同输入指纹，命中零调用/零事实；apply 后失效）+ client `cached`（连桥调用都省） |
+| 推理档设置（P14f 追加） | `src/config.ts` + `client/field-model.ts` 新增 `discriminator.reasoningEffort`（select：off/low/medium/high/max；留空 = 跟随模型默认）；**判别与 ★ 共用**，探测后只传模型声明的档；判别事实记 `requestedEffort`/`sentEffort`；弹层删除"已发送"提示 |
 
 ## 3. 明确不做
 
-- 不改判别（judge）的推理档——它直接决定"不漏边界"，等真机账本再评估。
+- **不默认强制任何推理档**——判别与 ★ 都只在用户显式设置时传档，缺省跟随模型默认。关闭思考会明显影响任务边界判断与改写质量，故默认不动（P14f）。
 - 不做产品长度的机械上限（长度是质量判断，归预览）。
 - 不剥离正文中部的同类文字（只剥开头连续元注释；剥空回退原文——失败默认保留）。
 

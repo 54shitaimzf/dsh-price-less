@@ -30,6 +30,9 @@ export interface JudgeRecordedFactData {
   latencyMs?: number
   ctxTokens?: number
   llmUsage?: JudgeLlmUsage
+  /** P14f：请求/实发的推理档（缺省 = 跟随模型默认）。 */
+  requestedEffort?: string
+  sentEffort?: string
 }
 
 export interface JudgeErrorFactData {
@@ -50,6 +53,8 @@ export function judgeRecordToFactData(record: JudgeRecord): JudgeRecordedFactDat
   if (record.latencyMs !== undefined) data.latencyMs = record.latencyMs
   if (record.ctxTokens !== undefined) data.ctxTokens = record.ctxTokens
   if (record.llmUsage !== undefined) data.llmUsage = record.llmUsage
+  if (record.requestedEffort !== undefined) data.requestedEffort = record.requestedEffort
+  if (record.sentEffort !== undefined) data.sentEffort = record.sentEffort
   return data
 }
 
@@ -64,6 +69,8 @@ export function factDataToJudgeRecord(data: JudgeRecordedFactData): JudgeRecord 
   if (data.latencyMs !== undefined) record.latencyMs = data.latencyMs
   if (data.ctxTokens !== undefined) record.ctxTokens = data.ctxTokens
   if (data.llmUsage !== undefined) record.llmUsage = data.llmUsage
+  if (data.requestedEffort !== undefined) record.requestedEffort = data.requestedEffort
+  if (data.sentEffort !== undefined) record.sentEffort = data.sentEffort
   return record
 }
 

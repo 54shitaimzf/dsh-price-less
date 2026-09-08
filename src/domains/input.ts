@@ -23,11 +23,11 @@ import { foldSegmentState } from '../core/units.ts'
 import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey, sessionScopedTaskId, type DossierBody, type DossierClass } from '../core/dossier.ts'
 import type { LedgerFact } from '../core/ledger/types.ts'
 import { parseT0Command } from '../core/t0.ts'
-import { streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
+import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { readSessionModel, type EventPump, type CeDomainEvents, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
-import type { Config as ConfigShape } from '../config.ts'
+import { reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
@@ -194,12 +194,19 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     let llmUsage: JudgeRecord['llmUsage']
     let latencyMs: number | undefined
     const started = now()
+    // P14f：推理档来自设置（discriminator.reasoningEffort）；缺省 = 跟随模型默认（不覆盖）。
+    // 关闭思考会明显影响边界判断，故不默认强制；用户显式选择才传，且只传模型声明支持的档。
+    const desiredEffort = reasoningEffortSetting(getConfig())
+    const sentEffort = desiredEffort === undefined
+      ? undefined
+      : await resolveReasoningEffort(ctx, provider, model, desiredEffort, logger)
     const options: CeGenerateOptions = {
       provider,
       model,
       messages: [{ role: 'user', content: [{ type: 'text', text: rendered.prompt }], source: { kind: 'user' }, id: 'judge' }] as never,
       purpose: 'context-economy-judge',
       temperature: 0,
+      ...(sentEffort === undefined ? {} : { reasoningEffort: sentEffort }),
     }
     for await (const chunk of streamCeLlm(ctx, options, {
       onUsage: (receipt) => { llmUsage = receipt.usage },
@@ -218,6 +225,8 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       ctxTokens: rendered.ctxTokens, latencyMs,
     }
     if (llmUsage !== undefined) record.llmUsage = llmUsage
+    if (desiredEffort !== undefined) record.requestedEffort = desiredEffort
+    if (sentEffort !== undefined) record.sentEffort = sentEffort
     if (tableMatch.hit) record.tableShadow = { hit: true, score: tableMatch.score }
     l1Cache.set(cacheKey, {
       decision: parsed.decision, class: parsed.class,

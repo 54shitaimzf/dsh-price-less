@@ -84,6 +84,8 @@ interface MountInput {
   frame?: boolean
   /** 推理档探测：给定即让假 llm 声明这些档（P14d §3）。 */
   efforts?: string[]
+  /** 配置里的推理档设置（P14f；缺省 = 跟随模型默认）。 */
+  effort?: string
   /** 覆盖判别路由（探测缓存键隔离用）。 */
   model?: string
   dossier?: { messages: DossierBody['messages']; annotations?: DossierBody['annotations'] }
@@ -104,7 +106,12 @@ function mount(input: MountInput = {}) {
   const session = input.session === false ? undefined : makeSession(sessionEvents, sessionId)
   const host = mountStarHost({
     storage: storage as never,
-    getConfig: () => ({ discriminator: input.model === undefined ? {} : { provider: 'probe', model: input.model } }) as never,
+    getConfig: () => ({
+      discriminator: {
+        ...(input.model === undefined ? {} : { provider: 'probe', model: input.model }),
+        ...(input.effort === undefined ? {} : { reasoningEffort: input.effort }),
+      },
+    }) as never,
     logger,
     workspace: 'ws',
     now: () => 5000,
@@ -147,8 +154,11 @@ describe('star host service', () => {
     expect(calls.prompts[0]).toContain('[候选权威段]')
     expect(storage.puts).toHaveLength(0)
     expect(facts).toHaveLength(1)
-    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0, short: false, historyCount: 2, requestedEffort: 'off' })
+    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0, short: false, historyCount: 2 })
+    // P14f：未配置推理档 = 跟随模型默认（不覆盖；两个字段都不落，请求不带 reasoningEffort）。
+    expect(facts[0]!.requestedEffort).toBeUndefined()
     expect(facts[0]!.sentEffort).toBeUndefined()
+    expect(Object.hasOwn(calls.options[0]!, 'reasoningEffort')).toBe(false)
     expect(facts[0]!.llmUsage).toBeUndefined()
     expect(renderPreviewCommandText(dto)).toContain('断面预览')
     expect(readSessionId(makeSession([], 'sid-2'))).toBe('sid-2')
@@ -180,6 +190,7 @@ describe('star host service', () => {
       output: metaOutput,
       model: 'probe-meta',
       efforts: ['off', 'high'],
+      effort: 'off',
       dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] },
     })
     const dto = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))
@@ -189,10 +200,12 @@ describe('star host service', () => {
     expect(calls.options[0]!.reasoningEffort).toBe('off')
   })
 
-  it('2d. 必保事实缺失 → 警告；模型未声明推理档 → 不传 effort', async () => {
+  it('2d. 必保事实缺失 → 警告；模型未声明所选档 → 回退为跟随（不传 effort）', async () => {
     const { host, facts, calls } = mount({
       output: '[PRODUCT]\n重写后的提示词\n\n[VERDICTS]\n',
       model: 'probe-plain',
+      efforts: ['low', 'high'],
+      effort: 'off',
       dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] },
     })
     const dto = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))

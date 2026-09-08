@@ -22,8 +22,16 @@ const llm = read('src/platform/llm.ts')
 check('推理档能力探测', llm.includes('resolveReasoningEffort') && llm.includes('resolveModelInfo'), '')
 check('宽化单点仍是 toHarnessGenerateOptions', llm.includes('export function toHarnessGenerateOptions'), '')
 
+const config = read('src/config.ts')
+check('配置面含推理档（缺省 = 跟随模型默认）', config.includes('reasoningEffort') && config.includes('reasoningEffortSetting'), '')
+
+const judge = read('src/domains/input.ts')
+check('判别走设置 + 能力探测', judge.includes('reasoningEffortSetting') && judge.includes('resolveReasoningEffort'), '')
+check('判别账本记 requested/sent effort', judge.includes('record.requestedEffort') && judge.includes('record.sentEffort'), '')
+
 const star = read('src/domains/star.ts')
-check('★ 传推理档 off（经探测）', star.includes('OPTIMIZE_REASONING_EFFORT') && star.includes('resolveReasoningEffort'), '')
+check('★ 推理档走设置 + 能力探测', star.includes('reasoningEffortSetting') && star.includes('resolveReasoningEffort'), '')
+check('★ 不再硬编码 off', !star.includes('OPTIMIZE_REASONING_EFFORT'), '')
 check('剥离/必保接入断面', star.includes('stripProductMeta(') && star.includes('mandatoryCandidateIndexes('), '')
 check('结果复用缓存（host）', star.includes('previewCache') && star.includes('previewCacheHits'), '')
 check('账本记 requested/sent effort', star.includes('requestedEffort:') && star.includes('sentEffort,'), '')
@@ -39,6 +47,10 @@ check('点侧面不再关闭', !/style=\{OVERLAY\} onClick=/.test(button), '')
 check('确认即发送', button.includes('inputActions.setDraft(edited)') && button.includes('inputActions.submit()'), '')
 check('结果复用缓存（client）', button.includes('cachedHit') && button.includes('setCached({ draft, data: result.data })'), '')
 check('关键事实警告文案', button.includes('关键事实未保留'), '')
+check('已发送提示已移除', !button.includes('已发送') && !button.includes('role="status"'), '')
+
+const fields = read('client/field-model.ts')
+check('设置卡含思考强度字段', fields.includes('discriminator.reasoningEffort') && fields.includes('跟随模型默认'), '')
 
 const types = read('client/star/star-types.ts')
 check('client 类型无 DiffLine', !types.includes('DiffLine'), '')

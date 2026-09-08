@@ -88,24 +88,38 @@ describe('模型路由', () => {
   })
 })
 
-describe('模板态壳不变量（空组 + 组外保留 spec）', () => {
-  it('4 个组壳保留；assembly 组已挂 auto 开关，其余组仍为空', () => {
+describe('模板态壳不变量（分组 + 字段 spec）', () => {
+  it('4 个组壳保留；assembly 挂 auto，discern 挂推理档，其余组为空', () => {
     expect(ECONOMY_FIELD_GROUPS.map(g => g.id)).toEqual(['assembly', 'discern', 'tune', 'advanced'])
     const assembly = ECONOMY_FIELD_GROUPS.find(g => g.id === 'assembly')!
     expect(assembly.fields.map(f => f.field)).toEqual(['discriminator.auto'])
-    for (const g of ECONOMY_FIELD_GROUPS.filter(x => x.id !== 'assembly')) expect(g.fields).toEqual([])
-    expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')?.routeSelector).toBe(true)
+    const discern = ECONOMY_FIELD_GROUPS.find(g => g.id === 'discern')!
+    expect(discern.fields.map(f => f.field)).toEqual(['discriminator.reasoningEffort'])
+    expect(discern.routeSelector).toBe(true)
+    for (const g of ECONOMY_FIELD_GROUPS.filter(x => x.id === 'tune' || x.id === 'advanced')) expect(g.fields).toEqual([])
   })
 
-  it('ECONOMY_FIELD_SPECS = 3 个：auto（core）+ provider/model（hidden），无观察模式', () => {
+  it('ECONOMY_FIELD_SPECS = 4 个：auto + 推理档（core）+ provider/model（hidden），无观察模式', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(ECONOMY_FIELD_SPECS).toHaveLength(3)
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(4)
     expect(specs.has('discriminator.mode')).toBe(false)
     expect(specs.get('discriminator.auto')?.type).toBe('bool')
     expect(specs.get('discriminator.auto')?.visibility).toBe('core')
     expect(specs.get('discriminator.provider')?.visibility).toBe('hidden')
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
     expect(CLIENT_DEFAULTS.discriminator.auto).toBe(false)
+    expect(defaultForPath('discriminator.reasoningEffort')).toBeUndefined()
+  })
+
+  it('推理档字段（P14f）：选项含 off、parse 校验、空 = 跟随模型默认（clear）', () => {
+    const spec = ECONOMY_FIELD_SPECS.find(s => s.field === 'discriminator.reasoningEffort')!
+    expect(spec.type).toBe('select')
+    expect(spec.visibility).toBe('core')
+    expect(spec.options?.map(o => o.value)).toEqual(['off', 'low', 'medium', 'high', 'max'])
+    expect(spec.parse('off')).toEqual({ kind: 'set', values: { 'discriminator.reasoningEffort': 'off' } })
+    expect(spec.parse('bogus').kind).toBe('error')
+    expect(spec.parse('')).toEqual({ kind: 'clear' })
+    expect(ECONOMY_FIELD_COPY['discriminator.reasoningEffort'].hint).toContain('跟随模型默认')
   })
 
   it('provider/model 文案存在且提示"跟随预设"（模型路由选择器的安全语义）', () => {

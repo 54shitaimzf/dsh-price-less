@@ -128,6 +128,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | 开关 | 默认 | 域 | 语义 |
 |---|---|---|---|
 | `discriminator.auto` | false | 判别 | 自动断面总开关（boolean）；false=不挂载零成本 / true=发 verdict 接入投影；**星标通道常在，不受此开关门控**（观察模式已取消，2026-09） |
+| `discriminator.reasoningEffort` | 空（跟随模型默认） | 判别/断面 | 辅助调用（自动判别 / ★）推理档（adapter 词汇 off/low/medium/high/max）；**默认不覆盖**——关闭思考可能明显影响任务边界判断与改写质量；模型未声明所选档时自动回退为跟随（P14f） |
 | `shear.enabled` | true | 剪切 | 工具剪切 + 对话剪切总开关（分层可再关 T-note / T0-R） |
 | `compression.boundary` | true | 压缩 | task 边界压缩 |
 | `compression.pressure` | true | 压缩 | 压力路径（`pressureRatio=0.4` × 压缩域窗口） |
