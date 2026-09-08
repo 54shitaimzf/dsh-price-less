@@ -9,7 +9,7 @@
 
 设计文档写清了"该是什么"，但直接丢给廉价模型施工会翻车在三处：**猜 API**（harness 没这个
 接口它也敢编）、**做设计**（文档留的口子它自己拍板）、**验不了**（"看起来对了"就算完）。所以
-把 R0–R4 拆成 30 份工单（P0–P21b + P1.1/P1.2/P5.1/P6.1 追记）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
+把 R0–R4 拆成 31 份工单（P0–P21b + P1.1/P1.2/P5.1/P6.1 追记 + P14b 拆分 P14b1/P14b2）：每份大小一顿饭功夫、输入输出写死、验收是一条条能跑的命令。
 flash 只需要照单干活——不需要理解全局，禁止发挥。
 
 ## 1. 工单制（角色与纪律）
@@ -74,7 +74,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P12 | 自动断面服务（已施工 commit `6746c1b`；工单见 [P12-input.md](P12-input.md)） | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3,P8,P9 | M |
 | P13 | 命令面 + init 项目帧（已施工；工单见 [P13-commands.md](P13-commands.md)） | R2 | `/task` 系列 + `/init` + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3,**P12**,**P5** | M |
 | P14a | 星标按钮 UI（槽 + 预览） | R2 | H11 `conversation.input.right` 槽注册 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿（mock host 方法契约） | P13 | M |
-| P14b | 星标 host 方法 + 时序 B | R2 | host 方法（装配输入栈 → H12 断面 → 双通道解析 → 回填/优化产物落盘）+ 时序 B 端到端（mock 断面；剪切清单本阶段只落盘记账） | P14a,P11,P13,P6,P3 | M |
+| P14b1 | 星标 host 断面服务 + RPC 桥端口（计划稿 [P14b1-star-host-service.md](P14b1-star-host-service.md)） | R2 | `platform/star-bridge.ts`（Connection RPC 通道 `/context-economy` = P14a 桥接口的 host 实现；**否决 Typert Remote**，依据见工单 §0.1）+ `domains/star.ts`（装配输入栈 → H12 断面 → 双通道解析 → 预览态 → 确认后回填/优化产物落盘）+ `domains/optimize-facts.ts`（`optimize-run` 两相事实 + fold）；剪切清单本阶段只落盘记账；client 仍用 mock | P14a,P11,P13,P6,P3 | M |
+| P14b2 | 星标真实桥 + 时序 B 端到端（计划稿 [P14b2-star-live-bridge.md](P14b2-star-live-bridge.md)） | R2 | client 真实 `StarHostBridge`（Connection RPC → P14b1 端口；常量两侧独立声明 + 契约测试）+ 预览→确认→回填端到端 + 隔离 home 冒烟 + R2 出门验收（07 快照 §32） | P14b1 | M |
 | P15a | 工具剪切纯核 | R3 | `core/shear/` 工具半边（ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则；[03 §2](../03-shear.md)） | P2 | M |
 | P15b | 工具剪切调度 | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面） | P15a,P6,P7,P12,P2 | M |
 | P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15b | M |
@@ -93,7 +94,7 @@ P0 ─┬─ P1 ─┬─ P2 ─ P5 ─┐
     │      ├─ P6 ────────┤
     │      └─ P7 ─┐      │
     ├─ P3(P1,P2) ─ P8 ─ P9 ─ P10 ─ P12(P10,P3,P8,P9) ─ P15b(P15a,P6,P7,P12,P2) ─ P16
-    │      └────────┴─ P11 ─ P13(P8,P9,P11,P3,P12,P5) ─ P14a(P13) ─ P14b(P14a,P11,P13,P6,P3)
+    │      └────────┴─ P11 ─ P13(P8,P9,P11,P3,P12,P5) ─ P14a(P13) ─ P14b1(P14a,P11,P13,P6,P3) ─ P14b2(P14b1)
     └─ P4 ─ P8                │
 P2 ─ P15a ────────────────────┘
 P17(P6,P8,P9) ─ P19(P17,P18,P2,P3) ─┬─ P20a(P19) ─┐
@@ -110,13 +111,18 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > 结构断言全绿（M/S/D1–D8）、R1 出门门槛核对（docs/11 §8 R1 行：JSONL 回放 + ignorable 断言 +
 > platform 七端口齐）通过；下一段 = R2 判别域。
 
-> R2 进行中（2026-09-07）：P8/P9/P10/P11/P12/P13 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；P12 自动断面服务 commit `6746c1b`；**P14a 星标按钮 UI 已施工（`node scripts/verify-p14a.mjs` PASS）**；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p12.mjs` 与 `node scripts/verify-p13.mjs` 输出 PASS；P10/P11 为纯核工单，其“src/index.ts 零改动”断言在后续接线后不再逐项复跑（各自历史提交点 PASS）。
+> P14b 拆分（2026-09-08 计划修正）：原 P14b 一单超出 M 尺寸（host 端口 + 断面服务 + 真实桥 + 端到端 ≈ 1000 行），
+> 按总纲 §3「L = 工单内必须拆分两份」拆为 **P14b1**（host 断面服务 + RPC 桥端口，client 零改动）与
+> **P14b2**（client 真实桥 + 时序 B 端到端 + R2 出门）。传输选型 = **Connection 通用 RPC 通道**
+> （channel `/context-economy`），否决 P14a §8.2 的 Typert Remote 设想（依据见 P14b1 §0.1）。
+
+> R2 进行中（2026-09-07）：P8/P9/P10/P11/P12/P13 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；P12 自动断面服务 commit `6746c1b`；**P14a 星标按钮 UI 已施工（`node scripts/verify-p14a.mjs` PASS）**；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p12.mjs` 与 `node scripts/verify-p13.mjs` 输出 PASS；P10/P11 为纯核工单，其“src/index.ts 零改动”断言在后续接线后不再逐项复跑（各自历史提交点 PASS）。**下一未执行单元 = P14b1**（计划稿已立，见上方拆分说明）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、
 > docs/12 同步补齐命令面与四值 purpose 契约。
 > P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
-> P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b/P19/P21a 补 P3）。
+> P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b1/P19/P21a 补 P3）。
 > P13 修正边（2026-09-07 P12 工单计划）：P13 补 P12——复用 P12 交付的 `core/t0.ts` T0 解析，避免 T0 双发与 taskId 分叉。
 
 平台通道横切（[docs/12](../12-platform-capabilities.md) 正典）：ignorable 发射通道缺失时事实轨
@@ -170,7 +176,7 @@ commit: `<type>(<scope>): <一行>`；账本快照：<是否需要>
 
 ## 6. 总纲自身的验收
 
-- [ ] §3 表 30 行（含 P1.1/P1.2/P5.1/P6.1 追记）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
+- [ ] §3 表 31 行（含 P1.1/P1.2/P5.1/P6.1 追记与 P14b1/P14b2 拆分）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
 - [ ] 每行依赖列构成 DAG（无环）；
 - [ ] 尺寸全部 S/M（L 已注明拆分）；
 - [ ] 工单模板含 harness 符号核验位与停工上报条款。
