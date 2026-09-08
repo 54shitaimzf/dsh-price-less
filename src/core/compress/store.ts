@@ -24,6 +24,10 @@ export interface ArchiveRecord extends ArchiveEntry {
   readonly sessionId?: string
   readonly layer?: AssembleLayer
   readonly at?: number
+  /** 压力检查点：缝（下一折叠的起点；机制 A 续传定位）。 */
+  readonly cutPointSeq?: number
+  /** 压力检查点：本次替换区间末端（下一折叠的替换起点 = 其后的首个表面节点）。 */
+  readonly rangeEndSeq?: number
 }
 
 /** 内容寻址缓存条目：键 = span 哈希，值 = 已解析产物（复用 = 零调用）。 */

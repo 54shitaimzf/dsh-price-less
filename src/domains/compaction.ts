@@ -22,24 +22,35 @@ import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.t
 import { foldSurfaceNodes } from '../core/ledger/surface.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
-import { DEFAULT_ASSEMBLE_POLICY, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
+import { DEFAULT_ASSEMBLE_POLICY, foldAssembleInputs, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
 import {
   COMPRESS_PROMPT_VERSION,
   COMPRESS_POLICY_VERSION,
   DEFAULT_COMPRESS_POLICY,
+  PRESSURE_RETRY_BUDGET,
   appendArchiveEntry,
   compressSpanHash,
+  composePressureArchive,
+  isPressureMaterial,
   lookupCachedProduct,
   parseCompressProduct,
   planTailConsumption,
+  pressureBreakerTripped,
+  pressureChainDepth,
+  pressureThreshold,
   priorChainFor,
   putCachedProduct,
   readArchiveStore,
   renderBoundaryPrompt,
+  renderCheckpoint,
+  renderFoldMaterialTranscript,
+  renderPressurePrompt,
   renderRegionTranscript,
   type ArchiveStoreBody,
   type BoundaryProduct,
+  type CompressCheckpoint,
   type CompressPolicy,
+  type PressureProduct,
 } from '../core/compress/index.ts'
 import {
   SHEAR_APPLIED_FACT_TYPE,
@@ -58,7 +69,7 @@ import type { MeterPort } from '../platform/meter.ts'
 import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
 import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
-import { COMPRESS_RUN_FACT_TYPE, type CompressRunFactData } from './compaction-facts.ts'
+import { COMPRESS_RUN_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
 
 const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
 
@@ -136,6 +147,8 @@ function attemptedTaskIds(facts: readonly LedgerFact[]): Set<string> {
     if (fact.type !== COMPRESS_RUN_FACT_TYPE) continue
     const data = (fact.data ?? {}) as Partial<CompressRunFactData>
     if (typeof data.taskId !== 'string' || data.taskId === '') continue
+    // 只有边界路径的尝试才算"该 task 已归档"；压力路径的 compress-run 不阻止 task 闭合归档。
+    if (data.layer !== 'boundary') continue
     if (data.outcome === 'skipped' && data.reason === 'llm-unavailable') continue
     attempted.add(data.taskId)
   }
@@ -195,6 +208,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   const storeKey = boundaryArchiveKey(workspace)
   const counts: CompactionDomainStats = { preSteps: 0, triggers: 0, compactions: 0, cacheHits: 0, skips: 0, rangeSkips: 0, errors: 0 }
   const busy = new WeakSet<Session>()
+  /** 压力触发 turn 守卫（一个 turn 至多一次常规压力尝试；紧急折叠另有守卫）。 */
+  const pressureTurn = new WeakMap<Session, number>()
   let disposed = false
 
   const policiesOf = (config: ConfigShape): { assemble: AssemblePolicy; compress: CompressPolicy } => ({
@@ -449,31 +464,312 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     }), logger)
   }
 
+  /** 边界路径（时序 A）：闭合段发现 → 单次调用 → 档案 vN → 事务替换。 */
+  const runBoundary = async (
+    session: Session,
+    turn: number,
+    events: readonly LedgerSessionEvent[],
+    facts: readonly LedgerFact[],
+  ): Promise<void> => {
+    const segments = foldSegmentState([...facts], { sessionFirstSeq: firstUserSeq(events) }).segments
+    if (segments.length < 2) return
+    const sid = sessionIdOf(session)
+    const attempted = attemptedTaskIds(facts)
+    const index = segments.findIndex((segment, i) => segment.closed && i < segments.length - 1 && !attempted.has(`${sid}:${segment.taskId}`))
+    if (index < 0) return
+    const nextStartSeq = segments[index + 1]?.startSeq
+    if (typeof nextStartSeq !== 'number') return
+    counts.triggers++
+    await compactSegment(session, turn, events, facts, segments[index] as TaskSegment, nextStartSeq)
+  }
+
+  interface PressureAttempt {
+    readonly product: PressureProduct
+    readonly checkpointText: string
+    readonly rendered: string
+    readonly cutSeq: number
+    readonly foldedTokens: number
+    readonly retainedTokens: number
+    readonly productTokens: number
+    readonly calls: number
+    readonly cacheHit: boolean
+    readonly provider: string
+    readonly model: string
+    readonly usage?: CeLlmUsage
+    readonly rawOutput?: string
+  }
+
+  /**
+   * 压力折叠（P20a；docs/04 §3）：选缝 → 检查点 + 保留区逐字 → 缩水校验（重试 2）→
+   * 档案 checkpoint 条目 → 事务替换。emergency = 保险丝/溢出接管（P20b；跳过 turn 守卫）。
+   * 返回 true = 已落刀。
+   */
+  const pressureFold = async (
+    session: Session,
+    turn: number,
+    events: readonly LedgerSessionEvent[],
+    facts: readonly LedgerFact[],
+    opts: { wireTokens: number; thresholdTokens: number; emergency: boolean },
+  ): Promise<boolean> => {
+    const config = getConfig()
+    const sid = sessionIdOf(session)
+    const base = { at: now(), wireTokens: opts.wireTokens, thresholdTokens: opts.thresholdTokens, emergency: opts.emergency }
+    const fire = (outcome: PressureFireFactData['outcome'], extra: Partial<PressureFireFactData> = {}): void => {
+      emitCeFact(session, PRESSURE_FIRED_FACT_TYPE, compactFact({ ...base, outcome, chainDepth: 0, ...extra }), logger)
+    }
+    const segments = foldSegmentState([...facts], { sessionFirstSeq: firstUserSeq(events) }).segments
+    const segment = segments.at(-1)
+    if (segment === undefined || segment.closed) { fire('skip', { reason: 'no-task' }); return false }
+    const scopedTaskId = `${sid}:${segment.taskId}`
+    const existing = storage.getEntity('boundary_archive', storeKey)
+    const storeBody = readArchiveStore(existing?.body, workspace)
+    const priorChain = priorChainFor(storeBody, scopedTaskId, sid)
+    const depth = pressureChainDepth(priorChain)
+    if (pressureBreakerTripped(depth)) { fire('breaker', { chainDepth: depth }); return false }
+    if (!planTailConsumption({ priorChain, layer: 'pressure' }).ok) { fire('skip', { reason: 'chain-invalid', chainDepth: depth }); return false }
+
+    const surface = foldSurfaceNodes(events)
+    const taskEndSeq = surface.at(-1)
+    if (taskEndSeq === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return false }
+    const prev = priorChain.at(-1)
+    const segmentStart = segment.startSeq ?? firstUserSeq(events)
+    const foldStartSeq = prev?.cutPointSeq ?? segmentStart
+    const replaceStart = prev?.rangeEndSeq === undefined
+      ? surface.find((seq) => seq >= segmentStart)
+      : surface.find((seq) => seq > (prev.rangeEndSeq as number))
+    if (replaceStart === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return false }
+
+    // 单元清单与折叠区同源（模型只从清单抄 unitId 选缝；被遮蔽原文在此重新可见 = 机制 B）。
+    const material = events.filter(isPressureMaterial)
+    const units = foldAssembleInputs(material).units
+      .filter((unit) => unit.seqStart >= foldStartSeq && unit.seqEnd <= taskEndSeq)
+    if (units.length === 0) { fire('skip', { reason: 'no-units', chainDepth: depth }); return false }
+
+    const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
+    const candidateText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: taskEndSeq })
+    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.charsPerToken}`
+    const key = compressSpanHash({
+      promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'pressure',
+      regionText: candidateText, unitIds: units.map((unit) => unit.id),
+      priorChainTexts: priorChain.map((entry) => entry.text), policyKey,
+    })
+    const cached = lookupCachedProduct(storeBody, key)
+    const llm = deps.getLlm?.()
+    let calls = 0
+    let usage: CeLlmUsage | undefined
+    let renderedPromptTokens: number | undefined
+
+    const attemptProduct = async (useCache: boolean): Promise<PressureAttempt | undefined> => {
+      let product: PressureProduct
+      let cacheHit = false
+      let rawOutput: string | undefined
+      let provider = ''
+      let model = ''
+      if (useCache && cached !== undefined && cached.product.mode === 'pressure') {
+        product = cached.product
+        cacheHit = true
+      } else {
+        if (llm === undefined) { fire('skip', { reason: 'llm-unavailable', chainDepth: depth }); return undefined }
+        const renderedPrompt = renderPressurePrompt({ regionText: candidateText, units, priorChain, policy: compressPolicy })
+        renderedPromptTokens = estimateTokens(renderedPrompt.prompt, compressPolicy.charsPerToken)
+        const route = resolveJudgeModel(config, readSessionModel(session))
+        provider = route.provider
+        model = route.model
+        const desired = reasoningEffortSetting(config)
+        const sentEffort = desired === undefined ? undefined : await resolveReasoningEffort(llm, provider, model, desired, logger)
+        const options: CeGenerateOptions = {
+          provider, model,
+          messages: [{ role: 'user', content: [{ type: 'text', text: renderedPrompt.prompt }], source: { kind: 'user' }, id: 'compress' }] as never,
+          purpose: 'context-economy-compaction',
+          temperature: 0,
+          ...(sentEffort === undefined ? {} : { reasoningEffort: sentEffort }),
+        }
+        let llmText = ''
+        let failure: { code?: string; message: string } | undefined
+        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger })) {
+          if (chunk.type === 'text-delta') llmText += chunk.text
+          if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
+            const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
+            failure = { code: reason.failure?.code, message: reason.failure?.message ?? 'non-stop finish' }
+            break
+          }
+        }
+        if (failure !== undefined) {
+          const unavailable = failure.code === 'CE_LLM_UNAVAILABLE'
+          fire('skip', { reason: unavailable ? 'llm-unavailable' : 'llm-error', chainDepth: depth, cutPointSeq: undefined })
+          emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+            at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+            taskId: scopedTaskId, outcome: 'skipped' as const, reason: unavailable ? 'llm-unavailable' : 'llm-error',
+            calls: unavailable ? calls : calls + 1, emergency: opts.emergency,
+            ...(usage === undefined ? {} : { llmUsage: usage }),
+          }), logger)
+          return undefined
+        }
+        calls++
+        const parsed = parseCompressProduct(llmText, 'pressure', units)
+        if (!parsed.ok) {
+          emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+            at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+            taskId: scopedTaskId, outcome: parsed.reason, calls, emergency: opts.emergency,
+            ...(usage === undefined ? {} : { llmUsage: usage }),
+          }), logger)
+          return undefined
+        }
+        product = parsed.product as PressureProduct
+        rawOutput = llmText
+      }
+      const cutUnit = units.find((unit) => unit.id === product.cutPoint.unitId)
+      if (cutUnit === undefined) { fire('skip', { reason: 'cutpoint', chainDepth: depth }); return undefined }
+      const cutSeq = cutUnit.seqStart
+      const foldText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: cutSeq - 1 })
+      const retainedText = renderRegionTranscript(events, { startSeq: cutSeq, endSeq: taskEndSeq })
+      const checkpointText = renderCheckpoint(product.checkpoint)
+      const rendered = composePressureArchive({ priorChain, checkpointText, retainedText })
+      return {
+        product, checkpointText, rendered, cutSeq,
+        foldedTokens: estimateTokens(foldText, compressPolicy.charsPerToken),
+        retainedTokens: estimateTokens(retainedText, compressPolicy.charsPerToken),
+        productTokens: estimateTokens(`${checkpointText}\n\n${retainedText}`, compressPolicy.charsPerToken),
+        calls, cacheHit, provider, model,
+        ...(usage === undefined ? {} : { usage }),
+        ...(rawOutput === undefined ? {} : { rawOutput }),
+      }
+    }
+
+    let chosen: PressureAttempt | undefined
+    let lastFolded = 0
+    let lastRetained = 0
+    let attempts = 0
+    for (let attempt = 0; attempt <= PRESSURE_RETRY_BUDGET && chosen === undefined; attempt++) {
+      attempts++
+      const candidate = await attemptProduct(attempt === 0)
+      if (candidate === undefined) return false
+      lastFolded = candidate.foldedTokens
+      lastRetained = candidate.retainedTokens
+      // 缩水校验（04 §1，replace 前置）：产物（检查点 + 保留区）< 被压区间（折叠材料）。
+      if (candidate.productTokens < candidate.foldedTokens) chosen = candidate
+    }
+    const retry = Math.max(0, attempts - 1)
+    if (chosen === undefined) {
+      fire('skip', { reason: 'shrink', chainDepth: depth, foldedTokens: lastFolded, retainedTokens: lastRetained })
+      emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+        at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+        taskId: scopedTaskId, outcome: 'skipped' as const, reason: 'shrink', calls, retry,
+        foldedTokens: lastFolded, retainedTokens: lastRetained, emergency: opts.emergency,
+        ...(usage === undefined ? {} : { llmUsage: usage }),
+      }), logger)
+      return false
+    }
+    if (chosen.cacheHit) counts.cacheHits++
+
+    // 档案 vN：只存检查点文本 C（续传面）；cutPointSeq/rangeEndSeq 供下一次折叠定位（机制 A/B）。
+    const entries = await writeStore((body) => {
+      const appended = appendArchiveEntry(body, {
+        taskId: scopedTaskId, kind: 'checkpoint', text: chosen!.checkpointText, sessionId: sid,
+        layer: 'pressure', at: now(), cutPointSeq: chosen!.cutSeq, rangeEndSeq: taskEndSeq,
+      }, assemblePolicy)
+      return {
+        body: chosen!.cacheHit
+          ? appended.body
+          : putCachedProduct(appended.body, { key, at: now(), layer: 'pressure', product: chosen!.product }),
+        entries: appended.kept,
+      }
+    }, existing?.version, scopedTaskId)
+    if (entries === undefined) {
+      fire('skip', { reason: 'storage', chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
+      emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+        at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+        taskId: scopedTaskId, outcome: 'skipped' as const, reason: 'storage', calls: chosen.calls, retry,
+        cacheHit: chosen.cacheHit, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens,
+        cutPointSeq: chosen.cutSeq, emergency: opts.emergency,
+        ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
+      }), logger)
+      return false
+    }
+
+    // 事务：open → prune（影子价）→ summary + checkpoint 替换 → close。
+    const history = createHistoryPort(session)
+    const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, replaceStart, taskEndSeq)
+      ?? estimateTokens(renderRegionTranscript(events, { startSeq: replaceStart, endSeq: taskEndSeq }), compressPolicy.charsPerToken)
+    const plan = planTxn({
+      txnId: `ce-compact-pressure-${segment.taskId}-${replaceStart}-${taskEndSeq}`,
+      layer: 'pressure', taskId: scopedTaskId, range: { start: replaceStart, end: taskEndSeq },
+      shadowedTokenCount: shadowPrice, replaceKind: 'checkpoint', turn,
+    })
+    const txn = runCompactionTxn(history, plan, (h) => {
+      h.recordPrune({ start: replaceStart as never, end: taskEndSeq as never, shadowedTokenCount: shadowPrice })
+      h.commitCheckpoint({
+        compactionId: plan.txnId,
+        text: chosen!.rendered,
+        summary: chosen!.checkpointText,
+        range: { start: replaceStart as never, end: taskEndSeq as never },
+        shadowedTokenCount: shadowPrice,
+        provider: chosen!.cacheHit ? '' : chosen!.provider,
+        model: chosen!.cacheHit ? '' : chosen!.model,
+        ...(chosen!.usage === undefined ? {} : { usage: chosen!.usage }),
+        ...(chosen!.rawOutput === undefined ? {} : { rawOutput: chosen!.rawOutput }),
+      })
+    })
+    if (!txn.ok) {
+      fire('skip', { reason: `txn-${txn.code ?? 'fail'}`, chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
+      emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+        at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+        taskId: scopedTaskId, outcome: 'skipped' as const, reason: 'txn', calls: chosen.calls, retry,
+        cacheHit: chosen.cacheHit, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens,
+        cutPointSeq: chosen.cutSeq, emergency: opts.emergency,
+        ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
+      }), logger)
+      return false
+    }
+    counts.compactions++
+    fire('fired', { chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
+    emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
+      at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
+      taskId: scopedTaskId, outcome: 'ok' as const, calls: chosen.calls, cacheHit: chosen.cacheHit, retry,
+      regionTokens: chosen.foldedTokens,
+      ...(renderedPromptTokens === undefined ? {} : { promptTokens: renderedPromptTokens }),
+      productBytes: new TextEncoder().encode(chosen.rendered).length,
+      shadowedTokens: chosen.foldedTokens, productTokens: chosen.productTokens,
+      foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq,
+      carried: priorChain.length, archiveEntries: entries, emergency: opts.emergency,
+      ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
+    }), logger)
+    return true
+  }
+
+  /** 压力触发（时序 C 上半）：wire 锚定计量 ≥ 阈值；一个 turn 至多尝试一次。 */
+  const runPressure = async (
+    session: Session,
+    turn: number,
+    events: readonly LedgerSessionEvent[],
+    facts: readonly LedgerFact[],
+  ): Promise<void> => {
+    const config = getConfig()
+    const wireTokens = deps.getMeter?.()?.wireTokens(session)
+    if (wireTokens === undefined) return
+    const thresholdTokens = pressureThreshold(config.compression)
+    if (thresholdTokens === undefined || wireTokens < thresholdTokens) return
+    if (pressureTurn.get(session) === turn) return
+    pressureTurn.set(session, turn)
+    await pressureFold(session, turn, events, facts, { wireTokens, thresholdTokens, emergency: false })
+  }
+
   const onPreStep = async (payload: { session: Session; turn: number }): Promise<void> => {
     if (disposed) return
     const { session, turn } = payload
     counts.preSteps++
     const config = getConfig()
-    if (config.compression?.boundary === false) return
     if (!compressionInvariantOk(config.compression)) return
     if (busy.has(session)) return
     busy.add(session)
     try {
       const events = ledgerEventsOf(session)
       const facts = factsFromSessionEvents(events)
-      const segments = foldSegmentState(facts, { sessionFirstSeq: firstUserSeq(events) }).segments
-      if (segments.length < 2) return
-      const sid = sessionIdOf(session)
-      const attempted = attemptedTaskIds(facts)
-      const index = segments.findIndex((segment, i) => segment.closed && i < segments.length - 1 && !attempted.has(`${sid}:${segment.taskId}`))
-      if (index < 0) return
-      const nextStartSeq = segments[index + 1]?.startSeq
-      if (typeof nextStartSeq !== 'number') return
-      counts.triggers++
-      await compactSegment(session, turn, events, facts, segments[index] as TaskSegment, nextStartSeq)
+      if (config.compression?.boundary !== false) await runBoundary(session, turn, events, facts)
+      if (config.compression?.pressure !== false) await runPressure(session, turn, events, facts)
     } catch (e) {
       counts.errors++
-      logger.warn('context-economy: boundary compaction failed (fail-lazy, original history preserved)', e instanceof Error ? e.message : String(e))
+      logger.warn('context-economy: compaction failed (fail-lazy, original history preserved)', e instanceof Error ? e.message : String(e))
     } finally {
       busy.delete(session)
     }

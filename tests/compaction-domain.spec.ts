@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { mountCompactionDomain, boundaryArchiveKey } from '../src/domains/compaction.ts'
-import { COMPRESS_RUN_FACT_TYPE } from '../src/domains/compaction-facts.ts'
+import { COMPRESS_RUN_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
 import { SHEAR_APPLIED_FACT_TYPE, SHEAR_DECISION_FACT_TYPE } from '../src/core/shear/index.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
 import type { AssembleDomain } from '../src/domains/assemble.ts'
@@ -128,10 +128,8 @@ function fakeLlm(script: Array<{ text?: string; finish?: 'stop' | 'error'; code?
   return { ctx, calls }
 }
 
-const meter = { heuristicTokensInRange: () => 4242 }
-
-function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; assembleOk?: boolean; llm?: ReturnType<typeof fakeLlm>; storage?: FakeStorage; withLlm?: boolean; withMeter?: boolean } = {}) {
-  const session = makeSession()
+function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; assembleOk?: boolean; llm?: ReturnType<typeof fakeLlm>; storage?: FakeStorage; withLlm?: boolean; withMeter?: boolean; session?: FakeSession; wireTokens?: number } = {}) {
+  const session = options.session ?? makeSession()
   const storage = options.storage ?? new FakeStorage()
   const llm = options.llm ?? fakeLlm()
   const { domain: assemble, requests } = fakeAssemble({ ...(options.rendered === undefined ? {} : { rendered: options.rendered }), ...(options.assembleOk === undefined ? {} : { ok: options.assembleOk }) })
@@ -142,7 +140,9 @@ function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; as
     getConfig: () => config,
     logger: { info() {}, warn: (...args: unknown[]) => { warns.push(args) }, error() {} },
     assemble,
-    getMeter: () => options.withMeter === false ? undefined : meter,
+    getMeter: () => options.withMeter === false
+      ? undefined
+      : { heuristicTokensInRange: () => 4242, wireTokens: () => options.wireTokens },
     getLlm: () => options.withLlm === false ? undefined : llm.ctx,
     workspace: WORKSPACE,
     now: () => 5000,
@@ -305,3 +305,131 @@ describe('P19b 边界压缩：开关与守卫', () => {
     expect(env.runs()[0]!.taskId).not.toBe('s1:task-2')
   })
 })
+
+const PRESSURE_PRODUCT = JSON.stringify({
+  checkpoint: { progress: '已完成 A', currentState: 'B 已就绪', nextStep: '做 C', liveConstraints: ['不要改 D'] },
+  cutPoint: { unitId: 'c2' },
+})
+
+/** 开 task（无边界事实）+ 两对工具调用；前段大、尾段小（缩水校验可过）。 */
+function makePressureSession(id = 'sp'): FakeSession {
+  const session = new FakeSession()
+  ;(session.header as { id: string }).id = id
+  session.append('user/message', { content: [textBlock('做 A '.repeat(200))], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }, { surfaceOp: 'append' })
+  session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: [textBlock('x'.repeat(2000))] }] } }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
+  session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [textBlock('y'.repeat(50))] }] } }, { surfaceOp: 'append' })
+  session.append('user/message', { content: [textBlock('继续')], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  return session
+}
+
+const firesOf = (session: FakeSession) => session.events.filter((event) => event.type === PRESSURE_FIRED_FACT_TYPE).map((event) => event.data)
+
+describe('P20a 压力路径：触发与全路径', () => {
+  it('wire 达阈 → 单次调用 → 检查点档案 → 事务替换 → pressure-fired + compress-run', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    expect(env.llm.calls).toHaveLength(1)
+    expect(env.llm.calls[0]).toMatchObject({ purpose: 'context-economy-compaction', temperature: 0 })
+    const fires = firesOf(env.session)
+    expect(fires).toHaveLength(1)
+    expect(fires[0]).toMatchObject({ outcome: 'fired', chainDepth: 0, wireTokens: 120000, thresholdTokens: 100000, cutPointSeq: 3 })
+    expect(env.runs()).toHaveLength(1)
+    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', calls: 1, cutPointSeq: 3, carried: 0, archiveEntries: 1 })
+    const record = env.storage.entities.get(`boundary_archive:${ARCHIVE_KEY}`)!
+    const body = record.body as { entries: Array<Record<string, unknown>> }
+    expect(body.entries).toHaveLength(1)
+    expect(body.entries[0]).toMatchObject({ taskId: 'sp:task-1', kind: 'checkpoint', cutPointSeq: 3, rangeEndSeq: 5, layer: 'pressure' })
+    expect(String(body.entries[0]!.text)).toContain('进度：')
+    const landed = env.session.events.find((event) => event.type === 'user/message' && event.surfaceOp && event.surfaceOp.op === 'replace')!
+    const text = (landed.data as { content: Array<{ text: string }> }).content[0]!.text
+    expect(text).toContain('进度：')
+    expect(text).toContain('[3] tool/call read c2')
+    expect(text).toContain('y'.repeat(50))
+    expect(appendsOf(env.session, 'compaction/summary')[0]!.data).toMatchObject({ shadowedTokenCount: 4242 })
+    expect(env.domain.stats()).toMatchObject({ compactions: 1 })
+  })
+
+  it('断路器：链深达上限 → breaker 事实，零调用', async () => {
+    const storage = new FakeStorage()
+    storage.entities.set(`boundary_archive:${ARCHIVE_KEY}`, {
+      version: 1,
+      body: {
+        schemaVersion: 1, workspace: WORKSPACE,
+        entries: [0, 1, 2].map((i) => ({ taskId: 'sp:task-1', kind: 'checkpoint', text: `C${i}`, sessionId: 'sp', layer: 'pressure', at: i, cutPointSeq: 1, rangeEndSeq: 2 })),
+        cache: {},
+      },
+    })
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 120000, storage })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    expect(env.llm.calls).toHaveLength(0)
+    expect(firesOf(env.session)[0]).toMatchObject({ outcome: 'breaker', chainDepth: 3 })
+    expect(env.runs()).toHaveLength(0)
+  })
+
+  it('turn 守卫：同 turn 第二次 pre-step 不再尝试（防每步重复计费）', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    expect(env.llm.calls).toHaveLength(1)
+  })
+
+  it('低于阈值 / meter 缺失 → 零压力行为（boundary 无闭合段亦不动）', async () => {
+    const low = makeEnv({ session: makePressureSession(), wireTokens: 50000 })
+    await low.domain.onPreStep({ session: low.session as never, turn: 3 })
+    expect(firesOf(low.session)).toHaveLength(0)
+    expect(low.llm.calls).toHaveLength(0)
+    const noMeter = makeEnv({ session: makePressureSession(), withMeter: false })
+    await noMeter.domain.onPreStep({ session: noMeter.session as never, turn: 3 })
+    expect(firesOf(noMeter.session)).toHaveLength(0)
+    expect(noMeter.llm.calls).toHaveLength(0)
+  })
+
+  it('机制 A/B：续传旧检查点 C1，折叠区 = 上次缝之后的原文（含被遮蔽材料）', async () => {
+    const session = new FakeSession()
+    ;(session.header as { id: string }).id = 'sp'
+    session.append('user/message', { content: [textBlock('做 A')], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }, { surfaceOp: 'append' })
+    session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: [textBlock('x'.repeat(2000))] }] } }, { surfaceOp: 'append' })
+    // 模拟上一次压力折叠：replace [0..2] → 检查点节点（plugin:compact）
+    session.append('user/message', { content: [textBlock('C1')], source: { kind: 'plugin', plugin: 'compact' } }, { surfaceOp: { op: 'replace', start: 0, end: 2 }, sourceEventSeqs: [0, 1, 2] })
+    session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
+    session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [textBlock('y'.repeat(50))] }] } }, { surfaceOp: 'append' })
+    session.append('user/message', { content: [textBlock('继续')], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    const storage = new FakeStorage()
+    storage.entities.set(`boundary_archive:${ARCHIVE_KEY}`, {
+      version: 1,
+      body: { schemaVersion: 1, workspace: WORKSPACE, entries: [{ taskId: 'sp:task-1', kind: 'checkpoint', text: 'C1', sessionId: 'sp', layer: 'pressure', at: 1, cutPointSeq: 1, rangeEndSeq: 2 }], cache: {} },
+    })
+    const env = makeEnv({ session, storage, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    expect(env.runs()[0]).toMatchObject({ outcome: 'ok', carried: 1 })
+    const prompt = env.llm.calls[0].messages[0].content[0].text as string
+    expect(prompt).toContain('C1')
+    expect(prompt).toContain('x'.repeat(2000))
+    const landed = env.session.events.find((event) => event.type === 'user/message' && event.surfaceOp && event.surfaceOp.op === 'replace')!
+    const text = (landed.data as { content: Array<{ text: string }> }).content[0]!.text
+    expect(text.startsWith('C1')).toBe(true)
+  })
+
+  it('内容寻址复用：同内容跨会话命中 → 零调用 + cacheHit', async () => {
+    const storage = new FakeStorage()
+    const first = makeEnv({ session: makePressureSession('sp'), storage, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await first.domain.onPreStep({ session: first.session as never, turn: 3 })
+    const second = makeEnv({ session: makePressureSession('sp2'), storage, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await second.domain.onPreStep({ session: second.session as never, turn: 3 })
+    expect(second.llm.calls).toHaveLength(0)
+    expect(second.runs()[0]).toMatchObject({ outcome: 'ok', cacheHit: true, calls: 0 })
+    expect(second.domain.stats().cacheHits).toBe(1)
+  })
+
+  it('压力开关关闭 → 零行为', async () => {
+    const config = resolveConfig({ compression: { ...resolveConfig({}).compression, pressure: false } })
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 120000, config })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    expect(env.llm.calls).toHaveLength(0)
+    expect(firesOf(env.session)).toHaveLength(0)
+  })
+})
+

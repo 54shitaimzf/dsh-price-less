@@ -1,8 +1,10 @@
 /**
  * 压缩族账本 fold（docs/07 §0.5 压缩族；docs/04 §7；P17a 度量先行）。
  * 纯函数：同输入同账；输入 = `context-economy/assemble-run` 事实（+ 后续 P19/P20/P20b 事实）。
- * 未实现项显式 0（口径先立不空转）：pressure* 归 P20a、hardTruncateCount 归 P20b、
- * extraSearchCalls 归 P21b。
+ * 未实现项显式 0（口径先立不空转）：hardTruncateCount 归 P20b、extraSearchCalls 归 P21b。
+ * P20a：pressure* 四字段由 pressure-fired 事实 fold（纯核 = core/compress/pressure.ts）；
+ * compressionLayer.pressure 由 compress-run（layer=pressure ∧ outcome=ok）计数——
+ * 压力路径不经边界装配器（保留区无帽、无热尾语义），两源各自唯一不双计（P18 N6 口径修正）。
  * P17c：`archiveTruncate` fold 路径打通（纯核截断 = `core/assemble/archive.ts`；生产者 = P19 档案区）。
  * P18：`compressionCallCount`/`compressionCacheHitRate` fold 路径打通（事实 = `compress-run`，
  * 纯核 = `core/compress/ledger.ts`；生产者 = P19/P20a）。
@@ -15,6 +17,7 @@
  * 度量: 本文件即压缩族账本 fold（07 回放管道消费面）。
  */
 import { foldCompressCalls } from '../compress/ledger.ts'
+import { foldPressureFires } from '../compress/pressure.ts'
 import type { LedgerFact } from '../ledger/types.ts'
 import type { AssembleLayer, HotTailDropCounts, HotTailSource, HotTailStopReason } from './types.ts'
 
@@ -79,6 +82,11 @@ export interface CompressionLedger {
   compressArchiveAppends: number
   compressShearBoundaryFolded: number
   compressRetiredDossiers: number
+  /** P20a 压力自持观测位（07 pressure* 四字段见上；此处为折叠/保留体量与 skip/紧急细分）。 */
+  pressureFoldedTokens: number
+  pressureRetainedTokens: number
+  pressureSkips: number
+  pressureEmergencies: number
 }
 
 export function emptyCompressionLedger(): CompressionLedger {
@@ -116,6 +124,10 @@ export function emptyCompressionLedger(): CompressionLedger {
     compressArchiveAppends: 0,
     compressShearBoundaryFolded: 0,
     compressRetiredDossiers: 0,
+    pressureFoldedTokens: 0,
+    pressureRetainedTokens: 0,
+    pressureSkips: 0,
+    pressureEmergencies: 0,
   }
 }
 
@@ -166,5 +178,19 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
   ledger.compressArchiveAppends = calls.archiveAppends
   ledger.compressShearBoundaryFolded = calls.shearBoundaryFolded
   ledger.compressRetiredDossiers = calls.retiredDossiers
+  // P20a：压力触发口径由 pressure-fired 事实汇总；层计数 pressure 由成功压力折叠唯一产出。
+  const fires = foldPressureFires(facts)
+  ledger.pressureFireCount = fires.pressureFireCount
+  ledger.pressureTriggerWireTokens = fires.pressureTriggerWireTokens
+  ledger.pressureChainDepth = fires.pressureChainDepth
+  ledger.pressureBreakerTrips = fires.pressureBreakerTrips
+  ledger.pressureSkips = fires.skips
+  // 紧急折叠计数源 = compress-run（每次尝试一条，含失败）；pressure-fired 只记"决定开火"。
+  ledger.pressureEmergencies = calls.pressureEmergencies
+  ledger.pressureFoldedTokens = calls.pressureFoldedTokens
+  ledger.pressureRetainedTokens = calls.pressureRetainedTokens
+  // 两源各自唯一（P19 archiveTruncate 先例）：assemble-run 源 = 边界装配路径（含 P17 fixture）；
+  // compress-run 源 = 压力折叠（压力路径不经装配器）。同一 fold 不会两源同时出现。
+  ledger.compressionLayer.pressure += calls.pressureOk
   return ledger
 }

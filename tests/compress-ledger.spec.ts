@@ -10,6 +10,7 @@ import {
   type CompressRunFactData,
 } from '../src/core/compress/index.ts'
 import { ASSEMBLE_RUN_FACT_TYPE, emptyCompressionLedger, foldCompressionLedger } from '../src/core/assemble/index.ts'
+import { PRESSURE_FIRED_FACT_TYPE } from '../src/core/compress/index.ts'
 import type { LedgerFact } from '../src/core/ledger/types.ts'
 
 const fact = (data: Partial<CompressRunFactData>, seq = 1): LedgerFact => ({ type: COMPRESS_RUN_FACT_TYPE, seq, time: seq, data })
@@ -99,6 +100,29 @@ describe('P18 账本：调用口径', () => {
       fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok', archiveTruncateCount: 2, archiveTruncateTokens: 30 }),
     ])
     expect(ledger.archiveTruncate).toEqual({ count: 2, tokens: 30 })
+  })
+
+  it('P20a 压力自持位 + 层计数：pressure 由 compress-run(ok) 唯一产出，boundary 仍由 assemble-run', () => {
+    const pressureFact: LedgerFact = {
+      type: PRESSURE_FIRED_FACT_TYPE, seq: 9, time: 9,
+      data: { at: 1, wireTokens: 120000, thresholdTokens: 100000, outcome: 'fired', chainDepth: 1 },
+    }
+    const ledger = foldCompressionLedger([
+      pressureFact,
+      fact({ at: 2, layer: 'pressure', promptVersion: 1, policyVersion: 1, outcome: 'ok', foldedTokens: 100, retainedTokens: 40, emergency: true }, 2),
+      fact({ at: 3, layer: 'pressure', promptVersion: 1, policyVersion: 1, outcome: 'skipped', reason: 'shrink' }, 3),
+      fact({ at: 4, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok' }, 4),
+    ])
+    expect(ledger.pressureFireCount).toBe(1)
+    expect(ledger.pressureTriggerWireTokens).toBe(120000)
+    expect(ledger.pressureChainDepth).toBe(1)
+    expect(ledger.pressureBreakerTrips).toBe(0)
+    expect(ledger.compressionLayer.pressure).toBe(1)
+    expect(ledger.compressionLayer.boundary).toBe(0)
+    expect(ledger.pressureSkips).toBe(0)
+    expect(ledger.pressureFoldedTokens).toBe(100)
+    expect(ledger.pressureRetainedTokens).toBe(40)
+    expect(ledger.pressureEmergencies).toBe(1)
   })
 
   it('同输入同账（双跑逐字节一致）', () => {

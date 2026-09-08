@@ -63,6 +63,15 @@ export interface CompressRunFactData {
   readonly shearFolded?: number
   /** 卷宗清空（结构性：新 task 新卷宗；本字段仅审计）。 */
   readonly dossierRetired?: boolean
+  // —— P20a 压力路径归因（边界路径不产出这些键） ——
+  /** 缝（最后一个子任务起点）的会话序。 */
+  readonly cutPointSeq?: number
+  /** 折叠区材料体量（上次缝之后的原始材料；缩水校验分母）。 */
+  readonly foldedTokens?: number
+  /** 保留区体量（[cutPoint..end] 全量逐字；无帽）。 */
+  readonly retainedTokens?: number
+  /** 紧急折叠（保险丝地板以上 / 溢出接管；P20b）。 */
+  readonly emergency?: boolean
 }
 
 export interface CompressCallLedger {
@@ -87,6 +96,11 @@ export interface CompressCallLedger {
   archiveAppends: number
   shearBoundaryFolded: number
   retiredDossiers: number
+  /** P20a 压力自持位（不属 07 字段；pressure* 四字段由 pressure-fired 事实 fold）。 */
+  pressureOk: number
+  pressureFoldedTokens: number
+  pressureRetainedTokens: number
+  pressureEmergencies: number
 }
 
 export function emptyCompressCallLedger(): CompressCallLedger {
@@ -106,6 +120,10 @@ export function emptyCompressCallLedger(): CompressCallLedger {
     archiveAppends: 0,
     shearBoundaryFolded: 0,
     retiredDossiers: 0,
+    pressureOk: 0,
+    pressureFoldedTokens: 0,
+    pressureRetainedTokens: 0,
+    pressureEmergencies: 0,
   }
 }
 
@@ -144,6 +162,11 @@ export function foldCompressCalls(facts: readonly LedgerFact[]): CompressCallLed
     if (numberField(data.archiveEntries) > 0) ledger.archiveAppends++
     ledger.shearBoundaryFolded += numberField(data.shearFolded)
     if (data.dossierRetired === true) ledger.retiredDossiers++
+    // P20a 压力路径：成功落刀的压力折叠（compressionLayer.pressure 的唯一计数源）。
+    if (data.layer === 'pressure' && data.outcome === 'ok') ledger.pressureOk++
+    ledger.pressureFoldedTokens += numberField(data.foldedTokens)
+    ledger.pressureRetainedTokens += numberField(data.retainedTokens)
+    if (data.emergency === true) ledger.pressureEmergencies++
   }
   ledger.compressionCacheHitRate = ledger.invocations === 0 ? 0 : ledger.cacheHits / ledger.invocations
   return ledger
