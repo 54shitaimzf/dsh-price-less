@@ -76,6 +76,8 @@ export interface ArchiveEntry {
 export interface ArchiveTruncation {
   readonly count: number
   readonly tokens: number
+  /** 最新单条自身超帽（保最新 + 标记；F9d 起入账）。 */
+  readonly overCap?: boolean
 }
 
 /** 档案形态（04 §3 机制 A：单块总摘要 / [C…][D] 追加式链）。 */
@@ -205,7 +207,7 @@ export interface AssemblePolicy {
   readonly version: number
   /** 热尾预算（= retainTokens 绝对设计值 10K）。 */
   readonly hotTailTokens: number
-  /** 档案区硬帽（04 §6 绝对设计值 15K；超限从最老档案条目起整条机械截断）。 */
+  /** 档案区硬帽（04 §6 F9 绝对设计值 10K；超限从最老档案条目起整条机械截断）。 */
   readonly archiveTokens: number
   /** 字符密度（04 §5：两桶标定 CJK 1.5 / 其余 2.9；与压缩器同源）。 */
   readonly density: TokenDensity
@@ -238,7 +240,7 @@ export interface AssemblePolicy {
 export const DEFAULT_ASSEMBLE_POLICY: AssemblePolicy = {
   version: ASSEMBLE_POLICY_VERSION,
   hotTailTokens: 10000,
-  archiveTokens: 15000,
+  archiveTokens: 10000,
   density: DEFAULT_TOKEN_DENSITY,
   floorVerifyLines: 3,
   floorErrorLines: 5,

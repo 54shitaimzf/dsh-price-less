@@ -140,7 +140,7 @@ describe('模板态壳不变量（分组 + 字段 spec）', () => {
     expect(defaultForPath('compression.retainTokens')).toBe(10000)
     expect(defaultForPath('compression.thresholdTokens')).toBe(100000)
     expect(defaultForPath('compression.domainTokens')).toBe(125000)
-    expect(defaultForPath('compression.archiveCapTokens')).toBe(15000)
+    expect(defaultForPath('compression.archiveCapTokens')).toBe(10000)
     expect(specs.get('compression.pressureRatio')?.parse('0.5')).toEqual({ kind: 'set', values: { 'compression.pressureRatio': 0.5 } })
     expect(specs.get('compression.pressureRatio')?.parse('0.01').kind).toBe('error')
     expect(specs.get('compression.pressureRatio')?.parse('0.9').kind).toBe('error')

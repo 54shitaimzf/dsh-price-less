@@ -21,7 +21,7 @@ import { flatDensity } from '../src/core/meter/index.ts'
 import type { BoundaryProduct } from '../src/core/compress/index.ts'
 
 const policy = { ...DEFAULT_ASSEMBLE_POLICY, density: flatDensity(1), archiveTokens: 30 }
-const product: BoundaryProduct = { mode: 'boundary', digest: { blocks: [{ type: 'plan', text: '目标' }], coords: [] }, hotTail: [] }
+const product: BoundaryProduct = { mode: 'boundary', digest: { gist: '目标与方向', steps: [] }, hotTail: [] }
 const cacheEntry = (key: string, at = 1): CompressCacheEntry => ({ key, at, layer: 'boundary', product })
 
 const entry = (taskId: string, kind: 'checkpoint' | 'boundary', text: string, sessionId = 's1') => ({ taskId, kind, text, sessionId, layer: 'boundary' as const, at: 1 })
@@ -34,6 +34,7 @@ describe('P19a 档案区：追加与硬帽', () => {
     expect(first.truncation).toEqual({ count: 0, tokens: 0 })
     const second = appendArchiveEntry(body, entry('task-2', 'boundary', 'b'.repeat(30)), policy)
     expect(second.truncation.count).toBe(1)
+    expect(second.overCap).toBe(false)
     expect(second.body.entries.map((e) => e.taskId)).toEqual(['task-2'])
     expect(second.body.entries[0]!.text).toBe('b'.repeat(30))
   })
@@ -56,6 +57,18 @@ describe('P19a 档案区：防御解析', () => {
     expect(readArchiveStore({ schemaVersion: ARCHIVE_STORE_VERSION, workspace: 'other', entries: [], cache: {} }, 'w')).toEqual(emptyArchiveStore('w'))
   })
 
+  it('F9d 迁移：v1 条目原样保留，只丢 v1 产物缓存（失败方向 = 保留档案）', () => {
+    const body = readArchiveStore({
+      schemaVersion: 1,
+      workspace: 'w',
+      entries: [entry('task-1', 'boundary', '旧档案')],
+      cache: { k1: cacheEntry('k1') },
+    }, 'w')
+    expect(body.schemaVersion).toBe(ARCHIVE_STORE_VERSION)
+    expect(body.entries.map((item) => item.text)).toEqual(['旧档案'])
+    expect(Object.keys(body.cache)).toEqual([])
+  })
+
   it('坏条目与坏缓存条目逐条丢弃，好条目保留', () => {
     const body = readArchiveStore({
       schemaVersion: ARCHIVE_STORE_VERSION,
@@ -65,6 +78,15 @@ describe('P19a 档案区：防御解析', () => {
     }, 'w')
     expect(body.entries).toHaveLength(1)
     expect(Object.keys(body.cache)).toEqual(['k1'])
+  })
+})
+
+describe('F9d 档案：最新单条自身超帽 = 保最新 + overCap 入账', () => {
+  it('单条超帽仍保留（不空档），overCap = true', () => {
+    const first = appendArchiveEntry(emptyArchiveStore('w'), entry('task-1', 'boundary', 'x'.repeat(80)), policy)
+    expect(first.overCap).toBe(true)
+    expect(first.kept).toBe(1)
+    expect(first.body.entries).toHaveLength(1)
   })
 })
 

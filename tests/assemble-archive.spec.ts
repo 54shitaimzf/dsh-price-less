@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_ASSEMBLE_POLICY,
   archiveChainAppendOnly,
+  archiveChainMonotone,
   archiveChainShape,
   assembleArchive,
   truncateArchiveArea,
@@ -32,8 +33,8 @@ const unit = (id: string, seqStart: number, text: string): AssembleUnit => ({
 })
 
 describe('P17c 档案：策略初值', () => {
-  it('档案区硬帽 = 15K 绝对设计值（04 §6，与 retain/threshold 同哲学）', () => {
-    expect(DEFAULT_ASSEMBLE_POLICY.archiveTokens).toBe(15000)
+  it('档案区硬帽 = 10K 绝对设计值（F9；与热尾 10K 分列）', () => {
+    expect(DEFAULT_ASSEMBLE_POLICY.archiveTokens).toBe(10000)
     expect(DEFAULT_ASSEMBLE_POLICY.hotTailTokens).toBe(10000)
   })
 })
@@ -63,6 +64,23 @@ describe('P17c 档案：追加式链两形态（04 §3 机制 A）', () => {
     expect(archiveChainAppendOnly([c1, c2], [c1, c2, d])).toBe(true)
     expect(archiveChainAppendOnly([c1], [entry('checkpoint', 'c1-rewritten')])).toBe(false)
     expect(archiveChainAppendOnly([c1, c2], [c1])).toBe(false)
+  })
+
+  it('F9d 单调追加守卫：允许最老整条截断 + 尾部追加；改写幸存条目 = 违规', () => {
+    const c1 = entry('checkpoint', 'c1')
+    const c2 = entry('checkpoint', 'c2')
+    const d = entry('boundary', 'd')
+    expect(archiveChainMonotone([], [c1])).toBe(true)
+    expect(archiveChainMonotone([c1], [c1, d])).toBe(true)
+    // 最老整条被截断：next = prev 的后缀 + 追加。
+    expect(archiveChainMonotone([c1, c2], [c2, d])).toBe(true)
+    // 全部最老被截断（无幸存条目）：合法。
+    expect(archiveChainMonotone([c1, c2], [d])).toBe(true)
+    // 改写幸存条目 = 违规（形状 = 幸存后缀 + 恰好一条新条目；改写使后缀错位）。
+    expect(archiveChainMonotone([c1, c2], [c1, entry('checkpoint', 'c2-rewritten'), d])).toBe(false)
+    expect(archiveChainMonotone([c1, c2], [entry('checkpoint', 'c1-rewritten'), c2])).toBe(false)
+    // 一次追加只能多一条：next 比 prev 多 2 条且不截断 = 违规。
+    expect(archiveChainMonotone([c1], [c1, d, entry('boundary', 'd2')])).toBe(false)
   })
 })
 

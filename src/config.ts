@@ -42,7 +42,7 @@ export interface Config {
     retainTokens: number
     /** 末位绝对安全网（窗口与假定窗口都不可用时启用）；不变量 retain < threshold。 */
     thresholdTokens: number
-    /** 档案区硬帽（绝对设计值 15K；docs/04 §6）。 */
+    /** 档案区硬帽（F9 绝对设计值 10K，与热尾 10K 分列；docs/04 §6）。 */
     archiveCapTokens: number
   }
   /** 判别器/引擎配置区。 */
@@ -72,7 +72,7 @@ export const Config = z.object({
     domainTokens: z.number().default(125000),
     retainTokens: z.number().default(10000),
     thresholdTokens: z.number().default(100000),
-    archiveCapTokens: z.number().default(15000),
+    archiveCapTokens: z.number().default(10000),
   }),
   discriminator: z.object({
     provider: z.string().min(1),
@@ -95,7 +95,7 @@ export const CONFIG_DEFAULTS = {
     domainTokens: 125000,
     retainTokens: 10000,
     thresholdTokens: 100000,
-    archiveCapTokens: 15000,
+    archiveCapTokens: 10000,
   },
   discriminator: {
     auto: false,

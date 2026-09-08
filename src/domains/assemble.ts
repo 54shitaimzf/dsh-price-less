@@ -258,7 +258,11 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       truncated: result.hotTail.truncated,
       ...(request.archiveTruncate === undefined
         ? {}
-        : { archiveTruncateCount: request.archiveTruncate.count, archiveTruncateTokens: request.archiveTruncate.tokens }),
+        : {
+            archiveTruncateCount: request.archiveTruncate.count,
+            archiveTruncateTokens: request.archiveTruncate.tokens,
+            ...(request.archiveTruncate.overCap === undefined ? {} : { archiveOverCap: request.archiveTruncate.overCap }),
+          }),
     })
     emitCeFact(request.session, ASSEMBLE_RUN_FACT_TYPE, data, logger)
     return outcome

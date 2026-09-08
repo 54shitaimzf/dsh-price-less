@@ -21,7 +21,7 @@ import { compactFact, factsFromSessionEvents } from '../core/ledger/facts.ts'
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
-import { DEFAULT_ASSEMBLE_POLICY, foldAssembleInputs, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
+import { DEFAULT_ASSEMBLE_POLICY, archiveChainMonotone, foldAssembleInputs, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
 import {
   COMPRESS_PROMPT_VERSION,
   COMPRESS_POLICY_VERSION,
@@ -248,24 +248,41 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     compress: { ...DEFAULT_COMPRESS_POLICY },
   })
 
-  /** 档案实体写入（CAS 冲突重读重试 1；纯 mutate 在新体上重放）。 */
+  /**
+   * 档案实体写入（CAS 冲突重读重试 1；纯 mutate 在新体上重放）。
+   * F9d：写入前做**单调追加守卫**（允许最老整条截断，幸存条目必须逐条字节恒等）——
+   * 违规 = 拒写（失败方向 = 保留旧档案）。
+   */
   const writeStore = async (
-    mutate: (body: ArchiveStoreBody) => { body: ArchiveStoreBody; entries: number },
+    mutate: (body: ArchiveStoreBody) => { body: ArchiveStoreBody; entries: number; overCap: boolean },
     baseVersion: number | undefined,
     taskId: string,
-  ): Promise<number | undefined> => {
+  ): Promise<{ entries: number; overCap: boolean } | undefined> => {
     const source = { taskId, eventType: 'boundary-archive', evidence: { workspace } }
+    const apply = (
+      base: unknown,
+    ): { body: ArchiveStoreBody; entries: number; overCap: boolean } | undefined => {
+      const before = readArchiveStore(base, workspace)
+      const result = mutate(before)
+      if (!archiveChainMonotone(before.entries, result.body.entries)) {
+        logger.warn('context-economy: archive write rejected (append-only violation; old archive preserved)')
+        return undefined
+      }
+      return result
+    }
     try {
-      const result = mutate(readArchiveStore(storage.getEntity('boundary_archive', storeKey)?.body, workspace))
+      const result = apply(storage.getEntity('boundary_archive', storeKey)?.body)
+      if (result === undefined) return undefined
       await storage.putEntity('boundary_archive', storeKey, result.body, source, { baseVersion: baseVersion ?? 0 })
-      return result.entries
+      return { entries: result.entries, overCap: result.overCap }
     } catch {
       const current = storage.getEntity('boundary_archive', storeKey)
       if (current === undefined || current.version === baseVersion) return undefined
       try {
-        const result = mutate(readArchiveStore(current.body, workspace))
+        const result = apply(current.body)
+        if (result === undefined) return undefined
         await storage.putEntity('boundary_archive', storeKey, result.body, source, { baseVersion: current.version })
-        return result.entries
+        return { entries: result.entries, overCap: result.overCap }
       } catch {
         return undefined
       }
@@ -427,7 +444,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (chosen.cacheHit) counts.cacheHits++
 
     // ④ 档案 vN 落盘（落盘成功才落刀；09 §6「LLM 产物未落盘不被引用」）。
-    const entries = await writeStore((body) => {
+    const written = await writeStore((body) => {
       const appended = appendArchiveEntry(
         body,
         { taskId: scopedTaskId, kind: 'boundary', text: chosen!.rendered, sessionId: sid, layer: 'boundary', at: now() },
@@ -438,9 +455,10 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
           ? appended.body
           : putCachedProduct(appended.body, { key, at: now(), layer: 'boundary', product: chosen!.product, dropped: chosen!.dropped }),
         entries: appended.kept,
+        overCap: appended.overCap,
       }
     }, existing?.version, scopedTaskId)
-    if (entries === undefined) {
+    if (written === undefined) {
       skip('storage', { calls: chosen.calls, retry, shadowedTokens, productTokens: chosen.productTokens, cacheHit: chosen.cacheHit, ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }) })
       return
     }
@@ -491,8 +509,9 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       productBytes: new TextEncoder().encode(chosen.rendered).length,
       shadowedTokens, productTokens: chosen.productTokens,
       droppedHotTail: chosen.dropped.badDecl + chosen.dropped.unknownUnit,
-      carried: priorChain.length, archiveEntries: entries,
+      carried: priorChain.length, archiveEntries: written.entries,
       archiveTruncateCount: chosen.truncation.count, archiveTruncateTokens: chosen.truncation.tokens,
+      archiveOverCap: written.overCap,
       shearFolded: held.length, dossierRetired: true,
       ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
     }), logger)
@@ -727,7 +746,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (chosen.cacheHit) counts.cacheHits++
 
     // 档案 vN：只存检查点文本 C（续传面）；cutPointSeq/rangeEndSeq 供下一次折叠定位（机制 A/B）。
-    const entries = await writeStore((body) => {
+    const written = await writeStore((body) => {
       const appended = appendArchiveEntry(body, {
         taskId: scopedTaskId, kind: 'checkpoint', text: chosen!.checkpointText, sessionId: sid,
         layer: 'pressure', at: now(), cutPointSeq: chosen!.cutSeq, rangeEndSeq: replaceEnd,
@@ -737,9 +756,10 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
           ? appended.body
           : putCachedProduct(appended.body, { key, at: now(), layer: 'pressure', product: chosen!.product }),
         entries: appended.kept,
+        overCap: appended.overCap,
       }
     }, existing?.version, scopedTaskId)
-    if (entries === undefined) {
+    if (written === undefined) {
       fire('skip', { reason: 'storage', chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
         at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
@@ -794,7 +814,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       productBytes: new TextEncoder().encode(chosen.rendered).length,
       shadowedTokens: chosen.foldedTokens, productTokens: chosen.productTokens,
       foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq,
-      carried: priorChain.length, archiveEntries: entries, emergency: opts.emergency,
+      carried: priorChain.length, archiveEntries: written.entries,
+      archiveOverCap: written.overCap, emergency: opts.emergency,
       ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
     }), logger)
     return { landed: true, attempted: true }

@@ -2661,4 +2661,31 @@ compress-product（宽松修复表）、compress-prompt（新 schema 段）；�
 
 **未落地**：F9d 预算 10K/10K + 存储 v1→v2 + 单调性守卫、F9e 路径压缩、F9f 死码清理 + 文档、F9g 回放验收。
 
+---
+
+## §65 F9d 双预算 10K/10K + 档案存储 v2 + 单调追加守卫（2026-09-09；提交 = 本账本同提交）
+
+**预算（用户裁定：累计压缩内容 10K + 热尾 10K 分列）**：
+- `compression.archiveCapTokens` 15000 → **10000**（host schema + `CONFIG_DEFAULTS` + client
+  `CLIENT_DEFAULTS`/字段默认/提示文案同步）；`AssemblePolicy.archiveTokens` 同步。
+- `retainTokens` 保持 10000；不变量 `retain < thresholdTokens`（10000 < 100000）仍成立。
+
+**档案存储 v2（`ARCHIVE_STORE_VERSION` 1→2）**：
+- `ArchiveRecord.root?`（F9e 相对路径基准预留）；`isArchiveStoreVersion()` 为读面与恢复审计共用口径。
+- `readArchiveStore` 接受 v1：**条目原样保留**（root 缺省），只丢弃 v1 内容寻址缓存（产物 schema 已变）——
+  失败方向 = 保留档案。`core/restore/plan.ts` `validateArchiveBody` 改用同一谓词（否则 v1 档案会被
+  恢复审计判 version-mismatch 降级）。
+- **单调追加守卫**（`archiveChainMonotone`，F9d 起运行时生效）：next 必须 = `prev.slice(k) ++ [新条目]`
+  （允许最老整条截断，幸存条目逐条字节恒等且序不变）。`writeStore` 写入前校验，违规 = 拒写 +
+  warn + 保留旧档案。原 `archiveChainAppendOnly` 是**零引用死守卫**（仅测试），本单补上真运行时形态。
+
+**overCap 入账（原缺陷 = 算了就丢）**：`appendArchiveEntry` 返回 `overCap`（最新单条自身超帽 =
+保最新 + 标记），`writeStore` 透传，`compress-run.archiveOverCap` 落账；`AssembleRunFactData.archiveOverCap`
+同源打通。
+
+**验收**：`npm run gate` = **641 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿。
+新增：v1→v2 迁移、单条超帽 overCap、单调追加五例（截断/追加/全截断/改写/多追加）。
+
+**未落地**：F9e 路径压缩、F9f 死码清理 + 文档（04/07/09/11/AGENTS/TODO）、F9g 回放验收。
+
 

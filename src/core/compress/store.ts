@@ -1,5 +1,5 @@
 /**
- * 档案区实体纯核（docs/04 §6 档案区：只追加 + 15K 硬帽 + 内容寻址复用；docs/09 §2 边界档案 vN；P19a）。
+ * 档案区实体纯核（docs/04 §6 档案区：只追加 + 10K 硬帽〔F9〕+ 内容寻址复用；docs/09 §2 边界档案 vN；P19a）。
  * 纯函数：档案条目追加（含硬帽机械截断）+ 内容寻址缓存（span 哈希命中 = 零调用复用）+ 防御解析。
  * 键含 workspace（09 §1 项目级实体隔离）；条目字节一经写出不可变（机制 A：只追加、绝不重写）。
  *
@@ -13,8 +13,14 @@ import { truncateArchiveArea } from '../assemble/archive.ts'
 import { DEFAULT_ASSEMBLE_POLICY, type ArchiveEntry, type ArchiveTruncation, type AssembleLayer, type AssemblePolicy, type HotTailDropCounts } from '../assemble/types.ts'
 import type { CompressMode, CompressProduct } from './types.ts'
 
-/** 档案区实体结构版本（schemaVersion；结构变化必须升版本）。 */
-export const ARCHIVE_STORE_VERSION = 1
+/** 档案区实体结构版本（schemaVersion；结构变化必须升版本）。v2 = F9：条目可带 root、产物 v2 schema。 */
+export const ARCHIVE_STORE_VERSION = 2
+/** 可读的最小历史版本（v1 条目原样保留，仅丢弃 v1 产物缓存；失败方向 = 保留档案）。 */
+export const ARCHIVE_STORE_VERSION_MIN = 1
+/** 结构版本可读判定（读面与恢复审计共用，避免两处口径漂移）。 */
+export function isArchiveStoreVersion(value: unknown): boolean {
+  return value === 1 || value === ARCHIVE_STORE_VERSION
+}
 
 /** 内容寻址缓存条目上限（插入序淘汰；跨会话复用的小容量缓存）。 */
 export const ARCHIVE_CACHE_LIMIT = 32
@@ -28,6 +34,8 @@ export interface ArchiveRecord extends ArchiveEntry {
   readonly cutPointSeq?: number
   /** 压力检查点：本次替换区间末端（下一折叠的替换起点 = 其后的首个表面节点）。 */
   readonly rangeEndSeq?: number
+  /** F9e：渲染该条目时的会话工作区根（相对路径解析基准；跨会话重放不串档）。 */
+  readonly root?: string
 }
 
 /** 内容寻址缓存条目：键 = span 哈希，值 = 已解析产物（复用 = 零调用）。 */
@@ -82,14 +90,17 @@ function isCacheEntry(value: unknown): value is CompressCacheEntry {
   return true
 }
 
-/** 防御解析：坏形状 / 版本不符 / workspace 不符 → 空档案（失败方向 = 保留原文）。 */
+/**
+ * 防御解析：坏形状 / 版本不符 / workspace 不符 → 空档案（失败方向 = 保留原文）。
+ * F9d 迁移：v1 条目**原样保留**（`root` 缺省），只丢弃 v1 内容寻址缓存（产物 schema 已变）。
+ */
 export function readArchiveStore(value: unknown, workspace: string): ArchiveStoreBody {
   const root = recordOf(value)
   if (root === undefined) return emptyArchiveStore(workspace)
-  if (root.schemaVersion !== ARCHIVE_STORE_VERSION || root.workspace !== workspace) return emptyArchiveStore(workspace)
+  if (!isArchiveStoreVersion(root.schemaVersion) || root.workspace !== workspace) return emptyArchiveStore(workspace)
   const entries = Array.isArray(root.entries) ? root.entries.filter(isArchiveRecord) : []
   const cache: Record<string, CompressCacheEntry> = {}
-  const rawCache = recordOf(root.cache)
+  const rawCache = root.schemaVersion === ARCHIVE_STORE_VERSION ? recordOf(root.cache) : undefined
   if (rawCache !== undefined) {
     for (const [key, entry] of Object.entries(rawCache)) {
       if (!isCacheEntry(entry) || entry.key !== key) continue
@@ -104,6 +115,8 @@ export interface ArchiveAppendResult {
   /** 硬帽截断计数（04 §6；入 assemble-run / compress-run 事实）。 */
   readonly truncation: ArchiveTruncation
   readonly kept: number
+  /** 最新单条自身超帽（保最新 + 标记；F9d 起入账，不再算了就丢）。 */
+  readonly overCap: boolean
 }
 
 /** 追加一条档案（只追加；超帽从最老整条机械截断，不合并、不重压）。 */
@@ -117,6 +130,7 @@ export function appendArchiveEntry(
     body: { ...body, entries: area.kept },
     truncation: area.truncated,
     kept: area.kept.length,
+    overCap: area.overCap,
   }
 }
 

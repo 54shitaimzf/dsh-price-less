@@ -9,7 +9,7 @@
  * 审查清单: 不 import harness/platform（S1）；无时钟随机（D17）；不写事实、不改史。
  * 度量: 审计结果由域侧落 `restore-step` / `restore-degraded` 事实（07 `restoreDegraded`）。
  */
-import { ARCHIVE_STORE_VERSION } from '../compress/store.ts'
+import { isArchiveStoreVersion } from '../compress/store.ts'
 
 /**
  * 恢复序（09 §4 顺序 + 本单补入第四实体 `optimize_artifact`，见工单 §8-1）。
@@ -127,7 +127,7 @@ export function validateProjectFrameBody(body: unknown): boolean {
 /** 边界档案体形状（ArchiveStoreBody：schemaVersion + workspace + entries[]；P20c 检查点字段可选）。 */
 export function validateArchiveBody(body: unknown, workspace: string): boolean {
   if (!isRecord(body)) return false
-  if (body.schemaVersion !== ARCHIVE_STORE_VERSION || body.workspace !== workspace) return false
+  if (!isArchiveStoreVersion(body.schemaVersion) || body.workspace !== workspace) return false
   if (!Array.isArray(body.entries)) return false
   return body.entries.every((entry) => isRecord(entry)
     && typeof entry.taskId === 'string'

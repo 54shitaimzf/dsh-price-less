@@ -230,7 +230,7 @@ export const CLIENT_DEFAULTS = {
     domainTokens: 125000,
     retainTokens: 10000,
     thresholdTokens: 100000,
-    archiveCapTokens: 15000,
+    archiveCapTokens: 10000,
   },
   discriminator: { auto: false },
 } as const
@@ -378,8 +378,8 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   },
   'compression.archiveCapTokens': {
     label: '档案区上限',
-    hint: '默认 15000：档案堆硬帽，超限从最老整条截断。',
-    docs: '边界档案区硬上限（绝对设计值 15000 token）。超限时从最老的档案条目起整条机械截断（不合并、不重压）；被截条目仍可从档案快照回溯。',
+    hint: '默认 10000：档案堆硬帽，超限从最老整条截断。',
+    docs: '边界档案区硬上限（F9 绝对设计值 10000 token，与热尾 10000 分列）。超限时从最老的档案条目起整条机械截断（不合并、不重压）；被截条目仍可从档案快照回溯。',
   },
   'discriminator.reasoningEffort': {
     label: '思考强度',
@@ -434,7 +434,7 @@ const compressionNumberFields = [
   economyNumberField('compression.retainTokens', { min: 1000, max: 100000, step: 1000, unit: 'token', visibility: 'tune', default: 10000, deflabel: '默认 10000' }),
   economyNumberField('compression.thresholdTokens', { min: 10000, max: 1000000, step: 10000, unit: 'token', visibility: 'tune', default: 100000, deflabel: '默认 100000' }),
   economyNumberField('compression.domainTokens', { min: 10000, max: 2000000, step: 10000, unit: 'token', visibility: 'tune', default: 125000, deflabel: '默认 125000' }),
-  economyNumberField('compression.archiveCapTokens', { min: 1000, max: 200000, step: 1000, unit: 'token', visibility: 'tune', default: 15000, deflabel: '默认 15000' }),
+  economyNumberField('compression.archiveCapTokens', { min: 1000, max: 200000, step: 1000, unit: 'token', visibility: 'tune', default: 10000, deflabel: '默认 10000' }),
 ]
 
 /** P14f：辅助调用推理档（留空 = 跟随模型默认）。 */

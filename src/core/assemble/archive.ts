@@ -1,5 +1,5 @@
 /**
- * 档案形态与硬帽（docs/04 §6 档案区 15K 硬帽 / §3 机制 A 追加式链两形态；P17c）。
+ * 档案形态与硬帽（docs/04 §6 档案区 10K 硬帽〔F9〕/ §3 机制 A 追加式链两形态；P17c）。
  * 纯函数：超限从**最老**档案条目起整条机械截断至入限（不合并、不重压、不条内截断）；
  * 链形态只认 `[]` / `[C…]` / `[D]` / `[C…][D]`；append-only = 前缀逐条字节恒等（旧块不可改写）。
  *
@@ -47,6 +47,25 @@ export function archiveChainAppendOnly(prev: readonly ArchiveEntry[], next: read
   for (let i = 0; i < prev.length; i++) {
     const before = prev[i] as ArchiveEntry
     const after = next[i] as ArchiveEntry
+    if (before.taskId !== after.taskId || before.kind !== after.kind || before.text !== after.text) return false
+  }
+  return true
+}
+
+/**
+ * 单调追加守卫（F9d 运行时）：next 必须是 prev 的**后缀 + 追加**——允许最老整条截断
+ * （front truncation），但幸存条目必须逐条字节恒等且保持相对序（append-only 律的运行时形式）。
+ * 违规 = 拒写（失败方向 = 保留旧档案）。
+ */
+export function archiveChainMonotone(prev: readonly ArchiveEntry[], next: readonly ArchiveEntry[]): boolean {
+  if (next.length === 0) return prev.length === 0
+  // appendArchiveEntry 的构造性形状：next = prev.slice(k) ++ [新条目]（0 ≤ k ≤ prev.length）。
+  const survivors = next.slice(0, next.length - 1)
+  if (survivors.length > prev.length) return false
+  const start = prev.length - survivors.length
+  for (let i = 0; i < survivors.length; i++) {
+    const before = prev[start + i] as ArchiveEntry
+    const after = survivors[i] as ArchiveEntry
     if (before.taskId !== after.taskId || before.kind !== after.kind || before.text !== after.text) return false
   }
   return true
