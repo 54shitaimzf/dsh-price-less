@@ -3,7 +3,7 @@
 > 本文是**权威挂点地图**——插件接到 DSH 的哪个事件/服务/槽上，逐条对 harness 源码核验。
 > 域归属视角与三条主时序也在此。事件分两层：会话日志事件（`session/event` firehose，
 > append-only 落盘）与 cordis 运行时事件（waterfall/emit，不落盘）。
-> 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；**H6 四档执行已由 P15b、run 冲刷已由 P16 接线于 `domains/shear.ts`**；**H15 盘上取真已由 P17b 接线于 `platform/files.ts`（装配域 `domains/assemble.ts`，压缩触发归 P19）**；H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H2/H3/H9 仍为设计态，模块落位见 [11 §3](11-structure.md)）。
+> 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；**H6 四档执行已由 P15b、run 冲刷已由 P16 接线于 `domains/shear.ts`**；**H15 盘上取真已由 P17b 接线于 `platform/files.ts`（装配域 `domains/assemble.ts`，压缩触发归 P19；P17c 补 HT 软门与丢弃归因）**；H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H2/H3/H9 仍为设计态，模块落位见 [11 §3](11-structure.md)）。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -29,7 +29,7 @@
 | H12 | 辅助 LLM | `llm.stream({purpose})` | 判别 / 断面 / 压缩调用统一 purpose 标记（度量可区分 + 前缀对齐）；usage 回执入账。**宿主现仅 `'compaction'|'session-title'`**，插件自定义 purpose 经 `platform/llm.ts` 单点适配（[12 §1 C2](../12-platform-capabilities.md)），P5 已施工：`platform/llm.ts` `streamCeLlm` + usage 回执 |
 | H13 | 技能目录 | `ctx.skills` 官方注册表（`snapshot`/`get`；`skills/change` 热更新）——`SKILL.md` 扫描与目录 watch 由 harness skill-filesystem 提供者承担 | 稳定前缀原料 + 引用守卫查表（[02 §2](02-discriminator.md)）；枚举纯机械零 LLM |
 | H14 | 会话事实发射 | `session.append` + LogIntent（`IgnorableSessionEventMap` 合并成员） | `context-economy/*` log-only 事件唯一写入通道（append 侧编译闸，读取不查合并表）；能力探测与降级契约 = [12](12-platform-capabilities.md) |
-| H15 | **盘上取真** | `ctx.fs`（`resolve`/`stat`/`readText`） | 文件坐标 `{path,vN,lineRange?}` 经版本补丁链重映射后取**盘上当前字节**（含本会话已落盘编辑——上下文副本是历史快照，改过的文件从上下文取 = 复活旧版本；[04 §2](04-compactor.md)）；服务缺失 / 读失败 = 通道 A 降级丢弃 + 计数，通道 B 与位置兜底照常。**P17b 落位 = `platform/files.ts`（唯一 fs 触点，D11 断言锁定单元边界），装配域 = `domains/assemble.ts`，快照 [§43](ledger-history.md)** |
+| H15 | **盘上取真** | `ctx.fs`（`resolve`/`stat`/`readText`） | 文件坐标 `{path,vN,lineRange?}` 经版本补丁链重映射后取**盘上当前字节**（含本会话已落盘编辑——上下文副本是历史快照，改过的文件从上下文取 = 复活旧版本；[04 §2](04-compactor.md)）；服务缺失 / 读失败 = 通道 A 降级丢弃 + 计数，通道 B 与位置兜底照常。**P17b 落位 = `platform/files.ts`（唯一 fs 触点，D11 断言锁定单元边界），装配域 = `domains/assemble.ts`，快照 [§43](ledger-history.md)；P17c：HT 软门（坏形状不触盘）+ 丢弃归因 `{badDecl,unknownUnit,remap,fetch}`** |
 
 **三条辨析（防接错缝）**：
 

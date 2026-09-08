@@ -5,7 +5,9 @@
 > 正交互补，共享同一套事务原语（§1）。触发信号来自优化判别器（[02](02-discriminator.md)）。
 > 状态：**R4 进行中**——P17 边界装配器已施工（`core/assemble/` 双通道坐标 + 版本重映射 + 贪心停机 + 地板/兜底 +
 > 共享事务原语；`platform/files.ts` 盘上取真 H15；`domains/assemble.ts` 装配域 + `assemble-run` 事实；
-> 快照 [§42](ledger-history.md)/[§43](ledger-history.md)）；压缩调用 / 边界编排 / 压力 / 保险丝见 P18–P20b（搭建序见 [11](11-structure.md) R4）。
+> 快照 [§42](ledger-history.md)/[§43](ledger-history.md)）；**P17c 修正**（HT 软门 + 档案区 15K 硬帽机械截断 +
+> 追加式链两形态校验 + `clipped`/丢弃归因计数修复；快照 [§44](ledger-history.md)）；压缩调用 / 边界编排（档案区落盘）/
+> 压力 / 保险丝见 P18–P20b（搭建序见 [11](11-structure.md) R4）。
 
 ## 0. 它解决什么问题（人话版）
 

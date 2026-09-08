@@ -1928,6 +1928,53 @@ P17 合计 src 净增 **1,625 行**（P17a 1,229 + P17b 396），按总纲 §3 =
 
 **R4 进行中**：P17 已施工；**下一未执行单元 = P18 压缩调用**（边界/压力两模式 prompt 组装 + 产物 schema 校验）。
 
+## 44. 账本快照 §44：边界装配修正（P17c，R4 第一单修正）
+
+> 触发：P17a/P17b **执行结果审计**（工单 §8 八项修正）——正典已引用但未落地的机械面补齐 +
+> 工单与实测不符处改正。**纯核为主 + 薄接线；仍不触发压缩**（触发 / 档案区生产者归 P19）。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| HT 软门（04 §2 门禁组） | 只在 `validateDigest` 间接覆盖；坏 `coord` 可致 `coord.version` 读取异常 | `core/assemble/gate.ts` `gateHotTailDecls`：坏形状 → `bad-decl`、ID 不在清单 → `unknown-unit`，只降级计数、**永不抛错**；域侧取真前调用（只对 accepted 触盘） |
+| 热尾丢弃归因 | 只有总数 `dropped` | `dropReasons{badDecl,unknownUnit,remap,fetch}`（`dropped` = 归因之和；`declaredUnits` 仍记原始申报数） |
+| 出界裁剪计数 | `clipped` 声明但从未自增（**恒 0 缺陷**） | 修复 + 用例/verify 断言 > 0 |
+| 位置兜底计量 | 用 fold 期默认 cpt（与注入 policy 不一致） | 统一 `policy.charsPerToken` 现算；双份循环合并 |
+| 档案区硬帽（04 §6） | 07 字段 `archiveTruncate` 恒 0（原记归 P19） | `core/assemble/archive.ts` `truncateArchiveArea`（15K 绝对设计值；从最老整条截断至入限；最新单条超帽 = 保最新 + `overCap`）+ `assemble-run` 事实字段 + fold 路径打通（**生产者 = P19 档案区**） |
+| 追加式链两形态（04 §3 机制 A / §8） | 无 | `archiveChainShape`（empty/prefix/single/chain）+ `archiveChainAppendOnly`（前缀逐条字节恒等）+ `assembleArchive.priorChain` 续传渲染（旧块 + 新块；非 empty\|prefix = schema fatal） |
+| 工单事实 | `foldAssembleUnits` / txn 顺序 `open→replace→prune→close` / 尺寸 1223·396·381 三口径混用 | 改正 `foldAssembleInputs` / **prune → replace**（附实证：`recordPrune` 需替换前表面 span）/ 尺寸统一：P17a commit 净增 1,223（现文件 1,229）、P17b **402**、合计 1,625 |
+
+**真机会话离线回放**（44 会话；`scripts/verify-p17.mjs`；不做臂对照；会话随本机活动增长，绝对值只作口径）：
+
+| 指标 | 读数 |
+|---|---|
+| 文件操作（插件可见） | read **57** / write **22** / edit **24** |
+| 单元（tool 对） | **4,405** |
+| 版本链 | **60**（链断 **3**） |
+| 坐标重映射自检 | ok **74** / chain-break **21** = **write 全量替换屏障 9 + 定位失败屏障 12** |
+| 假想热尾（无申报 = 位置兜底） | **213,456** token |
+| live `assemble-run` 事实 | **0**（装配域无触发——触发归 P19） |
+
+**读数解读（诚实声明）**：`chain-break 21` 全部是**设计内降级**——write 全文替换使旧行位置不可知（9），
+edit 的 `old_string` 不在任何已知全文/读窗（12；真机 57 次 read 中 22 次为部分窗口）；3 条链断同理。
+按 04 §2"不猜位置"**不加启发式猜测**，失败方向 = 丢弃 + 计数（不复活旧版本）。live 事实仍为 0：
+P17c 补齐的是机械面，压缩触发与档案区生产者是 P19。
+
+**验收**：
+- `npm run gate` 绿（**413 用例 / 38 文件**；M1–M5 / S1–S5 / **D1–D12** 全 PASS）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p17.mjs` → `P17 VERIFY PASS (54 checks)`（原 40 + P17c 14：导出面 / 初值 15K / 软门 2 / clipped / 硬帽 2 / 两形态 / append-only / priorChain 2 / `archiveTruncate` fold / 回放归因 / 文档标记 3）
+- 新增 `tests/assemble-archive.spec.ts` **13 用例**；`assemble-hottail.spec.ts` 20 → **26**（软门 / clipped / 兜底 cpt）；`assemble-domain.spec.ts` 11 → **13**（软门接线 / 续传 + 透传）；`assemble-ledger.spec.ts` 4 → **5**
+- `node scripts/verify-p16.mjs` / `verify-p15b.mjs` / `verify-p15a.mjs` → PASS（无回归）
+
+**尺寸申报**：P17c 估计 src 净增 ≤300（红线 360）。实测 **src 净增 217**（`gate.ts` 73 / `archive.ts` 84 /
+`types.ts` +38 / `ledger.ts` +8 / `index.ts` +2 / `domains/assemble.ts` +14 / `assemble.ts` −2），
+另 spec +272（新 143 + 扩 129）+ `verify-p17.mjs` +74——**在预算内**。
+P17 合计 src 净增 **1,842**（P17a 1,223 + P17b 402 + P17c 217）。
+
+**R4 进行中**：P17 修正完成；**下一未执行单元 = P18 压缩调用**（边界/压力两模式 prompt 组装 + 产物 schema 校验）。
+
+
 
 
 

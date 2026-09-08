@@ -7,7 +7,8 @@
 > 四形态 / manifest / build 闭环 / 铁律）；② harness API 面（源码逐条核验，见 10 §1）；
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
 > 状态：**R4 进行中**（P17 边界装配器已施工：`core/assemble/` 纯核 + `platform/files.ts` 盘上取真 H15 + `domains/assemble.ts` 装配域；
-> 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；下一单 = P18 压缩调用）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
+> 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；**P17c 修正**：HT 软门 + 档案区 15K 硬帽 + 追加式链两形态 + 计数修复
+> （快照 [§44](ledger-history.md)）；下一单 = P18 压缩调用）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -67,7 +68,7 @@ src/
 │  ├─ init.ts        # init 项目帧采集：prompt v1 渲染与 fail-lazy 解析（02 §2）
 │  ├─ shear/         # 剪切纯核（已施工：types/t0r/tool/run/ledger/index，P15a+P15b+P16）（03）
 │  ├─ compress/      # 两模式压缩 prompt 组装 + 产物 schema 校验 + 共享消费模块（04）
-│  ├─ assemble/      # 装配器（P17 已施工）：坐标链 vN 重映射、热尾双通道取真、贪心停机 + 共享事务原语（04 §1/§2；stub 续传/折叠 = P19/P20a 消费面）
+│  ├─ assemble/      # 装配器（P17 已施工，P17c 修正）：坐标链 vN 重映射、热尾双通道取真、贪心停机 + 共享事务原语 + HT 软门 + 档案硬帽/追加式链（04 §1/§2/§3/§6；档案区落盘 = P19）
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
 │  ├─ input.ts       # 判别域：自动断面服务（T0→L1→LLM→fail-lazy；对表影子记账；三分类搭车）
@@ -131,7 +132,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | `discriminator.auto` | false | 判别 | 自动断面总开关（boolean）；false=不挂载零成本 / true=发 verdict 接入投影；**星标通道常在，不受此开关门控**（观察模式已取消，2026-09） |
 | `discriminator.reasoningEffort` | 空（跟随模型默认） | 判别/断面 | 辅助调用（自动判别 / ★）推理档（adapter 词汇 off/low/medium/high/max）；**默认不覆盖**——关闭思考可能明显影响任务边界判断与改写质量；模型未声明所选档时自动回退为跟随（P14f） |
 | `shear.enabled` | true | 剪切 | 工具剪切 + 对话剪切总开关（分层可再关 T-note / T0-R）；**P15b 落位、P16 复用**（host `config.ts` ↔ client `field-model.ts`，设置卡可关） |
-| `compression.boundary` | true | 压缩 | task 边界压缩（开关随 P19 落位；P17 装配域无触发，常驻零成本） |
+| `compression.boundary` | true | 压缩 | task 边界压缩（开关随 P19 落位；P17 装配域无触发，常驻零成本；P17c 已备档案区 15K 硬帽纯核） |
 | `compression.pressure` | true | 压缩 | 压力路径（`pressureRatio=0.4` × 压缩域窗口） |
 | `compressionDomain` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 压缩域标定（[04 §5](04-compactor.md) 硬规则；`retain < threshold` 校验强制） |
 | `archiveCapTokens` | 15K | 压缩 | 档案区硬上限；超限截断最老条目（[04 §6](04-compactor.md)） |
@@ -161,7 +162,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | **R1 平台面** | platform 七端口（含 skills）+ settings 域 + `core/ledger` 空转（只记账，不发行为） | 账本字段能从 JSONL 回放；ignorable 断言过 |
 | **R2 判别域** | core/{units,dossier,judge,optimize,prefix,init} + domains/{input,commands} + init 项目帧 + 星标按钮（H11） | 边界 F1 / 判别成本 / tableHitRate / optimizePromptTokens 入账；`auto` 开关可用（默认关）；星标端到端（断面→预览→确认→回填） |
 | **R3 剪切域** | core/shear + domains/shear（工具剪切四档 + 对话 run 冲刷）——**P15a + P15b + P16 全部施工**（快照 §38/§39/§40/§41），**R3 关门** | cut*/shear*/tableRepair/questionBacklogDepth/cutMisfireDetected 全部入账（P16 补齐后三字段）；阈值常数按既有实验结论初值落位（[03 §8](03-shear.md)，不做对照实验） |
-| **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织（**P17 边界装配器已施工**：core/assemble 纯核 + platform/files 盘上取真 + domains/assemble 装配域，快照 §42/§43） | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效 |
+| **R4 压缩域** | core/{compress,assemble} + domains/compaction：边界装配 → 压力路径 → 共享消费模块；验收按四种触发次序组织（**P17 边界装配器已施工**：core/assemble 纯核 + platform/files 盘上取真 + domains/assemble 装配域，快照 §42/§43；**P17c 修正**：HT 软门 + 档案硬帽 + 追加式链，快照 §44） | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效 |
 | R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
 
 施工分解：R0–R4 细化为 P0–P21b 工单（flash 级自主执行粒度，验收全机械），总纲与工单见
