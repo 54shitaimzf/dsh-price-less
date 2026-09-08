@@ -70,8 +70,8 @@ turn/end → 自动断面边界信号成立（或 /task close）
   → host 方法：装配输入栈（稳定前缀[技能目录+项目帧] + 卷宗 + 当前 prompt）
   → H12 llm.stream({purpose:'context-economy-optimize'})：单次断面（temperature 0、无工具调用）
   → 双通道解析：产品（自由文本）+ 行式裁决（行级容错）
-  → client 渲染 diff → 用户确认/编辑（= 终稿）
-  → 执行：优化后 prompt 原地替换（对话框）；判别回填落卷宗 vN+1（H10）；
+  → client 渲染预览（P14d：无 diff、无统计噪声，裁决折叠在详情里）→ 用户确认/编辑（= 终稿）
+  → 执行：确认即发送（`setDraft` + `submit()`）；判别回填落卷宗 vN+1（H10）；
      剪切清单 → H4 surfaceOp 执行（run 冲刷，结论句落位；**P14b 阶段只落盘记账，执行归 P15b**）；task 边界裁决仅提示不执行
   → 度量：optimize-run 全账（输入栈体积/产出/回填/剪切规模/explorationAvoided 基线）
 ```

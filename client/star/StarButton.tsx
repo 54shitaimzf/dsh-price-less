@@ -2,9 +2,11 @@
  * P14a 星标按钮 UI（client 半边）。
  *
  * 注册到 `conversation.input.right`：读取当前会话草稿 → 调用可替换的
- * `StarHostBridge.preview` → 展示 diff 弹层 → 用户确认/编辑 → `apply` →
- * `inputActions.setDraft(editedProduct)` 原地替换（确认即终稿）。
+ * `StarHostBridge.preview` → 预览弹层 → 用户确认/编辑 → `apply` →
+ * `inputActions.setDraft(editedProduct)` + `inputActions.submit()` 直接发送（确认即发送）。
  *
+ * P14d：删 diff 与顶部统计（账本数据不进决策面）；裁决收进折叠详情；
+ * 点弹层侧面不再关闭（防误触，只认取消/Esc）；只有关键事实缺失才显示警告。
  * 禁区：不写 host/storage/LLM；失败只显示错误，绝不改写用户草稿。
  */
 
@@ -16,7 +18,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { CeButton } from '../components/CeButton.tsx'
 import { TOKEN, Z_POPOVER, tint } from '../theme.ts'
 import { STAR_NO_CONTEXT_NOTICE } from './star-protocol.ts'
-import { diffLines, isTrivialPrompt, summaryOfVerdicts } from './star-model.ts'
+import { isTrivialPrompt, verdictSummary } from './star-model.ts'
 import type { StarButtonInjected, StarPreviewData } from './star-types.ts'
 
 /** 槽位组件 props：标准运行时 share + 注入的 star 桥。 */
@@ -74,35 +76,11 @@ function SparkleIcon({ size = 15 }: { size?: number }) {
     <svg
       width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-      style={{ display: 'block' }}
+      style={{ display: "block" }}
     >
       <path d="M11 2c.55 5.5 2.5 7.45 8 8-5.5.55-7.45 2.5-8 8-.55-5.5-2.5-7.45-8-8 5.5-.55 7.45-2.5 8-8Z" />
       <path d="M18 13.5c.3 2.2.8 2.7 3 3-2.2.3-2.7.8-3 3-.3-2.2-.8-2.7-3-3 2.2-.3 2.7-.8 3-3Z" />
     </svg>
-  )
-}
-
-function DiffView({ original, product }: { original: string; product: string }) {
-  const lines = diffLines(original, product)
-  const lineStyle = (type: string): CSSProperties => ({
-    display: 'flex',
-    gap: 6,
-    padding: '1px 4px',
-    borderRadius: 4,
-    background: type === 'add' ? tint(TOKEN.successPrimary, 0.10) : type === 'del' ? tint(TOKEN.errorPrimary, 0.10) : 'transparent',
-    color: type === 'add' ? TOKEN.successPrimary : type === 'del' ? TOKEN.errorPrimary : undefined,
-  })
-  return (
-    <div style={{ ...CODE, maxHeight: 220, overflow: 'auto' }}>
-      {lines.length === 0 ? <div style={{ color: TOKEN.labelTertiary }}>（空）</div> : lines.map((line, i) => (
-        <div key={i} style={lineStyle(line.type)}>
-          <span style={{ width: 22, flex: '0 0 auto', textAlign: 'right', color: TOKEN.labelTertiary }}>
-            {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
-          </span>
-          <span style={{ flex: 1 }}>{line.text || ' '}</span>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -157,10 +135,12 @@ export function StarButton(props: StarButtonProps) {
     const result = await star.apply(sessionId, { previewId: preview.previewId, editedProduct: edited })
     setApplying(false)
     if (result.ok) {
+      // P14d：确认即发送——先写回草稿再走标准提交机（提交失败会恢复草稿，不吞用户输入）。
       inputActions.setDraft(edited)
+      inputActions.submit()
       setOpen(false)
       setPreview(null)
-      setNotice('已应用：草稿已替换为终稿')
+      setNotice('已发送')
     } else {
       setError(result.message)
     }
@@ -234,27 +214,20 @@ export function StarButton(props: StarButtonProps) {
         }}>{notice}</div>
       ) : null}
       {open && preview !== null ? (
-        <div style={OVERLAY} onClick={close}>
-          <div style={CARD} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div style={OVERLAY}>
+          <div style={CARD} role="dialog" aria-modal="true">
             <div style={{ fontSize: 15, fontWeight: 700 }}>提示词优化预览</div>
-            <div style={{ fontSize: 11.5, color: TOKEN.labelTertiary }}>
-              {preview.historyCount === 0
-                ? STAR_NO_CONTEXT_NOTICE
-                : `上下文估算 ${preview.ctxTokens} tokens · 历史消息 ${preview.historyCount} 条 · 丢失行 ${preview.droppedLines}`}
-            </div>
+            {preview.historyCount === 0 ? (
+              <div style={{ fontSize: 11.5, color: TOKEN.labelTertiary }}>{STAR_NO_CONTEXT_NOTICE}</div>
+            ) : null}
             {preview.missingAuthority.length > 0 ? (
-              <div style={{ border: `1px solid ${tint(TOKEN.warnPrimary, 0.5)}`, borderRadius: 8, padding: '6px 8px', fontSize: 12, color: TOKEN.warnPrimary }}>
-                权威段缺失警告：{preview.missingAuthority.slice(0, 3).map((m) => `#${m.index} ${m.text}`).join('；')}
-                {preview.missingAuthority.length > 3 ? ` 等 ${preview.missingAuthority.length} 段` : ''}
+              <div style={{ border: `1px solid ${tint(TOKEN.warnPrimary, 0.5)}`, borderRadius: 8, padding: "6px 8px", fontSize: 12, color: TOKEN.warnPrimary }}>
+                关键事实未保留：{preview.missingAuthority.slice(0, 3).map((m) => m.text).join("；")}
+                {preview.missingAuthority.length > 3 ? ` 等 ${preview.missingAuthority.length} 处` : ""}
               </div>
             ) : null}
-            <div style={{ fontSize: 12, color: TOKEN.labelSecondary }}>{summaryOfVerdicts(preview.verdicts)}</div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>diff</div>
-              <DiffView original={preview.originalPrompt} product={edited} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>优化后 prompt（可编辑，确认即终稿）</div>
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>优化后 prompt（可编辑，确认即发送）</div>
               <textarea
                 value={edited}
                 onChange={(e) => setEdited(e.target.value)}
@@ -274,10 +247,20 @@ export function StarButton(props: StarButtonProps) {
                 }}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <details style={{ fontSize: 12, color: TOKEN.labelSecondary }}>
+              <summary style={{ cursor: "pointer" }}>
+                详情（历史 {preview.historyCount} 条 · 上下文 {preview.ctxTokens} tokens · {verdictSummary(preview.verdicts)} · 丢行 {preview.droppedLines}）
+              </summary>
+              <div style={{ ...CODE, maxHeight: 160, overflow: "auto", marginTop: 6 }}>
+                {preview.verdicts.length === 0 ? '（无裁决）' : preview.verdicts.map((v, i) => (
+                  <div key={i}>{v.kind}: {v.summary}</div>
+                ))}
+              </div>
+            </details>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <CeButton variant="ghost" onClick={close} disabled={applying}>取消</CeButton>
               <CeButton variant="primary" onClick={() => { void runApply() }} disabled={applying}>
-                {applying ? '应用中…' : '应用'}
+                {applying ? '发送中…' : '应用并发送'}
               </CeButton>
             </div>
           </div>

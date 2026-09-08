@@ -12,7 +12,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
-  checkAuthoritySpans, extractAuthorityCandidates, isTrivialOptimizePrompt, parseOptimizeOutput, renderOptimizePrompt,
+  checkAuthoritySpans, extractAuthorityCandidates, isTrivialOptimizePrompt, mandatoryCandidateIndexes,
+  parseOptimizeOutput, renderOptimizePrompt, stripProductMeta,
   type OptimizeParseResult, type OptimizeVerdict,
 } from '../core/optimize.ts'
 import { backfillDossier, dossierStorageKey, isTrivialMessage, sessionScopedTaskId, type DossierBody } from '../core/dossier.ts'
@@ -21,7 +22,7 @@ import { foldSegmentState } from '../core/units.ts'
 import { factsFromSessionEvents } from '../core/ledger/facts.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { estimateTokens } from '../core/ledger/fold.ts'
-import { streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
+import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
@@ -41,6 +42,9 @@ export interface StarPreviewDto {
 }
 
 export const STAR_VERDICT_SUMMARY_MAX_CHARS = 120
+
+/** ★ 断面推理档（P14d §3）：改写任务不需要长思考；模型不支持时探测返回 undefined，按默认档发。 */
+export const OPTIMIZE_REASONING_EFFORT = 'off'
 
 /** 八种 kind 的行文（长度钳制到 STAR_VERDICT_SUMMARY_MAX_CHARS）。 */
 export function summarizeVerdict(verdict: OptimizeVerdict): StarVerdictView {
@@ -81,7 +85,7 @@ export interface OptimizeArtifactBody {
 
 export function buildArtifactBody(input: {
   parsed: OptimizeParseResult; product: string | null; previewId: string; taskId: string; sessionId: string
-  appliedAt: number; previousVersion?: number
+  appliedAt: number; previousVersion?: number; keptSpanIndexes?: readonly number[]
 }): OptimizeArtifactBody {
   const { parsed } = input
   return {
@@ -90,7 +94,8 @@ export function buildArtifactBody(input: {
       fileSignatures: [...parsed.judgeTable.fileSignatures], keywords: [...parsed.judgeTable.keywords],
     },
     product: input.product, verdicts: parsed.verdicts.map(summarizeVerdict),
-    shear: parsed.shearItems.map((item) => ({ ...item })), keptSpanIndexes: [...parsed.keptSpanIndexes],
+    shear: parsed.shearItems.map((item) => ({ ...item })),
+    keptSpanIndexes: [...(input.keptSpanIndexes ?? parsed.keptSpanIndexes)],
     taskId: input.taskId, sessionId: input.sessionId, previewId: input.previewId, appliedAt: input.appliedAt,
   }
 }
@@ -114,7 +119,12 @@ export interface StarHost {
   dispose(): void
 }
 
-interface PendingPreview { sessionId: string; session: Session; taskId: string; dossier: DossierBody; parsed: OptimizeParseResult; applied: boolean }
+interface PendingPreview {
+  sessionId: string; session: Session; taskId: string; dossier: DossierBody; parsed: OptimizeParseResult
+  /** P14d：必保事实 ∪ 模型 KEEP（apply 落产物与账本用同一集合）。 */
+  enforcedSpanIndexes: number[]
+  applied: boolean
+}
 
 /** 会话 id 结构读取（与 commands/input 同口径；domains 不 import 运行期 harness）。 */
 export function readSessionId(session: { header?: { id?: unknown }; id?: unknown }): string {
@@ -181,12 +191,16 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     let usage: CeLlmUsage | undefined
     let latencyMs = 0
     let errorCode: string | undefined
+    let sentEffort: string | undefined
     if (deps.llmCtx === undefined) errorCode = STAR_BRIDGE_CODES.llmFailed
     else {
       const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
+      // P14d §3：推理档能力探测——模型未声明该档就不传（宿主对不支持的档直接抛错）。
+      sentEffort = await resolveReasoningEffort(deps.llmCtx, provider, model, OPTIMIZE_REASONING_EFFORT, logger)
       const startedAt = now()
       const options: CeGenerateOptions = {
         provider, model, purpose: 'context-economy-optimize', temperature: 0,
+        ...(sentEffort === undefined ? {} : { reasoningEffort: sentEffort }),
         messages: [{ role: 'user', content: [{ type: 'text', text: rendered.prompt }], source: { kind: 'user' }, id: 'optimize' }] as never,
       }
       let raw = ''
@@ -202,15 +216,21 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
         if (parsed.product === null && parsed.verdicts.length === 0) errorCode = STAR_BRIDGE_CODES.parseFailed
       }
     }
-    const product = parsed === undefined ? null : parsed.product
-    const missingAuthority = checkAuthoritySpans(product ?? '', candidates, parsed?.keptSpanIndexes ?? [])
+    // P14d §2：产品开头元注释机械剥离（剥空则回退原文——失败默认保留）。
+    const stripped = stripProductMeta(parsed === undefined ? null : parsed.product)
+    const product = stripped.product
+    // P14d §1：必保事实（路径/引号/数值）与模型 KEEP 取并集后做包含性检查。
+    const enforcedSpanIndexes = [...new Set([...(parsed?.keptSpanIndexes ?? []), ...mandatoryCandidateIndexes(candidates)])]
+    const missingAuthority = checkAuthoritySpans(product ?? '', candidates, enforcedSpanIndexes)
       .missing.map((candidate) => ({ index: candidate.index, text: candidate.text }))
     emitRun(session, previewRunFact({ previewId, taskId, sessionId: input.sessionId, at }, {
       // short 保留为账本字段，P14c 语义修订为「无历史素材」（= historyCount === 0）。
       short: rendered.historyCount === 0, historyCount: rendered.historyCount,
       ctxTokens: rendered.ctxTokens, productChars: product?.length ?? 0,
       verdictCount: parsed?.verdicts.length ?? 0, droppedLines: parsed?.droppedLines ?? 0,
-      keptSpanCount: parsed?.keptSpanIndexes.length ?? 0, missingAuthorityCount: missingAuthority.length,
+      keptSpanCount: enforcedSpanIndexes.length, missingAuthorityCount: missingAuthority.length,
+      metaStrippedLines: stripped.stripped,
+      requestedEffort: OPTIMIZE_REASONING_EFFORT, sentEffort,
       shearPairs: parsed?.shearItems.length ?? 0, shearTokens: parsed === undefined ? 0 : shearTokensOf(dossier, parsed.shearItems),
       latencyMs, llmUsage: usage, errorCode,
     }))
@@ -230,7 +250,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       const oldest = pending.keys().next().value
       if (oldest !== undefined) pending.delete(oldest)
     }
-    pending.set(previewId, { sessionId: input.sessionId, session, taskId, dossier, parsed: parsed!, applied: false })
+    pending.set(previewId, { sessionId: input.sessionId, session, taskId, dossier, parsed: parsed!, enforcedSpanIndexes, applied: false })
     return { ok: true, value: dto }
   }
 
@@ -266,7 +286,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     const previous = storage.getEntity('optimize_artifact', artifactKey)
     const body = buildArtifactBody({
       parsed: item.parsed, product: input.editedProduct, previewId: input.previewId, taskId: item.taskId,
-      sessionId: item.sessionId, appliedAt: at,
+      sessionId: item.sessionId, appliedAt: at, keptSpanIndexes: item.enforcedSpanIndexes,
       previousVersion: (previous?.body as { judgeTable?: { version?: number } } | undefined)?.judgeTable?.version,
     })
     try {

@@ -1,27 +1,17 @@
 /**
- * P14a 星标纯逻辑/桥测试（docs/implement/P14a-star-button-ui.md §3.6）。
- * 零 React、零 host import：只验证 diff、mock 预览、汇总与桥契约。
+ * P14a 星标纯逻辑/桥测试（docs/implement/P14a-star-button-ui.md §3.6；P14d 删 diff 后收敛）。
+ * 零 React、零 host import：只验证门控镜像、mock 预览、裁决摘要与桥契约。
  */
 import { describe, expect, it } from 'vitest'
 import { createMockStarBridge } from '../client/star/star-bridge.ts'
-import { clampPreviewText, diffLines, parseMockPreview, summaryOfVerdicts } from '../client/star/star-model.ts'
+import { isTrivialPrompt, parseMockPreview, verdictSummary } from '../client/star/star-model.ts'
 
-describe('star diff', () => {
-  it('纯新增/纯删除/相同/空输入', () => {
-    expect(diffLines('', 'a\nb')).toEqual([{ type: 'add', text: 'a' }, { type: 'add', text: 'b' }])
-    expect(diffLines('a\nb', '')).toEqual([{ type: 'del', text: 'a' }, { type: 'del', text: 'b' }])
-    expect(diffLines('a\nb', 'a\nb')).toEqual([{ type: 'same', text: 'a' }, { type: 'same', text: 'b' }])
-    expect(diffLines('', '')).toEqual([])
-  })
-
-  it('混合同步：删除旧行、新增新行', () => {
-    const out = diffLines('one\ntwo\nthree', 'one\nthree\nfour')
-    expect(out).toEqual([
-      { type: 'same', text: 'one' },
-      { type: 'del', text: 'two' },
-      { type: 'same', text: 'three' },
-      { type: 'add', text: 'four' },
-    ])
+describe('star trivial prompt', () => {
+  it('去噪后不足 4 字为极短（与 host TRIVIAL_MESSAGE_MAX_CHARS 同口径）', () => {
+    expect(isTrivialPrompt('好')).toBe(true)
+    expect(isTrivialPrompt('继续')).toBe(true)
+    expect(isTrivialPrompt('继续做完')).toBe(false)
+    expect(isTrivialPrompt('   ')).toBe(true)
   })
 })
 
@@ -44,20 +34,12 @@ describe('star mock preview', () => {
   })
 })
 
-describe('star text helpers', () => {
-  it('clampPreviewText 保留超长头尾', () => {
-    const text = 'a'.repeat(5000)
-    const out = clampPreviewText(text, 100)
-    expect(out.length).toBeLessThan(text.length)
-    expect(out).toContain('…[preview truncated]…')
-    expect(out.startsWith('a')).toBe(true)
-    expect(out.endsWith('a')).toBe(true)
-  })
-
-  it('summaryOfVerdicts 空与多行', () => {
-    expect(summaryOfVerdicts([])).toBe('（无裁决）')
-    expect(summaryOfVerdicts([{ kind: 'KEEP', summary: '保留' }, { kind: 'ASPECT', summary: '完成标准' }]))
-      .toBe('KEEP: 保留；ASPECT: 完成标准')
+describe('star verdict summary', () => {
+  it('计数摘要：空、单类、多类', () => {
+    expect(verdictSummary([])).toBe('（无裁决）')
+    expect(verdictSummary([
+      { kind: 'class', summary: 'a' }, { kind: 'class', summary: 'b' }, { kind: 'shear', summary: 'c' },
+    ])).toBe('裁决 3（class 2 · shear 1）')
   })
 })
 

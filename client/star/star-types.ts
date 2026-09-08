@@ -59,9 +59,3 @@ export interface StarButtonInjected {
   readonly star: StarHostBridge
 }
 
-/** 行级 diff 类型。 */
-export type DiffType = 'same' | 'add' | 'del'
-export interface DiffLine {
-  readonly type: DiffType
-  readonly text: string
-}

@@ -58,6 +58,7 @@ describe('R2 ledger replay (§32)', () => {
       optimizePromptTokens: { inputTokens: 250, outputTokens: 90, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 },
       verdictBackfill: { count: 2, conflicts: 1 },
       shearAtStar: { pairs: 1, tokens: 30 },
+      metaStrippedLines: 0,
     })
   })
 

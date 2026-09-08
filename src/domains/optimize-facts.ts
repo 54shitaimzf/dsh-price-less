@@ -36,6 +36,11 @@ export interface OptimizeRunFactData {
   droppedLines?: number
   keptSpanCount?: number
   missingAuthorityCount?: number
+  /** P14d：产品开头被机械剥离的元注释行数（prompt v2 效果读数）。 */
+  metaStrippedLines?: number
+  /** P14d：★ 断面请求的推理档（adapter 词汇，如 off）与实发档（模型不支持时省略）。 */
+  requestedEffort?: string
+  sentEffort?: string
   shearPairs?: number
   shearTokens?: number
   latencyMs?: number
@@ -89,6 +94,7 @@ export function foldOptimizeRunFacts(facts: readonly OptimizeRunFactData[]): Opt
       backfillConflicts: applied?.backfillConflicts ?? 0,
       shearPairs: applied?.shearPairs ?? 0,
       shearTokens: applied?.shearTokens ?? 0,
+      metaStrippedLines: preview?.metaStrippedLines ?? 0,
     }
     if (preview?.llmUsage !== undefined) record.llmUsage = preview.llmUsage
     records.push(record)

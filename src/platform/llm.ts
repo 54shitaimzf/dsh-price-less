@@ -36,8 +36,12 @@ export type CeAuxPurpose = (typeof CE_AUX_PURPOSES)[number]
 /** 宿主已支持 purpose 与插件自定义 purpose 的并集（插件侧宽化形态）。 */
 export type CePurpose = CeAuxPurpose | 'compaction' | 'session-title'
 
-/** 辅助调用选项：除 purpose 宽化外，与宿主 GenerateOptions 完全同构。 */
-export type CeGenerateOptions = Omit<GenerateOptions, 'purpose'> & { purpose?: CePurpose }
+/** 辅助调用选项：除 purpose / reasoningEffort 宽化外，与宿主 GenerateOptions 完全同构。 */
+export type CeGenerateOptions = Omit<GenerateOptions, 'purpose' | 'reasoningEffort'> & {
+  purpose?: CePurpose
+  /** 推理档：宿主用品牌类型，插件侧只持有 adapter 字符串（P14d §3 省成本），收窄仍只在 toHarnessGenerateOptions。 */
+  reasoningEffort?: string
+}
 
 /**
  * 插件侧唯一 cast 点：把宽化 purpose 选项收窄为宿主 GenerateOptions。
@@ -50,6 +54,8 @@ export function toHarnessGenerateOptions(options: CeGenerateOptions): GenerateOp
 /** dsh-llm 的最小调用面（P5 端口消费；此处只声明，不发调用）。 */
 export interface CeLlmStreamService {
   stream(options: GenerateOptions): AsyncIterable<StreamChunk>
+  /** 可选能力：解析某模型声明的推理档（P14d §3 探测用；缺失即视为不支持）。 */
+  resolveModelInfo?(provider: string, model: string, signal?: AbortSignal): Promise<{ reasoning?: { efforts: readonly { id: string }[] } } | undefined>
 }
 
 /** 解析 llm 服务（可选能力；未装配 → undefined，调用侧 fail-lazy）。 */
@@ -94,6 +100,37 @@ export function toCeLlmUsage(usage: TokenUsage): CeLlmUsage {
   if (usage.cacheWriteTokens !== undefined) result.cacheWriteTokens = usage.cacheWriteTokens
   if (usage.reasoningTokens !== undefined) result.reasoningTokens = usage.reasoningTokens
   return result
+}
+
+/**
+ * 推理档能力探测（P14d §3）：只有目标模型真实声明该档才返回它，否则返回 undefined。
+ * 宿主对不支持的档**直接抛错**（UNSUPPORTED_REASONING_EFFORT，无静默回退），
+ * 所以必须先探测再传——否则用户换模型会让 ★/判别整条链失败。
+ * 命中缓存以 provider/model/desired 为键；探测失败**不缓存**（瞬时失败不永久降级）。
+ */
+const effortSupportCache = new Map<string, string | undefined>()
+
+export async function resolveReasoningEffort(
+  ctx: Pick<Context, 'llm'>,
+  provider: string,
+  model: string,
+  desired: string,
+  logger?: { warn: (...args: unknown[]) => void },
+): Promise<string | undefined> {
+  const key = `${provider}\u0000${model}\u0000${desired}`
+  if (effortSupportCache.has(key)) return effortSupportCache.get(key)
+  const service = resolveLlmService(ctx)
+  if (service?.resolveModelInfo === undefined) return undefined
+  try {
+    const info = await service.resolveModelInfo(provider, model)
+    const supported = info?.reasoning?.efforts.some((effort) => effort.id === desired) === true
+    const result = supported ? desired : undefined
+    effortSupportCache.set(key, result)
+    return result
+  } catch (e) {
+    logger?.warn('context-economy: reasoning effort probe failed (fail-lazy, no cache)', e instanceof Error ? e.message : String(e))
+    return undefined
+  }
 }
 
 /**

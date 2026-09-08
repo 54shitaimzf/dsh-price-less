@@ -116,7 +116,8 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
   两处同扩，测试断言一致性）。配置面（§6）按此重填。
 - **星标按钮**：`conversation.input.right` 槽注册 → 真实桥 = Connection RPC `/context-economy`
   （`client/star/star-bridge.ts` → `src/platform/star-bridge.ts`，[13 §3.11](13-harness-plugin-spec.md)）→
-  host 断面方法（时序 B，[10 §4](10-wiring.md)）→ 预览 diff 弹层 → 确认后 `setDraft` 终稿。
+  host 断面方法（时序 B，[10 §4](10-wiring.md)）→ 预览弹层（P14d：删 diff，裁决折叠）→
+  确认后 `setDraft` + `submit()` **直接发送**。
 - **度量消息列表可视化**（加分项，R3+）：client 渲染 `context-economy/*` 会话事件为
   消息流内轻量条目（剪除了多少、压缩了什么——用户可见可审计）。
 - 模型路由：`MODEL_PRESET_ROUTES` + `session.modelCatalog()`（H11 remote）+

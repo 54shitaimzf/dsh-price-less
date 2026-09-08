@@ -15,8 +15,10 @@ import {
   extractAuthorityCandidates,
   foldOptimizeLedger,
   isTrivialOptimizePrompt,
+  mandatoryCandidateIndexes,
   parseOptimizeOutput,
   renderOptimizePrompt,
+  stripProductMeta,
   validateSkillName,
   type AuthorityCandidate,
   type OptimizeRecord,
@@ -78,6 +80,8 @@ describe('optimize render', () => {
       expect(result.prompt).toContain(section)
     }
     expect(result.prompt).toContain(OPTIMIZE_PROMPT_OUTPUT)
+    expect(OPTIMIZE_PROMPT_HEAD).toContain('禁止分节标题与标签')
+    expect(OPTIMIZE_PROMPT_HEAD).toContain('关键事实逐字保真')
     expect(result.prompt).toContain('build a parser')
     expect(result.prompt).toContain('build-fix')
     const one = JSON.stringify(result)
@@ -87,13 +91,34 @@ describe('optimize render', () => {
 })
 
 describe('optimize candidates', () => {
-  it('候选提取：非空行、编号从 1、40 上限、空返回空', () => {
-    expect(extractAuthorityCandidates('  a \n\n b \n c ')).toEqual([
-      { index: 1, text: 'a' }, { index: 2, text: 'b' }, { index: 3, text: 'c' },
+  it('事实级预抽：路径/引号/数值必保，约束从句可保；按出现顺序编号、上限 40、空返回空', () => {
+    const prompt = '改 docs/02 §4 的门控，跑 npm run gate（至少 3 次），不要动 "docs/05" 的宪法。'
+    expect(extractAuthorityCandidates(prompt)).toEqual([
+      { index: 1, text: 'docs/02', mandatory: true },
+      { index: 2, text: '§4', mandatory: true },
+      { index: 3, text: '跑 npm run gate（至少 3 次）', mandatory: false },
+      { index: 4, text: '3 次', mandatory: true },
+      { index: 5, text: '不要动 "docs/05" 的宪法', mandatory: false },
+      { index: 6, text: 'docs/05', mandatory: true },
     ])
-    const many = Array.from({ length: 45 }, (_, i) => `line${i + 1}`).join('\n')
+    expect(mandatoryCandidateIndexes(extractAuthorityCandidates(prompt))).toEqual([1, 2, 4, 6])
+    expect(extractAuthorityCandidates('读取 src/a.ts 并运行 npm test')).toEqual([{ index: 1, text: 'src/a.ts', mandatory: true }])
+    const many = Array.from({ length: 45 }, (_, i) => `src/f${i + 1}.ts`).join(' ')
     expect(extractAuthorityCandidates(many)).toHaveLength(40)
+    expect(extractAuthorityCandidates('do it')).toEqual([])
     expect(extractAuthorityCandidates('')).toEqual([])
+  })
+})
+
+describe('optimize product meta strip', () => {
+  it('开头元注释行机械剥离；正文中的同类文字不动；剥空回退原文', () => {
+    expect(stripProductMeta('原样保留用户提示词\n目标：改门控')).toEqual({ product: '目标：改门控', stripped: 1 })
+    expect(stripProductMeta('以下为优化后的提示词：\n正文')).toEqual({ product: '正文', stripped: 1 })
+    expect(stripProductMeta('注意：\n正文')).toEqual({ product: '正文', stripped: 1 })
+    expect(stripProductMeta('原样保留 docs/02 的措辞')).toEqual({ product: '原样保留 docs/02 的措辞', stripped: 0 })
+    expect(stripProductMeta('正文\n原样保留用户提示词')).toEqual({ product: '正文\n原样保留用户提示词', stripped: 0 })
+    expect(stripProductMeta('原样保留用户提示词')).toEqual({ product: '原样保留用户提示词', stripped: 0 })
+    expect(stripProductMeta(null)).toEqual({ product: null, stripped: 0 })
   })
 })
 
@@ -180,8 +205,8 @@ describe('optimize authority', () => {
 describe('optimize fold', () => {
   it('度量 fold：手算聚合、空记录零值、字节稳定', () => {
     const records: OptimizeRecord[] = [
-      { time: 1, short: false, ctxTokens: 10, llmUsage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, cacheReadTokens: 4, cacheWriteTokens: 5, reasoningTokens: 6 }, backfillCount: 2, backfillConflicts: 1, shearPairs: 3, shearTokens: 30 },
-      { time: 2, short: true, ctxTokens: 20, llmUsage: { inputTokens: 10, outputTokens: 20 }, backfillCount: 1, backfillConflicts: 0, shearPairs: 4, shearTokens: 40 },
+      { time: 1, short: false, ctxTokens: 10, llmUsage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, cacheReadTokens: 4, cacheWriteTokens: 5, reasoningTokens: 6 }, backfillCount: 2, backfillConflicts: 1, shearPairs: 3, shearTokens: 30, metaStrippedLines: 2 },
+      { time: 2, short: true, ctxTokens: 20, llmUsage: { inputTokens: 10, outputTokens: 20 }, backfillCount: 1, backfillConflicts: 0, shearPairs: 4, shearTokens: 40, metaStrippedLines: 1 },
       { time: 3, short: false, ctxTokens: 30, backfillCount: 0, backfillConflicts: 2, shearPairs: 1, shearTokens: 10 },
     ]
     const led = foldOptimizeLedger(records)
@@ -189,7 +214,8 @@ describe('optimize fold', () => {
     expect(led.optimizePromptTokens).toEqual({ inputTokens: 11, outputTokens: 22, totalTokens: 3, cacheReadTokens: 4, cacheWriteTokens: 5, reasoningTokens: 6 })
     expect(led.verdictBackfill).toEqual({ count: 3, conflicts: 3 })
     expect(led.shearAtStar).toEqual({ pairs: 8, tokens: 80 })
-    expect(foldOptimizeLedger([])).toEqual({ optimizeCount: 0, optimizePromptTokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 }, verdictBackfill: { count: 0, conflicts: 0 }, shearAtStar: { pairs: 0, tokens: 0 } })
+    expect(led.metaStrippedLines).toBe(3)
+    expect(foldOptimizeLedger([])).toEqual({ optimizeCount: 0, optimizePromptTokens: { inputTokens: 0, outputTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 }, verdictBackfill: { count: 0, conflicts: 0 }, shearAtStar: { pairs: 0, tokens: 0 }, metaStrippedLines: 0 })
     const one = JSON.stringify(led)
     expect(JSON.stringify(foldOptimizeLedger(records))).toBe(one)
     expect(JSON.stringify(foldOptimizeLedger(records))).toBe(one)

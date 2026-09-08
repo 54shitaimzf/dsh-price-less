@@ -265,7 +265,7 @@ inputActions: InputActions
 
 ```ts
 export interface InputActions {
-  setDraft(text: string): void       // 替换整个草稿（P14a 应用终稿入口）
+  setDraft(text: string): void       // 替换整个草稿（P14a 终稿入口；P14d 与 submit 连用 = 直接发送）
   addAttachments(ids: readonly DraftAttachmentId[]): boolean
   removeAttachment(id: DraftAttachmentId): boolean
   pruneAttachments(ids: readonly DraftAttachmentId[]): void
@@ -396,7 +396,7 @@ webserver/credentials/attachment。
 | `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物）；P14c：极短短路 + 上下文读会话事件 + DTO `historyCount` | 已施工（P14b1 / P14c） |
 | `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
-| `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft`、`useInput`、`StarHostBridge` | 已施工（P14a） |
+| `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft` + `submit`（P14d 确认即发送）、`useInput`、`StarHostBridge` | 已施工（P14a / P14d） |
 | `client/star/star-protocol.ts` | 两侧独立声明的 channel/端点常量 + `StarPreviewData`/apply 形状守卫 | 已施工（P14b2，§3.11） |
 | `client/star/star-bridge.ts` | `ctx.get('connection')` → `ConnectionHandle.rpc.call`（真实桥）+ mock（测试资产） | 已施工（P14b2） |
 

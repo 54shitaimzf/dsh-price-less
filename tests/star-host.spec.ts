@@ -54,12 +54,19 @@ function userEvents(messages: DossierBody['messages']): unknown[] {
   }))
 }
 
-function makeLlm(output: string, calls: { count: number; prompts: string[] }, finishKind = 'stop') {
+function makeLlm(
+  output: string,
+  calls: { count: number; prompts: string[]; options: Array<Record<string, unknown>> },
+  finishKind = 'stop',
+  efforts?: string[],
+) {
   return {
     llm: {
+      resolveModelInfo: efforts === undefined ? undefined : async () => ({ reasoning: { efforts: efforts.map((id) => ({ id })) } }),
       stream: async function* (options: { messages: Array<{ content: Array<{ text: string }> }> }) {
         calls.count++
         calls.prompts.push(options.messages[0]!.content[0]!.text)
+        calls.options.push(options as unknown as Record<string, unknown>)
         yield { type: 'text-delta', index: 0, text: output }
         yield { type: 'finish', reason: { kind: finishKind } }
       },
@@ -75,6 +82,10 @@ interface MountInput {
   skills?: boolean
   finishKind?: string
   frame?: boolean
+  /** 推理档探测：给定即让假 llm 声明这些档（P14d §3）。 */
+  efforts?: string[]
+  /** 覆盖判别路由（探测缓存键隔离用）。 */
+  model?: string
   dossier?: { messages: DossierBody['messages']; annotations?: DossierBody['annotations'] }
 }
 
@@ -88,12 +99,12 @@ function mount(input: MountInput = {}) {
   if (input.frame === true) seed[projectFrameStorageKey('ws')] = { version: 1, body: createProjectFrame('目标', ['方面'], CATALOG).body }
   const storage = makeStorage(seed)
   const facts: OptimizeRunFactData[] = []
-  const calls = { count: 0, prompts: [] as string[] }
+  const calls = { count: 0, prompts: [] as string[], options: [] as Array<Record<string, unknown>> }
   const sessionEvents = input.dossier === undefined ? [] : userEvents(input.dossier.messages)
   const session = input.session === false ? undefined : makeSession(sessionEvents, sessionId)
   const host = mountStarHost({
     storage: storage as never,
-    getConfig: () => ({ discriminator: {} }) as never,
+    getConfig: () => ({ discriminator: input.model === undefined ? {} : { provider: 'probe', model: input.model } }) as never,
     logger,
     workspace: 'ws',
     now: () => 5000,
@@ -101,7 +112,7 @@ function mount(input: MountInput = {}) {
       skills: { snapshot: async () => ({ skills: CATALOG.skills.map((s) => ({ ...s, invocation: { modelInvocable: true, userInvocable: true } })), complete: true }) },
       logger: () => logger,
     } as never,
-    llmCtx: input.llm === false ? undefined : makeLlm(input.output ?? FULL_OUTPUT, calls, input.finishKind ?? 'stop'),
+    llmCtx: input.llm === false ? undefined : makeLlm(input.output ?? FULL_OUTPUT, calls, input.finishKind ?? 'stop', input.efforts),
     resolveSession: session === undefined ? undefined : () => session,
     emitFact: (_session: unknown, _type: string, data: unknown) => { facts.push(data as OptimizeRunFactData) },
   })
@@ -136,7 +147,8 @@ describe('star host service', () => {
     expect(calls.prompts[0]).toContain('[候选权威段]')
     expect(storage.puts).toHaveLength(0)
     expect(facts).toHaveLength(1)
-    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0, short: false, historyCount: 2 })
+    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0, short: false, historyCount: 2, requestedEffort: 'off' })
+    expect(facts[0]!.sentEffort).toBeUndefined()
     expect(facts[0]!.llmUsage).toBeUndefined()
     expect(renderPreviewCommandText(dto)).toContain('断面预览')
     expect(readSessionId(makeSession([], 'sid-2'))).toBe('sid-2')
@@ -160,6 +172,34 @@ describe('star host service', () => {
     expect(dto.product).toBe(PROMPT)
     expect(calls.count).toBe(1)
     expect(facts[0]).toMatchObject({ short: true, historyCount: 0, productChars: PROMPT.length })
+  })
+
+  it('2c. P14d：产品开头元注释机械剥离 + 必保事实并入包含性检查 + 推理档探测', async () => {
+    const metaOutput = '[PRODUCT]\n原样保留用户提示词\n' + PROMPT + '\n\n[VERDICTS]\nKEEP 1\n'
+    const { host, facts, calls } = mount({
+      output: metaOutput,
+      model: 'probe-meta',
+      efforts: ['off', 'high'],
+      dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] },
+    })
+    const dto = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))
+    expect(dto.product).toBe(PROMPT)
+    expect(dto.missingAuthority).toEqual([])
+    expect(facts[0]).toMatchObject({ metaStrippedLines: 1, requestedEffort: 'off', sentEffort: 'off', keptSpanCount: 1 })
+    expect(calls.options[0]!.reasoningEffort).toBe('off')
+  })
+
+  it('2d. 必保事实缺失 → 警告；模型未声明推理档 → 不传 effort', async () => {
+    const { host, facts, calls } = mount({
+      output: '[PRODUCT]\n重写后的提示词\n\n[VERDICTS]\n',
+      model: 'probe-plain',
+      dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] },
+    })
+    const dto = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))
+    expect(dto.missingAuthority).toEqual([{ index: 1, text: 'src/a.ts' }])
+    expect(facts[0]).toMatchObject({ missingAuthorityCount: 1, requestedEffort: 'off' })
+    expect(facts[0]!.sentEffort).toBeUndefined()
+    expect(Object.hasOwn(calls.options[0]!, 'reasoningEffort')).toBe(false)
   })
 
   it('3. 解析失败：乱码输出 → CE_STAR_PARSE_FAILED 且零 putEntity', async () => {
@@ -206,7 +246,7 @@ describe('star host service', () => {
     const artifact = storage.data.get('optimize_artifact:latest:ws')!.body as Record<string, unknown>
     expect(artifact).toMatchObject({
       product: '用户编辑后的产品', taskId: 's1:task-1', sessionId: 's1', previewId, appliedAt: 5000,
-      shear: [{ startSeq: 5, endSeq: 5, note: '结论' }], keptSpanIndexes: [],
+      shear: [{ startSeq: 5, endSeq: 5, note: '结论' }], keptSpanIndexes: [1],
     })
     expect(readJudgeTable(storage as never, 'ws')).toEqual({ version: 1, aspects: [], fileSignatures: [], keywords: [] })
     expect(facts.map((f) => f.phase)).toEqual(['preview', 'applied'])

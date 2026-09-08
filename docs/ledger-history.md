@@ -1610,3 +1610,43 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 
 **验收**：`npm run gate` 绿（252 用例）；`scripts/verify-p14c.mjs` 新增 §⑤ 静态断言——
 `src/domains/input.ts` 不得出现 `trigger: 'table'` 短路、必须接 `tableShadow` → PASS。
+## 35. 账本快照 §35：断面产品契约 + 弹层瘦身 + 推理档（P14d）
+
+> 触发：用户四问——(1) 影子记账数据够不够用来优化？(2) 优化提示词怎么设计的？(3) 产品里的
+> "原样保留用户提示词"该不该出现、预览是不是就该大胆改？(4) 怎么防过度思考、降费用。
+
+**① 影子数据现状（诚实记录）**：真机 `tableShadow` 记录 **0 条**——`b7225f9` 尚未重启加载，
+且 `discriminator.auto` 默认 off（`src/domains/input.ts:153` 直接 return）。现有 356 条
+`judge-records.jsonl` 是 v2.2 旧版产物，无 `tableShadow` 字段，不能当影子数据用。
+要证"不漏边界"（0 漏 / 300 命中 → 95% 上界 1%）按 7.9% 命中率需 ~3800 条用户消息 ≈ 历史全量
+（161 条）的 24 倍，而 300 次命中只省约 **$0.07**。结论：对表永远赚不回风险，
+**保留为零成本遥测，不再等它做决策**。
+
+**② 断面 prompt 设计缺陷（本次修正的根因）**：旧 `extractAuthorityCandidates` 按**行**切分——
+单行提示词退化为「整条原文 = 唯一候选」，模型 `KEEP 1` 后 `checkAuthoritySpans` 的包含性检查
+**结构性要求产品逐字包含原文**。真机那次断面（`at=1788871019448`）：`keptSpanCount` 1 /
+`missingAuthorityCount` 0 / `productChars` 684 → 产品被锁成"原文 + 附加"；"原样保留用户提示词"
+不是模型乱来，是契约逼出来的。
+
+**③ 成本读数（改前）**：同一次断面 `outputTokens` **9657**，其中 `reasoningTokens` **8863（91.8%）**，
+`latencyMs` **34641**，而产品仅 684 字符。根因：插件从未设置 `reasoningEffort`，DeepSeek adapter
+默认 `high`（harness `llm-deepseek/src/index.ts:132`），会话主模型选的是 `max`。
+
+**④ 口径变化**：
+
+| 项 | §34 口径 | §35 口径（P14d） |
+|---|---|---|
+| prompt 版本 | `OPTIMIZE_PROMPT_VERSION` 1 | **2**：关键事实保真 + 大胆重写 + 禁分节标签/元注释 |
+| 候选权威段 | 按行切分（单行 → 整条原文） | **事实级预抽**：路径/引号文本/版本数值**必保**（机械强制）+ 约束从句可保（模型 KEEP） |
+| 保真检查 | 仅模型 KEEP 的 span | **必保事实 ∪ 模型 KEEP** 的包含性检查 |
+| 产品净化 | 无 | 开头连续元注释行**机械剥离**（窄口径；剥空回退原文），`metaStrippedLines` 入账 |
+| ★ 推理档 | 未设置（跟随模型默认 high） | 能力探测后传 **`off`**；不支持则不传（宿主对不支持的档直接抛错）；账本记 `requestedEffort`/`sentEffort` |
+| 预览弹层 | 顶部统计 + 裁决平铺一行 + 行级 diff + textarea | **textarea（唯一交付面）+ 关键事实缺失警告 + 无历史提示 + 折叠详情（计数）**；点侧面不关闭；确认 → `setDraft` + `submit()` **直接发送** |
+
+**⑤ 验收**：`npm run gate` 绿（253 用例 / 29 文件）；`npm run typecheck:tests` 绿；build 绿；
+`node scripts/verify-p14d.mjs` → **P14D VERIFY PASS (18 checks)**（双跑逐字节一致）；
+`node scripts/verify-p14c.mjs` 无回归（P14C VERIFY PASS）。
+
+**⑥ 待真机读数（下一次重启后）**：`metaStrippedLines` 应快速降到 0（prompt v2 生效）；
+`sentEffort: 'off'` 出现且 `outputTokens` 从 ~9600 降到 ~800 量级、`latencyMs` 从 ~35s 降到 ~5s；
+`missingAuthorityCount` 只在模型真的丢路径/数值时 > 0。
