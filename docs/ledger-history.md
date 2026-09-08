@@ -2731,4 +2731,40 @@ fact-leak.ts）；`AGENTS.md`（双预算 + 产物形状 + F9 进度）；`docs/
 
 **未落地**：F9g 回放验收（`scripts/verify-f9.mjs` + 真机重启冒烟 + 账本对照）。
 
+---
+
+## §68 F9g 回放验收：合成夹具 15/15 + 真机对照（2026-09-09；提交 = 本账本同提交）
+
+**`scripts/verify-f9.mjs`（可进 CI，纯回放）**：15 项断言全过——
+模块面 / 宽松归一化 / 产物渲染（总述+分步+▸n+路径表+1:1）/ 摘要零事实 + 引用完整 /
+事实泄漏只记账 / 份额帽 / Zipf 重要者多分 / 仅指针降级 / 路径相对化+短 ID / fact 子串校验 /
+消息单元 + tool-call 转写 / 存储 v1→v2 / 单调追加守卫 / overCap / F9a 区间守卫在位。
+
+**合成夹具**（新 schema 产出）：摘要头 **559 est** / 热尾 **417 est** / 产物 **373 est**
+（旧真机缺陷产物 = 摘要 1,512 / 热尾 6,697 / 合计 8,209）。
+
+**真机对照 `scripts/verify-f9-replay.mjs`**（可选、机器本地：解 zstd 会话日志 → 取最后一次
+`compaction/summary.rawOutput` → 旧 blocks 映射新 steps + 旧申报按 span 重放 → F9 装配器重渲染）：
+
+| 口径 | 旧产物（真机 session-7d73bb3f） | F9 重装配（**同旧申报**） |
+|---|---|---|
+| 字符 | 18,240 | 22,842 |
+| est（两桶） | **8,209** | **10,022** |
+| 摘要头 est | — | 221 |
+| 热尾 est | — | 9,725 |
+
+**诚实结论（重要）**：同旧申报重装配 **变大** 而非变小——Zipf 把 10K 热尾预算**用满**（9,725），
+旧贪心在 6,697 处因下一条装不下而停。**"档案内容大量下降"由两处来源，而非装配算法本身**：
+① 档案区硬帽 15K→10K（−33%，已落 F9d）；② 新 prompt 产出 gist（≤80 字零事实）+ 分步（≤120 字/条）
+取代旧 blocks（真机旧摘要 1,512 est → 合成新形状 559 est）。热尾总量仍受 `retainTokens=10K` 约束；
+若用户要求产物 ≤5K，需把 `retainTokens` 降到 5K（一行配置；不变量 `5K < 100K` 成立）——**待用户拍板**。
+
+**顺带修正**：真机对照暴露 `DigestPlan.tokens` 原为**整产物**体量（与摘要头混同）——已改为
+**摘要头**（gist + 分步 + 路径表）；`assemble-run.digestTokens` 随迁。
+
+**验收**：`npm run gate` = **646 tests / 58 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；
+`node scripts/verify-f9.mjs` = 15/15 `ok=true`；build 绿（host + client）。
+
+**F9 收口状态**：F9a–F9f ✅；F9g 回放脚本 ✅（真机重启冒烟 + 新 prompt 实产样本待 DSH 重启后补）。
+
 

@@ -338,7 +338,8 @@ export function renderProduct(
       refCount: referenced.size,
       refDrops,
       factLeaks: scan.total,
-      tokens: estimateTokens(text, policy.density),
+      // 摘要头体量（gist + 分步 + 路径表）；产物总量 = 本值 + 热尾内容 + 指针开销。
+      tokens: estimateTokens(head, policy.density),
     },
   }
 }

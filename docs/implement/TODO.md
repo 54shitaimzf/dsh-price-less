@@ -45,7 +45,7 @@
 | **F9c** | **热尾事实载体**：user/assistant 消息单元 + tool-call 块转写 + Zipf `1/i` 分配 + 份额帽 + 仅指针降级 + `fact` 子串校验 + dup 去重 | ✅ | `core/assemble/assemble.ts`、`core/compress/region.ts`、`domains/{assemble,compaction}.ts`；快照 §64 |
 | **F9d** | **双预算 10K/10K + 存储 v2**：`archiveCapTokens` 15K→10K；`ARCHIVE_STORE_VERSION` 2 + v1 条目兼容迁移；`archiveChainMonotone` 运行时守卫；`overCap` 入账 | ✅ | `config.ts`、`client/field-model.ts`、`core/compress/store.ts`、`core/assemble/archive.ts`、`core/restore/plan.ts`；快照 §65 |
 | **F9e** | **路径压缩**：`root`（session.header.cwd）+ 相对化 + 同路径 ≥2 次短 ID 表；单元清单同源相对化；`policyKey` 含 root | ✅ | `core/assemble/paths.ts`（新）、`core/assemble/assemble.ts`、`core/compress/prompt.ts`、`domains/compaction.ts`；快照 §66 |
-| **F9g** | **回放验收**：`scripts/verify-f9.mjs` 对照表（摘要/热尾/总量/路径字节/事实泄漏/引用完整率）+ 真机重启冒烟 | ⬜ | 待 F9 全链 |
+| **F9g** | **回放验收**：`scripts/verify-f9.mjs` 15/15 + `scripts/verify-f9-replay.mjs` 真机对照（旧申报重装配 10,022 vs 旧 8,209——Zipf 用满预算；**产物总量下降待用户定 `retainTokens`**）；真机重启冒烟待补 | ✅ | `scripts/verify-f9{,-replay}.mjs`；快照 §68 |
 
 **F5a 说明**：只改渲染面（块序 + 标签），产物 schema 与校验序（`DIGEST_BLOCK_ORDER`）不变；若要真正的「总述块」需第 5 种块型，属 schema 变更，另行拍板。
 
