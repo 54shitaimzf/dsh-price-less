@@ -69,6 +69,8 @@ function makeClientCtx() {
     })),
   }
   const ctx = {
+    // P14b2：真实桥经 ctx.get('connection') 取服务；本 fake 无 connection → 应得 CE_STAR_UNAVAILABLE。
+    get: vi.fn((_name: string) => undefined),
     slots,
     settingsScope: { bind: vi.fn(() => scope) },
     remote,
@@ -97,7 +99,7 @@ function makeClientCtx() {
 const flush = async () => { await Promise.resolve(); await Promise.resolve() }
 
 describe('client apply 冒烟（P1.2）', () => {
-  it('槽注册面正确：settings.plugin.item + key=context-economy + face/actions 完整', () => {
+  it('槽注册面正确：settings.plugin.item + key=context-economy + face/actions 完整', async () => {
     const { ctx, registrations, slotsCalls } = makeClientCtx()
     expect(() => apply(ctx as never)).not.toThrow()
     expect(slotsCalls).toEqual(['settings.plugin.item', 'conversation.input.right'])
@@ -113,9 +115,15 @@ describe('client apply 冒烟（P1.2）', () => {
     const starReg = registrations.find((r) => r.options.name === 'conversation.input.right')!
     expect(starReg.options).toMatchObject({ name: 'conversation.input.right', id: 'context-economy-star', order: 10 })
     expect(starReg.component).toBeTypeOf('function')
-    const starFace = starReg.inject('session-1') as { star?: { preview?: unknown; apply?: unknown } }
+    const starFace = starReg.inject('session-1') as {
+      star?: { preview?: (id: string, prompt: string) => Promise<unknown>; apply?: unknown }
+    }
     expect(starFace.star?.preview).toBeTypeOf('function')
     expect(starFace.star?.apply).toBeTypeOf('function')
+    // P14b2：注入的是 host 桥（不再是 mock）——无 connection 时返回稳定错误码，绝不抛。
+    const result = await starFace.star!.preview!('session-1', 'draft')
+    expect(result).toMatchObject({ ok: false, code: 'CE_STAR_UNAVAILABLE' })
+    expect(ctx.get).toHaveBeenCalledWith('connection')
   })
 
   it('订阅面完整：scope/模型目录 + llm/adapters-updated + settings/document-updated + connection/reset', async () => {

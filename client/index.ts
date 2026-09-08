@@ -28,7 +28,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EconomyCard } from './Card.tsx'
 import { EconomyCardController, type EconomyCardFace } from './controller.ts'
 import { StarButton } from './star/StarButton.tsx'
-import { createMockStarBridge } from './star/star-bridge.ts'
+import { createHostStarBridge } from './star/star-bridge.ts'
 
 /** 插件名（与 tsdown banner 的 ModuleLoader load id 一致；入口铁律 docs/11 §1 client 行）。 */
 export const name = 'dsh-price-less'
@@ -78,7 +78,7 @@ export function apply(ctx: ClientContext): void {
     }, EconomyCard)
   })
 
-  const starBridge = createMockStarBridge()
+  const starBridge = createHostStarBridge(ctx)
   ctx.slots.inject('conversation.input.right', function* () {
     yield ctx.slots.register({
       name: 'conversation.input.right',

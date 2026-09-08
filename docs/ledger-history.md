@@ -1498,3 +1498,56 @@
 **R1 出门门槛核对（docs/11 §8 R1 行）**：账本字段能从 JSONL 回放（fixture 回放 + 同输入同账
 断言通过）；ignorable 断言过（npm run assert 全绿：D3/S3）；平台七端口齐（含 skills 与
 diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为）。
+
+## 32. 账本快照 §32：R2 判别域段末基线（P14a/P14b1/P14b2；纯回放管道产出）
+
+> **改动**：R2 判别域施工完毕——P8 units / P9 dossier / P10 judge / P11 optimize / P12 input /
+> P13 commands / P14a 星标 UI / P14b1 host 断面服务 + Connection RPC 桥 / P14b2 真实桥 + 时序 B。
+> **回放管道**（docs/07 §5）：会话事实 JSONL → `factsFromSessionEvents` →
+> ① 判别族：`factDataToJudgeRecord`（`context-economy/judge-recorded`）+ 错误事实按
+> `FAIL_LAZY_JUDGE_DECISION` 记为 `error-fallback`（`context-economy/judge-error`）→ `foldJudgeLedger`；
+> ② 断面族：`context-economy/optimize-run` 两相按 `previewId` 归并 → `foldOptimizeRunFacts`。
+> 输入 fixture = `tests/fixtures/r2/session-events.json`（4 条判别记录 + 1 条判别错误 + 3 条断面事实；
+> 覆盖 l0-continue/table/l1-cache/llm/error-fallback 五 trigger 与 preview×2 其一无 applied）；
+> 同输入三跑逐字节相等由 `tests/r2-ledger-replay.spec.ts` 锁定。
+
+**判别族（`foldJudgeLedger` 原样输出）**：
+
+| 字段 | 读数 |
+|---|---|
+| `judgeCount` | 5 |
+| `judgeErrorRate` | 0.2（1/5，error-fallback） |
+| `judgeCacheHitRate` | 0.2（l1-cache 1/5） |
+| `judgeLatencyMs` | 200.75（4 次计时：1+2+0+800） |
+| `l0CaptureRate` | 0.2 |
+| `tableHitRate` | 0.5（table 1 / (table 1 + llm 1)） |
+| `judgeLLMUsage` | in 100 / out 20 / total 120 / cacheRead 0 / cacheWrite 0 / reasoning 0 |
+| `judgeCtxTokens` | 560 |
+| `judgeVerdictDist` | action 2 / pureQ 1 / verifyQ 1 |
+
+**断面族（`foldOptimizeRunFacts` 原样输出）**：
+
+| 字段 | 读数 |
+|---|---|
+| `optimizeCount` | 2（distinct previewId，含未确认） |
+| `optimizePromptTokens` | in 250 / out 90（只取 preview 相，两相不重复计数） |
+| `verdictBackfill` | count 2 / conflicts 1（只取 applied 相） |
+| `shearAtStar` | pairs 1 / tokens 30（只落盘记账；执行归 R3/P15b） |
+
+**隔离 home 真机读数（2026-09-08，零用户环境影响）**：vanilla `dsh 0.1.3-alpha.2` + 临时 `$DSH_HOME`：
+`plugin add` 成功 → `--dump-config` 组合树含 `dsh-price-less` → `dsh web --port 0` 启动并打印 URL →
+插件诊断日志出现 fresh `applying` 行 → 未认证 `POST /context-economy/star.preview` 返回 **401**
+（通道路由经 trust 围栏注册成功）；带 token cookie 的完整信封返回
+`{"result":{"ok":false,"error":{"code":"CE_STAR_NO_SESSION",...}}}`（P14b1 手工探针）与
+`CE_STAR_UNKNOWN_ENDPOINT`（未知端点）。**主 profile 浏览器点击 = 待用户确认的人工项**（计划 §6-5）。
+
+**R2 出门门槛核对（docs/11 §8 R2 行）**：
+
+| 门槛 | 证据 | 结论 |
+|---|---|---|
+| 边界 F1 | 判别 prompt v3 + L0/L1/对表三层 fail-lazy（`tests/judge.spec.ts`、`tests/input.spec.ts` 全绿）；实验结论已固化 docs/02 §3 | 达标（机制面） |
+| 判别成本 | `judgeLLMUsage` 入账 + 本快照读数；`auto` 默认 off 时零调用 | 达标 |
+| tableHitRate | 字段入账（本快照口径 = table/(table+llm)）；`readJudgeTable` 首个写者 = P14b1 优化产物 | 达标 |
+| optimizePromptTokens 入账 | `optimize-run(preview).llmUsage` → `foldOptimizeRunFacts.optimizePromptTokens`；`tests/star-host.spec.ts` 用例 10 | 达标 |
+| `auto` 开关可用（默认关） | docs/11 §6 默认 false；`tests/input.spec.ts` auto=false 零行为；星标通道不受门控 | 达标 |
+| 星标端到端（断面→预览→确认→回填） | host：`tests/star-host.spec.ts` 13 用例；两侧契约 + 进程内 E2E：`tests/star-transport.spec.ts`；隔离冒烟真机 401/信封；**主 profile 浏览器点击 = 待人工确认** | 机制/隔离达标；人工点击待办 |

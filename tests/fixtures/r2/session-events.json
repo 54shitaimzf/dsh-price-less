@@ -1,0 +1,11 @@
+[
+  { "type": "user/message", "seq": 0, "time": 900, "data": { "text": "把 R2 做完" } },
+  { "type": "context-economy/judge-recorded", "seq": 1, "time": 1000, "data": { "seq": 10, "time": 1000, "trigger": "l0-continue", "decision": "continue", "class": "action", "latencyMs": 1, "ctxTokens": 100 } },
+  { "type": "context-economy/judge-recorded", "seq": 2, "time": 2000, "data": { "seq": 11, "time": 2000, "trigger": "table", "decision": "continue", "class": "pureQ", "latencyMs": 2, "ctxTokens": 120 } },
+  { "type": "context-economy/judge-recorded", "seq": 3, "time": 3000, "data": { "seq": 12, "time": 3000, "trigger": "l1-cache", "decision": "new-task", "class": "verifyQ", "latencyMs": 0, "ctxTokens": 140 } },
+  { "type": "context-economy/judge-recorded", "seq": 4, "time": 4000, "data": { "seq": 13, "time": 4000, "trigger": "llm", "decision": "continue", "class": "action", "latencyMs": 800, "ctxTokens": 200, "llmUsage": { "inputTokens": 100, "outputTokens": 20, "totalTokens": 120 } } },
+  { "type": "context-economy/judge-error", "seq": 5, "time": 5000, "data": { "seq": 14, "time": 5000, "code": "CE_JUDGE_PARSE_FAILED", "message": "judge output unparsable" } },
+  { "type": "context-economy/optimize-run", "seq": 6, "time": 6000, "data": { "phase": "preview", "previewId": "s1#task-1#1#1", "taskId": "s1:task-1", "sessionId": "s1", "at": 6000, "short": false, "ctxTokens": 500, "productChars": 100, "verdictCount": 3, "droppedLines": 1, "keptSpanCount": 1, "missingAuthorityCount": 0, "shearPairs": 1, "shearTokens": 30, "latencyMs": 1200, "llmUsage": { "inputTokens": 200, "outputTokens": 80 } } },
+  { "type": "context-economy/optimize-run", "seq": 7, "time": 7000, "data": { "phase": "applied", "previewId": "s1#task-1#1#1", "taskId": "s1:task-1", "sessionId": "s1", "at": 7000, "backfillCount": 2, "backfillConflicts": 1, "shearPairs": 1, "shearTokens": 30 } },
+  { "type": "context-economy/optimize-run", "seq": 8, "time": 8000, "data": { "phase": "preview", "previewId": "s1#task-1#2#2", "taskId": "s1:task-1", "sessionId": "s1", "at": 8000, "short": true, "ctxTokens": 60, "productChars": 0, "verdictCount": 1, "droppedLines": 0, "keptSpanCount": 0, "missingAuthorityCount": 0, "shearPairs": 0, "shearTokens": 0, "latencyMs": 300, "llmUsage": { "inputTokens": 50, "outputTokens": 10 } } }
+]

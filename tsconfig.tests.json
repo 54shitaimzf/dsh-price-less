@@ -34,6 +34,8 @@
     "tests/input.spec.ts",
     "tests/commands.spec.ts",
     "tests/star-model.spec.ts",
-    "tests/star-host.spec.ts"
+    "tests/star-host.spec.ts",
+    "tests/star-transport.spec.ts",
+    "tests/r2-ledger-replay.spec.ts"
   ]
 }

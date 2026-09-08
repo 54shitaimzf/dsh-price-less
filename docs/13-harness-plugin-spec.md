@@ -326,7 +326,9 @@ link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 - client 注入：`['slots','settingsScope','remote','remote.session','connection']`
 - 已注册槽：`settings.plugin.item`（设置卡）、`conversation.input.right`（星标按钮）
 - 星标使用 `StarHostBridge` 接口（见 `docs/implement/P14a-star-button-ui.md` §2.3）；
-  P14b1 已交付 host 半边（§3.11）；P14b2 只需替换 `createMockStarBridge()` 为真实 bridge，UI/类型不变。
+  P14b2 已接真实桥：`client/star/star-bridge.ts:createHostStarBridge(ctx)` 经
+  `ctx.get('connection')` → `ConnectionHandle.rpc.call` 调 P14b1 端口（§3.11）；
+  `createMockStarBridge` 降级为测试资产（`tests/star-model.spec.ts`）。
 - `docs/11 §5` 与 `docs/10 §1 H11` 已同步为 `conversation.input.right`。
 
 ### 3.11 Connection 通用 RPC 通道（P14b1 使用；星标 host 桥）
@@ -395,6 +397,8 @@ webserver/credentials/attachment。
 | `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
 | `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft`、`useInput`、`StarHostBridge` | 已施工（P14a） |
+| `client/star/star-protocol.ts` | 两侧独立声明的 channel/端点常量 + `StarPreviewData`/apply 形状守卫 | 已施工（P14b2，§3.11） |
+| `client/star/star-bridge.ts` | `ctx.get('connection')` → `ConnectionHandle.rpc.call`（真实桥）+ mock（测试资产） | 已施工（P14b2） |
 
 ## 6. 复用方法（后续工单的核验流程）
 

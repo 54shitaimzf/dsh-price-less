@@ -6,7 +6,7 @@
 > 事实源三链：① 插件开发规范（dsh-super-injector 插件开发指南 + 脚手架模板：
 > 四形态 / manifest / build 闭环 / 铁律）；② harness API 面（源码逐条核验，见 10 §1）；
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
-> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；R2 判别域进行中（P8/P9/P10/P11/P12/P13/P14a/P14b1 已施工；P14b2 待接真实 bridge），§9。
+> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)）；下一段 = R3 剪切域（P15a/P15b），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -114,8 +114,9 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
   Card/controller/components 壳（**零改动**）→ **`field-model.ts` 是唯一载荷入口**。
 - 对应律：`ECONOMY_FIELD_SPECS` ↔ Config 字段一一对应（扩配置 = Config + field-model
   两处同扩，测试断言一致性）。配置面（§6）按此重填。
-- **星标按钮**：`conversation.input.right` 槽注册 → host 断面方法（时序 B，[10 §4](10-wiring.md)）
-  → 预览 diff 弹层（复用壳的 popover/fixed 弹层基建）。
+- **星标按钮**：`conversation.input.right` 槽注册 → 真实桥 = Connection RPC `/context-economy`
+  （`client/star/star-bridge.ts` → `src/platform/star-bridge.ts`，[13 §3.11](13-harness-plugin-spec.md)）→
+  host 断面方法（时序 B，[10 §4](10-wiring.md)）→ 预览 diff 弹层 → 确认后 `setDraft` 终稿。
 - **度量消息列表可视化**（加分项，R3+）：client 渲染 `context-economy/*` 会话事件为
   消息流内轻量条目（剪除了多少、压缩了什么——用户可见可审计）。
 - 模型路由：`MODEL_PRESET_ROUTES` + `session.modelCatalog()`（H11 remote）+
