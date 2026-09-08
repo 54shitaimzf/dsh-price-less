@@ -1,8 +1,9 @@
 /**
  * 压缩族账本 fold（docs/07 §0.5 压缩族；docs/04 §7；P17a 度量先行）。
  * 纯函数：同输入同账；输入 = `context-economy/assemble-run` 事实（+ 后续 P19/P20/P20b 事实）。
- * 未实现项显式 0（口径先立不空转）：archiveTruncate 归 P19、compressionCall* 归 P18、
- * pressure* 归 P20a、hardTruncateCount 归 P20b、extraSearchCalls 归 P21b。
+ * 未实现项显式 0（口径先立不空转）：compressionCall* 归 P18、pressure* 归 P20a、
+ * hardTruncateCount 归 P20b、extraSearchCalls 归 P21b。
+ * P17c：`archiveTruncate` fold 路径打通（纯核截断 = `core/assemble/archive.ts`；生产者 = P19 档案区）。
  *
  * 模块: core 压缩账本 fold（零 harness/platform import）
  * 平面: L0（确定性重放；无模型、无 IO）
@@ -11,7 +12,7 @@
  * 度量: 本文件即压缩族账本 fold（07 回放管道消费面）。
  */
 import type { LedgerFact } from '../ledger/types.ts'
-import type { AssembleLayer, HotTailSource, HotTailStopReason } from './types.ts'
+import type { AssembleLayer, HotTailDropCounts, HotTailSource, HotTailStopReason } from './types.ts'
 
 export const ASSEMBLE_RUN_FACT_TYPE = 'context-economy/assemble-run' // ignorable
 
@@ -28,8 +29,13 @@ export interface AssembleRunFactData {
   readonly hotTailFloorFilled: boolean
   readonly unitCount: number
   readonly dropped: number
+  /** 丢弃归因（P17c；缺省 = 旧事实无归因）。 */
+  readonly dropReasons?: Partial<HotTailDropCounts>
   readonly clipped: number
   readonly truncated: number
+  /** 档案区硬帽截断（P17c；生产者 = P19 档案区，缺省 0）。 */
+  readonly archiveTruncateCount?: number
+  readonly archiveTruncateTokens?: number
 }
 
 export interface CompressionLedger {
@@ -101,6 +107,8 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     ledger.assembleDropped += numberField(data.dropped)
     ledger.assembleClipped += numberField(data.clipped)
     ledger.assembleTruncated += numberField(data.truncated)
+    ledger.archiveTruncate.count += numberField(data.archiveTruncateCount)
+    ledger.archiveTruncate.tokens += numberField(data.archiveTruncateTokens)
     const stop = data.hotTailStopReason
     if (stop === 'budget' || stop === 'list-end') ledger.hotTailStopReason[stop]++
     const source = data.hotTailSource

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { mountAssembleDomain, runCompactionTxn } from '../src/domains/assemble.ts'
 import { ASSEMBLE_RUN_FACT_TYPE } from '../src/domains/assemble-facts.ts'
 import { planTxn } from '../src/core/assemble/txn.ts'
+import type { HotTailDecl } from '../src/core/assemble/types.ts'
 import { createHistoryPort, type HistoryPort } from '../src/platform/history.ts'
 import type { FilesPort } from '../src/platform/files.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
@@ -119,6 +120,7 @@ describe('P17b 装配域：双通道取真', () => {
     expect(selection.source).toBe('file')
     expect(selection.text).toBe('old\nextra')
     expect(selection.clipped).toBe(true)
+    expect(outcome.result.hotTail.clipped).toBe(1)
     expect(env.domain.stats().assemblies).toBe(1)
   })
 
@@ -147,6 +149,40 @@ describe('P17b 装配域：双通道取真', () => {
     expect(outcome.result.hotTail.source).toBe('positional-fallback')
     expect(outcome.result.hotTail.selections[0]!.source).toBe('span')
     expect(env.domain.stats().degraded).toBe(1)
+  })
+
+  it('软门接线：坏形状不抛错 + 只对 accepted 触盘（P17c）', async () => {
+    const reads: string[] = []
+    const files: FilesPort = {
+      async readLines(path: string) { reads.push(path); return { lines: ['a'], totalLines: 1 } },
+    }
+    const env = makeEnv({ files })
+    env.appendCall('c1', 'bash', { command: 'npm test' })
+    env.appendResult('c1', 'ok')
+    const bad = [null, { unitId: 'c1', coord: null }, { unitId: 'c1' }] as unknown as readonly HotTailDecl[]
+    const outcome = await env.domain.assemble({ session: env.session as never, taskId: 'task-1', range: rangeOf(env.session), hotTail: bad })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(reads).toEqual([])
+    expect(outcome.result.hotTail.dropReasons.badDecl).toBe(2)
+    expect(outcome.result.hotTail.selections.length).toBe(1)
+  })
+
+  it('priorChain 续传 + archiveTruncate 透传入事实（P17c）', async () => {
+    const env = makeEnv()
+    env.appendCall('c1', 'bash', { command: 'npm test' })
+    env.appendResult('c1', '307 tests passed')
+    const outcome = await env.domain.assemble({
+      session: env.session as never, taskId: 'task-1', range: rangeOf(env.session), hotTail: [{ unitId: 'c1' }],
+      priorChain: [{ taskId: 'task-1', kind: 'checkpoint', text: 'C1' }],
+      archiveTruncate: { count: 2, tokens: 700 },
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.archiveForm).toEqual({ form: 'chain', checkpointCount: 1 })
+    expect(outcome.result.rendered.startsWith('C1\n\n')).toBe(true)
+    const fact = env.session.appends.find((entry) => entry.type === ASSEMBLE_RUN_FACT_TYPE)
+    expect(fact!.data.archiveTruncateCount).toBe(2)
+    expect(fact!.data.archiveTruncateTokens).toBe(700)
+    expect(fact!.data.dropReasons).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 })
   })
 
   it('单元清单按范围过滤（供 P18 prompt 枚举）', () => {
@@ -213,7 +249,7 @@ describe('P17b 共享事务原语执行器', () => {
     return session
   }
 
-  it('open → replace → prune → close 顺序执行', () => {
+  it('open → prune → replace → close 顺序执行', () => {
     const session = makeSurface()
     const history = createHistoryPort(session as never)
     const plan = planTxn({ txnId: 'txn-1', layer: 'boundary', taskId: 'task-1', range: { start: 0, end: 2 }, shadowedTokenCount: 42, replaceKind: 'digest' })

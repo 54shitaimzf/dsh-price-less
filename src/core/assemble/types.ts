@@ -62,6 +62,28 @@ export interface TaskDigest {
   readonly coords: readonly DigestCoord[]
 }
 
+/** 档案条目种类：C = 压力检查点（未完成边界），D = 边界追加块（闭合）。 */
+export type ArchiveKind = 'checkpoint' | 'boundary'
+
+/** 档案条目（一条 = 一个 task 的归档块；追加式，字节一经写出不可变）。 */
+export interface ArchiveEntry {
+  readonly taskId: string
+  readonly kind: ArchiveKind
+  readonly text: string
+}
+
+/** 档案区硬帽截断计数（07 压缩族 `archiveTruncate{count,tokens}`）。 */
+export interface ArchiveTruncation {
+  readonly count: number
+  readonly tokens: number
+}
+
+/** 档案形态（04 §3 机制 A：单块总摘要 / [C…][D] 追加式链）。 */
+export interface ArchiveForm {
+  readonly form: 'single' | 'chain'
+  readonly checkpointCount: number
+}
+
 /** 压缩层（生产/消费不对称律：边界产热尾模式、压力产检查点+末段子任务）。 */
 export type AssembleLayer = 'boundary' | 'pressure'
 
@@ -102,6 +124,15 @@ export interface HotTailSelection {
 }
 
 export type HotTailStopReason = 'budget' | 'list-end'
+
+/** 丢弃归因（HT 软门 / 重映射 / 取真；总数 = HotTailPlan.dropped）。 */
+export type HotTailDropReason = 'badDecl' | 'unknownUnit' | 'remap' | 'fetch'
+export interface HotTailDropCounts {
+  readonly badDecl: number
+  readonly unknownUnit: number
+  readonly remap: number
+  readonly fetch: number
+}
 export type HotTailSource = 'model' | 'positional-fallback'
 
 export interface HotTailPlan {
@@ -111,8 +142,10 @@ export interface HotTailPlan {
   readonly floorFilled: boolean
   /** 申报条数（模型产出侧规模；地板项不计）。 */
   readonly declaredUnits: number
-  /** 坐标无效 / 单元缺失丢弃数。 */
+  /** 坐标无效 / 单元缺失 / 取真缺失丢弃总数（= dropReasons 之和）。 */
   readonly dropped: number
+  /** 丢弃归因（P17c：HT 软门 / 重映射 / 取真）。 */
+  readonly dropReasons: HotTailDropCounts
   /** 出界裁剪数。 */
   readonly clipped: number
   readonly truncated: number
@@ -127,6 +160,8 @@ export interface AssembleResult {
   readonly digestBytes: number
   readonly digestEntryCount: number
   readonly hotTail: HotTailPlan
+  /** 本次产物的档案形态（priorChain 为空 = 单块；否则续传 + 追加）。 */
+  readonly archiveForm: ArchiveForm
   readonly unitCount: number
   /** 事实层 + 热尾（装配序 = transcript 序，字节稳定）。 */
   readonly rendered: string
@@ -142,6 +177,8 @@ export interface AssemblePolicy {
   readonly version: number
   /** 热尾预算（= retainTokens 绝对设计值 10K）。 */
   readonly hotTailTokens: number
+  /** 档案区硬帽（04 §6 绝对设计值 15K；超限从最老档案条目起整条机械截断）。 */
+  readonly archiveTokens: number
   /** wire 校准字符/token（04 §5：CHARS_PER_TOKEN=1.5）。 */
   readonly charsPerToken: number
   /** 地板：逐字末次验证 ≤3 条。 */
@@ -157,6 +194,7 @@ export interface AssemblePolicy {
 export const DEFAULT_ASSEMBLE_POLICY: AssemblePolicy = {
   version: ASSEMBLE_POLICY_VERSION,
   hotTailTokens: 10000,
+  archiveTokens: 15000,
   charsPerToken: 1.5,
   floorVerifyLines: 3,
   floorErrorLines: 5,

@@ -49,6 +49,8 @@ const FILES = [
   'docs/implement/P17-boundary-assembler.md',
   'src/core/assemble/types.ts',
   'src/core/assemble/chain.ts',
+  'src/core/assemble/gate.ts',
+  'src/core/assemble/archive.ts',
   'src/core/assemble/assemble.ts',
   'src/core/assemble/txn.ts',
   'src/core/assemble/ledger.ts',
@@ -60,6 +62,7 @@ const FILES = [
   'tests/assemble-hottail.spec.ts',
   'tests/assemble-ledger.spec.ts',
   'tests/assemble-domain.spec.ts',
+  'tests/assemble-archive.spec.ts',
 ]
 const missing = FILES.filter((rel) => !fs.existsSync(path.join(ROOT, rel)))
 check('文件齐备（工单 + 纯核 6 文件 + 端口 + 域 + 事实面 + 4 spec）', missing.length === 0, missing.join(','))
@@ -68,6 +71,7 @@ check('文件齐备（工单 + 纯核 6 文件 + 端口 + 域 + 事实面 + 4 sp
 const core = await import('../lib/core/assemble/index.js')
 const WANTED = ['foldFileChains', 'remapFileCoord', 'lastLineCount', 'foldAssembleInputs', 'validateDigest',
   'renderDigest', 'renderUnitList', 'assembleArchive', 'renderArchive', 'planTxn', 'foldTxnMarkers', 'txnOrderValid',
+  'gateHotTailDecls', 'validateHotTailDecl', 'archiveChainShape', 'archiveChainAppendOnly', 'truncateArchiveArea',
   'foldCompressionLedger', 'emptyCompressionLedger', 'DEFAULT_ASSEMBLE_POLICY', 'ASSEMBLE_POLICY_VERSION',
   'ASSEMBLE_RUN_FACT_TYPE', 'HOT_TAIL_TRUNCATION_MARKER', 'VERIFY_LINE_RE', 'ERROR_LINE_RE']
 const missingExports = WANTED.filter((name) => typeof core[name] === 'undefined')
@@ -99,8 +103,9 @@ check('结构断言引擎全绿（含 D11/D12）', rules.ok === true, JSON.strin
 check('零位快照含 D11/D12', rules.rules.D11?.status === 'pass' && rules.rules.D12?.status === 'pass')
 
 // ④ 策略初值（docs/04 §2/§5 绝对设计值）
-check('策略初值未漂移（hotTail 10K / charsPerToken 1.5 / 地板 3+5 / 版本 1）',
-  DEFAULT_ASSEMBLE_POLICY.hotTailTokens === 10000 && DEFAULT_ASSEMBLE_POLICY.charsPerToken === 1.5 &&
+check('策略初值未漂移（hotTail 10K / 档案帽 15K / charsPerToken 1.5 / 地板 3+5 / 版本 1）',
+  DEFAULT_ASSEMBLE_POLICY.hotTailTokens === 10000 && DEFAULT_ASSEMBLE_POLICY.archiveTokens === 15000 &&
+  DEFAULT_ASSEMBLE_POLICY.charsPerToken === 1.5 &&
   DEFAULT_ASSEMBLE_POLICY.floorVerifyLines === 3 && DEFAULT_ASSEMBLE_POLICY.floorErrorLines === 5 &&
   ASSEMBLE_POLICY_VERSION === 1)
 
@@ -176,12 +181,64 @@ check('账本 fold：压缩族字段可回放 + 未实现项显式 0',
   ledger.hotTailSource.model === 1 && ledger.compressionLayer.boundary === 1 &&
   emptyCompressionLedger().hardTruncateCount === 0 && emptyCompressionLedger().archiveTruncate.count === 0)
 
+// ⑦b P17c：HT 软门 / 裁剪计数 / 档案硬帽 / 追加式链 / archiveTruncate fold
+const badDecls = [null, { unitId: '' }, { unitId: 'a', coord: null }, { unitId: 'a', coord: { path: 'a.ts', version: 0 } }, { unitId: 'a' }, { unitId: 'ghost' }]
+const gate = core.gateHotTailDecls(badDecls, [unit('a', 1, 'x'.repeat(6))])
+check('HT 软门：坏形状拒绝 + 计数 + 不抛错（只降级不拒压）',
+  gate.accepted.length === 1 &&
+  gate.rejected.filter((item) => item.reason === 'bad-decl').length === 4 &&
+  gate.rejected.filter((item) => item.reason === 'unknown-unit').length === 1)
+const gated = assembleArchive({ units: [unit('a', 1, 'x'.repeat(6))], hotTail: badDecls, policy: smallPolicy })
+check('HT 软门：拒绝项入 dropReasons（dropped = 归因之和；declaredUnits = 原始申报数）',
+  gated.ok === true && gated.result.hotTail.dropReasons.badDecl === 4 && gated.result.hotTail.dropReasons.unknownUnit === 1 &&
+  gated.result.hotTail.dropped === 5 && gated.result.hotTail.declaredUnits === 6)
+const clipChain = foldFileChains([
+  { seq: 1, path: 'c.ts', kind: 'write', content: lines(10) },
+  { seq: 2, path: 'c.ts', kind: 'edit', oldString: 'l3', newString: 'l3a\nl3b' },
+])
+const clippedOutcome = assembleArchive({
+  units: [unit('u', 1, 'ignored')], chains: clipChain,
+  hotTail: [{ unitId: 'u', coord: { path: 'c.ts', version: 1, lineRange: { start: 10, end: 12 } } }],
+  resolve: { u: 'sliced' }, currentLineCounts: { 'c.ts': 11 },
+  policy: { ...DEFAULT_ASSEMBLE_POLICY, charsPerToken: 1, hotTailTokens: 50 },
+})
+check('裁剪计数修复：clipped > 0（P17a 恒 0 缺陷）',
+  clippedOutcome.ok === true && clippedOutcome.result.hotTail.clipped === 1 && clippedOutcome.result.hotTail.selections[0].clipped === true)
+const area = (n, size) => Array.from({ length: n }, (_, i) => ({ taskId: 't' + i, kind: 'boundary', text: String.fromCharCode(97 + i).repeat(size) }))
+const capped = core.truncateArchiveArea(area(3, 10), { ...DEFAULT_ASSEMBLE_POLICY, charsPerToken: 1, archiveTokens: 20 })
+check('档案硬帽：从最老整条截断至入限（15K 设计值 / 截断计数入账）',
+  capped.kept.length === 2 && capped.truncated.count === 1 && capped.truncated.tokens === 10 && capped.overCap === false)
+const overCap = core.truncateArchiveArea([...area(1, 5), { taskId: 't9', kind: 'boundary', text: 'z'.repeat(30) }], { ...DEFAULT_ASSEMBLE_POLICY, charsPerToken: 1, archiveTokens: 20 })
+check('档案硬帽：最新单条自身超帽 = 保最新 + overCap（不空档，失败方向 = 保留）',
+  overCap.kept.length === 1 && overCap.overCap === true && overCap.truncated.count === 1)
+const cp = (text) => ({ taskId: 't1', kind: 'checkpoint', text })
+const bd = (text) => ({ taskId: 't1', kind: 'boundary', text })
+check('追加式链两形态：single / chain / prefix / order 违例',
+  core.archiveChainShape([bd('d')]).shape === 'single' && core.archiveChainShape([cp('c1'), bd('d')]).shape === 'chain' &&
+  core.archiveChainShape([cp('c1')]).shape === 'prefix' && core.archiveChainShape([bd('d'), cp('c')]).reason === 'order')
+check('append-only：前缀逐条字节恒等（旧块不可改写）',
+  core.archiveChainAppendOnly([cp('c1')], [cp('c1'), bd('d')]) === true && core.archiveChainAppendOnly([cp('c1')], [cp('c1x')]) === false)
+const chained = assembleArchive({ units: [unit('a', 1, 'A'.repeat(4))], hotTail: [{ unitId: 'a' }], priorChain: [cp('C1')], policy: { ...DEFAULT_ASSEMBLE_POLICY, charsPerToken: 1, hotTailTokens: 50 } })
+check('priorChain 续传：旧块 + 新块渲染（chain 形态）',
+  chained.ok === true && chained.result.archiveForm.form === 'chain' && chained.result.archiveForm.checkpointCount === 1 &&
+  chained.result.rendered === 'C1\n\n' + 'A'.repeat(4))
+check('priorChain 违例（已闭合链 / D 在 C 前）= schema fatal',
+  assembleArchive({ units: [unit('a', 1, 'x')], priorChain: [bd('d')] }).reason === 'digest-schema' &&
+  assembleArchive({ units: [unit('a', 1, 'x')], priorChain: [bd('d'), cp('c')] }).reason === 'digest-schema')
+const archiveLedger = foldCompressionLedger([
+  { type: ASSEMBLE_RUN_FACT_TYPE, seq: 1, time: 1, data: { at: 1, layer: 'boundary', archiveTruncateCount: 2, archiveTruncateTokens: 700 } },
+])
+check('账本：archiveTruncate 由事实汇总（P17c 打通 fold 路径；缺省 0 向后兼容）',
+  archiveLedger.archiveTruncate.count === 2 && archiveLedger.archiveTruncate.tokens === 700 &&
+  emptyCompressionLedger().archiveTruncate.count === 0)
+
 // ⑨ spec 标记
 const specMarkers = [
   ['tests/assemble-chain.spec.ts', 'remapFileCoord'],
   ['tests/assemble-hottail.spec.ts', 'assembleArchive'],
   ['tests/assemble-ledger.spec.ts', 'foldCompressionLedger'],
   ['tests/assemble-domain.spec.ts', 'runCompactionTxn'],
+  ['tests/assemble-archive.spec.ts', 'truncateArchiveArea'],
 ]
 check('spec 标记齐全（4 文件各覆盖本层主面）',
   specMarkers.every(([rel, token]) => readText(rel).includes(token)))
@@ -249,6 +306,8 @@ let chainsBuilt = 0
 let chainsBroken = 0
 let remapOk = 0
 let remapFail = {}
+let remapWriteBarrier = 0
+let remapLocateBarrier = 0
 let hypotheticalHotTailTokens = 0
 let liveAssembleFacts = 0
 for (const file of logs) {
@@ -273,8 +332,17 @@ for (const file of logs) {
     for (const version of chain.versions) {
       if (version.content === undefined && version.lineCount === undefined) continue
       const result = remapFileCoord(chain, { path: chain.path, version: version.version }, lastLineCount(chain))
-      if (result.ok) remapOk++
-      else remapFail[result.reason] = (remapFail[result.reason] ?? 0) + 1
+      if (result.ok) { remapOk++; continue }
+      remapFail[result.reason] = (remapFail[result.reason] ?? 0) + 1
+      if (result.reason === 'chain-break') {
+        let barrier = 'locate'
+        for (let i = version.version; i < chain.versions.length; i++) {
+          const next = chain.versions[i]
+          if (next.hunks === undefined) { barrier = next.kind === 'write' ? 'write' : 'locate'; break }
+        }
+        if (barrier === 'write') remapWriteBarrier++
+        else remapLocateBarrier++
+      }
     }
   }
   const tail = assembleArchive({ units: inputs.units, chains: inputs.chains })
@@ -285,10 +353,13 @@ console.log('=== P17 真机会话离线回放（文件操作 / 单元 / 假想�
 console.log('会话扫描 = ' + scanned + '；文件操作 read=' + opCounts.read + ' write=' + opCounts.write + ' edit=' + opCounts.edit)
 console.log('单元（tool 对）= ' + unitCount + '；版本链 = ' + chainsBuilt + '（链断 ' + chainsBroken + '）')
 console.log('坐标重映射自检：ok=' + remapOk + '；fail=' + (Object.keys(remapFail).length === 0 ? '(无)' : Object.entries(remapFail).map(([k, n]) => k + '=' + n).join(' ')))
+console.log('重映射归因：write 全量替换屏障 = ' + remapWriteBarrier + '；定位失败屏障 = ' + remapLocateBarrier)
 console.log('假想热尾（无申报 = 位置兜底）token 合计 = ' + hypotheticalHotTailTokens)
 console.log('live assemble-run 事实 = ' + liveAssembleFacts + '（P19 触发接线后才产生）')
 check('真机会话离线回放完成（扫描 ' + scanned + ' 个会话）', scanned >= 0)
 check('回放自洽（链断/重映射失败不抛错）', remapOk >= 0 && chainsBuilt >= 0)
+check('回放归因：chain-break 分类自洽（write 屏障 ' + remapWriteBarrier + ' / 定位失败 ' + remapLocateBarrier + '）',
+  remapWriteBarrier + remapLocateBarrier === (remapFail['chain-break'] ?? 0))
 check('live 事实数与接线状态自洽（触发归 P19）', liveAssembleFacts >= 0)
 
 // ⑫ 尺寸申报
@@ -307,6 +378,9 @@ check('docs/13 含 ctx.fs 接口节', /dsh-fs/.test(readText('docs/13-harness-pl
 check('ledger-history 含 §42/§43 快照', /§42/.test(readText('docs/ledger-history.md')) && /§43/.test(readText('docs/ledger-history.md')))
 check('总纲 P17 行标已施工 + 下一单 = P18', /P17 \| 边界装配器（\*\*已施工/.test(readText('docs/implement/00-master.md')) && /P18/.test(readText('docs/implement/00-master.md')))
 check('AGENTS 现状段已同步 P17', /P17/.test(readText('AGENTS.md')))
+check('工单含 P17c 修正单（§8）', /## 8\. P17c 修正单/.test(readText('docs/implement/P17-boundary-assembler.md')))
+check('ledger-history 含 §44 快照（P17c）', /## 44\. 账本快照 §44/.test(readText('docs/ledger-history.md')))
+check('docs/04 状态行已同步 P17c', /P17c/.test(readText('docs/04-compactor.md')))
 
 console.log('')
 if (failures.length > 0) {

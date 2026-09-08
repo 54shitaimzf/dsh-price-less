@@ -61,6 +61,14 @@ describe('P17a 压缩族账本', () => {
     expect(ledger.hotTailStopReason).toEqual({ budget: 0, 'list-end': 0 })
   })
 
+  it('archiveTruncate 由事实汇总（P17c：生产者 = P19 档案区；缺省 0 向后兼容）', () => {
+    const ledger = foldCompressionLedger([
+      fact({ at: 1, layer: 'boundary', archiveTruncateCount: 2, archiveTruncateTokens: 700 }),
+      fact({ at: 2, layer: 'boundary' }, 2),
+    ])
+    expect(ledger.archiveTruncate).toEqual({ count: 2, tokens: 700 })
+  })
+
   it('同输入同账（双跑相等）', () => {
     const facts = [fact({ at: 1, layer: 'boundary', digestBytes: 7 }), fact({ at: 2, layer: 'boundary', digestBytes: 9 }, 2)]
     expect(JSON.stringify(foldCompressionLedger(facts))).toBe(JSON.stringify(foldCompressionLedger(facts)))

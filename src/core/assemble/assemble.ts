@@ -1,5 +1,6 @@
 /**
  * 事实层与热尾装配（docs/04 §2 预算三环 + 双通道取真 + 地板填充 + 位置兜底；P17a）。
+ * P17c 修正：HT 软门前置（坏形状不抛错）+ clipped 计数修复 + 兜底按 policy cpt + 追加式链续传。
  * 纯函数：从会话事件 fold 单元清单与文件操作，再按申报序贪心累加、到 10K 即停，
  * 渲染序 = transcript 序（字节稳定）。三环 fatal 口径：仅 digest schema 违例 fatal，
  * 坏坐标/超预算/申报缺失一律机械降级（失败默认保留，绝不抛错）。
@@ -13,11 +14,14 @@
 import { estimateTokens, extractTextFromToolResult } from '../ledger/fold.ts'
 import type { LedgerSessionEvent } from '../ledger/types.ts'
 import { toolCategory } from '../shear/tool.ts'
+import { archiveChainShape } from './archive.ts'
 import { foldFileChains, remapFileCoord, type FileChain, type FileOp } from './chain.ts'
+import { gateHotTailDecls } from './gate.ts'
 import {
   DEFAULT_ASSEMBLE_POLICY,
   DIGEST_BLOCK_ORDER,
   HOT_TAIL_TRUNCATION_MARKER,
+  type ArchiveEntry,
   type AssembleLayer,
   type AssembleOutcome,
   type AssemblePolicy,
@@ -28,6 +32,7 @@ import {
   type DigestCoord,
   type FileCoord,
   type HotTailDecl,
+  type HotTailDropReason,
   type HotTailSelection,
   type HotTailSource,
   type HotTailStopReason,
@@ -54,6 +59,8 @@ export interface AssembleInput {
   readonly digest?: TaskDigest
   /** 申报（重要性降序）；缺失/空 = 位置兜底。 */
   readonly hotTail?: readonly HotTailDecl[]
+  /** 已存在的压力检查点链（04 §3 机制 A 续传；只接受 empty|prefix，否则 schema fatal）。 */
+  readonly priorChain?: readonly ArchiveEntry[]
   /** 单元 ID → 取真文本（通道 A = 盘上行窗口；通道 B 缺省用单元原文）。 */
   readonly resolve?: Readonly<Record<string, string>>
   /** 盘上当前行数：`null` = 文件不存在（丢弃）。 */
@@ -268,7 +275,7 @@ function resolveSelection(
   unit: AssembleUnit,
   input: AssembleInput,
   policy: AssemblePolicy,
-): { selection: HotTailSelection } | { dropped: true } {
+): { selection: HotTailSelection } | { dropped: 'remap' | 'fetch' } {
   if (decl.coord === undefined) {
     return {
       selection: {
@@ -286,9 +293,9 @@ function resolveSelection(
   const chain = input.chains?.get(coord.path)
   const current = input.currentLineCounts === undefined ? undefined : input.currentLineCounts[coord.path]
   const remap = remapFileCoord(chain, coord, current)
-  if (!remap.ok) return { dropped: true }
+  if (!remap.ok) return { dropped: 'remap' }
   const text = input.resolve?.[unit.id]
-  if (text === undefined) return { dropped: true }
+  if (text === undefined) return { dropped: 'fetch' }
   return {
     selection: {
       unitId: unit.id,
@@ -311,6 +318,9 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   const policy = input.policy ?? DEFAULT_ASSEMBLE_POLICY
   const layer: AssembleLayer = input.layer ?? 'boundary'
   const units = input.units ?? []
+  const prior = input.priorChain ?? []
+  const priorShape = archiveChainShape(prior)
+  if (priorShape.shape !== 'empty' && priorShape.shape !== 'prefix') return { ok: false, reason: 'digest-schema' }
   let digest: TaskDigest | undefined
   if (input.digest !== undefined) {
     digest = validateDigest(input.digest)
@@ -327,44 +337,47 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   const selections: HotTailSelection[] = []
   const picked = new Set<string>()
   let used = 0
-  let dropped = 0
   let clipped = 0
   let truncated = 0
   let stopReason: HotTailStopReason = 'list-end'
   let source: HotTailSource = 'model'
   let floorFilled = false
-  const declared = input.hotTail ?? []
+  const dropReasons: Record<HotTailDropReason, number> = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
+  const rawDecls: readonly unknown[] = Array.isArray(input.hotTail) ? input.hotTail : []
+  const gated = gateHotTailDecls(rawDecls, units)
+  for (const reject of gated.rejected) {
+    if (reject.reason === 'bad-decl') dropReasons.badDecl++
+    else dropReasons.unknownUnit++
+  }
+  const declared = gated.accepted
 
   const push = (selection: HotTailSelection): void => {
     selections.push(selection)
     picked.add(selection.unitId)
     used += selection.tokens
+    if (selection.clipped === true) clipped++
   }
 
-  if (declared.length === 0) {
+  const positionalFallback = (): void => {
     source = 'positional-fallback'
     stopReason = 'list-end'
     for (let i = units.length - 1; i >= 0; i--) {
       const unit = units[i] as AssembleUnit
-      const selection: HotTailSelection = {
-        unitId: unit.id,
-        tier: 'fallback',
-        seqStart: unit.seqStart,
-        seqEnd: unit.seqEnd,
-        source: 'span',
-        text: unit.text,
-        tokens: unit.tokens,
-      }
-      if (used + selection.tokens > budget) { stopReason = 'budget'; break }
-      push(selection)
+      const tokens = estimateTokens(unit.text, policy.charsPerToken)
+      if (used + tokens > budget) { stopReason = 'budget'; break }
+      push({ unitId: unit.id, tier: 'fallback', seqStart: unit.seqStart, seqEnd: unit.seqEnd, source: 'span', text: unit.text, tokens })
       if (used >= budget) { stopReason = 'budget'; break }
     }
+  }
+
+  if (declared.length === 0) {
+    positionalFallback()
   } else {
     for (const decl of declared) {
       const unit = byId.get(decl.unitId)
-      if (unit === undefined) { dropped++; continue }
+      if (unit === undefined) { dropReasons.unknownUnit++; continue }
       const resolved = resolveSelection(decl, unit, input, policy)
-      if ('dropped' in resolved) { dropped++; continue }
+      if ('dropped' in resolved) { dropReasons[resolved.dropped]++; continue }
       const selection = resolved.selection
       if (used + selection.tokens > budget) {
         if (selections.length === 0) {
@@ -382,25 +395,7 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
       push(selection)
       if (used >= budget) { stopReason = 'budget'; break }
     }
-    if (selections.length === 0 && dropped === declared.length) {
-      source = 'positional-fallback'
-      stopReason = 'list-end'
-      for (let i = units.length - 1; i >= 0; i--) {
-        const unit = units[i] as AssembleUnit
-        const selection: HotTailSelection = {
-          unitId: unit.id,
-          tier: 'fallback',
-          seqStart: unit.seqStart,
-          seqEnd: unit.seqEnd,
-          source: 'span',
-          text: unit.text,
-          tokens: unit.tokens,
-        }
-        if (used + selection.tokens > budget) { stopReason = 'budget'; break }
-        push(selection)
-        if (used >= budget) { stopReason = 'budget'; break }
-      }
-    }
+    if (selections.length === 0 && dropReasons.remap + dropReasons.fetch === declared.length) positionalFallback()
   }
 
   // 地板填充（04 §2）：模型申报装填停机后，run 结果类目未覆盖且预算有余。
@@ -436,7 +431,8 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   const ordered = selections.slice().sort((a, b) => a.seqStart - b.seqStart || a.unitId.localeCompare(b.unitId))
   const digestText = renderDigest(effective)
   const hotText = ordered.map((selection) => selection.text).join('\n\n')
-  const rendered = digestText === '' ? hotText : hotText === '' ? digestText : `${digestText}\n\n${hotText}`
+  const rendered = [...prior.map((entry) => entry.text), digestText, hotText].filter((part) => part !== '').join('\n\n')
+  const dropped = dropReasons.badDecl + dropReasons.unknownUnit + dropReasons.remap + dropReasons.fetch
   const result: AssembleResult = {
     layer,
     digest: effective,
@@ -447,13 +443,15 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
       stopReason,
       source,
       floorFilled,
-      declaredUnits: declared.length,
+      declaredUnits: rawDecls.length,
       dropped,
+      dropReasons: { ...dropReasons },
       clipped,
       truncated,
       tokens: used,
       budgetTokens: budget,
     },
+    archiveForm: { form: prior.length === 0 ? 'single' : 'chain', checkpointCount: prior.length },
     unitCount: units.length,
     rendered,
   }

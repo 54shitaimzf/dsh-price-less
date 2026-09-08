@@ -17,8 +17,11 @@ import {
   DEFAULT_ASSEMBLE_POLICY,
   assembleArchive,
   foldAssembleInputs,
+  gateHotTailDecls,
   txnOrderValid,
   remapFileCoord,
+  type ArchiveEntry,
+  type ArchiveTruncation,
   type AssembleLayer,
   type AssembleOutcome,
   type AssemblePolicy,
@@ -57,6 +60,10 @@ export interface AssembleRequest {
   readonly layer?: AssembleLayer
   readonly digest?: TaskDigest
   readonly hotTail?: readonly HotTailDecl[]
+  /** 已存在的压力检查点链（04 §3 机制 A 续传；P17c）。 */
+  readonly priorChain?: readonly ArchiveEntry[]
+  /** 档案区硬帽截断结果（生产者 = P19 档案区；P17c 只透传入账）。 */
+  readonly archiveTruncate?: ArchiveTruncation
 }
 
 export interface AssembleDomainStats {
@@ -176,15 +183,17 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
     const chains = foldFileChains(ops)
 
     const decls = request.hotTail ?? []
+    // HT 软门（P17c）：坏形状在触盘前被挡下（coord 形状由 gate 保证，remap 前置守卫）。
+    const gated = gateHotTailDecls(decls, units)
     const resolve: Record<string, string> = {}
     const currentLineCounts: Record<string, number | null> = {}
     const files = deps.getFiles?.()
     if (files === undefined) {
-      if (decls.some((decl) => decl.coord !== undefined)) counts.degraded++
+      if (gated.accepted.some((decl) => decl.coord !== undefined)) counts.degraded++
     } else {
       const windows = new Map<string, Awaited<ReturnType<FilesPort['readLines']>>>()
       let fetches = 0
-      for (const decl of decls) {
+      for (const decl of gated.accepted) {
         const coord = decl.coord
         if (coord === undefined) continue
         if (fetches >= policy.maxFetchUnits) break
@@ -205,6 +214,7 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       units,
       chains,
       ...(request.digest === undefined ? {} : { digest: request.digest }),
+      ...(request.priorChain === undefined ? {} : { priorChain: request.priorChain }),
       hotTail: decls,
       resolve,
       currentLineCounts,
@@ -229,8 +239,12 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       hotTailFloorFilled: result.hotTail.floorFilled,
       unitCount: result.unitCount,
       dropped: result.hotTail.dropped,
+      dropReasons: result.hotTail.dropReasons,
       clipped: result.hotTail.clipped,
       truncated: result.hotTail.truncated,
+      ...(request.archiveTruncate === undefined
+        ? {}
+        : { archiveTruncateCount: request.archiveTruncate.count, archiveTruncateTokens: request.archiveTruncate.tokens }),
     })
     emitCeFact(request.session, ASSEMBLE_RUN_FACT_TYPE, data, logger)
     return outcome
