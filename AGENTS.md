@@ -14,9 +14,8 @@ P3（持久面 `platform/storage.ts`）→ P4（技能目录 `platform/skills.ts
 `platform/llm.ts`）→ P6（改史端口 `platform/history.ts`：H4 surfaceOp replace +
 H5 compaction 事务 + 配对平衡守卫）→ P7（工具端口 `platform/tools.ts`：H6 tools/post-execute
 content 覆盖/追加 + tools/execute 信号计量）全部施工；首份 07 报表见
-`docs/ledger-history.md` §31；**R2 判别域进行中**（P8–P13 已施工：core/{units,dossier,judge,optimize,prefix,init} +
-domains/{input,commands,star,optimize-facts}；P14a 星标 UI + P14b1 host 断面服务/Connection RPC 桥端口已施工，
-P14b2 真实桥待接入）。`platform/`（十文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+`docs/ledger-history.md` §31；**R2 判别域已完成**（P8–P13 纯核/编排 + P14a 星标 UI + P14b1 host 断面服务/Connection RPC 桥端口 +
+P14b2 真实桥与时序 B；段末账本快照 = `docs/ledger-history.md` §32）。`platform/`（十文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
