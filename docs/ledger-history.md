@@ -1735,3 +1735,51 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 未拆单的理由：拆分只会把同一 commit 内的 `tool.ts`（fold 的 T0-R 分支）与 `t0r.ts` 切成名义两单，
 工程上无收益；若需守线，下一轮可把 T0-R 改为注入式 hook 拆为 P15a2。
 
+## 39. 账本快照 §39：工具剪切调度（P15b，R3 第二单）
+
+> 触发：总纲 §3 下一未执行单元 = P15b。本单把 P15a 纯核接进运行期（四档执行 / 事件接线 / 事实发射 /
+> 独立剪切账本 fold），并修正 P15a 的 streak 语义。**插件未重启，故 live 账本仍为 0**；
+> 快照 = 真机会话离线回放（含九道门槛的假想账本）+ 机械验收。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| live 账本（`cut*` / `shear*` / `tableRepair`） | 全 0（纯核未接线） | **仍 0**（未重启插件；重启后由 `shear-applied` 真机观测） |
+| 机制面 | `core/shear/` 纯核未接线 | 四档执行接线（T-entry/T-note/T-loop/T0/T0-R）+ 三类 ignorable 事实 + 独立剪切账本 fold（`core/shear/ledger.ts`） |
+| 配置面 | — | `shear.enabled`（默认 **true**，[11 §6]；设置卡可关 = 四档零行为） |
+| 结构断言 | D1–D9 | **D10**（`core/shear/**` 零时钟/随机）+ D3 白名单增 `src/domains/shear-facts.ts` |
+| 纯核语义 | assistant 消息打断 T0-R streak | **修正**：streak 只被异质操作/用户轮打断（docs/03 §2.2；真实事件序下原语义使 T0-R 永不可达） |
+
+**真机会话离线回放**（44 会话；`scripts/verify-p15b.mjs`，含九道门槛的假想账本；不做臂对照）：
+
+| 指标 | 读数 |
+|---|---|
+| tool/result | 4125（cmd 类 **2884**） |
+| T-entry 假想整形 | **2052 / 2884 cmd 结果**；节省 12,900,174 bytes ≈ **7,169,408 token**（断裂成本恒 0） |
+| T-note 贴注候选 | 659 |
+| 门槛后假想落刀 | stub-replace **12** / note-cut 0 / t0-supersede 0 / t0r-repair 0 |
+| 门槛拦下 | 超尾部窗 12 / 无净省 7 / 不在表面 1 |
+| 假想节省 token | 7,171,173（含 T-entry）；假想断裂重价 **697,622（上界）** |
+
+**读数解读（诚实声明）**：① T-entry 是唯一有大量真实样本的档（72% 的 cmd 结果可整形，断裂成本恒 0），
+重启后应最先在 live 账本看到；② T0/T0-R 在真机语料被**尾部窗 100% 拦下**（读→写之间通常隔着多步），
+说明「老调用对只许 T-boundary 搭车」的门槛按设计生效——不是机制失效；③ T-note 0 落刀符合预期
+（`CUT-OK` 协商标记尚无历史样本）；④ 探针断裂重价按会话**末**表面计价，属上界；真机 fact 记剪点当时
+的存活尾部。阈值不动（探针只记录分布，docs/03 §8）。
+
+**验收**：
+- `npm run gate` 绿（**307 用例 / 32 文件**；结构断言 M1–M5 / S1–S5 / **D1–D10** 全 PASS）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p15b.mjs` → `P15B VERIFY PASS (19 checks)`（文件 / 导出面 / 零 harness import / 接线白名单 / 确定性双跑 / 初值 / D3+D10 / spec 标记 / 真机回放 / live 事实 / 尺寸）
+- `node scripts/verify-p15a.mjs` → `P15A VERIFY PASS (10 checks)`（③ 由「未接线」改为「接线白名单」；T0-R 探针读数不变）
+- `node scripts/verify-p14c.mjs` / `verify-p14d.mjs` → PASS（无回归）
+- `tests/shear-domain.spec.ts` 16 用例（四档端到端 / G1–G9 门槛 / 回填基线 / 确定性）；`tests/shear-ledger.spec.ts` 9 用例；`tests/shear-tool.spec.ts` 25 用例
+
+**尺寸申报（偏差留档）**：工单预算 src 净增 ≤700（红线 800，用户本单已放宽）。实测 **src 净增 880 行**
+（`core/shear` +288 / `domains/shear.ts` 456 / `domains/shear-facts.ts` 45 / `platform/tools.ts` +71 / 其余 +20；
+另 client +10，合计 890）——**超红线 80 行**，但范围未变（无第 5 个机制、无新增挂点、无新目录），验收全绿。
+超量集中在 docs/05 §6 强制合规自证头（本批改动文件内注释 282 行）与类型/契约面；未拆单理由同 P15a。
+若需守线：下一轮可把 `core/shear/ledger.ts`（账本 fold）与 `domains/shear.ts`（调度域）拆为 P15b1/P15b2，
+或把门槛表/注释压缩——两者都只动组织形态，不动行为。
+
+

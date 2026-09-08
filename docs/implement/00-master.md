@@ -81,7 +81,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P14e | ★ 结果复用（**已施工** commit `dfbac32`；快照 [§36](../ledger-history.md)） | R2 修正 | 同会话 + 同 prompt + 同输入指纹的二次点击回放缓存（零调用/零事实/零等待；apply 后失效重断面）+ client `cached` 态（连桥调用都省） | P14d | M |
 | P14f | 推理档做成设置项 + 弹层去噪（**已施工** commit `4711849`；快照 [§37](../ledger-history.md)） | R2 修正 | `discriminator.reasoningEffort`（留空 = 跟随模型默认 / off/low/medium/high/max）**判别与 ★ 共用**，能力探测后只传模型声明的档，账本记 `requestedEffort`/`sentEffort`；删除"已发送"提示 | P14e | M |
 | P15a | 工具剪切纯核（**已施工** commit `0274e4a`；工单 [P15a-shear-tool-core.md](P15a-shear-tool-core.md)；快照 §38） | R3 | `core/shear/` 工具半边（生命周期谓词 + 三级回退 / 四档准入 T-entry/T-loop/T-note/T0-R / T-note 协商；[03 §2](../03-shear.md)）；**纯核未接线**（接线 = P15b）；实测 632 行（预算 M、实际 L、未拆单，见 §38 尺寸申报） | P2 | M |
-| P15b | 工具剪切调度 | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面） | P15a,P6,P7,P12,P2 | M |
+| P15b | 工具剪切调度（**已施工**；工单 [P15b-shear-scheduling.md](P15b-shear-scheduling.md)；快照 §39） | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账 = 独立 `core/shear/ledger.ts` fold）+ `shear.enabled` 开关；实测 src 净增 883 行（预算 700 / 红线 800，见 §39 尺寸申报） | P15a,P6,P7,P12,P2 | M |
 | P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15b | M |
 | P17 | 边界装配器 | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机）+ 共享事务原语（04 §1） | P6,P8,P9 | L（拆纯核/接线两份） |
 | P18 | 压缩调用 | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验；模板在前 + datasets 同源断言，04 §7） | P5,P9 | M |
@@ -129,6 +129,10 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 
 > P15a 施工记录（R3 开工，2026-09-08）：工具剪切纯核已施工（commit `0274e4a`；快照 §38；`node scripts/verify-p15a.mjs` PASS，gate 274 用例 / 30 文件）。
 > **下一未执行单元 = P15b**（`domains/shear.ts` 调度：四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面；依赖 P15a,P6,P7,P12,P2）。
+
+> P15b 施工记录（R3 第二单，2026-09-08）：工具剪切调度已施工（`domains/shear.ts` 四档执行 + 三类 ignorable 事实 + `core/shear/ledger.ts` 独立账本 fold + `shear.enabled` 开关；快照 §39；
+> `node scripts/verify-p15b.mjs` PASS 19 checks，gate 307 用例 / 32 文件）。顺带修正 P15a streak 语义（assistant 消息不再打断 T0-R streak）。
+> **下一未执行单元 = P16**（对话剪切：run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4；依赖 P15b）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、

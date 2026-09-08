@@ -3,7 +3,7 @@
 > 本文是**权威挂点地图**——插件接到 DSH 的哪个事件/服务/槽上，逐条对 harness 源码核验。
 > 域归属视角与三条主时序也在此。事件分两层：会话日志事件（`session/event` firehose，
 > append-only 落盘）与 cordis 运行时事件（waterfall/emit，不落盘）。
-> 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H2/H3/H9 仍为设计态，模块落位见 [11 §3](11-structure.md)）。
+> 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；**H6 四档执行已由 P15b 接线于 `domains/shear.ts`**；H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H2/H3/H9 仍为设计态，模块落位见 [11 §3](11-structure.md)）。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -20,7 +20,7 @@
 | H3 | 压力触发 | `agent/pre-step`（压力计量）+ `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | `pressureRatio=0.4` × 压缩域窗口按 wire 锚定计量（[04 §3](04-compactor.md)）；溢出恢复走 request-error 接管 |
 | H4 | **改史唯一通道** | `session.append(type, data, {surfaceOp:{op:'replace',start,end}, sourceEventSeqs})` | replace 的 `sourceEventSeqs` 必含全部被遮蔽节点；紧邻契约：`compaction/summary` ↔ 替换 `user/message`；`compaction/prune` 影子计价紧随同步 append |
 | H5 | 压缩事务 | `compaction/start` … `compaction/end`（log-only 标记对） | 持锁幂等（`turn:null` 独立事务）；`assertNoActiveCompaction` 防重入 |
-| H6 | 剪切层挂点 | `tools/post-execute` accept `content` 覆盖 = T-entry 写时整形（落账前）；accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车；`tools/execute` 仅作信号/计量 around-wrapper | 工具自有 `finalizeContent` 属定义侧（仅自有工具）；P1.2 契约闭合核验见 [03 §2](../03-shear.md) 表后注 |
+| H6 | 剪切层挂点 | `tools/post-execute` accept `content` 覆盖 = T-entry 写时整形（落账前）；accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车；`tools/execute` 仅作信号/计量 around-wrapper | 工具自有 `finalizeContent` 属定义侧（仅自有工具）；P1.2 契约闭合核验见 [03 §2](../03-shear.md) 表后注；**P15b 已接线**：T-entry/T-note 贴注 = `platform/tools.ts` `createShearToolPort`（同步相），T-loop/T0/T0-R/T-note 剪除 = `domains/shear.ts` 经 H4 执行（异步相），快照 §39 |
 | H7 | 度量回放 | `step/start|end`、`assistant/message`（usage）、`request/header`、`tool/call|result`（原始 arguments + meta） | [07](07-metrics.md) 账本全部字段可从会话 JSONL 回放重算 |
 | H8 | 设置 | `ctx.settings.installSection(owner,'context-economy',Config,entry,hooks)`；写 = `mutate(ns,ops,expectedRevision)` revision-fence | 持久化归 settings-file（原子写 + 文件锁）；`settings/updated` 观察 |
 | H9 | 恢复 | `agent/session-start{source:'resume'|'startup'}` + Session 构造种子 | 种子**不上 firehose**（`firstLiveSeq` 定界）——重启重建需自扫或订阅时区分；恢复序 = [09 §4](09-state.md) |

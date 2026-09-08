@@ -195,6 +195,10 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   （execute 仅信号/计量恒 `return next()`；post-execute 返回决策短路、hook 异常委托 next）
   + 决策构造器 `replaceContent`（T-entry 写时整形）/ `appendContent`（T-note 贴注）；
   T-entry/T-note 判据归 P15a/P15b，端口内不内置剪切规则。
+- **P15b 已接线**：`createShearToolPort(ctx, hooks, logger)` 把执行视图收敛成 `ToolResultView`
+  （callId/name/resultText/isError/hasNonText/origin），只挂 `tools/post-execute`；`parent !== undefined`
+  （run_code 子分发）与 `origin === 'subagent'` 直接委托 `next()`；含非 text 块不整形。T-loop/T0/T0-R
+  与 T-note 剪除走 H4（`domains/shear.ts`），快照 §39。
 
 ### 3.10 客户端接口（client 半边）
 
@@ -392,10 +396,12 @@ webserver/credentials/attachment。
 | `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
-| `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent` | 已施工（P7） |
+| `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent`、`createShearToolPort`（P15b 视图适配） | 已施工（P7 / P15b） |
 | `src/platform/star-bridge.ts` | `ctx.get('connection')` 最小结构面、`connection.rpc.handle('/context-economy')`、`ConnectionRpcResult` 信封（§3.11） | 已施工（P14b1） |
 | `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物）；P14c：极短短路 + 上下文读会话事件 + DTO `historyCount` | 已施工（P14b1 / P14c） |
 | `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
+| `src/domains/shear.ts` | `createShearToolPort` 接线、`createHistoryPort`（H4 replace + prune 影子价）、pump 事件消费 | 已施工（P15b） |
+| `src/domains/shear-facts.ts` | `context-economy/shear-applied|decision|error` 声明合并 + 载荷 | 已施工（P15b） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
 | `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft` + `submit`（P14d 确认即发送）、`useInput`、`StarHostBridge` | 已施工（P14a / P14d） |
 | `client/star/star-protocol.ts` | 两侧独立声明的 channel/端点常量 + `StarPreviewData`/apply 形状守卫 | 已施工（P14b2，§3.11） |
