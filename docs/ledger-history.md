@@ -2413,3 +2413,27 @@ golden 系统提示 `snapshots/web/ptc-round/system-prompt.expected.md`）：
 标准模式**没有** `dev_*` / `list_subagent_models`，§55 的"6.4K"不适用。
 
 **另一杠杆不变**：`AGENTS.md` **14,478 B**（≈3.7K tokens）。
+
+## §57 工具目录为何在系统提示词里：呈现模式（**修正 §55/§56 口径**）（2026-09-09）
+
+**机制（已核实 checkout）**：
+
+- `ToolPresentationMode = 'native' | 'ptc' | 'both'`（`packages/core/tools/src/index.ts:644`），**默认 `native`**（:784）。
+- `tools:sdk` 是**动态 provider**：`text: (context) => render(this.sdkSchemas(context.scope))`（:867–884）——
+  每次组装按该 scope **可见工具注册表现算**。所以"工具确实是按配置组装的"，不是写死的。
+- 该段在 `native` 下渲染为**空**（:874）；`ptc` 下渲染 TypeScript SDK 声明，并由 `tools:ptc-only` 段
+  声明"只能直接调 `run_code`"（:847–855）。
+- web-app 补丁：`tools.config.mode: !!js process.env.DSH_TOOLS_MODE`（不设 = native，
+  `packages/bundle/web-app/cordis.patch.yml:32–38`）；`ptc` 预设显式加
+  `tool-presentation { mode: ptc }`（`presets/ptc/agent.cordis.yml:269–272`）。
+
+**口径修正**：§55/§56 的 34–44KB 都是 **PTC** 会话的系统提示。**标准模式（standard 预设无 mode 行）**
+的 native golden 快照实测 **3.2–9.4KB**（`text-turn` 4,692B / `pwsh-tool-turn` 3,877B /
+`agent-instructions` 9,187B），**不含工具目录**；工具 schema 走请求的 `tools` 数组（同样在请求前缀、同样被缓存）。
+
+**对 price-less 预设的影响**：它拷贝自 standard、**无 mode 行** → 继承部署默认。
+- 若部署进程设了 `DSH_TOOLS_MODE=ptc`（本次会话即 PTC），本预设也会是 PTC；
+- 若要强制 native，在本预设加 `@deepseek-ai/dsh-agent-tool-presentation { mode: native }` 一行即可（scoped 覆盖）。
+
+**权衡**：PTC 把工具 schema 放进系统提示词（+25KB），但**中间结果不进对话**（只有 print/return 进上下文）——
+对上下文经济反而是利好；native 系统提示词小，但每次工具调用都进历史。**待用户裁定本预设取哪种。**
