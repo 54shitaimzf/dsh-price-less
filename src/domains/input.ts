@@ -3,7 +3,7 @@
  * 订阅 pump 的 input/user-message 与 facts/session-event，按
  * T0→L1（重复投递护栏）→对表（保守）→LLM→fail-lazy 决策链逐消息处理；卷宗追加、判别事实发射、
  * 按会话分桶/去重。domains 允许 import core + platform；本文件不直接调用会话追加。
- * P14c：L0 延续词表已删除（实测 0.6% 命中，见 docs/implement/P14c §1）；对表改为打分制。
+ * P14c：L0 延续词表已删除（实测 0.6% 命中，见 docs/implement/archive/P14c §1）；对表改为打分制。
  */
 import {
   FAIL_LAZY_JUDGE_DECISION,

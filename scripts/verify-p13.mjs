@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P13 自动化验收（docs/implement/P13-commands.md §3.8）。
+ * P13 自动化验收（docs/implement/archive/P13-commands.md §3.8）。
  * 轻量模式：一次完整 gate + P12/P8/P9 专项 grep + P13 专项扫描。
  */
 import { spawnSync } from 'node:child_process'

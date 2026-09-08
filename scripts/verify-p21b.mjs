@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P21b 验收（docs/implement/P21b-full-chain.md §5）。
+ * P21b 验收（docs/implement/archive/P21b-full-chain.md §5）。
  * ① 文件齐备；② 纯核面引用；③ 结构/缺陷修正标记；④ 四触发次序闭合表（边→边/边→压/压→边/压→压）；
  * ⑤ 四道缓存断言（10 §6）实跑；⑥ R4 出门门槛汇总（P15a–P21a 全部 verify 脚本）；
  * ⑦ spec 标记；⑧ 文档同步标记；⑨ 尺寸申报。
@@ -37,7 +37,7 @@ const commonPrefix = (a, b) => { let i = 0; while (i < a.length && i < b.length 
 
 // ① 文件齐备
 const FILES = [
-  'docs/implement/P21b-full-chain.md',
+  'docs/implement/archive/P21b-full-chain.md',
   'tests/full-chain-order.spec.ts', 'tests/cache-invariants.spec.ts',
 ]
 const missing = FILES.filter((rel) => !fs.existsSync(path.join(ROOT, rel)))
@@ -146,7 +146,7 @@ const specMarkers = [
 check('spec 标记齐全（四次序 + 四断言主面）', specMarkers.every(([rel, token]) => readText(rel).includes(token)))
 
 // ⑨ 文档同步标记
-const master = readText('docs/implement/00-master.md')
+const master = readText('docs/implement/archive/00-master.md')
 check('总纲 P21b 行 + 施工记录 + R4 关门声明在位',
   /\| P21b \|/.test(master) && /P21b 施工记录/.test(master) && /R4 关门/.test(master))
 check('设计文档状态行同步（11 §8 R4 出门门槛勾选）',
@@ -155,7 +155,7 @@ check('AGENTS 现状 + 账本快照 §50 在位',
   /P21b/.test(readText('AGENTS.md')) && /§50/.test(readText('docs/ledger-history.md')))
 
 // ⑩ 尺寸申报
-const workorder = readText('docs/implement/P21b-full-chain.md')
+const workorder = readText('docs/implement/archive/P21b-full-chain.md')
 check('工单含尺寸实测申报（§6.5）', /尺寸申报/.test(workorder) && workorder.includes('tests/'))
 
 console.log('')

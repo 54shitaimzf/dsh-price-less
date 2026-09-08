@@ -1,5 +1,5 @@
 /**
- * P21a 恢复域单测（docs/implement/P21a-restore.md §5）——fake session/storage，零 cordis 运行时。
+ * P21a 恢复域单测（docs/implement/archive/P21a-restore.md §5）——fake session/storage，零 cordis 运行时。
  * 覆盖：fresh 会话零动作 / 卷宗缺失重放写回 / 卷宗 ok 不动 / 演练注入损坏覆盖写 / 项目帧快照回退 /
  * 项目帧无快照降级 / 档案与产物只降级 / 结构版本不符记账 / 双源漂移 / 幂等 / 事实全部 ignorable / 账本 fold。
  */

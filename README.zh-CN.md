@@ -180,7 +180,7 @@ dev_inject_plugin /path/to/dsh-price-less
 - [11 · 工程结构](docs/11-structure.md)
 - [12 · 平台能力](docs/12-platform-capabilities.md)
 - [13 · DSH 插件规范](docs/13-harness-plugin-spec.md)
-- [施工总纲](docs/implement/00-master.md)
+- [施工总纲](docs/implement/archive/00-master.md)
 
 ## 路线图
 
@@ -191,7 +191,7 @@ dev_inject_plugin /path/to/dsh-price-less
 | R3 | 剪切：工具结果瘦身 | 计划中 |
 | R4 | 压缩：历史压缩 | 计划中 |
 
-详细工单见 [docs/implement/00-master.md](docs/implement/00-master.md)。
+详细工单见 [docs/implement/archive/00-master.md](docs/implement/archive/00-master.md)。
 
 ## 已知限制
 

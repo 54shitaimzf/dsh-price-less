@@ -1,5 +1,5 @@
 /**
- * P20a 压力路径纯核单测（docs/implement/P20-pressure-and-fuse.md §5；docs/04 §3/§5/§7）。
+ * P20a 压力路径纯核单测（docs/implement/archive/P20-pressure-and-fuse.md §5；docs/04 §3/§5/§7）。
  * 触发阈值（绝对设计值为主 + 比例 fallback）/ 断路器 / 检查点渲染 / 续传拼接 /
  * 折叠区材料转写（含被遮蔽原文）/ pressure-fired fold / 同输入同账。
  */

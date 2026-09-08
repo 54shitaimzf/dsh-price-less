@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P6.1 自动化验收（docs/implement/P6.1-wrapup.md §3.3；agent 自动化验收入口）。
+ * P6.1 自动化验收（docs/implement/archive/P6.1-wrapup.md §3.3；agent 自动化验收入口）。
  * 先跑 P5.1/P6 基线，再做本单专项断言；全绿输出 P6.1 VERIFY PASS。
  */
 import { spawnSync } from 'node:child_process'

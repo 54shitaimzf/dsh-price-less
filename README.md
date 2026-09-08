@@ -180,7 +180,7 @@ The design canon is maintained under [`docs/`](docs/):
 - [11 · Structure](docs/11-structure.md)
 - [12 · Platform capabilities](docs/12-platform-capabilities.md)
 - [13 · Harness plugin spec](docs/13-harness-plugin-spec.md)
-- [Implementation master plan](docs/implement/00-master.md)
+- [Implementation master plan](docs/implement/archive/00-master.md)
 
 ## Roadmap
 
@@ -191,7 +191,7 @@ The design canon is maintained under [`docs/`](docs/):
 | R3 | Shear: slim tool results | Planned |
 | R4 | Compaction: history compression | Planned |
 
-See [docs/implement/00-master.md](docs/implement/00-master.md) for detailed work orders.
+See [docs/implement/archive/00-master.md](docs/implement/archive/00-master.md) for detailed work orders.
 
 ## Known Limitations
 

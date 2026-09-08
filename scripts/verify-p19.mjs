@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P19 验收（docs/implement/P19-boundary-path.md §5）。
+ * P19 验收（docs/implement/archive/P19-boundary-path.md §5）。
  * ① 文件齐备；② 纯核/端口导出面；③ 结构铁律（S1/D13/D14/D15 + 域侧收口）；④ 区间转写与档案区 fixture；
  * ⑤ 压缩族账本（P19 自持位 + 合并 fold）；⑥ 假会话端到端（触发 → 调用 → 档案 vN → 事务替换 → 事实 →
  * 内容寻址复用零调用）；⑦ 真机会话只读回放（闭合发现/区间体量/字节稳定）；⑧ spec 标记；⑨ 文档同步标记；
@@ -52,7 +52,7 @@ const readText = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 // ① 文件齐备
 const FILES = [
-  'docs/implement/P19-boundary-path.md',
+  'docs/implement/archive/P19-boundary-path.md',
   'src/core/compress/region.ts', 'src/core/compress/store.ts',
   'src/platform/agent-step.ts', 'src/platform/meter.ts',
   'src/domains/compaction.ts', 'src/domains/compaction-facts.ts',
@@ -370,7 +370,7 @@ const specMarkers = [
 check('spec 标记齐全（4 文件各覆盖本层主面）', specMarkers.every(([rel, token]) => readText(rel).includes(token)))
 
 // ⑨ 文档同步标记
-const master = readText('docs/implement/00-master.md')
+const master = readText('docs/implement/archive/00-master.md')
 check('总纲 P19 行 + 施工记录在位',
   /\| P19 \|/.test(master) && /P19 施工记录/.test(master))
 check('设计文档状态行同步（04/09/10/11）',
@@ -380,7 +380,7 @@ check('AGENTS 现状 + 账本快照 §46 在位',
   /P19/.test(readText('AGENTS.md')) && /§46/.test(readText('docs/ledger-history.md')))
 
 // ⑩ 尺寸申报
-const workorder = readText('docs/implement/P19-boundary-path.md')
+const workorder = readText('docs/implement/archive/P19-boundary-path.md')
 check('工单含尺寸实测申报（P19a/P19b）', /尺寸/.test(workorder) && /P19a/.test(workorder) && /P19b/.test(workorder))
 
 console.log('')

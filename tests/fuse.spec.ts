@@ -1,5 +1,5 @@
 /**
- * P20b 保险丝纯核单测（docs/implement/P20-pressure-and-fuse.md §5；docs/04 §4；docs/07 压缩族 hardTruncateCount）。
+ * P20b 保险丝纯核单测（docs/implement/archive/P20-pressure-and-fuse.md §5；docs/04 §4；docs/07 压缩族 hardTruncateCount）。
  * 地板判定 / 武装谓词 / 事实 fold / 同输入同账。
  */
 import { describe, expect, it } from 'vitest'

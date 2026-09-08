@@ -1,5 +1,5 @@
 /**
- * P14a 星标纯逻辑/桥测试（docs/implement/P14a-star-button-ui.md §3.6；P14d 删 diff 后收敛）。
+ * P14a 星标纯逻辑/桥测试（docs/implement/archive/P14a-star-button-ui.md §3.6；P14d 删 diff 后收敛）。
  * 零 React、零 host import：只验证门控镜像、mock 预览、裁决摘要与桥契约。
  */
 import { describe, expect, it } from 'vitest'

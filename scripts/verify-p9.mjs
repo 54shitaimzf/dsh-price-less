@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P9 自动化验收（docs/implement/P9-dossier.md §3.3）。
+ * P9 自动化验收（docs/implement/archive/P9-dossier.md §3.3）。
  * P8 收尾门 → build → gate/typecheck:tests → 断言确定性 → 纯核扫描 → 行数预算。
  */
 import { spawnSync } from 'node:child_process'

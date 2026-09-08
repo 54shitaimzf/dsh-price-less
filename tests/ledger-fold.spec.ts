@@ -1,5 +1,5 @@
 /**
- * P2 度量底座测试（docs/implement/P2-ledger-base.md §3.5）：
+ * P2 度量底座测试（docs/implement/archive/P2-ledger-base.md §3.5）：
  * 通用族 fold、facts 源等价、缺价 null、确定性、报表模板。
  */
 import { readFileSync } from 'node:fs'

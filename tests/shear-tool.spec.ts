@@ -1,5 +1,5 @@
 /**
- * P15a 工具剪切纯核测试（docs/implement/P15a-shear-tool-core.md §5；docs/03 §7 协议级断言）。
+ * P15a 工具剪切纯核测试（docs/implement/archive/P15a-shear-tool-core.md §5；docs/03 §7 协议级断言）。
  * 九组：谓词与三级回退 / T-entry / T-loop / T-note / T0 / T0-R / 配对与边界搭车 / 确定性 / P15b 接线缝。
  * 纯核测试：零 cordis 运行时、零 IO、零模型。
  */

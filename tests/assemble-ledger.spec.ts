@@ -1,5 +1,5 @@
 /**
- * P17a 压缩族账本单测（docs/07 §0.5 压缩族；docs/implement/P17-boundary-assembler.md §5）。
+ * P17a 压缩族账本单测（docs/07 §0.5 压缩族；docs/implement/archive/P17-boundary-assembler.md §5）。
  * 同输入同账；未实现项显式 0（口径先立不空转）。
  */
 import { describe, expect, it } from 'vitest'

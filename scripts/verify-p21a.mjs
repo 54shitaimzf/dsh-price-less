@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P21a 验收（docs/implement/P21a-restore.md §5）。
+ * P21a 验收（docs/implement/archive/P21a-restore.md §5）。
  * ① 文件齐备；② 纯核/端口/域导出面；③ 结构铁律（S1/D3/D16/D17 + 域侧零模型零改史）；
  * ④ 纯核 fixture（恢复序 / 实体审计四态 / 四表形状 / 段区间 / 卷宗重放 / 双源等价 / 账本 fold）；
  * ⑤ 假会话端到端（fresh 零动作 / 卷宗重建写回 / 项目帧快照回退 / 档案与产物只降级 / 双源漂移 /
@@ -58,7 +58,7 @@ const readText = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 // ① 文件齐备
 const FILES = [
-  'docs/implement/P21a-restore.md',
+  'docs/implement/archive/P21a-restore.md',
   'src/core/restore/plan.ts', 'src/core/restore/rebuild.ts', 'src/core/restore/ledger.ts', 'src/core/restore/index.ts',
   'src/platform/agent-step.ts', 'src/domains/restore.ts', 'src/domains/restore-facts.ts', 'src/index.ts',
   'tests/restore-core.spec.ts', 'tests/restore-domain.spec.ts',
@@ -402,7 +402,7 @@ const specMarkers = [
 check('spec 标记齐全（纯核/域/接线冒烟各覆盖本层主面）', specMarkers.every(([rel, token]) => readText(rel).includes(token)))
 
 // ⑧ 文档同步标记
-const master = readText('docs/implement/00-master.md')
+const master = readText('docs/implement/archive/00-master.md')
 check('总纲 P21a 行 + 施工记录在位', /\| P21a \|/.test(master) && /P21a 施工记录/.test(master))
 check('设计文档状态行同步（09/10/11）',
   /P21a/.test(readText('docs/09-state.md')) && /P21a/.test(readText('docs/10-wiring.md')) && /P21a/.test(readText('docs/11-structure.md')))
@@ -410,7 +410,7 @@ check('AGENTS 现状 + 账本快照 §49 在位',
   /P21a/.test(readText('AGENTS.md')) && /§49/.test(readText('docs/ledger-history.md')))
 
 // ⑨ 尺寸申报
-const workorder = readText('docs/implement/P21a-restore.md')
+const workorder = readText('docs/implement/archive/P21a-restore.md')
 check('工单含尺寸实测申报（§6.5）', /尺寸申报/.test(workorder) && /src 净增/.test(workorder))
 
 console.log('')

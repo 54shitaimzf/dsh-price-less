@@ -1,5 +1,5 @@
 /**
- * P12 自动断面服务测试（docs/implement/P12-input.md §3.7）。
+ * P12 自动断面服务测试（docs/implement/archive/P12-input.md §3.7）。
  * 十一组：T0 解析、模型路由、auto=false 零行为、T0/L1/对表/LLM/fail-lazy（P14c 已删 L0）、
  * 卷宗追加、会话事实隔离。全部 fake，零 cordis 运行时 import。
  */

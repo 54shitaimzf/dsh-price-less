@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P6 自动化验收（docs/implement/P6-history.md §4）。
+ * P6 自动化验收（docs/implement/archive/P6-history.md §4）。
  * 只跑命令/扫描，不替代测试；全绿输出 P6 VERIFY PASS。
  */
 import { spawnSync } from 'node:child_process'

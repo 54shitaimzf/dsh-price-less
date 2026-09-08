@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P15b 验收（docs/implement/P15b-shear-scheduling.md §5）。
+ * P15b 验收（docs/implement/archive/P15b-shear-scheduling.md §5）。
  * ① 文件齐备；② 导出面；③ core/shear 零 harness/platform import；④ 接线白名单；⑤ 确定性双跑；
  * ⑥ 策略/模板初值未漂移；⑦ D3 白名单 + D10 规则在位；⑧ spec 标记；
  * ⑨ 真机会话离线回放（含九道门槛的假想账本）；⑩ live 事实数（未重启 = 0）；⑪ 尺寸申报。
@@ -44,7 +44,7 @@ const check = (name, ok, detail = '') => {
 }
 
 const FILES = [
-  'docs/implement/P15b-shear-scheduling.md',
+  'docs/implement/archive/P15b-shear-scheduling.md',
   'src/core/shear/ledger.ts',
   'src/domains/shear.ts',
   'src/domains/shear-facts.ts',

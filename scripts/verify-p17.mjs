@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P17 验收（docs/implement/P17-boundary-assembler.md §5）。
+ * P17 验收（docs/implement/archive/P17-boundary-assembler.md §5）。
  * ① 文件齐备；② 纯核/端口/域导出面；③ core 零 harness import + D7/D11/D12 在位；
  * ④ 策略初值未漂移；⑤ 跨层事实名一致；⑥ 坐标链/热尾/事务 fixture；⑦ 账本 fold；
  * ⑧ 结构断言引擎全绿；⑨ spec 标记；⑩ 真机会话离线回放（文件操作 / 单元 / 假想热尾）；
@@ -46,7 +46,7 @@ const readText = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 // ① 文件齐备
 const FILES = [
-  'docs/implement/P17-boundary-assembler.md',
+  'docs/implement/archive/P17-boundary-assembler.md',
   'src/core/assemble/types.ts',
   'src/core/assemble/chain.ts',
   'src/core/assemble/gate.ts',
@@ -376,9 +376,9 @@ check('docs/10 挂点表含 H15（盘上取真）', /H15/.test(readText('docs/10
 check('docs/11 状态/搭建序已同步 P17', /P17/.test(readText('docs/11-structure.md')))
 check('docs/13 含 ctx.fs 接口节', /dsh-fs/.test(readText('docs/13-harness-plugin-spec.md')))
 check('ledger-history 含 §42/§43 快照', /§42/.test(readText('docs/ledger-history.md')) && /§43/.test(readText('docs/ledger-history.md')))
-check('总纲 P17 行标已施工 + 下一单 = P18', /P17 \| 边界装配器（\*\*已施工/.test(readText('docs/implement/00-master.md')) && /P18/.test(readText('docs/implement/00-master.md')))
+check('总纲 P17 行标已施工 + 下一单 = P18', /P17 \| 边界装配器（\*\*已施工/.test(readText('docs/implement/archive/00-master.md')) && /P18/.test(readText('docs/implement/archive/00-master.md')))
 check('AGENTS 现状段已同步 P17', /P17/.test(readText('AGENTS.md')))
-check('工单含 P17c 修正单（§8）', /## 8\. P17c 修正单/.test(readText('docs/implement/P17-boundary-assembler.md')))
+check('工单含 P17c 修正单（§8）', /## 8\. P17c 修正单/.test(readText('docs/implement/archive/P17-boundary-assembler.md')))
 check('ledger-history 含 §44 快照（P17c）', /## 44\. 账本快照 §44/.test(readText('docs/ledger-history.md')))
 check('docs/04 状态行已同步 P17c', /P17c/.test(readText('docs/04-compactor.md')))
 

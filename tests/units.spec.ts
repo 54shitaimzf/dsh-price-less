@@ -1,5 +1,5 @@
 /**
- * P8 分划单位状态机测试（docs/implement/P8-units-prefix.md §3.5）。
+ * P8 分划单位状态机测试（docs/implement/archive/P8-units-prefix.md §3.5）。
  * 全部 fake 事实/事件，零 cordis 运行时 import。
  */
 import { readFileSync } from 'node:fs'

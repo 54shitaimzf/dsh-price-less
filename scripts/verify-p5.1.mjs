@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P5.1 自动化验收（docs/implement/P6.1-wrapup.md §3.1 + P5.1-llm-hardening.md §3.3）。
+ * P5.1 自动化验收（docs/implement/archive/P6.1-wrapup.md §3.1 + P5.1-llm-hardening.md §3.3）。
  * 只跑命令/扫描，不替代测试；全绿输出 P5.1 VERIFY PASS。
  */
 import { spawnSync } from 'node:child_process'

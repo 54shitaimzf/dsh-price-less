@@ -1,5 +1,5 @@
 /**
- * P18 共享消费模块单测（docs/implement/P18-compress-call.md §5；docs/04 §3 生产/消费不对称律）。
+ * P18 共享消费模块单测（docs/implement/archive/P18-compress-call.md §5；docs/04 §3 生产/消费不对称律）。
  * 摘要块续传 / 材料块折叠 / 四触发次序闭合 / 链形态非法。
  */
 import { describe, expect, it } from 'vitest'

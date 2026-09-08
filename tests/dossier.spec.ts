@@ -1,5 +1,5 @@
 /**
- * P9 卷宗纯核测试（docs/implement/P9-dossier.md §3.2）。
+ * P9 卷宗纯核测试（docs/implement/archive/P9-dossier.md §3.2）。
  * 九组用例：纯核语义、P8 集成、确定性、P3 持久契约；fake 域，零 cordis 运行时。
  */
 import { describe, expect, it } from 'vitest'

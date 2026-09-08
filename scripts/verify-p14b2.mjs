@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P14b2 自动化验收（docs/implement/P14b2-star-live-bridge.md §3.6/§5）。
+ * P14b2 自动化验收（docs/implement/archive/P14b2-star-live-bridge.md §3.6/§5）。
  * 前序门 → 两侧常量比对 → client 反向扫描 → gate → build → 隔离 home 冒烟 → 行数预算。
  */
 import { spawn, spawnSync } from 'node:child_process'

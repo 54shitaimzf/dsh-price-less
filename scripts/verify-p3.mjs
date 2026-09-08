@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P3 自动化验收（docs/implement/P3-storage.md §3.6）。
+ * P3 自动化验收（docs/implement/archive/P3-storage.md §3.6）。
  * 只跑命令/扫描，不替代测试；全绿输出 P3 VERIFY PASS。
  */
 import { spawnSync } from 'node:child_process'

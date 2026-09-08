@@ -1,5 +1,5 @@
 /**
- * P19a 区间转写单测（docs/implement/P19-boundary-path.md §5；docs/04 §2）。
+ * P19a 区间转写单测（docs/implement/archive/P19-boundary-path.md §5；docs/04 §2）。
  * 覆盖：四类表面节点转写 / 被遮蔽节点不入正文 / 区间过滤 / 坏形状不抛错 / 字节稳定 / 体量计量。
  */
 import { describe, expect, it } from 'vitest'

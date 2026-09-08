@@ -1,5 +1,5 @@
 /**
- * P18 压缩调用账本单测（docs/implement/P18-compress-call.md §5；docs/07 §0.5 压缩族）。
+ * P18 压缩调用账本单测（docs/implement/archive/P18-compress-call.md §5；docs/07 §0.5 压缩族）。
  * 调用/复用口径 + 合并进压缩族 fold（防双计）+ 同输入同账。
  */
 import { describe, expect, it } from 'vitest'

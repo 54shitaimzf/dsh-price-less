@@ -1,5 +1,5 @@
 /**
- * P18 产物解析与 schema 校验单测（docs/implement/P18-compress-call.md §5；docs/04 §2/§3）。
+ * P18 产物解析与 schema 校验单测（docs/implement/archive/P18-compress-call.md §5；docs/04 §2/§3）。
  * 围栏剥离 / 平衡抽取 / 三环 fatal 口径 / HT 软门降级 / 缝两校验 / 永不抛错。
  */
 import { describe, expect, it } from 'vitest'

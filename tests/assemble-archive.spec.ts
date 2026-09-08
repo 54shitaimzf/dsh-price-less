@@ -1,5 +1,5 @@
 /**
- * P17c 档案形态与硬帽单测（docs/implement/P17-boundary-assembler.md §5/§8；docs/04 §6 + §3 机制 A）。
+ * P17c 档案形态与硬帽单测（docs/implement/archive/P17-boundary-assembler.md §5/§8；docs/04 §6 + §3 机制 A）。
  * 15K 硬帽整条截断 / 两形态（单块 / [C…][D]）/ append-only（stub 不可重压）/ priorChain 续传 / 确定性。
  */
 import { describe, expect, it } from 'vitest'

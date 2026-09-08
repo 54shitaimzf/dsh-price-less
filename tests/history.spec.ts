@@ -1,5 +1,5 @@
 /**
- * P6 改史端口单测（docs/implement/P6-history.md §3.2）——全部 fake session，
+ * P6 改史端口单测（docs/implement/archive/P6-history.md §3.2）——全部 fake session，
  * 零 cordis 运行时/零真 harness 依赖。覆盖：
  * H4 replace 的 sourceEventSeqs 自动补全与合并、assistant 禁源、非法区间；
  * H5 begin/end 事务与防重入、ID/turn 校验；compaction/prune 影子计价；

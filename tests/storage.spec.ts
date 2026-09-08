@@ -1,5 +1,5 @@
 /**
- * P3 持久面单测（docs/implement/P3-storage.md §3.3）——全部 fake，零 cordis 运行时直连。
+ * P3 持久面单测（docs/implement/archive/P3-storage.md §3.3）——全部 fake，零 cordis 运行时直连。
  * 覆盖：域声明合法、无 source 拒绝、CAS 创建/更新/冲突、快照与审计、回滚、
  * 事实镜像（同毫秒不覆盖）、FactMirrorRecord ↔ LedgerFact 类型级等价。
  */

@@ -1,5 +1,5 @@
 /**
- * P18 两模式 prompt 组装单测（docs/implement/P18-compress-call.md §5；docs/04 §2/§3）。
+ * P18 两模式 prompt 组装单测（docs/implement/archive/P18-compress-call.md §5；docs/04 §2/§3）。
  * 模板在前 / 清单在尾 / 零预算泄漏 / 续传面 / 上限计数 / 字节稳定。
  */
 import { describe, expect, it } from 'vitest'

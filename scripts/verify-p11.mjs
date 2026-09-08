@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P11 自动化验收（docs/implement/P11-optimize.md §3.3）。
+ * P11 自动化验收（docs/implement/archive/P11-optimize.md §3.3）。
  * 轻量模式：一次完整 gate + P8/P9 专项 grep + P11 专项扫描，不重跑 verify-p8/p9/p10 全量。
  */
 import { spawnSync } from 'node:child_process'

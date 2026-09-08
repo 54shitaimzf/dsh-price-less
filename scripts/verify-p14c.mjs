@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P14c 历史回放验收（docs/implement/P14c-gate-slim-and-star-fix.md §4）。
+ * P14c 历史回放验收（docs/implement/archive/P14c-gate-slim-and-star-fix.md §4）。
  * 用真实历史消息量三件事：① 极短过滤率；② 删 L0 的反事实代价；③ 对表保守打分的命中率与安全性。
  * 纯回放：只读本地会话缓存与判别记录，不联网、不调模型。
  */

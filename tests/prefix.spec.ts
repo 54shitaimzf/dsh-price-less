@@ -1,5 +1,5 @@
 /**
- * P8 稳定前缀测试（docs/implement/P8-units-prefix.md §3.6）。
+ * P8 稳定前缀测试（docs/implement/archive/P8-units-prefix.md §3.6）。
  * 全部纯函数，零 harness/cordis 运行时 import。
  */
 import { describe, expect, it } from 'vitest'

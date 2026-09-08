@@ -175,9 +175,11 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | **R3 剪切域** | core/shear + domains/shear（工具剪切四档 + 对话 run 冲刷）——**P15a + P15b + P16 全部施工**（快照 §38/§39/§40/§41），**R3 关门** | cut*/shear*/tableRepair/questionBacklogDepth/cutMisfireDetected 全部入账（P16 补齐后三字段）；阈值常数按既有实验结论初值落位（[03 §8](03-shear.md)，不做对照实验） |
 | **R4 压缩域（完成）** | core/{compress,assemble,restore} + domains/{compaction,restore}：边界装配 → 压力路径 → 保险丝 → 恢复编排；验收按四种触发次序组织（**P17** 装配器 §42/§43 + **P17c** §44 / **P18** 调用纯核 §45 / **P19** 边界路径 §46 / **P20+P20c** 压力与保险丝 §47/§48 / **P21a** 恢复编排 §49 / **P21b** 全链验收 §50） | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效；**四触发次序 + 四道缓存断言进 CI** |
 | R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
+| **N 系列（进行中）** | **协商剪除（语义层）**：N1 身份通道 → N2 结论契约 → N3 影子模式 → N4 剪除执行 → N5 闸门退避 → N6 验收；总纲 [implement/00-master.md](implement/00-master.md) | 各单元自设门槛；N3 出门 = 配合率 / 保真率 / 深度分布三张表 |
 
-施工分解：R0–R4 细化为 P0–P21b 工单（flash 级自主执行粒度，验收全机械），总纲与工单见
-[implement/00-master.md](implement/00-master.md)。
+施工分解：R0–R4 细化为 P0–P21b 工单（flash 级自主执行粒度，验收全机械），**已封存**至
+[implement/archive/00-master.md](implement/archive/00-master.md)（历史只读）；新设计见
+[implement/00-master.md](implement/00-master.md)（N 系列）。
 
 ## 9. 结构验收（进 CI）
 

@@ -1,5 +1,5 @@
 /**
- * P17a 坐标层单测（docs/implement/P17-boundary-assembler.md §5；docs/04 §2 通道 A）。
+ * P17a 坐标层单测（docs/implement/archive/P17-boundary-assembler.md §5；docs/04 §2 通道 A）。
  * 纯核 fixture：版本补丁链 fold + vN 重映射（恒等 / 逐版行偏移 / 出界裁剪 / 删除丢弃 / 链断）。
  */
 import { describe, expect, it } from 'vitest'

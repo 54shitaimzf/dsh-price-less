@@ -1,5 +1,5 @@
 /**
- * P14b1 星标 host 断面服务测试（docs/implement/P14b1-star-host-service.md §3.6）。
+ * P14b1 星标 host 断面服务测试（docs/implement/archive/P14b1-star-host-service.md §3.6）。
  * 十二组：全量断面 / 门控 / 解析失败 / 非 stop / 无会话 / apply 回填+产物+两相事实 /
  * 未知预览 / 幂等 / 版本递增 / fold / summarizeVerdict / pending 容量；另加 RPC 端口组。
  * 全部 fake，零网络、零真模型、零 cordis 运行时。

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P16 验收（docs/implement/P16-dialogue-shear.md §5）。
+ * P16 验收（docs/implement/archive/P16-dialogue-shear.md §5）。
  * ① 文件齐备；② 纯核/端口/域导出面；③ core/shear 零 harness/platform import；④ 接线白名单；
  * ⑤ 结论三档 + 中立性 + 预算 fixture；⑥ 确定性双跑；⑦ 策略初值未漂移；⑧ 跨层事实名一致；
  * ⑨ 账本 fold 三字段；⑩ D3/D10 在位；⑪ spec 标记；⑫ 真机会话离线回放（run 候选 / 假想落刀 / 拦截）；
@@ -37,7 +37,7 @@ const check = (name, ok, detail = '') => {
 }
 
 const FILES = [
-  'docs/implement/P16-dialogue-shear.md',
+  'docs/implement/archive/P16-dialogue-shear.md',
   'src/core/shear/run.ts',
   'src/core/shear/ledger.ts',
   'src/domains/shear.ts',

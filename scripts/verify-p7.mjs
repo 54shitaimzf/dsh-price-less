@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P7 自动化验收（docs/implement/P7-tools.md §3.3；agent 自动化验收入口）。
+ * P7 自动化验收（docs/implement/archive/P7-tools.md §3.3；agent 自动化验收入口）。
  * build（有 checkout）→ 五段门禁 → 断言确定性 + D8 → 反向扫描 → 端口纯净 → 行数预算。
  */
 import { spawnSync } from 'node:child_process'

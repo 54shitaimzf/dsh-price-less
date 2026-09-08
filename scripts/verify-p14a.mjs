@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P14a 自动化验收（docs/implement/P14a-star-button-ui.md §3.8）。
+ * P14a 自动化验收（docs/implement/archive/P14a-star-button-ui.md §3.8）。
  * 轻量模式：一次完整 gate + P14a 专项 grep + 反向扫描 + 构建（缺 checkout 记 SKIP）。
  */
 import { spawnSync } from 'node:child_process'

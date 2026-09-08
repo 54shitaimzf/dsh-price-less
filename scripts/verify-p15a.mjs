@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P15a 验收（docs/implement/P15a-shear-tool-core.md §5）。
+ * P15a 验收（docs/implement/archive/P15a-shear-tool-core.md §5）。
  * ① 导出面；② core/shear 零 harness/platform import；③ 未接线（接线归 P15b）；
  * ④ 确定性双跑；⑤ 策略初值；⑥ spec 覆盖标记；⑦ T0-R 真机会话探针（docs/03 §8 先立度量）。
  * 纯回放：只读本地会话缓存，不联网、不调模型。需先 build（import ../lib）。

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P5 自动化验收（docs/implement/P5-llm.md §3.3）。
+ * P5 自动化验收（docs/implement/archive/P5-llm.md §3.3）。
  * 只跑命令/扫描，不替代测试；全绿输出 P5 VERIFY PASS。
  */
 import { spawnSync } from 'node:child_process'

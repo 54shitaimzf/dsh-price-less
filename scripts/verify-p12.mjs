@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P12 自动化验收（docs/implement/P12-input.md §3.10）。
+ * P12 自动化验收（docs/implement/archive/P12-input.md §3.10）。
  * 轻量模式：一次完整 gate + P10/P8/P9 专项 grep + P12 专项扫描。
  */
 import { spawnSync } from 'node:child_process'

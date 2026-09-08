@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P8 自动化验收（docs/implement/P8-units-prefix.md §3.8）。
+ * P8 自动化验收（docs/implement/archive/P8-units-prefix.md §3.8）。
  * build（有 checkout）→ gate/typecheck:tests → 断言确定性 → 纯核/接线扫描 → 行数预算。
  */
 import { spawnSync } from 'node:child_process'

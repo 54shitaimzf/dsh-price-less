@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P2 自动化验收（docs/implement/P2-ledger-base.md §3.6）。
+ * P2 自动化验收（docs/implement/archive/P2-ledger-base.md §3.6）。
  * 只跑命令/扫描，不替代测试；全绿输出 P2 VERIFY PASS。
  */
 import { spawnSync } from 'node:child_process'

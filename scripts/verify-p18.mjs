@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P18 验收（docs/implement/P18-compress-call.md §5）。
+ * P18 验收（docs/implement/archive/P18-compress-call.md §5）。
  * ① 文件齐备；② 纯核导出面；③ S1/D13 结构铁律 + 断言引擎在位；④ 版本/策略初值未漂移；
  * ⑤ 两模式 prompt fixture（模板在前/清单在尾/零预算泄漏/续传/上限）；⑥ 产物 fixture（fatal 口径/HT 软门/缝两校验）；
  * ⑦ 四次序闭合表；⑧ 调用账本 fold + 合并压缩族（防双计）；⑨ spec 标记；⑩ 真机会话只读回放（渲染字节稳定/体量分布）；
@@ -52,7 +52,7 @@ const readText = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 // ① 文件齐备
 const FILES = [
-  'docs/implement/P18-compress-call.md',
+  'docs/implement/archive/P18-compress-call.md',
   'src/core/compress/types.ts',
   'src/core/compress/prompt.ts',
   'src/core/compress/product.ts',
@@ -324,8 +324,8 @@ console.log('尺寸申报（含注释总行数，非净增）：' + sizes.join('
 check('尺寸申报输出', sizes.length === sizeFiles.length)
 
 // ⑫ 文档同步标记
-check('总纲 P18 行标已施工 + 修正落位', /P18 \| 压缩调用（\*\*已施工/.test(readText('docs/implement/00-master.md')))
-const p18Row = readText('docs/implement/00-master.md').split('\n').find((line) => line.startsWith('| P18 |')) ?? ''
+check('总纲 P18 行标已施工 + 修正落位', /P18 \| 压缩调用（\*\*已施工/.test(readText('docs/implement/archive/00-master.md')))
+const p18Row = readText('docs/implement/archive/00-master.md').split('\n').find((line) => line.startsWith('| P18 |')) ?? ''
 check('总纲 P18 行删除 datasets 同源断言（修正 #2 落位）',
   p18Row.includes('版本化常量/字节稳定断言') && !p18Row.includes('模板在前 + datasets 同源断言'))
 check('docs/04 状态行已同步 P18', /P18/.test(readText('docs/04-compactor.md')))
@@ -334,7 +334,7 @@ check('docs/11 状态行/树已同步 P18', /P18/.test(readText('docs/11-structu
 check('docs/11 §7 资产登记已同步 P18（压缩器 prompt 版本化 + 字节稳定断言）', /压缩器 prompt（边界\/压力两模式；版本化常量 \+ 字节稳定断言/.test(readText('docs/11-structure.md')))
 check('AGENTS 现状段已同步 P18', /P18/.test(readText('AGENTS.md')))
 check('ledger-history 含 §45 快照（P18）', /## 45\. 账本快照 §45/.test(readText('docs/ledger-history.md')))
-check('工单含 §8 计划修正表（8 项）', /## 8\. 计划修正/.test(readText('docs/implement/P18-compress-call.md')))
+check('工单含 §8 计划修正表（8 项）', /## 8\. 计划修正/.test(readText('docs/implement/archive/P18-compress-call.md')))
 
 console.log('')
 if (failures.length > 0) {

@@ -32,8 +32,9 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
 client/ 设置壳**全保留**（星标按钮 +
-度量可视化按 `docs/11 §5` 接线）；后续机制按 `docs/11 §8` 搭建序（R2–R4）与
-`docs/implement/` 工单推进，核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
+度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
+（历史记录，只读）；**新设计 = N 系列「协商剪除」（语义层）**，总纲 `docs/implement/00-master.md`
+（N1 身份通道 → N2 结论契约 → N3 影子模式 → N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。
@@ -56,7 +57,7 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 - 改动前后必须留账本快照（`docs/07-metrics.md` 现行口径；历史快照档 = `docs/ledger-history.md`，
   只增不改），否则改动不算完成；账本快照 = 纯回放管道产出，不依赖实验批。
 - **不再组织对照实验（2026-09 定）**：实验结论已固化进 `docs/02–04` 设计与常数；
-  R3/R4 验收 = 机械断言 + 07 账本回放 + 真机冒烟（`docs/implement/00-master.md` §4）。
+  R3/R4 验收 = 机械断言 + 07 账本回放 + 真机冒烟（`docs/implement/archive/00-master.md` §4）。
   `docs/08` 与 `experiments/evalground/` 封存为历史方法学，正文不改，如将来重建实验面再启用。
 - 插件侧 vitest：设置壳不变量（`tests/field-model.spec.ts`）+ P0 冒烟/断言自测
   （`apply-smoke` / `assert-structure`）+ P1 事件面（`events-pump` / `ce-logger` /

@@ -1,5 +1,5 @@
 /**
- * P13 命令面测试（docs/implement/P13-commands.md §3.6）。
+ * P13 命令面测试（docs/implement/archive/P13-commands.md §3.6）。
  * 九组：task-facts 声明、init 纯核、/task open/close/status、/init propose/confirm/守卫、
  * /optimize-prompt 委托、dispose 与计数。全部 fake，零 cordis 运行时 import。
  */

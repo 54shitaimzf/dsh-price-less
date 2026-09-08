@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P20 验收（docs/implement/P20-pressure-and-fuse.md §5）。
+ * P20 验收（docs/implement/archive/P20-pressure-and-fuse.md §5）。
  * ① 文件齐备；② 纯核/端口导出面；③ 结构铁律（S1/D13/D14 + 域侧收口 + patch.yml auto:false）；
  * ④ 压力纯核 fixture（阈值/断路器/检查点/续传拼接/折叠区材料转写/pressure-fired fold）；
  * ⑤ 保险丝纯核 fixture（地板/武装/hard-truncate fold）；⑥ 压缩族账本（pressure* + hardTruncate*）；
@@ -60,7 +60,7 @@ const readText = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
 
 // ① 文件齐备
 const FILES = [
-  'docs/implement/P20-pressure-and-fuse.md',
+  'docs/implement/archive/P20-pressure-and-fuse.md',
   'src/core/compress/pressure.ts', 'src/core/compress/fuse.ts',
   'src/platform/agent-step.ts', 'src/platform/meter.ts', 'src/platform/llm.ts',
   'src/domains/compaction.ts', 'src/domains/compaction-facts.ts', 'cordis.patch.yml',
@@ -450,7 +450,7 @@ const specMarkers = [
 check('spec 标记齐全（5 文件各覆盖本层主面）', specMarkers.every(([rel, token]) => readText(rel).includes(token)))
 
 // ⑩ 文档同步标记
-const master = readText('docs/implement/00-master.md')
+const master = readText('docs/implement/archive/00-master.md')
 check('总纲 P20a/P20b 行 + 施工记录在位',
   /\| P20a \|/.test(master) && /\| P20b \|/.test(master) && /P20 施工记录/.test(master))
 check('设计文档状态行同步（04/09/10/11）',
@@ -460,7 +460,7 @@ check('AGENTS 现状 + 账本快照 §47 在位',
   /P20/.test(readText('AGENTS.md')) && /§47/.test(readText('docs/ledger-history.md')))
 
 // ⑪ 尺寸申报
-const workorder = readText('docs/implement/P20-pressure-and-fuse.md')
+const workorder = readText('docs/implement/archive/P20-pressure-and-fuse.md')
 check('工单含尺寸实测申报（P20a/P20b）', /尺寸/.test(workorder) && /P20a/.test(workorder) && /P20b/.test(workorder))
 
 console.log('')

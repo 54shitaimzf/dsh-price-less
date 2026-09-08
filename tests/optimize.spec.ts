@@ -1,5 +1,5 @@
 /**
- * P11 星标断面纯核测试（docs/implement/P11-optimize.md §3.2）。
+ * P11 星标断面纯核测试（docs/implement/archive/P11-optimize.md §3.2）。
  * 九组用例：门控/输入栈与预算/render 布局与确定性/候选 span/双通道解析/行级容错/
  * 引用守卫/权威段逐字保留/度量 fold。全部纯函数与 fake 数据，零 cordis 运行时 import。
  */

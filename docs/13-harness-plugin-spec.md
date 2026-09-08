@@ -338,7 +338,7 @@ link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 
 - client 注入：`['slots','settingsScope','remote','remote.session','connection']`
 - 已注册槽：`settings.plugin.item`（设置卡）、`conversation.input.right`（星标按钮）
-- 星标使用 `StarHostBridge` 接口（见 `docs/implement/P14a-star-button-ui.md` §2.3）；
+- 星标使用 `StarHostBridge` 接口（见 `docs/implement/archive/P14a-star-button-ui.md` §2.3）；
   P14b2 已接真实桥：`client/star/star-bridge.ts:createHostStarBridge(ctx)` 经
   `ctx.get('connection')` → `ConnectionHandle.rpc.call` 调 P14b1 端口（§3.11）；
   `createMockStarBridge` 降级为测试资产（`tests/star-model.spec.ts`）。
@@ -347,7 +347,7 @@ link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 ### 3.11 Connection 通用 RPC 通道（P14b1 使用；星标 host 桥）
 
 > P14b1 否决 P14a §8.2 的 Typert Remote 设想，改用官方 Connection 通道（依据见
-> `docs/implement/P14b1-star-host-service.md` §0.1）。核验源均在 `packages/client/connection/`。
+> `docs/implement/archive/P14b1-star-host-service.md` §0.1）。核验源均在 `packages/client/connection/`。
 
 | 符号 | 定义处 | 用途 |
 |---|---|---|

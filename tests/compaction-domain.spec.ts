@@ -1,5 +1,5 @@
 /**
- * P19b 边界压缩域单测（docs/implement/P19-boundary-path.md §5）——fake session/storage/llm/assemble，
+ * P19b 边界压缩域单测（docs/implement/archive/P19-boundary-path.md §5）——fake session/storage/llm/assemble，
  * 零 cordis 运行时。覆盖：闭合发现与已归档守卫 / 全路径落刀（事务 + 档案 vN + 事实）/
  * 内容寻址复用（零调用）/ 解析失败 / 缩水重试与放弃 / 落盘失败不落刀 / llm 缺失可重试 /
  * 开关关闭 / 续传链（机制 A）/ T-boundary 搭车补账 / 卷宗结构性清空。

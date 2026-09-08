@@ -1,5 +1,5 @@
 /**
- * P19a H2 步准入端口单测（docs/implement/P19-boundary-path.md §5；docs/10 §1 H2）。
+ * P19a H2 步准入端口单测（docs/implement/archive/P19-boundary-path.md §5；docs/10 §1 H2）。
  * 覆盖：回调载荷 / 恒 return next() / 异常遏制 / signal 中止跳过 / 退订。
  */
 import { describe, expect, it } from 'vitest'

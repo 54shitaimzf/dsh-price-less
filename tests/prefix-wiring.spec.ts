@@ -1,5 +1,5 @@
 /**
- * P8 稳定前缀 watch 接线测试（docs/implement/P8-units-prefix.md §3.7）。
+ * P8 稳定前缀 watch 接线测试（docs/implement/archive/P8-units-prefix.md §3.7）。
  * fake ctx + fake storageDomain；零 cordis 运行时依赖。
  */
 import { describe, expect, it } from 'vitest'

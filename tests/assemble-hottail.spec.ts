@@ -1,5 +1,5 @@
 /**
- * P17a 事实层与热尾单测（docs/implement/P17-boundary-assembler.md §5；docs/04 §2 预算三环）。
+ * P17a 事实层与热尾单测（docs/implement/archive/P17-boundary-assembler.md §5；docs/04 §2 预算三环）。
  * 贪心停机 / 单单元尾截断 / 地板填充 / 位置兜底 / 装配序 / digest schema / 确定性。
  */
 import { describe, expect, it } from 'vitest'

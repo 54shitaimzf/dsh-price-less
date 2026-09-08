@@ -1,5 +1,5 @@
 /**
- * P19a 档案区存储面单测（docs/implement/P19-boundary-path.md §5；docs/04 §6 / docs/09 §2）。
+ * P19a 档案区存储面单测（docs/implement/archive/P19-boundary-path.md §5；docs/04 §6 / docs/09 §2）。
  * 覆盖：追加 + 硬帽整条截断 / 防御解析 / 内容寻址键（确定性 + 输入敏感）/ 缓存命中与淘汰 / 续传链过滤。
  */
 import { describe, expect, it } from 'vitest'

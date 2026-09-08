@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P14b1 自动化验收（docs/implement/P14b1-star-host-service.md §3.7/§5）。
+ * P14b1 自动化验收（docs/implement/archive/P14b1-star-host-service.md §3.7/§5）。
  * 轻量模式：正向契约 grep + 反向扫描 + 完整 gate + 断言确定性 + 构建 + lib 新鲜度 + 行数预算。
  * 注：§5 的 "grep connection client/" 按语义执行——client 侧禁止的是 RPC 桥概念与 diff，
  * P14a 既有 inject 'connection' / 'connection/reset' 不算（P14b1 client 零改动以 git 断言）。

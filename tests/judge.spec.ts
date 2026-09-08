@@ -1,5 +1,5 @@
 /**
- * P10 判据与对表纯核测试（docs/implement/P10-judge.md §3.2）。
+ * P10 判据与对表纯核测试（docs/implement/archive/P10-judge.md §3.2）。
  * 九组用例：L0/L1/对表/prompt 渲染/解析/fold/P8-P9 集成/datasets 同源/确定性。
  * 全部纯函数与 fake 数据，零 cordis 运行时 import。
  */

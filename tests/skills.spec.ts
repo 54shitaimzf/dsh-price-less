@@ -1,5 +1,5 @@
 /**
- * P4 技能目录端口测试（docs/implement/P4-skills.md §3.2）。
+ * P4 技能目录端口测试（docs/implement/archive/P4-skills.md §3.2）。
  * 全部 fake，零 cordis 运行时 import；锁：只经 ctx.skills 官方缝、最小字段映射、
  * fail-lazy、skills/change 热更新、幂等卸载、onChange 异常遏制。
  */

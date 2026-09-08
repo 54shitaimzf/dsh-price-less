@@ -1,5 +1,5 @@
 /**
- * P14b2 星标传输契约与端到端（两侧同测；docs/implement/P14b2-star-live-bridge.md §3.4）。
+ * P14b2 星标传输契约与端到端（两侧同测；docs/implement/archive/P14b2-star-live-bridge.md §3.4）。
  * 契约等价 / 进程内 E2E（client 桥 → fake wire → 真实 host 端口）/ 失败映射 / 无 connection /
  * host 端口行为。全部 fake，零网络、零真模型。
  */

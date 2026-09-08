@@ -1,5 +1,5 @@
 /**
- * P21a 恢复纯核单测（docs/implement/P21a-restore.md §5）——零 cordis、零 IO。
+ * P21a 恢复纯核单测（docs/implement/archive/P21a-restore.md §5）——零 cordis、零 IO。
  * 覆盖：恢复序 / 实体审计四态 / 四表形状校验 / 段区间归属 / 卷宗日志重放重建 /
  * 双源等价核对 / 恢复族账本 fold（07 restoreDegraded）。
  */

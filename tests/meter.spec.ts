@@ -1,5 +1,5 @@
 /**
- * P20a H7 计量端口单测（docs/implement/P20-pressure-and-fuse.md §5；docs/10 §1 H7）。
+ * P20a H7 计量端口单测（docs/implement/archive/P20-pressure-and-fuse.md §5；docs/10 §1 H7）。
  * 区间启发式体量（影子价同源）+ wire 锚定计量（measure().totalTokens）；服务缺失/异常 = undefined。
  */
 import { describe, expect, it } from 'vitest'

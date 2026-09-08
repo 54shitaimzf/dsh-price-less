@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * P10 自动化验收（docs/implement/P10-judge.md §3.3）。
+ * P10 自动化验收（docs/implement/archive/P10-judge.md §3.3）。
  * 轻量模式：一次完整 gate + P9 专项 grep + P10 专项扫描，不重跑 verify-p9 全量。
  */
 import { spawnSync } from 'node:child_process'
