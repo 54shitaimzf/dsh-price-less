@@ -36,7 +36,6 @@
 |---|---|---|---|---|
 | T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因；**列表类命令（Get-ChildItem/gci/ls/dir/tree/fd/find）不整形**——载荷 = 名字集合，保头尾会丢名字，记 `entry-skip-listing` |
 | T-loop | 思考后占位（模型消费完结果） | surfaceOp replace | 一次 + 短尾（剪点 = 刚消费完） | 当次结论极短 + cmd/bash 类；**read 类排除**（喂后续编辑，剪 = 逼重读）；**必须 stub 占位替换而非移除**（保 tool_call 配对防 400） |
-| T-note | 注记协商（写时贴注 + 消费后协商剪） | 贴注 = `tools/post-execute` accept 追加；剪除 = surfaceOp replace | 同 T-loop（剪点贴消费） | 见 §2.1 |
 | T-boundary | 边界搭车 | task 压缩大 replace | 已付（搭车） | **老调用对唯一合法去处**，绝不中段独立剪 |
 
 > 挂点核验（P1.2 契约闭合）：harness `tools/execute` 的返回结果会经
@@ -44,23 +43,16 @@
 > 因此 T-entry 的落账前整形走 `tools/post-execute` accept `content` 覆盖（自有工具仍走
 > 定义侧 `finalizeContent`）。**时机经济学与准入动作不变**，仅修正实现缝。
 
-### 2.1 T-note 注记协商（超长结果的结论提取）
+### 2.1 T-note 注记协商（**已退役**，账本 §71）
 
-- **动机**：结论不是日志文本的属性，是**日志 × 当前意图**的函数——主模型带全量上下文
-  （在修什么、在追什么）消费结果，能立刻抽出"要的那一行"；旁观者（辅助摘要器）只有日志
-  没有意图，通用摘要反而可能丢掉正被追猎的报错。故**消费即提取，提取即授权剪切**；
-  机械格式剪切保留为基座，注记协商是其增强。**零新增调用**——提取是必要消费调用的附加输出。
-- **协议**：准入 = 体积 ≥ 阈值 ∧ 非 read ∧ 非问答（L0）；贴注要求叙述尾部输出结构化标记：
-  `CUT-OK:〈一句结论〉` = **调用整对 + 后续思考全部出上下文，仅结论保留**（结论落叙述位 =
-  语义在场）；`CUT-HOLD:〈原因〉` = 保留原文至边界搭车。
-- **失败语义**：无标记 / 解析失败 / 超时 = **默认保留**——协商不成不动刀，零重试，
-  绝不机械代剪（T-loop 有自己独立的类准入，不是 T-note 的失败兜底）。
-- **通道纪律（W2(B)，2026-09-09）**：`shear.negotiate` 三态中 **shadow = 只观察、零字节**——注记只落
-  `shear-negotiation-note` 事实（`attached:false`），不写进工具结果正文（协议文本不得污染用户可见
-  正文，影子模式也不得改史）；`live` 才写正文，且 N4 起改走独立 notice 通道（`source.kind='plugin'`，
-  不进判别输入面）。
-- **思考剪除前提**：reasoning 回放范围确认后剥离后续 assistant 消息的思考；若回合内回放
-  依赖 reasoning，思考剪除推迟至回合闭合，调用对剪除照常（两段分离，账本分开记）。
+- **退役裁定（用户，2026-09-09）**：协商线整体移除——`shear.negotiate` 配置、`core/shear/{negotiate,conclusion}.ts`、
+  两型 `shear-negotiation-*` 事实、账本协商段、T-note 档与 `CUT-OK`/`CUT-HOLD` 标记协议、预设 persona 协议段全部删除。
+- **依据（真机实测，只读回放）**：44 个会话 / 5,032 条 tool/result，选样 633 条、实际挂出注记 68 条，
+  **CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**；叠加 N2 探针 0/134 → 约 770 条真机样本零配合。
+- **保留的教训**：语义剪除不能依赖「让消费模型顺手写一行标记」——模型在干活时不会回应工具输出里的协议。
+  替代方向必须是**写时确定性**（剪点必须在结果入账前定死，见 §2 T-entry；任何「等后续行为再剪」都会改史 → 缓存前缀断裂）。
+- **思考剪除前提**（仍适用于其他档）：reasoning 回放范围确认后剥离后续 assistant 消息的思考；
+  若回合内回放依赖 reasoning，思考剪除推迟至回合闭合，调用对剪除照常（两段分离，账本分开记）。
 
 ### 2.2 T0 超越与 T0-R 读件修复
 
@@ -152,14 +144,15 @@
 - 事件（log-only）：`shear-applied {kind, policyVersion}` 随每次剪除；
 - 度量（定义见 [07](07-metrics.md)）：`cutEvents{kind: question|tool}` · `cutTokensSaved` ·
   `cutBreakCost` · `cutMisfireDetected`（重问/重读检出）· `questionBacklogDepth` ·
-  `toolPruneByClass` · `shearNoteAttached` · `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）·
-  `thinkingCutTokens` · `rerunAfterCut` · `tableRepair{Count,Tokens}` · `repairCoverage` ·
-  `rereadAfterRepair`。全部可从会话日志回放（stub 的 `sourceEventSeqs` 溯源 + prune 影子价）。
+  `toolPruneByClass` · `shearNoteAttached`（仅历史 `note-attached` 事实回放）·
+  `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）· `thinkingCutTokens` · `rerunAfterCut` ·
+  `tableRepair{Count,Tokens}` · `repairCoverage` · `rereadAfterRepair`。全部可从会话日志回放
+  （stub 的 `sourceEventSeqs` 溯源 + prune 影子价）。
 
 ## 7. 验收标准（协议级断言）
 
-- [ ] 四档各有 ≥1 自动化用例；T-entry 断裂成本 0（落账前整形，账本无完整版）；
-- [ ] T-note：无标记/坏标记/超时三路注入 → 全部默认保留（产品与既有剪除不受连坐）；
+- [ ] 各档各有 ≥1 自动化用例；T-entry 断裂成本 0（落账前整形，账本无完整版）；
+- [ ] T-entry 列表类命令不整形（W1；`entry-skip-listing` 可观测）；
 - [ ] run 冲刷：吸收证明到达即剪（机械），run 范围 = 最大连续段（配对平衡断言）；
 - [ ] 结论句预算（截断安全）与中立叙述体（无指令词黑名单）；
 - [ ] T0-R 三硬规则注入测试：跨事件/跨行/streak 打断各退回正确路径；

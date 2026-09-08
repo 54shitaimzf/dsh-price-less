@@ -162,7 +162,6 @@ describe('tools 端口（P7）', () => {
     const tools = { get: () => ({ presentCall: () => ({ kind: 'read', card: 'read' }) }) }
     const port = createShearToolPort(fake.ctx, {
       shapeEntry: (v) => { views.push(v); return undefined },
-      attachNote: () => undefined,
     }, undefined, () => tools)
     await fake.emit('tools/post-execute', fakeExec(), fakeResult([text('hello')]), makeNext(ACCEPT_RESULT).next)
     expect(views[0]).toMatchObject({ name: 'read_file', kind: 'read', card: 'read', resultBytes: 5 })
@@ -172,7 +171,6 @@ describe('tools 端口（P7）', () => {
     const views2: ToolResultView[] = []
     const port2 = createShearToolPort(fake2.ctx, {
       shapeEntry: (v) => { views2.push(v); return undefined },
-      attachNote: () => undefined,
     })
     await fake2.emit('tools/post-execute', fakeExec(), fakeResult([text('hello')]), makeNext(ACCEPT_RESULT).next)
     expect(views2[0]?.kind).toBeUndefined()
@@ -188,7 +186,7 @@ describe('tools 端口（P7）', () => {
         return Reflect.get(target, prop, receiver)
       },
     }) as unknown as Parameters<typeof createShearToolPort>[0]
-    const port = createShearToolPort(throwingCtx, { shapeEntry: () => undefined, attachNote: () => undefined })
+    const port = createShearToolPort(throwingCtx, { shapeEntry: () => undefined })
     const next = makeNext(ACCEPT_RESULT)
     await expect(fake.emit('tools/post-execute', fakeExec(), fakeResult([text('x')]), next.next)).resolves.toEqual([ACCEPT_RESULT])
     expect(next.calls()).toBe(1)

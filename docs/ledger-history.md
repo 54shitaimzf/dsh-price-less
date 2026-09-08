@@ -2838,4 +2838,45 @@ fact-leak.ts）；`AGENTS.md`（双预算 + 产物形状 + F9 进度）；`docs/
 3. **需 build + 重启**加载新构建；真机冒烟（resume 场景 0 次列表剪、正文无 `（协商：`、v4 判词是否产出边界压缩）待补。
 4. `project_frame` 的**写入方**仍是进程级 skill-catalog watcher（`index.ts:38`）——本单只统一读侧键；watcher 会话化另立小单。
 
+---
 
+## §71 N 系列协商线退役：T-note + N3 协商整体移除（2026-09-09；提交 = 本账本同提交）
+
+**用户裁定**：去掉协商线；**行为信号绝对不可用**（会带来缓存断裂）——剪除决策必须**在模型工具思考后立刻出结果**，
+即结果入账前定死。
+
+**依据（真机只读回放，`scripts/probe-n3.mjs` 最后一跑）**：44 个会话 / 5,032 条 `tool/result` →
+选样 633（对照组 8）、实际挂出注记 **68** 条；**CUT-OK 0（0.0%）/ CUT-HOLD 0（0.0%）/ 无回复 633（100%）**；
+按 basis：`name` 404 → OK 0，`command` 229 → OK 0；旧 v1 注记基线挂出 68 → 收到标记 **0**。
+叠加 N2 探针 0/134 → 约 **770 条真机样本零配合**。结论：语义剪除不能依赖「让消费模型顺手写一行标记」。
+
+**删除面（整条线）**：
+
+| 面 | 内容 |
+|---|---|
+| 纯核 | `core/shear/negotiate.ts`、`core/shear/conclusion.ts` 删除；`index.ts` 导出同步 |
+| 标记协议 | T-note 档：`admitNote`/`parseNoteMarker`/`noteEligible`/`NoteMarker`/`note-cut` op；`ShearPolicy.noteMinBytes`；`SHEAR_NOTE_TEMPLATE{,_VERSION}`；`QA_TOOLS` |
+| 域接线 | `domains/shear.ts` 协商选样/待答队列/回复结算/`attached` 分支全删；`attachNote` 钩子从 `platform/tools.ts` 的 `ShearToolHooks` 移除 |
+| 事实 | `shear-negotiation-note` / `shear-negotiation-reply` 两型声明与载荷（`domains/shear-facts.ts`） |
+| 账本 | `ShearLedger.negotiation` 段 + `formatNegotiationLedger` 引用；`shearNoteAttached` 保留（只统计历史 `note-attached` 事实，回放口径连续） |
+| 配置 | `shear.negotiate` 三态（host `config.ts` + client `field-model.ts` 字段/文案/分组） |
+| 预设 | `presets/price-less/` persona 协议段删除、预设更名「价格低耗」 |
+| 脚本/测试 | `scripts/probe-n3.mjs` 删除；`tests/shear-negotiate.spec.ts`、`tests/shear-conclusion.spec.ts` 删除；域/工具/账本/字段/输入用例随迁 |
+
+**保留**：N1 身份通道（`core/shear/classify.ts`，候选普查）；机械档 T-entry / T-loop / T0 / T0-R / run 冲刷；
+`appendContent` 端口原语（通用能力，测试仍覆盖）；`ShearTier`/`ShearAppliedTier` 中的 `T-note` 词汇（历史事实回放）。
+
+**版本**：`SHEAR_POLICY_VERSION` 1 → 2（策略面删除 `noteMinBytes`）。
+
+**验收**：`npm run gate` = **612 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；
+build 绿（host + client）。`src/`、`client/` 全量 grep 已无 `negotiate`/`CUT-OK`/`SHEAR_NOTE_TEMPLATE` 等残留。
+
+**口径同步**：`docs/00` §11、`docs/03` §2 表 + §2.1（改为退役记录）+ §6/§7、`docs/05` §2 失败语义措辞、
+`docs/07`、`docs/11` §2/§3/§7、`AGENTS.md`、`docs/implement/{00-master,N1,N2,N3,TODO}.md`（N2/N3 转只读历史）。
+
+**替代方向（已记入 TODO §3，待拍板）**：**写时确定性剪除**——① 工具自声明结果契约（`meta`/`presentResult` 摘要 +
+全文句柄）；② 结论型 vs 事实型准入分层（F11 是第一步）；③ 形态解析器（测试/tsc/git/包管理器）；
+④ 同结果内确定性去重。硬约束：剪点在结果入账前定死（T-entry，断裂成本 0）；不得依赖模型回应；不得等行为信号。
+
+**已知陈旧（不在 gate）**：`scripts/verify-p15a.mjs`（断言策略 1/8192）、`scripts/verify-p15b.mjs`（断言 `SHEAR_NOTE_TEMPLATE`）
+随本次删除失效；与既有 `verify-p17/p19.mjs` 同列待清理。

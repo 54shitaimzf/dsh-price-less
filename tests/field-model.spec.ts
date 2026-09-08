@@ -98,12 +98,12 @@ describe('模板态壳不变量（分组 + 字段 spec）', () => {
     expect(discern.routeSelector).toBe(true)
     const tune = ECONOMY_FIELD_GROUPS.find(g => g.id === 'tune')!
     expect(tune.fields.map(f => f.field)).toEqual(['compression.pressureRatio', 'compression.retainTokens', 'compression.thresholdTokens', 'compression.domainTokens', 'compression.archiveCapTokens'])
-    expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'advanced')!.fields.map(f => f.field)).toEqual(['shear.negotiate'])
+    expect(ECONOMY_FIELD_GROUPS.find(g => g.id === 'advanced')!.fields).toEqual([])
   })
 
-  it('ECONOMY_FIELD_SPECS = 13 个：判别 + 剪切两字段 + 压缩七字段 + 推理档 + provider/model（hidden）', () => {
+  it('ECONOMY_FIELD_SPECS = 12 个：判别 + 剪切开关 + 压缩七字段 + 推理档 + provider/model（hidden）', () => {
     const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    expect(ECONOMY_FIELD_SPECS).toHaveLength(13)
+    expect(ECONOMY_FIELD_SPECS).toHaveLength(12)
     expect(specs.has('discriminator.mode')).toBe(false)
     expect(specs.get('discriminator.auto')?.type).toBe('bool')
     expect(specs.get('discriminator.auto')?.visibility).toBe('core')
@@ -116,18 +116,6 @@ describe('模板态壳不变量（分组 + 字段 spec）', () => {
     expect(specs.get('discriminator.model')?.visibility).toBe('hidden')
     expect(CLIENT_DEFAULTS.discriminator.auto).toBe(false)
     expect(defaultForPath('discriminator.reasoningEffort')).toBeUndefined()
-  })
-
-  it('N3 协商三态（shear.negotiate）：select + 默认 off + parse 校验', () => {
-    const specs = new Map(ECONOMY_FIELD_SPECS.map(s => [s.field, s]))
-    const negotiate = specs.get('shear.negotiate')
-    expect(negotiate?.type).toBe('select')
-    expect(negotiate?.visibility).toBe('tune')
-    expect(negotiate?.options?.map(o => o.value)).toEqual(['off', 'shadow', 'live'])
-    expect(CLIENT_DEFAULTS.shear.negotiate).toBe('off')
-    expect(defaultForPath('shear.negotiate')).toBe('off')
-    expect(negotiate?.parse('shadow')).toEqual({ kind: 'set', values: { 'shear.negotiate': 'shadow' } })
-    expect(negotiate?.parse('bogus').kind).toBe('error')
   })
 
   it('压缩字段（P19 + P20c）：开关默认开、数值默认与 host 同值、parse 校验', () => {

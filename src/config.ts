@@ -17,13 +17,8 @@ import z from 'schemastery'
 export interface Config {
   /** 剪切层开关区（docs/11 §6：工具剪切 + 对话剪切总开关）。 */
   shear: {
-    /** 工具剪切总开关（默认 true；关闭后四档零行为）。 */
+    /** 工具剪切总开关（默认 true；关闭后各档零行为）。 */
     enabled: boolean
-    /**
-     * N3 协商通道三态（docs/implement/N3-shadow-mode.md §5）：
-     * off = 零行为（默认）；shadow = 挂注记 + 只记账不剪；live = 保留给 N4（当前与 shadow 等价）。
-     */
-    negotiate: 'off' | 'shadow' | 'live'
   }
   /** 压缩域配置区（docs/11 §6 装配开关；P19 落位边界路径）。 */
   compression: {
@@ -63,7 +58,6 @@ export interface Config {
 export const Config = z.object({
   shear: z.object({
     enabled: z.boolean().default(true),
-    negotiate: z.union(['off', 'shadow', 'live']).default('off'),
   }),
   compression: z.object({
     boundary: z.boolean().default(true),
@@ -86,7 +80,6 @@ export const Config = z.object({
 export const CONFIG_DEFAULTS = {
   shear: {
     enabled: true,
-    negotiate: 'off',
   },
   compression: {
     boundary: true,

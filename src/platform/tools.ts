@@ -5,7 +5,7 @@
  * `return next()`，见决策点 1——execute 返回值会被 harness 按 `value` 重新渲染
  * content，content-only 修改会丢，所以 T-entry 内容整形必须挂 `tools/post-execute`，
  * 见 docs/13 §3.9）；`tools/post-execute` 监听器返回 `PostToolDecision` 即短路
- * （覆盖 = T-entry 写时整形、追加 = T-note 贴注，由 replaceContent/appendContent
+ * （覆盖 = T-entry 写时整形；追加 = 端口通用能力，当前无消费者，由 replaceContent/appendContent
  * 构造）；T-entry/T-note 的业务判据归 P15a/P15b，本单不内置任何剪切规则。
  * P15b 增 `createShearToolPort`：把 harness 执行视图收敛成 `ToolResultView`（domains 零
  * harness 类型，D8 归口不变），只挂 post-execute，子分发/subagent 直接委托 next()。
@@ -169,8 +169,6 @@ export interface ToolResultView {
 export interface ShearToolHooks {
   /** T-entry 写时整形：返回覆盖后的完整文本；undefined = 不整形。 */
   shapeEntry(view: ToolResultView): string | undefined
-  /** T-note 贴注：返回追加文本；undefined = 不贴注。 */
-  attachNote(view: ToolResultView): string | undefined
 }
 
 function textOfContent(blocks: readonly ContentBlock[]): string {
@@ -240,8 +238,6 @@ export function createShearToolPort(
         const shaped = hooks.shapeEntry(view)
         if (shaped !== undefined) return replaceContent([{ type: 'text', text: shaped }])
       }
-      const note = hooks.attachNote(view)
-      if (note !== undefined) return appendContent(result, [{ type: 'text', text: note }])
       return undefined
     },
   }, logger)

@@ -16,7 +16,6 @@ import { foldSurfaceNodes } from '../ledger/surface.ts'
 import { DEFAULT_SHEAR_POLICY, type ShearEvent, type ShearPolicy, type ShearToolCategory } from './types.ts'
 import { foldToolShear, pathOfCall, toolCategory, type FoldToolShearOptions } from './tool.ts'
 import { DEFAULT_RUN_POLICY, foldRunShear, RUN_CLASS_FACT_TYPE, type RunEvent, type RunPolicy } from './run.ts'
-import { foldNegotiation, formatNegotiationLedger, type NegotiationLedger } from './negotiate.ts'
 
 export const SHEAR_APPLIED_FACT_TYPE = 'context-economy/shear-applied' // ignorable
 export const SHEAR_DECISION_FACT_TYPE = 'context-economy/shear-decision' // ignorable
@@ -97,8 +96,6 @@ export interface ShearLedger {
   shearDecision: { cut: number; hold: number; keep: number }
   /** W1 列表跳过 T-entry 整形数（keep 相；reason = entry-skip-listing）。 */
   entrySkipListing: number
-  /** N3 协商族（docs/implement/N3-shadow-mode.md §4；fold 见 core/shear/negotiate.ts）。 */
-  negotiation: NegotiationLedger
   thinkingCutTokens: number
   tableRepair: { count: number; tokens: number }
   repairCoverage: number
@@ -117,7 +114,6 @@ function emptyLedger(): ShearLedger {
     shearNoteAttached: 0,
     shearDecision: { cut: 0, hold: 0, keep: 0 },
     entrySkipListing: 0,
-    negotiation: foldNegotiation([]),
     thinkingCutTokens: 0,
     tableRepair: { count: 0, tokens: 0 },
     repairCoverage: 0,
@@ -259,9 +255,6 @@ export function foldShearLedger(
     const data = fact.data as ShearDecisionFactData
     if (data.decision === 'note-attached') ledger.shearNoteAttached++
   }
-  // N3 协商族（只记账不剪的账本半边；注记数并入 shearNoteAttached 保持 07 口径连续）。
-  ledger.negotiation = foldNegotiation(facts)
-  ledger.shearNoteAttached += ledger.negotiation.notes
 
   // —— P16 对话半边：重折 run 状态机（分类读 judge-recorded 事实，清单读 shear-run-plan 事实） ——
   const runEvents: RunEvent[] = []
@@ -331,6 +324,5 @@ export function formatShearLedger(ledger: ShearLedger): string {
   lines.push(`  tableRepair: count=${ledger.tableRepair.count} tokens=${ledger.tableRepair.tokens} coverage=${ledger.repairCoverage}`)
   lines.push(`  rereadAfterRepair: ${ledger.rereadAfterRepair} / rerunAfterCut: ${ledger.rerunAfterCut}`)
   lines.push(`  cutMisfireDetected: ${ledger.cutMisfireDetected} / questionBacklogDepth: ${ledger.questionBacklogDepth} / thinkingCutTokens: ${ledger.thinkingCutTokens}`)
-  lines.push(formatNegotiationLedger(ledger.negotiation))
   return lines.join('\n')
 }

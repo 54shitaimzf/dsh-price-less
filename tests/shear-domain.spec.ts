@@ -1,6 +1,6 @@
 /**
  * P15b 剪切调度域单测（工单 §5/§6）——fake ctx + fake pump + FakeSession，零 cordis 运行时。
- * 覆盖：T-entry/T-note/T-loop/T0/T0-R 端到端、门槛 G1–G9 各 ≥1、失败默认保留与零重试、
+ * 覆盖：T-entry/T-loop/T0/T0-R 端到端、门槛 G1–G9 各 ≥1、失败默认保留与零重试、
  * 回填基线不执行历史 op、确定性双跑同账。事件序与真实会话一致（assistant(含 tool-call) → tool/call → tool/result）。
  */
 import { describe, expect, it } from 'vitest'
@@ -10,11 +10,8 @@ import {
   SHEAR_APPLIED_FACT_TYPE,
   SHEAR_DECISION_FACT_TYPE,
   SHEAR_ERROR_FACT_TYPE,
-  SHEAR_NEGOTIATION_NOTE_FACT_TYPE,
-  SHEAR_NEGOTIATION_REPLY_FACT_TYPE,
   SHEAR_RUN_PLAN_FACT_TYPE,
 } from '../src/domains/shear-facts.ts'
-import { controlSlot, negotiationNote } from '../src/core/shear/index.ts'
 import { JUDGE_RECORDED_FACT_TYPE } from '../src/domains/judge-facts.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
 
@@ -58,7 +55,7 @@ const BIG = 'x'.repeat(9000)
 const MID = Array.from({ length: 5 }, (_, i) => `line ${i} ${'y'.repeat(800)}`).join('\n')
 const LONG_READ = Array.from({ length: 20 }, (_, i) => `line ${i}`).join('\n')
 
-function makeEnv(options: { enabled?: boolean; negotiate?: 'off' | 'shadow' | 'live' } = {}) {
+function makeEnv(options: { enabled?: boolean } = {}) {
   const listeners = new Map<string, Array<(...args: any[]) => unknown>>()
   const ctx = {
     on(name: string, fn: (...args: any[]) => unknown) {
@@ -79,7 +76,7 @@ function makeEnv(options: { enabled?: boolean; negotiate?: 'off' | 'shadow' | 'l
     dispose() {},
     stats() { return { enqueued: 0, dispatched: 0, listenerErrors: 0, dropped: 0, depth: 0 } },
   }
-  const config = { shear: { enabled: options.enabled !== false, negotiate: options.negotiate ?? 'off' }, discriminator: { auto: false } }
+  const config = { shear: { enabled: options.enabled !== false }, discriminator: { auto: false } }
   const session = new FakeSession()
   const domain = mountShearDomain(ctx as never, {
     pump: pump as never,
@@ -161,12 +158,6 @@ describe('P15b 同步相：T-entry 整形与 T-note 贴注', () => {
     expect((await env.postExecute(fakeExec({ name: 'bash', parent: Symbol('p') }), fakeResult(LONG_READ))).nextCalls).toBe(1)
     expect(env.facts()).toHaveLength(0)
   })
-  it('N3 off：协商通道关闭 → 不挂注记（委托 next）', async () => {
-    const env = makeEnv()
-    const { nextCalls } = await env.postExecute(fakeExec({ name: 'run_code', arguments: { code: 'console.log(1)' } }), fakeResult(BIG))
-    expect(nextCalls).toBe(1)
-    expect(env.facts()).toHaveLength(0)
-  })
   it('G1：enabled=false → 同步相与异步相全部零行为', async () => {
     const env = makeEnv({ enabled: false })
     expect((await env.postExecute(fakeExec({ name: 'bash' }), fakeResult(BIG))).nextCalls).toBe(1)
@@ -177,175 +168,7 @@ describe('P15b 同步相：T-entry 整形与 T-note 贴注', () => {
   })
 })
 
-describe('N3 协商剪除（影子模式：只记账不剪）', () => {
-  const RUN_CODE = { name: 'run_code', arguments: { code: 'console.log(1)' } }
-
-  it('W2(B) shadow：选样照记，但零字节写入正文（attached=false，不伪造回复）', async () => {
-    const env = makeEnv({ negotiate: 'shadow' })
-    const { decision, nextCalls } = await env.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-    expect(nextCalls).toBe(1)
-    expect(decision).toEqual({ kind: 'accept' })
-    env.appendUser('跑一下')
-    env.appendAssistant([toolCallBlock('c1', 'run_code', RUN_CODE.arguments)])
-    env.appendCall('c1', 'run_code', RUN_CODE.arguments)
-    env.appendResult('c1', BIG)
-    const notes = env.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_NOTE_FACT_TYPE)
-    expect(notes).toHaveLength(1)
-    expect(notes[0]!.data).toMatchObject({ callId: 'c1', name: 'run_code', basis: 'name', channel: 'note', templateVersion: 2, attached: false })
-    expect((notes[0]!.data as { resultBytes: number }).resultBytes).toBe(9000)
-    expect(env.replacements()).toHaveLength(0)
-    expect(env.applied()).toHaveLength(0)
-    expect(env.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_REPLY_FACT_TYPE)).toHaveLength(0)
-    expect(env.domain.stats()).toMatchObject({ negotiationNotes: 1, negotiationReplies: 0, negotiationNoReply: 0 })
-  })
-
-  it('W2(B) live：注记仍写正文（回复机制由 live 用例覆盖）', async () => {
-    const env = makeEnv({ negotiate: 'live' })
-    const { decision, nextCalls } = await env.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-    expect(nextCalls).toBe(0)
-    const content = (decision as { content: Array<{ text: string }> }).content
-    expect(content).toHaveLength(2)
-    expect(content[1]!.text).toBe(negotiationNote())
-  })
-
-  it('live：CUT-OK 三件套 → negotiation-reply(ok, complete, verifyOk) 且不动刀', async () => {
-    const env = makeEnv({ negotiate: 'live' })
-    await env.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-    env.appendUser('跑一下')
-    env.appendAssistant([toolCallBlock('c1', 'run_code', RUN_CODE.arguments)])
-    env.appendCall('c1', 'run_code', RUN_CODE.arguments)
-    env.appendResult('c1', BIG)
-    env.appendAssistant([textBlock('看完了。\nCUT-OK: 结论:构建通过｜事实:exit code 0；v1.2.3｜重取:重跑 npm test')])
-    const replies = env.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_REPLY_FACT_TYPE)
-    expect(replies).toHaveLength(1)
-    expect(replies[0]!.data).toMatchObject({ callId: 'c1', marker: 'ok', complete: true, verifyOk: true, basis: 'name' })
-    expect((replies[0]!.data as { depthRatio: number }).depthRatio).toBeGreaterThan(0)
-    expect(env.replacements()).toHaveLength(0)
-    expect(env.applied()).toHaveLength(0)
-    expect(env.domain.stats()).toMatchObject({ negotiationNotes: 1, negotiationReplies: 1, negotiationNoReply: 0 })
-  })
-
-  it('live：CUT-HOLD / 无标记 → 各记一条回复事实（hold / none）', async () => {
-    const holdEnv = makeEnv({ negotiate: 'live' })
-    await holdEnv.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-    holdEnv.appendUser('跑一下')
-    holdEnv.appendAssistant([toolCallBlock('c1', 'run_code', RUN_CODE.arguments)])
-    holdEnv.appendCall('c1', 'run_code', RUN_CODE.arguments)
-    holdEnv.appendResult('c1', BIG)
-    holdEnv.appendAssistant([textBlock('还在看\nCUT-HOLD: 还要中间日志')])
-    const hold = holdEnv.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_REPLY_FACT_TYPE)
-    expect(hold[0]!.data).toMatchObject({ marker: 'hold', complete: false, verifyOk: false })
-
-    const noneEnv = makeEnv({ negotiate: 'live' })
-    await noneEnv.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-    noneEnv.appendUser('跑一下')
-    noneEnv.appendAssistant([toolCallBlock('c1', 'run_code', RUN_CODE.arguments)])
-    noneEnv.appendCall('c1', 'run_code', RUN_CODE.arguments)
-    noneEnv.appendResult('c1', BIG)
-    noneEnv.appendAssistant([textBlock('继续干活，没写标记')])
-    const none = noneEnv.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_REPLY_FACT_TYPE)
-    expect(none[0]!.data).toMatchObject({ marker: 'none' })
-    expect(noneEnv.domain.stats().negotiationNoReply).toBe(1)
-  })
-
-  it('live：用户轮到来 → 待答注记记 no-reply（失败方向 = 保留）', async () => {
-    const env = makeEnv({ negotiate: 'live' })
-    await env.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-    env.appendUser('跑一下')
-    env.appendAssistant([toolCallBlock('c1', 'run_code', RUN_CODE.arguments)])
-    env.appendCall('c1', 'run_code', RUN_CODE.arguments)
-    env.appendResult('c1', BIG)
-    env.appendUser('换个话题')
-    const replies = env.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_REPLY_FACT_TYPE)
-    expect(replies).toHaveLength(1)
-    expect(replies[0]!.data).toMatchObject({ marker: 'none', replySeq: expect.any(Number) })
-  })
-
-  it('live：并行两条注记 → 标记归最新一条，另一条记 no-reply', async () => {
-    const env = makeEnv({ negotiate: 'live' })
-    await env.postExecute(fakeExec({ callId: 'p1', name: 'run_code', arguments: { code: 'a' } }), fakeResult(BIG))
-    await env.postExecute(fakeExec({ callId: 'p2', name: 'run_code', arguments: { code: 'b' } }), fakeResult(BIG))
-    env.appendUser('并行')
-    env.appendAssistant([toolCallBlock('p1', 'run_code', { code: 'a' }), toolCallBlock('p2', 'run_code', { code: 'b' })])
-    env.appendCall('p1', 'run_code', { code: 'a' })
-    env.appendCall('p2', 'run_code', { code: 'b' })
-    env.appendResult('p1', BIG)
-    env.appendResult('p2', BIG)
-    env.appendAssistant([textBlock('CUT-OK: 结论:两条都看了｜事实:x=1｜重取:重跑')])
-    const replies = env.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_REPLY_FACT_TYPE)
-    expect(replies.map((fact) => `${(fact.data as { callId: string }).callId}:${(fact.data as { marker: string }).marker}`))
-      .toEqual(['p1:none', 'p2:ok'])
-  })
-
-  it('shadow：never 结果按 1% 确定性对照组挂注记（只问不剪）', async () => {
-    const env = makeEnv({ negotiate: 'shadow' })
-    const callId = Array.from({ length: 500 }, (_, i) => `ctl${i}`).find((id) => controlSlot(id) === 0) as string
-    const { nextCalls } = await env.postExecute(fakeExec({ callId, name: 'read' }), fakeResult(BIG))
-    expect(nextCalls).toBe(1)
-    env.appendUser('读个文件')
-    env.appendAssistant([toolCallBlock(callId, 'read', { file_path: 'a.ts' })])
-    env.appendCall(callId, 'read', { file_path: 'a.ts' })
-    env.appendResult(callId, BIG)
-    const notes = env.facts().filter((fact) => fact.type === SHEAR_NEGOTIATION_NOTE_FACT_TYPE)
-    expect(notes).toHaveLength(1)
-    expect(notes[0]!.data).toMatchObject({ channel: 'control', basis: 'none', attached: false })
-  })
-
-  it('shadow：旧 T-note 机械剪被抑制（hold negotiate-shadow，零改史）', () => {
-    const env = makeEnv({ negotiate: 'shadow' })
-    env.appendUser('跑测试')
-    env.appendAssistant([toolCallBlock('c1', 'bash', { command: 'ls' })])
-    env.appendCall('c1', 'bash', { command: 'ls' })
-    env.appendResult('c1', BIG)
-    env.appendAssistant([textBlock('看完了\nCUT-OK: 就一行')])
-    expect(env.replacements()).toHaveLength(0)
-    const holds = env.facts().filter((fact) => fact.type === SHEAR_DECISION_FACT_TYPE
-      && (fact.data as { reason?: string }).reason === 'negotiate-shadow')
-    expect(holds).toHaveLength(1)
-    expect(holds[0]!.data).toMatchObject({ decision: 'hold', tier: 'T-note', callId: 'c1' })
-  })
-
-  it('确定性：同一事件序两个独立域实例产出同一协商事实序列', async () => {
-    const run = async (): Promise<string> => {
-      const env = makeEnv({ negotiate: 'shadow' })
-      await env.postExecute(fakeExec(RUN_CODE), fakeResult(BIG))
-      env.appendUser('跑一下')
-      env.appendAssistant([toolCallBlock('c1', 'run_code', RUN_CODE.arguments)])
-      env.appendCall('c1', 'run_code', RUN_CODE.arguments)
-      env.appendResult('c1', BIG)
-      env.appendAssistant([textBlock('CUT-OK: 结论:好｜事实:x=1｜重取:重跑')])
-      return JSON.stringify(env.facts().filter((fact) => fact.type.startsWith('context-economy/shear-negotiation')))
-    }
-    expect(await run()).toBe(await run())
-  })
-})
-
 describe('P15b 异步相：四档执行与门槛', () => {
-  it('T-note CUT-OK → 结果被剪为结论 stub（surfaceOp replace + 影子价 + 事实）', () => {
-    const env = makeEnv()
-    env.appendUser('跑测试')
-    env.appendAssistant([toolCallBlock('c1', 'bash', { command: 'npm test' })])
-    env.appendCall('c1', 'bash', { command: 'npm test' })
-    env.appendResult('c1', BIG)
-    env.appendAssistant([textBlock('测试全绿，无回归。\nCUT-OK: 测试全绿，无回归')])
-    const replaced = env.replacements()
-    expect(replaced).toHaveLength(1)
-    const message = (replaced[0]!.data as { message: { content: Array<{ content: Array<{ text: string }> }> } }).message
-    expect(message.content[0]!.content[0]!.text).toContain('测试全绿，无回归')
-    expect(env.applied()[0]!.data).toMatchObject({ tier: 'T-note', kind: 'note-cut' })
-    expect(env.session.appends.some((item) => item.type === 'compaction/prune')).toBe(true)
-  })
-  it('T-note CUT-HOLD → 不动刀，发 hold 事实（T-boundary 搭车候选）', () => {
-    const env = makeEnv()
-    env.appendUser('跑测试')
-    env.appendAssistant([toolCallBlock('c1', 'bash', { command: 'npm test' })])
-    env.appendCall('c1', 'bash', { command: 'npm test' })
-    env.appendResult('c1', BIG)
-    env.appendAssistant([textBlock('还在用\nCUT-HOLD: 还要看中间日志')])
-    expect(env.replacements()).toHaveLength(0)
-    const holds = env.facts().filter((fact) => fact.type === SHEAR_DECISION_FACT_TYPE && (fact.data as { decision: string }).decision === 'hold')
-    expect(holds).toHaveLength(1)
-  })
   it('T-loop：cmd 结果 + 极短结论 → stub 占位替换（保配对）', () => {
     const env = makeEnv()
     env.appendUser('跑测试')

@@ -170,7 +170,7 @@ describe('N1 平台描述符（§3 交付物 1）', () => {
       get: () => ({ presentCall: () => ({ card: 'terminal' }) }),
     }))
     const seen: ToolResultView[] = []
-    createShearToolPort(fake.ctx, { shapeEntry: () => undefined, attachNote: (view) => { seen.push(view); return undefined } }, undefined, fake.getTools)
+    createShearToolPort(fake.ctx, { shapeEntry: (view) => { seen.push(view); return undefined } }, undefined, fake.getTools)
     await fake.emit('tools/post-execute', fakeExec(), fakeResult({ meta: { exitCode: 0 } }), () => Promise.resolve(undefined))
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({ name: 'pwsh', card: 'terminal', args: { command: 'npm test' }, meta: { exitCode: 0 } })
@@ -186,7 +186,7 @@ describe('N1 平台描述符（§3 交付物 1）', () => {
     ] as Array<ToolSignatureSource | undefined>) {
       const fake = makePortCtx(() => tools)
       const seen: ToolResultView[] = []
-      createShearToolPort(fake.ctx, { shapeEntry: () => undefined, attachNote: (view) => { seen.push(view); return undefined } }, undefined, fake.getTools)
+      createShearToolPort(fake.ctx, { shapeEntry: (view) => { seen.push(view); return undefined } }, undefined, fake.getTools)
       await expect(fake.emit('tools/post-execute', fakeExec(), fakeResult(), () => Promise.resolve(undefined))).resolves.toBeDefined()
       expect(seen[0]?.kind).toBeUndefined()
       expect(seen[0]?.card).toBeUndefined()

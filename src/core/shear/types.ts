@@ -47,11 +47,10 @@ export interface ShearRepairSegment {
   readonly endLine: number
   readonly lines: readonly string[]
 }
-/** 四档产物（T-entry 整形 / T-loop stub / T-note 结论 / T0 整剪 / T0-R 修复）。 */
+/** 三档产物（T-entry 整形 / T-loop stub / T0 整剪 / T0-R 修复）；T-note 协商已退役（账本 §71）。 */
 export type ShearOp =
   | { readonly kind: 'shape-entry'; readonly callId: string; readonly content: string }
   | { readonly kind: 'stub-replace'; readonly callId: string; readonly stub: string }
-  | { readonly kind: 'note-cut'; readonly callId: string; readonly conclusion: string }
   | { readonly kind: 't0-supersede'; readonly callId: string; readonly writeCallId: string; readonly path: string }
   | {
       readonly kind: 't0r-repair'
@@ -75,23 +74,18 @@ export interface ShearPlan {
   readonly ops: readonly ShearOp[]
   readonly decisions: readonly ShearDecisionRecord[]
 }
-/** 策略阈值（docs/03 §8 初值；单位：字节 / 字符 / 缩进级（2 空格 = 1 级））。 */
+/** 策略阈值（docs/03 §8 初值；单位：字符 / 缩进级（2 空格 = 1 级））。 */
 export interface ShearPolicy {
   readonly version: number
-  readonly noteMinBytes: number
   readonly loopMaxConclusionChars: number
   readonly t0rMaxSegments: number
   readonly t0rMaxIndent: number
 }
-/** T-note 贴注模板（docs/03 §2.1；docs/11 §7 已登记资产）。中性叙述、无插件标签、逐字确定。 */
-export const SHEAR_NOTE_TEMPLATE_VERSION = 1
-export const SHEAR_NOTE_TEMPLATE =
-  '（本结果较长。若你已从中得出结论，请在本次回复的最后一行输出 CUT-OK:〈一句结论〉——原始日志将被剪除、只保留该结论；若后续仍需原文，请输出 CUT-HOLD:〈原因〉。不要为此额外调用工具。）'
 
-export const SHEAR_POLICY_VERSION = 1
+/** v2：T-note 协商退役，`noteMinBytes` 随之删除（账本 §71）。 */
+export const SHEAR_POLICY_VERSION = 2
 export const DEFAULT_SHEAR_POLICY: ShearPolicy = {
   version: SHEAR_POLICY_VERSION,
-  noteMinBytes: 8192,
   loopMaxConclusionChars: 120,
   t0rMaxSegments: 4,
   t0rMaxIndent: 1,

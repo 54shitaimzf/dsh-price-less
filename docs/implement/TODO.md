@@ -1,29 +1,25 @@
-# 待办清单 · N 系列「协商剪除」收口
+# 待办清单 · 真机复盘修复 + 写时剪除方向
 
-> **用途**：只记**未完成 / 被阻塞**项与出门门槛；单元定义、硬规则、决策记录见
-> [`00-master.md`](00-master.md) §2/§3/§6（不在此重复）。
+> **用途**：只记**未完成 / 被阻塞**项与出门门槛。
 > **口径**：🔶 进行中（等用户动作）· ⬜ 待办 · ✅ 已完成不展开。
-> **建立**：2026-09-09（N3b 落地之后）。**更新**：2026-09-09 真机复盘修复单 F1–F5 + F8a/F8b + **F3/F11/F12/F13（剪切层与判别器修正，快照 §70）**。
+> **建立**：2026-09-09（N3b 落地之后）。**更新**：2026-09-09 真机复盘修复单 F1–F5 + F8a/F8b + **F3/F11/F12/F13（快照 §70）**
+> + **N 系列协商线退役（快照 §71）**。
 
 ---
 
-## §1 当前阻塞：N3a 真机采样 🔶
+## §1 N 系列协商线：已退役 ✅（2026-09-09）
 
-**2026-09-09 真机三轮对话复盘发现：采样拿不到数据不是模型不配合，是 H6 端口在真机上抛错空转**
-（`ctx.tools` 未 inject → 211 次 `tools/post-execute hook failed`）。F1 已修（见 §2）。
+**用户裁定**：协商线整体移除——`shear.negotiate` 配置、`core/shear/{negotiate,conclusion}.ts`、两型
+`shear-negotiation-*` 事实、账本协商段、T-note 档与 `CUT-OK`/`CUT-HOLD` 标记协议、预设 persona 协议段全部删除。
 
-| # | 事项 | 负责 | 出门门槛 |
-|---|---|---|---|
-| ① | **采样通道重建（F12 后阻塞）**：shadow 已改「只观察零字节」→ 正文不再出现 `（协商：…）`，旧口径采样停摆；需先落 N4 的**独立 notice 通道**（`source.kind='plugin'`，不进判别输入面） | 我 | 通道落地后每个 basis 攒到 ≥30 条 |
-| ② | 用「价格低耗（协商剪除）」预设开**新会话**正常干活 | 用户 | 每个 basis 攒到 **≥30** 条样本 |
-| ③ | `node scripts/probe-n3.mjs` | 我 | 产出三张表 + 每 basis 晋升判定 |
-| ④ | 兜底（条件项）：独立 notice 通道配合率仍 <30% → **停止 N4 立项**（N2 探针在正文注记通道已实测 0/134） | 我 | — |
+**依据（真机只读回放）**：44 会话 / 5,032 条 tool/result → 选样 633、实际挂出注记 68 条，
+**CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**；叠加 N2 探针 0/134 ≈ 770 条样本零配合。
 
-**前置已就绪**：`~/.dsh/settings.yaml` = `context-economy.shear.negotiate: shadow` + `discriminator.auto: true`。
+**替代方向约束（用户裁定）**：
+1. 语义剪除必须**写时确定性**——剪点必须在结果入账前定死（= T-entry，断裂成本 0）；
+2. **行为信号不可用**（等后续轮次再判断再剪）：会在前缀已缓存后改史 → 缓存断裂。
 
-**晋升规则**（③ 的判据）：样本 ≥30 ∧ CUT-HOLD <5% ∧ 保真 ≥95% → 该 basis 进 N4 白名单。
-
-**已知采样偏倚**（设计预期）：`command` basis 的长结果多被 T-entry 写前整形吸收；某 basis 攒不满 30 条则不晋升。
+**保留**：N1 身份通道（`core/shear/classify.ts`，候选普查）；T-loop / T0 / T0-R / run 冲刷等机械档。
 
 ---
 
@@ -37,7 +33,7 @@
 | **F5a** | **档案渲染可读性**：结论先行（wrap→plan→impl→verify）+ 类型标签（`【结论】/【计划】/【实现】/【验证】`） | ✅ | `src/core/assemble/assemble.ts` |
 | **F3** | **档案/前缀按会话工作区隔离**：`domains/workspace.ts` 唯一键源（`header.cwd` 优先、回落进程 cwd），compaction/restore/input/star/commands 五站点收口 | ✅ | `src/domains/workspace.ts`（新）+ 五域；`tests/workspace.spec.ts`；快照 §70 |
 | **F11** | **列表不剪**：T-entry 识别列表类命令（Get-ChildItem/gci/ls/dir/tree/fd/find）→ 不整形 + `entry-skip-listing` 事实/账本分列（真机 resume 11 次实剪全为列表，丢名字） | ✅ | `core/shear/tool.ts`、`domains/shear.ts`、`core/shear/ledger.ts`；快照 §70 |
-| **F12** | **影子模式零字节**：`shear.negotiate=shadow` 只记 `shear-negotiation-note` 事实（`attached:false`），不写正文、不入待答队列、不伪造 no-reply；`live` 保留旧通道（N4 改独立 notice） | ✅ | `domains/shear.ts`、`core/shear/negotiate.ts`；快照 §70 |
+| **F12** | ~~影子模式零字节~~ → **随协商线整体退役移除**（配置/纯核/两型事实/账本段/T-note 标记协议/预设协议段全删） | ✅ | 删除面见快照 §71 |
 | **F13** | **判别器 v4**：task 定义居中（同一工作对象/同类目标持续改进）+ 言说层限定「当前对象」+ 换对象覆盖针对新对象的评价/咨询（真机：换话题单句被 v3 规则 1 吞成 continue → 漏边界） | ✅ | `core/judge.ts`、`datasets/prompt-discriminator-v2.3.txt`；快照 §70 |
 | **F5b** | **坐标路径相对化**：`renderDigest` 的 coords 逐行打印绝对路径；相对化依赖 F3 的会话工作区 | ⬜ | 待 F3 |
 | **F8a** | **token 估算重构**：新 core/meter/estimate.ts（DSH 结构对齐 + 两桶密度 CJK 1.5 / 其余 2.9 字符/token）；策略面 charsPerToken → density 全量随迁 | ✅ | src/core/meter/、src/core/{assemble,compress,ledger}/、src/domains/compaction.ts |
@@ -55,13 +51,12 @@
 
 ---
 
-## §3 待立项（等 §1 数据）
+## §3 待立项
 
 | 单元 | 内容 | 出门门槛 | 状态 |
 |---|---|---|---|
-| **N4** 剪除执行 | 整块替换（上一轮调用 + 结果 + 上一轮思考，本轮思考尽量一并剪）；配对与缓存断言 | 四触发次序不破；缓存断言进 CI；**白名单起步 = 空集**（`signature` 可剪实测 **0**），按 basis 逐组晋升 | ⬜ |
-| **N5** 三道闸门 + 误剪退避 | 事实保真 / 深度 / 配对三道护栏；复用 `cutMisfireDetected` 记账；超阈自动关协商 | 护栏不过必 hold；误剪率可回放 | ⬜ |
-| **N6** 验收与账本快照 | `verify-n.mjs` + `docs/ledger-history.md` §51+ 快照 + 正典同步 | 全链 verify + 快照 | ⬜ |
+| ~~N4/N5/N6~~ | ~~协商剪除执行 / 三道闸门 / 验收~~ —— **随协商线退役**（真机 0/770 配合率；账本 §71） | — | ✅ 退役 |
+| **W2** 写时确定性剪除（方向待拍板） | 在 T-entry 位置用确定性判据多剪：① 工具自声明结果契约（`meta`/`presentResult` 摘要 + 全文句柄）；② 结论型 vs 事实型准入分层（F11 是其一步）；③ 形态解析器（测试/tsc/git/包管理器）；④ 同结果内确定性去重 | **剪点必须在结果入账前定死**（断裂成本 0）；不得依赖模型回应、不得等行为信号（缓存断裂）；失败方向 = 保留 | ⬜ |
 
 ---
 

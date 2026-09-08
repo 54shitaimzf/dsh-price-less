@@ -33,7 +33,6 @@ const READ_TOOLS = new Set(['read', 'read_file', 'read_multiple_files'])
 const WRITE_TOOLS = new Set(['edit', 'write', 'str_replace_editor', 'apply_patch'])
 const SEARCH_TOOLS = new Set(['grep', 'glob', 'search', 'find'])
 const CMD_TOOLS = new Set(['bash', 'pwsh', 'run', 'shell', 'terminal', 'exec'])
-const QA_TOOLS = new Set(['ask_user', 'ask_user_question'])
 
 export const ENTRY_KEEP_HEAD = 2
 export const ENTRY_KEEP_TAIL = 2
@@ -168,11 +167,6 @@ export function textOfContentBlocks(blocks: readonly { readonly type?: string; r
   return text
 }
 
-/** T-note 贴注准入（docs/03 §2.1 L0）：体积 ≥ 阈值 ∧ 非 read ∧ 非问答。 */
-export function noteEligible(call: ShearToolCall, resultText: string, policy: ShearPolicy = DEFAULT_SHEAR_POLICY): boolean {
-  return utf8ByteLength(resultText) >= policy.noteMinBytes && toolCategory(call.name) !== 'read' && !QA_TOOLS.has(call.name)
-}
-
 export interface Admission {
   readonly decision: ShearDecision
   readonly reason: string
@@ -237,44 +231,6 @@ export function admitLoop(call: ShearToolCall, conclusion: string, policy: Shear
   return { decision: 'cut', reason: 'loop-admitted', op: { kind: 'stub-replace', callId: call.callId, stub: buildLoopStub(text) } }
 }
 
-export type NoteMarker =
-  | { readonly kind: 'cut'; readonly conclusion: string }
-  | { readonly kind: 'hold'; readonly reason: string }
-  | { readonly kind: 'none' }
-
-/** 解析叙述尾部的结构化标记；无标记 / 坏标记（空内容）→ none（= 默认保留）。 */
-export function parseNoteMarker(text: string): NoteMarker {
-  for (const raw of text.split('\n')) {
-    const ok = /CUT-OK[:：]\s*(.+)$/.exec(raw)
-    if (ok !== null) return { kind: 'cut', conclusion: (ok[1] as string).trim() }
-    const hold = /CUT-HOLD[:：]\s*(.+)$/.exec(raw)
-    if (hold !== null) return { kind: 'hold', reason: (hold[1] as string).trim() }
-  }
-  return { kind: 'none' }
-}
-
-/** T-note：体积阈值 ∧ 非 read ∧ 非问答 → 协商；超时 / 无标记 / 结论超长 → 保留或 hold。 */
-export function admitNote(
-  call: ShearToolCall,
-  resultText: string,
-  narrative: string,
-  options: { readonly timedOut?: boolean } = {},
-  policy: ShearPolicy = DEFAULT_SHEAR_POLICY,
-): Admission {
-  if (options.timedOut === true) return { decision: 'keep', reason: 'note-timeout' }
-  const category = toolCategory(call.name)
-  if (category === 'read') return { decision: 'keep', reason: 'note-read-excluded' }
-  if (QA_TOOLS.has(call.name)) return { decision: 'keep', reason: 'note-qa-excluded' }
-  if (utf8ByteLength(resultText) < policy.noteMinBytes) return { decision: 'keep', reason: 'note-below-threshold' }
-  const marker = parseNoteMarker(narrative)
-  if (marker.kind === 'none') return { decision: 'keep', reason: 'note-no-marker' }
-  if (marker.kind === 'hold') return { decision: 'hold', reason: 'note-hold' }
-  const conclusion = marker.conclusion.trim()
-  if (conclusion.length === 0) return { decision: 'keep', reason: 'note-empty-conclusion' }
-  if (conclusion.length > policy.loopMaxConclusionChars) return { decision: 'hold', reason: 'note-conclusion-too-long' }
-  return { decision: 'cut', reason: 'note-admitted', op: { kind: 'note-cut', callId: call.callId, conclusion } }
-}
-
 /** 配对纪律：op 指向的调用必须有对应结果（孤儿调用 → 拒绝该 op）。 */
 export function assertPairing(op: ShearOp, events: readonly ShearEvent[]): boolean {
   const callId = op.kind === 't0r-repair' ? op.readCallId : op.callId
@@ -294,7 +250,7 @@ export function isBoundaryRideCandidate(record: ShearDecisionRecord): boolean {
 
 /** fold 可选项（P15b 接线缝；全部可选，缺省 = P15a 行为逐字节一致）。 */
 export interface FoldToolShearOptions {
-  /** 已在落账前整形的调用（T-entry）：跳过 T-note/T-loop，防双重剪。 */
+  /** 已在落账前整形的调用（T-entry）：跳过 T-loop，防双重剪。 */
   readonly entryShaped?: ReadonlySet<string>
   /** 工具自声明生命周期（三级回退第一级）；缺省 = 类别启发式。 */
   readonly lifecycles?: Readonly<Record<string, ToolContextLifecycle>>
@@ -371,9 +327,8 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
       const result = lastResultId === undefined ? undefined : resultsById.get(lastResultId)
       const call = lastResultId === undefined ? undefined : callsById.get(lastResultId)
       if (call !== undefined && result !== undefined && !entryShaped.has(call.callId) && options.entryShaped?.has(call.callId) !== true) {
-        const eligible = noteEligible(call, result.text, policy)
-        const admission = eligible ? admitNote(call, result.text, event.text, {}, policy) : admitLoop(call, event.text, policy)
-        record(eligible ? 'T-note' : 'T-loop', admission.decision, admission.reason, call.callId)
+        const admission = admitLoop(call, event.text, policy)
+        record('T-loop', admission.decision, admission.reason, call.callId)
         if (admission.op !== undefined) ops.push(admission.op)
       }
       // docs/03 §2.2：streak 只被异质操作（其他文件）或用户轮打断——assistant 叙述不算打断

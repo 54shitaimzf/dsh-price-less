@@ -1,6 +1,7 @@
 # N3 · 影子模式（落地目标）
 
-> **状态**：**N3b ✅ 已施工**（2026-09-09）：协商纯核 `core/shear/negotiate.ts` + 域接线 + 两型 ignorable 事实 + 账本 fold + 设置卡三态 + 探针 `scripts/probe-n3.mjs`；默认 `shear.negotiate = off`，N3a 试验开 `shadow`。**待用户真机采样**（配合率底线 30%）。
+> **已退役（2026-09-09，账本 §71）**：`core/shear/negotiate.ts`、`shear.negotiate` 配置、两型 `shear-negotiation-*` 事实、账本协商段、探针 `scripts/probe-n3.mjs` 全部删除；真机 633 选样 / 68 挂注记 / **0 回复**。**只读历史。**
+> **状态（历史）**：**N3b ✅ 已施工**（2026-09-09）：协商纯核 `core/shear/negotiate.ts` + 域接线 + 两型 ignorable 事实 + 账本 fold + 设置卡三态 + 探针 `scripts/probe-n3.mjs`；默认 `shear.negotiate = off`，N3a 试验开 `shadow`。**待用户真机采样**（配合率底线 30%）。
 > **依赖**：N1 ✅（分类器）· N2 ✅（结论契约）· N2 §10 探针（通道配合率 0/134）。**总纲**：[`00-master.md`](00-master.md) §2/§3。
 > **正典**：[`docs/03 §2.1`](../03-shear.md)（协商语义）· [`docs/10 §1 H6`](../10-wiring.md)（挂点）· [`docs/07`](../07-metrics.md)（度量）。
 

@@ -12,25 +12,20 @@
  */
 import type { SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { ShearAppliedFactData, ShearDecisionFactData, ShearErrorFactData, ShearRunPlanFactData } from '../core/shear/ledger.ts'
-import type { ShearNegotiationNoteFactData, ShearNegotiationReplyFactData } from '../core/shear/negotiate.ts'
 
 declare module '@deepseek-ai/dsh-session/types' {
-  // ignorable: 剪切事实为 log-only 事件（含 N3 协商两型），须同步并入 IgnorableSessionEventMap。
+  // ignorable: 剪切事实为 log-only 事件，须同步并入 IgnorableSessionEventMap。
   interface SessionEventMap {
     'context-economy/shear-applied': ShearAppliedFactData // ignorable
     'context-economy/shear-decision': ShearDecisionFactData // ignorable
     'context-economy/shear-error': ShearErrorFactData // ignorable
     'context-economy/shear-run-plan': ShearRunPlanFactData // ignorable
-    'context-economy/shear-negotiation-note': ShearNegotiationNoteFactData // ignorable
-    'context-economy/shear-negotiation-reply': ShearNegotiationReplyFactData // ignorable
   }
   interface IgnorableSessionEventMap {
     'context-economy/shear-applied': ShearAppliedFactData // ignorable
     'context-economy/shear-decision': ShearDecisionFactData // ignorable
     'context-economy/shear-error': ShearErrorFactData // ignorable
     'context-economy/shear-run-plan': ShearRunPlanFactData // ignorable
-    'context-economy/shear-negotiation-note': ShearNegotiationNoteFactData // ignorable
-    'context-economy/shear-negotiation-reply': ShearNegotiationReplyFactData // ignorable
   }
 }
 
@@ -40,15 +35,10 @@ export {
   SHEAR_ERROR_FACT_TYPE,
   SHEAR_RUN_PLAN_FACT_TYPE,
 } from '../core/shear/ledger.ts'
-export {
-  SHEAR_NEGOTIATION_NOTE_FACT_TYPE,
-  SHEAR_NEGOTIATION_REPLY_FACT_TYPE,
-} from '../core/shear/negotiate.ts'
 export type { ShearAppliedFactData, ShearAppliedTier, ShearDecisionFactData, ShearErrorFactData, ShearRunPlanFactData } from '../core/shear/ledger.ts'
-export type { ShearNegotiationNoteFactData, ShearNegotiationReplyFactData } from '../core/shear/negotiate.ts'
 
 export { compactFact } from '../core/ledger/facts.ts'
 
 /** 声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。 */
-// ignorable: 三型事实键的声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。
-export type ShearFactMap = Pick<SessionEventMap, 'context-economy/shear-applied' | 'context-economy/shear-decision' | 'context-economy/shear-error' | 'context-economy/shear-run-plan' | 'context-economy/shear-negotiation-note' | 'context-economy/shear-negotiation-reply'>
+// ignorable: 四型事实键的声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。
+export type ShearFactMap = Pick<SessionEventMap, 'context-economy/shear-applied' | 'context-economy/shear-decision' | 'context-economy/shear-error' | 'context-economy/shear-run-plan'>

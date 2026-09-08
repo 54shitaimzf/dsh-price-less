@@ -10,10 +10,7 @@ import {
   SHEAR_POLICY_VERSION,
   admitEntry,
   admitLoop,
-  admitNote,
   assertPairing,
-  SHEAR_NOTE_TEMPLATE,
-  SHEAR_NOTE_TEMPLATE_VERSION,
   buildLoopStub,
   buildSupersededStub,
   foldToolShear,
@@ -22,8 +19,6 @@ import {
   isBoundaryRideCandidate,
   isDeclarationTable,
   looksLikeListing,
-  noteEligible,
-  parseNoteMarker,
   parseReadEnvelope,
   pathOfCall,
   repairReadAfterWrite,
@@ -80,8 +75,8 @@ describe('P15a §1 谓词与三级回退', () => {
     expect(pathOfCall(read)).toBeUndefined()
   })
   it('策略初值集中且版本化（docs/03 §8）', () => {
-    expect(SHEAR_POLICY_VERSION).toBe(1)
-    expect(DEFAULT_SHEAR_POLICY).toEqual({ version: 1, noteMinBytes: 8192, loopMaxConclusionChars: 120, t0rMaxSegments: 4, t0rMaxIndent: 1 })
+    expect(SHEAR_POLICY_VERSION).toBe(2)
+    expect(DEFAULT_SHEAR_POLICY).toEqual({ version: 2, loopMaxConclusionChars: 120, t0rMaxSegments: 4, t0rMaxIndent: 1 })
   })
 })
 
@@ -140,29 +135,6 @@ describe('P15a §3 T-loop 占位替换', () => {
     expect(admitLoop({ ...cmd, name: 'read' }, '短').reason).toBe('loop-category')
     expect(admitLoop(cmd, 'x'.repeat(200)).reason).toBe('loop-conclusion-too-long')
     expect(admitLoop(cmd, '   ').reason).toBe('loop-empty-conclusion')
-  })
-})
-
-describe('P15a §4 T-note 注记协商', () => {
-  const cmd = { seq: 1, time: 0, callId: 'c1', name: 'bash', argsText: '{}' }
-  const big = 'x'.repeat(DEFAULT_SHEAR_POLICY.noteMinBytes + 1)
-  it('无标记 / 坏标记 / 超时三路注入 → 全部默认保留', () => {
-    expect(admitNote(cmd, big, '就是一段普通叙述').decision).toBe('keep')
-    expect(admitNote(cmd, big, 'CUT-OK:').decision).toBe('keep')
-    expect(admitNote(cmd, big, 'CUT-OK: 有结论', { timedOut: true }).reason).toBe('note-timeout')
-  })
-  it('准入闸：体积阈值 / 非 read / 非问答', () => {
-    expect(admitNote(cmd, 'small', 'CUT-OK: 结论').reason).toBe('note-below-threshold')
-    expect(admitNote({ ...cmd, name: 'read' }, big, 'CUT-OK: 结论').reason).toBe('note-read-excluded')
-    expect(admitNote({ ...cmd, name: 'ask_user' }, big, 'CUT-OK: 结论').reason).toBe('note-qa-excluded')
-  })
-  it('CUT-OK → 剪（结论落叙述位）；CUT-HOLD / 结论超长 → hold', () => {
-    const cut = admitNote(cmd, big, '叙述尾部 CUT-OK: 测试全绿，无回归')
-    expect(cut.decision).toBe('cut')
-    expect(cut.op).toEqual({ kind: 'note-cut', callId: 'c1', conclusion: '测试全绿，无回归' })
-    expect(admitNote(cmd, big, 'CUT-HOLD: 还在用').decision).toBe('hold')
-    expect(admitNote(cmd, big, `CUT-OK: ${'y'.repeat(200)}`).decision).toBe('hold')
-    expect(parseNoteMarker('CUT-OK：全角冒号也可')).toEqual({ kind: 'cut', conclusion: '全角冒号也可' })
   })
 })
 
@@ -255,13 +227,6 @@ describe('P15a §7 确定性', () => {
 })
 
 describe('P15b 接线缝（纯核可选参数与模板）', () => {
-  it('noteEligible：体积阈值 / 非 read / 非问答', () => {
-    const cmd = { seq: 1, time: 10, callId: 'c1', name: 'bash', argsText: '{}' }
-    expect(noteEligible(cmd, bigLog(400))).toBe(true)
-    expect(noteEligible(cmd, 'small')).toBe(false)
-    expect(noteEligible({ ...cmd, name: 'read' }, bigLog(400))).toBe(false)
-    expect(noteEligible({ ...cmd, name: 'ask_user' }, bigLog(400))).toBe(false)
-  })
   it('textOfContentBlocks：拼接 text 块、忽略非 text 块', () => {
     expect(textOfContentBlocks([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }])).toBe('ab')
     expect(textOfContentBlocks([])).toBe('')
@@ -269,13 +234,7 @@ describe('P15b 接线缝（纯核可选参数与模板）', () => {
   it('buildSupersededStub 逐字含路径（零转写）', () => {
     expect(buildSupersededStub('src/index.ts')).toContain('src/index.ts')
   })
-  it('SHEAR_NOTE_TEMPLATE：版本 1、含 CUT-OK/CUT-HOLD 契约、可被 parseNoteMarker 解析', () => {
-    expect(SHEAR_NOTE_TEMPLATE_VERSION).toBe(1)
-    expect(SHEAR_NOTE_TEMPLATE).toContain('CUT-OK:')
-    expect(SHEAR_NOTE_TEMPLATE).toContain('CUT-HOLD:')
-    expect(parseNoteMarker('CUT-OK: 结论')).toEqual({ kind: 'cut', conclusion: '结论' })
-  })
-  it('entryShaped 选项：已整形调用跳过 T-note/T-loop（防双重剪）', () => {
+  it('entryShaped 选项：已整形调用跳过 T-loop（防双重剪）', () => {
     const events: ShearEvent[] = [call(1, 10, 'b1', 'bash', { command: 'npm test' }), result(2, 11, 'b1', 'a\nb\nc\nd\ne'), assistant(3, 12, '测试全绿。')]
     expect(foldToolShear(events).ops.map((op) => op.kind)).toEqual(['stub-replace'])
     expect(foldToolShear(events, DEFAULT_SHEAR_POLICY, { entryShaped: new Set(['b1']) }).ops).toHaveLength(0)

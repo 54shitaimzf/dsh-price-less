@@ -34,11 +34,11 @@ harness checkout 的本地实现（上游共识形态，待合并），插件经
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
 （历史记录，只读）；**新设计 = N 系列「协商剪除」（语义层）**，总纲 `docs/implement/00-master.md`
-（**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 ✅ 影子模式**（`core/shear/negotiate.ts` 纯核 + 域接线 + `shear-negotiation-note|reply` 两型 ignorable 事实 + 账本 fold + `shear.negotiate` 三态〔默认 off〕+ `scripts/probe-n3.mjs`；通道 A+C：预设 `presets/price-less/` persona 段声明协议 + 措辞纪律、**固定 native 呈现** + 短注记；**待真机采样**）；**2026-09-09 真机复盘修复 F1–F5**（H6 端口 `ctx.tools` 未 inject 空转 → F1 修；边界压缩加 60s 判词屏障 F2；诊断日志去重 F4；档案渲染结论先行+标签 F5a；**F3 工作区隔离已落地**（`domains/workspace.ts` 唯一键源 = 会话 `header.cwd`；快照 §70）/ F5b 路径相对化已由 **F9e** 落地〔每档案条目带 root + 相对化 + 短 ID 表〕；
+（**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 影子模式（已退役，账本 §71）**（历史：`core/shear/negotiate.ts` 纯核 + 两型 ignorable 事实 + `shear.negotiate` 三态 + 通道 A+C）；**2026-09-09 真机复盘修复 F1–F5**（H6 端口 `ctx.tools` 未 inject 空转 → F1 修；边界压缩加 60s 判词屏障 F2；诊断日志去重 F4；档案渲染结论先行+标签 F5a；**F3 工作区隔离已落地**（`domains/workspace.ts` 唯一键源 = 会话 `header.cwd`；快照 §70）/ F5b 路径相对化已由 **F9e** 落地〔每档案条目带 root + 相对化 + 短 ID 表〕；
 快照 §60）→ **F9 压缩产物重构**（F9a 区间权威 + F9b schema v2 + F9c 热尾事实载体 + F9d 双预算/存储 v2/
 单调守卫 + F9e 路径压缩；快照 §62–§66）→ **F10 契约 v3**（总分零指针 + 热尾指向档案 + 档案只存总分 +
 错误不进热尾；快照 §69）→ **F11/F12/F13 真机复盘修正**（列表类命令不剪 / 影子模式零字节〔注记只记事实〕/
-判别器 v4 任务定义〔同一工作对象或同类目标持续改进；子task 不分流〕；快照 §70）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
+判别器 v4 任务定义〔同一工作对象或同类目标持续改进；子task 不分流〕；快照 §70）→ **N 系列协商线退役**（真机 44 会话 / 633 选样 / 68 挂注记 → **CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**，叠加 N2 探针 0/134；`shear.negotiate` 配置 + `core/shear/{negotiate,conclusion}.ts` + 两型 `shear-negotiation-*` 事实 + 账本协商段 + T-note 标记协议 + 预设 persona 协议段全部删除；N1 分类器保留；快照 §71）→ **写时确定性剪除方向**（剪点必须在结果入账前定死 = T-entry；禁模型回应依赖、禁行为信号〔缓存断裂〕）），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。
@@ -95,7 +95,7 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 - 优化产物 = **关键事实逐字保真 + 其余大胆重写**：路径/版本数值/引号内文本/约束与合规词句逐字保留；
   结构按"目标 → 交付物与验收 → 约束 → 执行路径"自然成文，禁止分节标签与元注释（"原样保留用户提示词"之类）。
 - 执行路径钉"决策点"、软化"顺序"（条件化，如"若 A 不存在则走 B"），只引用本会话当前装配的工具集与已安装技能（引用守卫查表）。
-- **失败默认保留**：协商不成不动刀（无标记/解析失败/超时 → 不剪、不替换、不回填），失败方向永远朝用户数据安全侧。
+- **失败默认保留**：剪除不成不动刀（判据不成立/解析失败/超时 → 不剪、不替换、不回填），失败方向永远朝用户数据安全侧。
 - **相信用户决策**：Tier-0 一票算数；星标回填即终审；预览确认即生效；用户编辑即终稿。
 
 ## Workflow
