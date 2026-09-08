@@ -28,7 +28,7 @@ import {
   type TxnPlan,
 } from '../core/assemble/index.ts'
 import { foldFileChains } from '../core/assemble/chain.ts'
-import { foldSurfaceNodes } from '../core/shear/ledger.ts'
+import { foldSurfaceNodes } from '../core/ledger/surface.ts'
 import { compactFact } from '../core/ledger/facts.ts'
 import type { LedgerSessionEvent } from '../core/ledger/types.ts'
 import { emitCeFact } from '../platform/logger.ts'

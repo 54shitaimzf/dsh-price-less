@@ -12,6 +12,7 @@
  */
 import type { LedgerFact, LedgerSessionEvent } from '../ledger/types.ts'
 import { estimateTokens, extractTextFromToolResult } from '../ledger/fold.ts'
+import { foldSurfaceNodes } from '../ledger/surface.ts'
 import { DEFAULT_SHEAR_POLICY, type ShearEvent, type ShearPolicy, type ShearToolCategory } from './types.ts'
 import { foldToolShear, pathOfCall, toolCategory, type FoldToolShearOptions } from './tool.ts'
 import { DEFAULT_RUN_POLICY, foldRunShear, RUN_CLASS_FACT_TYPE, type RunEvent, type RunPolicy } from './run.ts'
@@ -117,23 +118,8 @@ function emptyLedger(): ShearLedger {
   }
 }
 
-/** 表面 fold（append 入尾 / replace 遮蔽区间换节点）；返回当前表面节点 seq 序。 */
-export function foldSurfaceNodes(events: readonly LedgerSessionEvent[]): number[] {
-  const nodes: number[] = []
-  for (const event of events) {
-    const op = (event as { surfaceOp?: unknown }).surfaceOp
-    if (op === 'append') { nodes.push(event.seq); continue }
-    if (typeof op !== 'object' || op === null) continue
-    const replace = op as { op?: unknown; start?: unknown; end?: unknown }
-    if (replace.op !== 'replace') continue
-    const start = Number(replace.start)
-    const end = Number(replace.end)
-    const si = nodes.indexOf(start)
-    const ei = nodes.indexOf(end)
-    if (si >= 0 && ei >= si) nodes.splice(si, ei - si + 1, event.seq)
-  }
-  return nodes
-}
+/** 表面 fold（通用回放工具，P17b 上移 core/ledger/surface.ts；此处 re-export 保持剪切面导出不变）。 */
+export { foldSurfaceNodes } from '../ledger/surface.ts'
 
 /** 事件模型可见文本（tool/result | assistant/message | user/message）。 */
 export function ledgerEventText(event: LedgerSessionEvent): string {

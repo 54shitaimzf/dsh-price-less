@@ -2,3 +2,4 @@
 export * from './types.ts'
 export * from './facts.ts'
 export * from './fold.ts'
+export * from './surface.ts'
