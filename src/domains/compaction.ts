@@ -27,6 +27,7 @@ import {
   COMPRESS_PROMPT_VERSION,
   COMPRESS_POLICY_VERSION,
   DEFAULT_COMPRESS_POLICY,
+  PRESSURE_EMERGENCY_LIMIT,
   PRESSURE_RETRY_BUDGET,
   appendArchiveEntry,
   compressSpanHash,
@@ -216,6 +217,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   const pressureTurn = new WeakMap<Session, number>()
   /** 紧急折叠守卫（同 (turn,step) 至多一次：地板以上自动折叠 / 溢出接管共用）。 */
   const emergencyGuard = new WeakMap<Session, string>()
+  /** 保险丝自动折叠 turn 守卫（每轮至多一次；与压力 turn 守卫独立）。 */
+  const fuseTurn = new WeakMap<Session, number>()
   let disposed = false
 
   const policiesOf = (config: ConfigShape): { assemble: AssemblePolicy; compress: CompressPolicy } => ({
@@ -505,51 +508,70 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     readonly rawOutput?: string
   }
 
+  interface PressureFoldResult {
+    readonly landed: boolean
+    /** 是否真正进入折叠尝试（保险丝据此避免同一轮重复折叠）。 */
+    readonly attempted: boolean
+  }
+
   /**
    * 压力折叠（P20a；docs/04 §3）：选缝 → 检查点 + 保留区逐字 → 缩水校验（重试 2）→
-   * 档案 checkpoint 条目 → 事务替换。emergency = 保险丝/溢出接管（P20b；跳过 turn 守卫）。
-   * 返回 true = 已落刀。
+   * 档案 checkpoint 条目 → 事务替换。emergency = 保险丝/溢出接管（P20b；跳过 turn 守卫，
+   * 并可越过断路器——保险丝是最后板凳，但仍有硬上限 PRESSURE_EMERGENCY_LIMIT）。
+   * 返回 { landed, attempted }。
    */
   const pressureFold = async (
     session: Session,
     turn: number,
     events: readonly LedgerSessionEvent[],
     facts: readonly LedgerFact[],
-    opts: { wireTokens: number; thresholdTokens: number; emergency: boolean },
-  ): Promise<boolean> => {
+    opts: {
+      wireTokens: number
+      thresholdTokens: number
+      emergency: boolean
+      contextWindow?: number
+      pressureRatio?: number
+    },
+  ): Promise<PressureFoldResult> => {
     const config = getConfig()
     const sid = sessionIdOf(session)
-    const base = { at: now(), wireTokens: opts.wireTokens, thresholdTokens: opts.thresholdTokens, emergency: opts.emergency }
+    const stop = (attempted: boolean): PressureFoldResult => ({ landed: false, attempted })
+    const base = {
+      at: now(), wireTokens: opts.wireTokens, thresholdTokens: opts.thresholdTokens, emergency: opts.emergency,
+      contextWindow: opts.contextWindow, pressureRatio: opts.pressureRatio,
+    }
     const fire = (outcome: PressureFireFactData['outcome'], extra: Partial<PressureFireFactData> = {}): void => {
       emitCeFact(session, PRESSURE_FIRED_FACT_TYPE, compactFact({ ...base, outcome, chainDepth: 0, ...extra }), logger)
     }
     const segments = foldSegmentState([...facts], { sessionFirstSeq: firstUserSeq(events) }).segments
     const segment = segments.at(-1)
-    if (segment === undefined || segment.closed) { fire('skip', { reason: 'no-task' }); return false }
+    if (segment === undefined || segment.closed) { fire('skip', { reason: 'no-task' }); return stop(false) }
     const scopedTaskId = `${sid}:${segment.taskId}`
     const existing = storage.getEntity('boundary_archive', storeKey)
     const storeBody = readArchiveStore(existing?.body, workspace)
     const priorChain = priorChainFor(storeBody, scopedTaskId, sid)
     const depth = pressureChainDepth(priorChain)
-    if (pressureBreakerTripped(depth)) { fire('breaker', { chainDepth: depth }); return false }
-    if (!planTailConsumption({ priorChain, layer: 'pressure' }).ok) { fire('skip', { reason: 'chain-invalid', chainDepth: depth }); return false }
+    // 常规压力受断路器约束；紧急折叠（保险丝/溢出接管）可越过，但有独立硬上限。
+    if (!opts.emergency && pressureBreakerTripped(depth)) { fire('breaker', { chainDepth: depth }); return stop(false) }
+    if (opts.emergency && depth >= PRESSURE_EMERGENCY_LIMIT) { fire('breaker', { chainDepth: depth, reason: 'emergency-cap' }); return stop(false) }
+    if (!planTailConsumption({ priorChain, layer: 'pressure' }).ok) { fire('skip', { reason: 'chain-invalid', chainDepth: depth }); return stop(false) }
 
     const surface = foldSurfaceNodes(events)
     const taskEndSeq = surface.at(-1)
-    if (taskEndSeq === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return false }
+    if (taskEndSeq === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return stop(false) }
     const prev = priorChain.at(-1)
     const segmentStart = segment.startSeq ?? firstUserSeq(events)
     const foldStartSeq = prev?.cutPointSeq ?? segmentStart
     const replaceStart = prev?.rangeEndSeq === undefined
       ? surface.find((seq) => seq >= segmentStart)
       : surface.find((seq) => seq > (prev.rangeEndSeq as number))
-    if (replaceStart === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return false }
+    if (replaceStart === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return stop(false) }
 
     // 单元清单与折叠区同源（模型只从清单抄 unitId 选缝；被遮蔽原文在此重新可见 = 机制 B）。
     const material = events.filter(isPressureMaterial)
     const units = foldAssembleInputs(material).units
       .filter((unit) => unit.seqStart >= foldStartSeq && unit.seqEnd <= taskEndSeq)
-    if (units.length === 0) { fire('skip', { reason: 'no-units', chainDepth: depth }); return false }
+    if (units.length === 0) { fire('skip', { reason: 'no-units', chainDepth: depth }); return stop(false) }
 
     const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
     const candidateText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: taskEndSeq })
@@ -649,7 +671,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     for (let attempt = 0; attempt <= PRESSURE_RETRY_BUDGET && chosen === undefined; attempt++) {
       attempts++
       const candidate = await attemptProduct(attempt === 0)
-      if (candidate === undefined) return false
+      if (candidate === undefined) return stop(true)
       lastFolded = candidate.foldedTokens
       lastRetained = candidate.retainedTokens
       // 缩水校验（04 §1，replace 前置）：产物（检查点 + 保留区）< 被压区间（折叠材料）。
@@ -664,7 +686,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         foldedTokens: lastFolded, retainedTokens: lastRetained, emergency: opts.emergency,
         ...(usage === undefined ? {} : { llmUsage: usage }),
       }), logger)
-      return false
+      return stop(true)
     }
     if (chosen.cacheHit) counts.cacheHits++
 
@@ -690,7 +712,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         cutPointSeq: chosen.cutSeq, emergency: opts.emergency,
         ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
       }), logger)
-      return false
+      return stop(true)
     }
 
     // 事务：open → prune（影子价）→ summary + checkpoint 替换 → close。
@@ -725,7 +747,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         cutPointSeq: chosen.cutSeq, emergency: opts.emergency,
         ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
       }), logger)
-      return false
+      return stop(true)
     }
     counts.compactions++
     fire('fired', { chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
@@ -740,49 +762,78 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       carried: priorChain.length, archiveEntries: entries, emergency: opts.emergency,
       ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
     }), logger)
-    return true
+    return { landed: true, attempted: true }
   }
 
-  /** 压力触发（时序 C 上半）：wire 锚定计量 ≥ 阈值；一个 turn 至多尝试一次。 */
+  /**
+   * 主模型窗口探针（P20c）：窗口必须取**主会话路由**（readSessionModel），
+   * 不是辅助调用（判别/压缩）路由；无 llm / 无 request/header / 适配器未声明 = undefined（不猜）。
+   */
+  const resolvePressureWindow = async (session: Session): Promise<number | undefined> => {
+    const llm = deps.getLlm?.()
+    if (llm === undefined) return undefined
+    const model = readSessionModel(session)
+    if (model === undefined) return undefined
+    return await resolveContextWindow(llm, model.provider, model.model, logger)
+  }
+
+  /**
+   * 压力触发（时序 C 上半）：wire 锚定计量 ≥ 阀门（比例 × 主模型窗口）；一个 turn 至多尝试一次。
+   * 返回 true = 本轮真正进入折叠尝试（保险丝据此避免同轮重复折叠）。
+   */
   const runPressure = async (
     session: Session,
     turn: number,
     events: readonly LedgerSessionEvent[],
     facts: readonly LedgerFact[],
-  ): Promise<void> => {
+    contextWindow?: number,
+  ): Promise<boolean> => {
     const config = getConfig()
     const wireTokens = deps.getMeter?.()?.wireTokens(session)
-    if (wireTokens === undefined) return
-    const thresholdTokens = pressureThreshold(config.compression)
-    if (thresholdTokens === undefined || wireTokens < thresholdTokens) return
-    if (pressureTurn.get(session) === turn) return
+    if (wireTokens === undefined) return false
+    const thresholdTokens = pressureThreshold({
+      contextWindow,
+      domainTokens: config.compression.domainTokens,
+      thresholdTokens: config.compression.thresholdTokens,
+      pressureRatio: config.compression.pressureRatio,
+    })
+    if (thresholdTokens === undefined || wireTokens < thresholdTokens) return false
+    if (pressureTurn.get(session) === turn) return false
     pressureTurn.set(session, turn)
-    await pressureFold(session, turn, events, facts, { wireTokens, thresholdTokens, emergency: false })
+    const result = await pressureFold(session, turn, events, facts, {
+      wireTokens, thresholdTokens, emergency: false,
+      pressureRatio: config.compression.pressureRatio,
+      ...(contextWindow === undefined ? {} : { contextWindow }),
+    })
+    return result.attempted
   }
 
-  /** 保险丝（时序 C 下半，P20b）：地板以上自动紧急折叠；低于地板严格 no-op（零事实零行为）。 */
+  /**
+   * 保险丝（时序 C 下半，P20b/P20c）：地板以上自动紧急折叠；低于地板严格 no-op（零事实零行为）。
+   * 压力路径本轮已真正尝试过折叠则跳过（避免同轮重复折叠）；否则紧急折叠可越过断路器。
+   */
   const runFuse = async (
     session: Session,
     turn: number,
     step: number,
     events: readonly LedgerSessionEvent[],
     facts: readonly LedgerFact[],
+    contextWindow: number | undefined,
+    pressureAttempted: boolean,
   ): Promise<void> => {
-    const config = getConfig()
-    const llm = deps.getLlm?.()
-    if (llm === undefined) return
+    if (pressureAttempted) return
+    if (fuseTurn.get(session) === turn) return
     const wireTokens = deps.getMeter?.()?.wireTokens(session)
     if (wireTokens === undefined) return
-    const route = resolveJudgeModel(config, readSessionModel(session))
-    const contextWindow = await resolveContextWindow(llm, route.provider, route.model, logger)
     const floorTokens = fuseFloorTokens(contextWindow)
     if (floorTokens === undefined || !fuseArmed({ wireTokens, contextWindow })) return
     const guardKey = `${turn}:${step}`
     if (emergencyGuard.get(session) === guardKey) return
     emergencyGuard.set(session, guardKey)
-    const landed = await pressureFold(session, turn, events, facts, { wireTokens, thresholdTokens: floorTokens, emergency: true })
+    fuseTurn.set(session, turn)
+    const result = await pressureFold(session, turn, events, facts, { wireTokens, thresholdTokens: floorTokens, emergency: true })
     emitCeFact(session, HARD_TRUNCATE_FACT_TYPE, compactFact({
-      at: now(), wireTokens, floorTokens, outcome: 'fuse-fold' as const, landed,
+      at: now(), wireTokens, floorTokens, outcome: 'fuse-fold' as const, landed: result.landed,
       ...(contextWindow === undefined ? {} : { contextWindow }),
     }), logger)
   }
@@ -810,13 +861,17 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const events = ledgerEventsOf(payload.session)
       const facts = factsFromSessionEvents(events)
       const wireTokens = deps.getMeter?.()?.wireTokens(payload.session) ?? 0
-      const thresholdTokens = pressureThreshold(config.compression) ?? 0
-      const landed = await pressureFold(payload.session, payload.turn, events, facts, { wireTokens, thresholdTokens, emergency: true })
+      const thresholdTokens = pressureThreshold({
+        domainTokens: config.compression.domainTokens,
+        thresholdTokens: config.compression.thresholdTokens,
+        pressureRatio: config.compression.pressureRatio,
+      }) ?? 0
+      const result = await pressureFold(payload.session, payload.turn, events, facts, { wireTokens, thresholdTokens, emergency: true })
       emitCeFact(payload.session, HARD_TRUNCATE_FACT_TYPE, compactFact({
         at: now(), wireTokens, floorTokens: thresholdTokens,
-        outcome: landed ? 'overflow-retry' as const : 'overflow-declined' as const, landed,
+        outcome: result.landed ? 'overflow-retry' as const : 'overflow-declined' as const, landed: result.landed,
       }), logger)
-      return landed ? 'retry' : 'pass'
+      return result.landed ? 'retry' : 'pass'
     } catch (e) {
       counts.errors++
       logger.warn('context-economy: overflow takeover failed (fail-lazy, original error preserved)', e instanceof Error ? e.message : String(e))
@@ -839,8 +894,10 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const facts = factsFromSessionEvents(events)
       if (config.compression?.boundary !== false) await runBoundary(session, turn, events, facts)
       if (config.compression?.pressure !== false) {
-        await runPressure(session, turn, events, facts)
-        await runFuse(session, turn, payload.step ?? 0, events, facts)
+        // P20c：每步只探一次主模型窗口，压力阀门与保险丝地板共用同一值。
+        const contextWindow = await resolvePressureWindow(session)
+        const pressureAttempted = await runPressure(session, turn, events, facts, contextWindow)
+        await runFuse(session, turn, payload.step ?? 0, events, facts, contextWindow, pressureAttempted)
       }
     } catch (e) {
       counts.errors++

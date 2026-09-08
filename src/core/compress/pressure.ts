@@ -1,5 +1,5 @@
 /**
- * 压力路径纯核（docs/04 §3 层 3：40% 触发 / 进行时检查点 + 缝 / 保留区全量逐字 /
+ * 压力路径纯核（docs/04 §3 层 3：35% 主模型窗口触发〔P20c 用户裁定〕/ 进行时检查点 + 缝 / 保留区全量逐字 /
  * 机制 A 续传 + 机制 B 折叠 / 断路器；docs/07 §0.5 压缩族 pressure*；P20a）。
  * 纯函数：触发阈值与断路器判定、折叠区材料转写、检查点渲染、续传链拼接、pressure-fired fold。
  * 模型只做识别（选缝）与摘要；计量、裁剪、保留区取真全部机械完成（04 §2 分工律）。
@@ -17,11 +17,17 @@ import type { ArchiveEntry } from '../assemble/types.ts'
 import { renderRegionTranscript } from './region.ts'
 import { DEFAULT_COMPRESS_POLICY, type CompressCheckpoint, type CompressPolicy } from './types.ts'
 
-/** 压力触发比例（04 §3；绝对设计值缺失时的比例式 fallback）。 */
-export const PRESSURE_RATIO = 0.4
+/**
+ * 压力阀门默认比例（用户裁定 2026-09-09：模型能力在上下文窗口约 35% 后下降；
+ * 修订 docs/04 §3/§4/§5 的旧口径——裸模型窗口不再禁作压缩触发，改由比例旋钮 + 断路器 + 保险丝三层共同约束）。
+ */
+export const PRESSURE_RATIO = 0.35
 
 /** 单 task 压力上限（04 §3 断路器；链长有界 = checkpoint 条目数）。 */
 export const PRESSURE_CHAIN_LIMIT = 3
+
+/** 紧急折叠硬上限（保险丝/溢出接管可越过常规断路器，但不得无限追加检查点链）。 */
+export const PRESSURE_EMERGENCY_LIMIT = PRESSURE_CHAIN_LIMIT + 3
 
 /** 压力档缩水重试预算（04 §3「比边界激进一档」；边界档 = 1）。 */
 export const PRESSURE_RETRY_BUDGET = 2
@@ -29,20 +35,38 @@ export const PRESSURE_RETRY_BUDGET = 2
 /** 压力触发事实（ignorable log-only；声明合并随 domains/compaction-facts.ts）。 */
 export const PRESSURE_FIRED_FACT_TYPE = 'context-economy/pressure-fired' // ignorable
 
-/** 触发阈值：绝对设计值为主（04 §5），比例式只作 fallback（域窗缺失/非法时）。 */
-export function pressureThreshold(input: { thresholdTokens?: number; domainTokens?: number }): number | undefined {
-  const absolute = input.thresholdTokens
-  if (typeof absolute === 'number' && Number.isFinite(absolute) && absolute > 0) return absolute
-  const domain = input.domainTokens
-  if (typeof domain !== 'number' || !Number.isFinite(domain) || domain <= 0) return undefined
-  return Math.ceil(domain * PRESSURE_RATIO)
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+/**
+ * 触发阈值（优先级，docs/04 §3 修订版）：
+ * ① 主模型窗口已知 → ceil(pressureRatio × contextWindow)；
+ * ② 窗口未知 → ceil(pressureRatio × domainTokens)（domainTokens = 假定窗口兜底）；
+ * ③ 以上都不可用 → thresholdTokens（绝对安全网，宁晚不误压）；
+ * ④ 全不可用 → undefined（不触发）。
+ */
+export function pressureThreshold(input: {
+  contextWindow?: number
+  domainTokens?: number
+  thresholdTokens?: number
+  pressureRatio?: number
+}): number | undefined {
+  const ratio = positiveNumber(input.pressureRatio)
+  if (ratio !== undefined) {
+    const window = positiveNumber(input.contextWindow) ?? positiveNumber(input.domainTokens)
+    if (window !== undefined) return Math.max(1, Math.ceil(window * ratio))
+  }
+  return positiveNumber(input.thresholdTokens)
 }
 
 /** 是否达到压力触发阈（wire 锚定计量 ≥ 阈值；阈值不可得 = 不触发）。 */
 export function shouldFirePressure(input: {
   wireTokens: number
-  thresholdTokens?: number
+  contextWindow?: number
   domainTokens?: number
+  thresholdTokens?: number
+  pressureRatio?: number
 }): boolean {
   if (!Number.isFinite(input.wireTokens) || input.wireTokens <= 0) return false
   const threshold = pressureThreshold(input)
@@ -138,6 +162,9 @@ export interface PressureFireFactData {
   readonly at: number
   readonly wireTokens: number
   readonly thresholdTokens: number
+  /** 计算阀门的输入快照（审计可复算；窗口未知时省略）。 */
+  readonly contextWindow?: number
+  readonly pressureRatio?: number
   readonly outcome: 'fired' | 'breaker' | 'skip'
   readonly reason?: string
   readonly chainDepth: number

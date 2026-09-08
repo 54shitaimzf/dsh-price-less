@@ -34,10 +34,12 @@ export interface EconomyCardSettingsShape {
   shear?: {
     enabled?: boolean
   }
-  /** 压缩域开关与标定（与 host Config.compression 同步对；P19）。 */
+  /** 压缩域开关与标定（与 host Config.compression 同步对；P19 + P20c）。 */
   compression?: {
     boundary?: boolean
     pressure?: boolean
+    /** P20c：压力阀门比例（× 主模型上下文窗口）。 */
+    pressureRatio?: number
     domainTokens?: number
     retainTokens?: number
     thresholdTokens?: number
@@ -222,6 +224,7 @@ export const CLIENT_DEFAULTS = {
   compression: {
     boundary: true,
     pressure: true,
+    pressureRatio: 0.35,
     domainTokens: 125000,
     retainTokens: 10000,
     thresholdTokens: 100000,
@@ -347,8 +350,13 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   },
   'compression.pressure': {
     label: '压力压缩',
-    hint: '默认开启：单任务过长时按 40% 阈值保尾压头（接线随 P20a）。',
-    docs: '压力路径总开关：任务内历史涨到压缩域窗口的 40% 时，保留最近一段原文、把更早内容折成进行时检查点。是判别器失灵时的兜底。',
+    hint: '默认开启：单任务上下文涨到阀门比例时保尾压头。',
+    docs: '压力路径总开关：任务内上下文涨到「压力阀门」（默认 35% × 主模型上下文窗口）时，保留最近一段原文、把更早内容折成进行时检查点。是判别器失灵时的兜底；再高由防溢出保险丝接管。',
+  },
+  'compression.pressureRatio': {
+    label: '压力阀门',
+    hint: '默认 0.35：主模型上下文窗口的占比，超过即走压力路径。',
+    docs: '压力触发阀门比例（0–1）。一般认为上下文占用超过窗口约 35% 后模型能力开始下降，故默认 0.35。窗口取自主对话模型自身声明的上下文长度；模型未声明窗口时以「假定窗口」为基准。比例必须小于保险丝地板 0.8。',
   },
   'compression.retainTokens': {
     label: '热尾预算',
@@ -356,14 +364,14 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
     docs: '热尾（任务材料）预算，绝对设计值 10000 token。压缩器按重要性申报、装配器贪心累加到该值即停；材料只是缓存，丢了可从磁盘与会话账本重推导。',
   },
   'compression.thresholdTokens': {
-    label: '压力阈值',
-    hint: '默认 100000：超过即走压力路径（须大于热尾预算）。',
-    docs: '压力触发阈值（绝对设计值 100000 token）。与压缩域窗口配套标定；必须大于热尾预算，否则配置自动回退设计值。',
+    label: '压力阈值（安全网）',
+    hint: '默认 100000：仅当窗口与假定窗口都不可用时启用。',
+    docs: '末位绝对安全网（100000 token）：只在主模型未声明窗口、且假定窗口也不可用时才作为压力触发阈值；必须大于热尾预算，否则整块配置自动回退设计值。',
   },
   'compression.domainTokens': {
-    label: '压缩域窗口',
-    hint: '默认 125000：按任务尺度标定的窗口。',
-    docs: '压缩域窗口（≈任务峰值上下文）。压力阈值按它标定，不按模型裸窗口——裸窗口会让触发门永不过。',
+    label: '假定窗口',
+    hint: '默认 125000：模型未声明上下文长度时的比例基准。',
+    docs: '假定窗口（≈任务峰值上下文）。主模型未声明上下文长度时，压力阀门按「比例 × 假定窗口」计算；主模型声明了窗口则优先用它。',
   },
   'compression.archiveCapTokens': {
     label: '档案区上限',
@@ -412,6 +420,7 @@ const compressionPressureField = economyBoolField('compression.pressure', { visi
 
 /** P19：压缩域标定数值（模型与调优组）。 */
 const compressionNumberFields = [
+  economyNumberField('compression.pressureRatio', { min: 0.05, max: 0.75, step: 0.05, visibility: 'tune', default: 0.35, deflabel: '默认 0.35' }),
   economyNumberField('compression.retainTokens', { min: 1000, max: 100000, step: 1000, unit: 'token', visibility: 'tune', default: 10000, deflabel: '默认 10000' }),
   economyNumberField('compression.thresholdTokens', { min: 10000, max: 1000000, step: 10000, unit: 'token', visibility: 'tune', default: 100000, deflabel: '默认 100000' }),
   economyNumberField('compression.domainTokens', { min: 10000, max: 2000000, step: 10000, unit: 'token', visibility: 'tune', default: 125000, deflabel: '默认 125000' }),

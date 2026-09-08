@@ -26,11 +26,16 @@ export interface Config {
     boundary: boolean
     /** 压力路径总开关（生产者 = P20a；默认 true）。 */
     pressure: boolean
-    /** 压缩域窗口（docs/04 §5 标定；压力触发基准）。 */
+    /**
+     * 压力阀门比例（P20c 用户裁定 2026-09-09）：压力触发 = 比例 × 主模型上下文窗口。
+     * 默认 0.35（模型能力在窗口约 35% 后下降）；不变量 0 < ratio < 1。
+     */
+    pressureRatio: number
+    /** 假定窗口（主模型未声明窗口时的比例基准；docs/04 §5 修订）。 */
     domainTokens: number
     /** 热尾保留预算（绝对设计值 10K；docs/04 §5）。 */
     retainTokens: number
-    /** 压力阈值（绝对设计值 100K）；不变量 retain < threshold。 */
+    /** 末位绝对安全网（窗口与假定窗口都不可用时启用）；不变量 retain < threshold。 */
     thresholdTokens: number
     /** 档案区硬帽（绝对设计值 15K；docs/04 §6）。 */
     archiveCapTokens: number
@@ -57,6 +62,7 @@ export const Config = z.object({
   compression: z.object({
     boundary: z.boolean().default(true),
     pressure: z.boolean().default(true),
+    pressureRatio: z.number().default(0.35),
     domainTokens: z.number().default(125000),
     retainTokens: z.number().default(10000),
     thresholdTokens: z.number().default(100000),
@@ -78,6 +84,7 @@ export const CONFIG_DEFAULTS = {
   compression: {
     boundary: true,
     pressure: true,
+    pressureRatio: 0.35,
     domainTokens: 125000,
     retainTokens: 10000,
     thresholdTokens: 100000,
@@ -96,11 +103,17 @@ export function reasoningEffortSetting(config: Config): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
-/** 压缩域不变量（docs/04 §5 硬规则）：retain < threshold 且两者为正。 */
+/**
+ * 压缩域不变量（docs/04 §5 硬规则 + P20c）：
+ * retain < threshold 且两者为正；压力阀门比例 ∈ (0, 1)（且必须 < 保险丝地板 0.8）。
+ */
 export function compressionInvariantOk(compression: Config['compression']): boolean {
   return Number.isFinite(compression.retainTokens) && Number.isFinite(compression.thresholdTokens)
     && compression.retainTokens > 0
     && compression.thresholdTokens > compression.retainTokens
+    && Number.isFinite(compression.pressureRatio)
+    && compression.pressureRatio > 0
+    && compression.pressureRatio < 0.8
 }
 
 /** 把"可能部分"的 config 补全成完整形状（shear/compression/discriminator 深合并）。 */

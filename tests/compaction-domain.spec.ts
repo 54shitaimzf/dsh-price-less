@@ -327,6 +327,8 @@ function makePressureSession(id = 'sp'): FakeSession {
   session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [textBlock('y'.repeat(50))] }] } }, { surfaceOp: 'append' })
   session.append('user/message', { content: [textBlock('继续')], source: { kind: 'user' } }, { surfaceOp: 'append' })
+  // 主会话路由（readSessionModel 倒序扫描；非表面事件，不影响表面序）——P20c 窗口探针输入。
+  session.append('request/header', { header: { config: { provider: 'p', model: 'm' } } })
   return session
 }
 
@@ -340,7 +342,7 @@ describe('P20a 压力路径：触发与全路径', () => {
     expect(env.llm.calls[0]).toMatchObject({ purpose: 'context-economy-compaction', temperature: 0 })
     const fires = firesOf(env.session)
     expect(fires).toHaveLength(1)
-    expect(fires[0]).toMatchObject({ outcome: 'fired', chainDepth: 0, wireTokens: 120000, thresholdTokens: 100000, cutPointSeq: 3 })
+    expect(fires[0]).toMatchObject({ outcome: 'fired', chainDepth: 0, wireTokens: 120000, thresholdTokens: 43750, pressureRatio: 0.35, cutPointSeq: 3 })
     expect(env.runs()).toHaveLength(1)
     expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', calls: 1, cutPointSeq: 3, carried: 0, archiveEntries: 1 })
     const record = env.storage.entities.get(`boundary_archive:${ARCHIVE_KEY}`)!
@@ -382,7 +384,7 @@ describe('P20a 压力路径：触发与全路径', () => {
   })
 
   it('低于阈值 / meter 缺失 → 零压力行为（boundary 无闭合段亦不动）', async () => {
-    const low = makeEnv({ session: makePressureSession(), wireTokens: 50000 })
+    const low = makeEnv({ session: makePressureSession(), wireTokens: 40000 })
     await low.domain.onPreStep({ session: low.session as never, turn: 3 })
     expect(firesOf(low.session)).toHaveLength(0)
     expect(low.llm.calls).toHaveLength(0)
@@ -442,24 +444,34 @@ describe('P20a 压力路径：触发与全路径', () => {
 const hardFactsOf = (session: FakeSession) => session.events.filter((event) => event.type === HARD_TRUNCATE_FACT_TYPE).map((event) => event.data)
 
 describe('P20b 保险丝：地板以上自动折叠 + 溢出接管', () => {
-  it('地板以上（低于压力阈）→ 紧急折叠 + hard-truncate{fuse-fold}', async () => {
+  it('断路器耗尽后：保险丝越过断路器紧急折叠 + hard-truncate{fuse-fold}', async () => {
+    const storage = new FakeStorage()
+    storage.entities.set(`boundary_archive:${ARCHIVE_KEY}`, {
+      version: 1,
+      body: {
+        schemaVersion: 1, workspace: WORKSPACE,
+        entries: [0, 1, 2].map((i) => ({ taskId: 'sp:task-1', kind: 'checkpoint', text: `C${i}`, sessionId: 'sp', layer: 'pressure', at: i, cutPointSeq: 1, rangeEndSeq: 2 })),
+        cache: {},
+      },
+    })
     const env = makeEnv({
-      session: makePressureSession(), wireTokens: 90000,
+      session: makePressureSession(), storage, wireTokens: 90000,
       llm: fakeLlm([{ text: PRESSURE_PRODUCT }], { contextWindow: 100000 }),
     })
     await env.domain.onPreStep({ session: env.session as never, turn: 3, step: 1 })
+    expect(firesOf(env.session)[0]).toMatchObject({ outcome: 'breaker', chainDepth: 3 })
     const hard = hardFactsOf(env.session)
     expect(hard).toHaveLength(1)
     expect(hard[0]).toMatchObject({ outcome: 'fuse-fold', landed: true, wireTokens: 90000, floorTokens: 80000, contextWindow: 100000 })
-    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', emergency: true })
-    expect(firesOf(env.session)[0]).toMatchObject({ outcome: 'fired', emergency: true })
+    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', emergency: true, carried: 3 })
   })
 
   it('低于地板 → 严格 no-op（零事实 / 零调用 / 零改史）', async () => {
     const session = makePressureSession()
     const before = session.events.length
+    const config = resolveConfig({ compression: { ...resolveConfig({}).compression, pressureRatio: 0.75 } })
     const env = makeEnv({
-      session, wireTokens: 70000,
+      session, wireTokens: 70000, config,
       llm: fakeLlm([{ text: PRESSURE_PRODUCT }], { contextWindow: 100000 }),
     })
     await env.domain.onPreStep({ session: session as never, turn: 3, step: 1 })

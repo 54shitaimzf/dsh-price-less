@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   PRESSURE_CHAIN_LIMIT,
+  PRESSURE_EMERGENCY_LIMIT,
   PRESSURE_FIRED_FACT_TYPE,
   PRESSURE_RATIO,
   composePressureArchive,
@@ -36,28 +37,36 @@ const SAMPLE: LedgerSessionEvent[] = [
 ]
 
 describe('P20a 压力纯核：阈值与断路器', () => {
-  it('触发阈值：绝对设计值为主，比例式只作 fallback', () => {
-    expect(PRESSURE_RATIO).toBe(0.4)
+  it('触发阈值优先级：主模型窗口比例 → 假定窗口比例 → 绝对安全网（P20c 默认 0.35）', () => {
+    expect(PRESSURE_RATIO).toBe(0.35)
+    // ① 窗口已知：比例 × 窗口
+    expect(pressureThreshold({ contextWindow: 128000, pressureRatio: 0.35, domainTokens: 125000, thresholdTokens: 100000 })).toBe(44800)
+    // ② 窗口未知：比例 × 假定窗口（domainTokens）
+    expect(pressureThreshold({ pressureRatio: 0.35, domainTokens: 125000, thresholdTokens: 100000 })).toBe(43750)
+    // ③ 比例不可用：绝对安全网
     expect(pressureThreshold({ thresholdTokens: 100000, domainTokens: 125000 })).toBe(100000)
-    expect(pressureThreshold({ domainTokens: 125000 })).toBe(50000)
-    expect(pressureThreshold({ thresholdTokens: 0, domainTokens: 125000 })).toBe(50000)
+    expect(pressureThreshold({ pressureRatio: 0, thresholdTokens: 100000 })).toBe(100000)
+    // ④ 全不可用
     expect(pressureThreshold({})).toBeUndefined()
-    expect(pressureThreshold({ thresholdTokens: Number.NaN, domainTokens: Number.NaN })).toBeUndefined()
+    expect(pressureThreshold({ contextWindow: Number.NaN, domainTokens: Number.NaN, thresholdTokens: Number.NaN })).toBeUndefined()
   })
 
   it('shouldFirePressure：达阈触发；坏计量/无阈值不触发', () => {
+    expect(shouldFirePressure({ wireTokens: 44800, contextWindow: 128000, pressureRatio: 0.35 })).toBe(true)
+    expect(shouldFirePressure({ wireTokens: 44799, contextWindow: 128000, pressureRatio: 0.35 })).toBe(false)
+    expect(shouldFirePressure({ wireTokens: 43750, pressureRatio: 0.35, domainTokens: 125000 })).toBe(true)
     expect(shouldFirePressure({ wireTokens: 100000, thresholdTokens: 100000 })).toBe(true)
     expect(shouldFirePressure({ wireTokens: 99999, thresholdTokens: 100000 })).toBe(false)
-    expect(shouldFirePressure({ wireTokens: 50000, domainTokens: 125000 })).toBe(true)
     expect(shouldFirePressure({ wireTokens: Number.NaN, thresholdTokens: 1 })).toBe(false)
     expect(shouldFirePressure({ wireTokens: 10 })).toBe(false)
   })
 
-  it('链深 = 检查点条目数；达上限即断路器', () => {
+  it('链深 = 检查点条目数；常规上限 3、紧急折叠硬上限 6', () => {
     expect(pressureChainDepth([])).toBe(0)
     expect(pressureChainDepth([{ taskId: 't', kind: 'checkpoint', text: 'a' }])).toBe(1)
     expect(pressureBreakerTripped(PRESSURE_CHAIN_LIMIT - 1)).toBe(false)
     expect(pressureBreakerTripped(PRESSURE_CHAIN_LIMIT)).toBe(true)
+    expect(PRESSURE_EMERGENCY_LIMIT).toBe(PRESSURE_CHAIN_LIMIT + 3)
   })
 })
 

@@ -18,6 +18,7 @@ import {
   FUSE_RATIO,
   HARD_TRUNCATE_FACT_TYPE,
   PRESSURE_CHAIN_LIMIT,
+  PRESSURE_EMERGENCY_LIMIT,
   PRESSURE_FIRED_FACT_TYPE,
   PRESSURE_RATIO,
   PRESSURE_RETRY_BUDGET,
@@ -109,11 +110,16 @@ check('三事实声明合并（compress-run / pressure-fired / hard-truncate；i
   /compaction-facts\.ts'/.test(assertSrc))
 
 // ④ 压力纯核 fixture
-check('触发阈值：绝对设计值为主 + 比例 fallback（PRESSURE_RATIO=0.4）',
-  PRESSURE_RATIO === 0.4 && pressureThreshold({ thresholdTokens: 100000, domainTokens: 125000 }) === 100000 &&
-  pressureThreshold({ domainTokens: 125000 }) === 50000 && pressureThreshold({}) === undefined &&
-  shouldFirePressure({ wireTokens: 100000, thresholdTokens: 100000 }) === true &&
-  shouldFirePressure({ wireTokens: 99999, thresholdTokens: 100000 }) === false)
+check('触发阈值优先级（P20c）：窗口比例 → 假定窗口比例 → 绝对安全网；默认 0.35',
+  PRESSURE_RATIO === 0.35 &&
+  pressureThreshold({ contextWindow: 128000, pressureRatio: 0.35, domainTokens: 125000, thresholdTokens: 100000 }) === 44800 &&
+  pressureThreshold({ pressureRatio: 0.35, domainTokens: 125000, thresholdTokens: 100000 }) === 43750 &&
+  pressureThreshold({ thresholdTokens: 100000 }) === 100000 && pressureThreshold({}) === undefined &&
+  shouldFirePressure({ wireTokens: 44800, contextWindow: 128000, pressureRatio: 0.35 }) === true &&
+  shouldFirePressure({ wireTokens: 44799, contextWindow: 128000, pressureRatio: 0.35 }) === false)
+check('压力阀门取主会话路由窗口（P20c）：readSessionModel → resolveContextWindow；紧急上限 = 链上限 + 3',
+  PRESSURE_EMERGENCY_LIMIT === PRESSURE_CHAIN_LIMIT + 3 &&
+  /const resolvePressureWindow = async[\s\S]{0,400}readSessionModel\(session\)[\s\S]{0,200}resolveContextWindow\(llm, model\.provider, model\.model/.test(readText('src/domains/compaction.ts')))
 check('断路器：链深 = checkpoint 数；上限 ' + PRESSURE_CHAIN_LIMIT + '；重试预算 ' + PRESSURE_RETRY_BUDGET,
   pressureChainDepth([{ taskId: 't', kind: 'checkpoint', text: 'a' }]) === 1 &&
   pressureBreakerTripped(PRESSURE_CHAIN_LIMIT) === true && pressureBreakerTripped(PRESSURE_CHAIN_LIMIT - 1) === false &&
@@ -223,6 +229,8 @@ const makePressureSession = (id) => {
   session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: blk('y'.repeat(50)) }] } }, { surfaceOp: 'append' })
   session.append('user/message', { content: blk('继续'), source: { kind: 'user' } }, { surfaceOp: 'append' })
+  // 主会话路由（readSessionModel 倒序扫描；非表面事件，不影响表面序）——P20c 窗口探针输入。
+  session.append('request/header', { header: { config: { provider: 'p', model: 'm' } } })
   return session
 }
 const makeLlm = (contextWindow) => {
@@ -287,22 +295,30 @@ await domain2.onPreStep({ session: session2, turn: 1, step: 1 })
 check('断路器：链深达上限 → breaker 事实 + 零调用',
   llm2.calls.length === 0 && session2.events.filter((event) => event.type === PRESSURE_FIRED_FACT_TYPE)[0].data.outcome === 'breaker')
 
-// 地板 no-op（字节不变）
+// 地板 no-op（字节不变；压力阀门调高使压力不介入，只验保险丝地板）
 const session3 = makePressureSession('sp')
 const before3 = session3.events.length
-const domain3 = makeDomain(session3, new FakeStorage(), makeLlm(100000), config, 70000)
+const highValve = resolveConfig({ compression: { ...resolveConfig({}).compression, pressureRatio: 0.75 } })
+const domain3 = makeDomain(session3, new FakeStorage(), makeLlm(100000), highValve, 70000)
 await domain3.onPreStep({ session: session3, turn: 1, step: 1 })
 check('保险丝低于地板：严格 no-op（零事实 / 零改史，字节不变）',
   session3.events.length === before3 && session3.events.filter((event) => event.type === HARD_TRUNCATE_FACT_TYPE).length === 0 &&
   session3.events.filter((event) => event.type === PRESSURE_FIRED_FACT_TYPE).length === 0)
 
-// 地板以上自动折叠
+// 地板以上自动折叠（压力断路器耗尽后，保险丝越过断路器）
+const storage4 = new FakeStorage()
+storage4.entities.set('boundary_archive:' + boundaryArchiveKey('w'), {
+  version: 1,
+  body: { schemaVersion: 1, workspace: 'w', entries: [0, 1, 2].map((i) => ({ taskId: 'sp:task-1', kind: 'checkpoint', text: 'C' + i, sessionId: 'sp', layer: 'pressure', at: i, cutPointSeq: 1, rangeEndSeq: 2 })), cache: {} },
+})
 const session4 = makePressureSession('sp')
 const llm4 = makeLlm(100000)
-const domain4 = makeDomain(session4, new FakeStorage(), llm4, config, 90000)
+const domain4 = makeDomain(session4, storage4, llm4, config, 90000)
 await domain4.onPreStep({ session: session4, turn: 1, step: 1 })
-check('保险丝地板以上：紧急折叠 + hard-truncate{fuse-fold}',
+check('保险丝地板以上（越过断路器）：紧急折叠 + hard-truncate{fuse-fold}',
+  session4.events.filter((event) => event.type === PRESSURE_FIRED_FACT_TYPE)[0].data.outcome === 'breaker' &&
   session4.events.filter((event) => event.type === HARD_TRUNCATE_FACT_TYPE)[0].data.outcome === 'fuse-fold' &&
+  session4.events.filter((event) => event.type === HARD_TRUNCATE_FACT_TYPE)[0].data.landed === true &&
   session4.events.filter((event) => event.type === COMPRESS_RUN_FACT_TYPE)[0].data.emergency === true && llm4.calls.length === 1)
 
 // 溢出接管
