@@ -66,6 +66,8 @@ task 内万一长过头（判别器失灵连续误判、用户贴入超大内容
 ①类型化摘要（type 差异化 schema：plan/impl/verify/wrap 信息块，impl 用坐标指针不嵌代码）
 + ②`hotTail` 范围申报（边界压缩器**专属**）。机械组装：摘要检查点 + 热尾原文
 （装配序 = transcript 序，字节稳定）→ 新 task 的 user message 前注入。
+渲染面（F5a，2026-09-09）：**结论先行**（wrap→plan→impl→verify）+ 类型标签
+（`【结论】/【计划】/【实现】/【验证】`），块序与 schema 校验序（`DIGEST_BLOCK_ORDER`）解耦；产物 schema 不变。
 
 **双通道坐标 + 版本重映射**（"范围 → 原文" = 两级机械查表，模型只生产坐标）：
 

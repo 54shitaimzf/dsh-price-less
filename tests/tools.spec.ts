@@ -12,7 +12,7 @@ import type {
   ToolExecutionResult,
   ToolExecutionToken,
 } from '@deepseek-ai/dsh-tools'
-import { appendContent, createToolPort, replaceContent } from '../src/platform/tools.ts'
+import { appendContent, createShearToolPort, createToolPort, replaceContent, type ToolResultView } from '../src/platform/tools.ts'
 
 type Listener = (...args: any[]) => unknown
 
@@ -154,6 +154,46 @@ describe('tools 端口（P7）', () => {
     expect(result.content).toEqual([text('x'), text('y')])
     out[0] = text('mutated')
     expect(result.content).toEqual([text('x'), text('y')])
+  })
+
+  it('8. createShearToolPort：签名只经 getTools 注入；缺省 = 无签名通道', async () => {
+    const fake = makeFakeCtx()
+    const views: ToolResultView[] = []
+    const tools = { get: () => ({ presentCall: () => ({ kind: 'read', card: 'read' }) }) }
+    const port = createShearToolPort(fake.ctx, {
+      shapeEntry: (v) => { views.push(v); return undefined },
+      attachNote: () => undefined,
+    }, undefined, () => tools)
+    await fake.emit('tools/post-execute', fakeExec(), fakeResult([text('hello')]), makeNext(ACCEPT_RESULT).next)
+    expect(views[0]).toMatchObject({ name: 'read_file', kind: 'read', card: 'read', resultBytes: 5 })
+    port.dispose()
+
+    const fake2 = makeFakeCtx()
+    const views2: ToolResultView[] = []
+    const port2 = createShearToolPort(fake2.ctx, {
+      shapeEntry: (v) => { views2.push(v); return undefined },
+      attachNote: () => undefined,
+    })
+    await fake2.emit('tools/post-execute', fakeExec(), fakeResult([text('hello')]), makeNext(ACCEPT_RESULT).next)
+    expect(views2[0]?.kind).toBeUndefined()
+    expect(views2[0]?.card).toBeUndefined()
+    port2.dispose()
+  })
+
+  it('9. 回归（真机缺陷）：ctx.tools 访问抛错（cordis 未 inject 语义）→ 端口不抛、仍委托 next()', async () => {
+    const fake = makeFakeCtx()
+    const throwingCtx = new Proxy(fake.ctx as object, {
+      get(target, prop, receiver) {
+        if (prop === 'tools') throw new Error('cannot get property "tools" without inject')
+        return Reflect.get(target, prop, receiver)
+      },
+    }) as unknown as Parameters<typeof createShearToolPort>[0]
+    const port = createShearToolPort(throwingCtx, { shapeEntry: () => undefined, attachNote: () => undefined })
+    const next = makeNext(ACCEPT_RESULT)
+    await expect(fake.emit('tools/post-execute', fakeExec(), fakeResult([text('x')]), next.next)).resolves.toEqual([ACCEPT_RESULT])
+    expect(next.calls()).toBe(1)
+    expect(port.stats().listenerErrors).toBe(0)
+    port.dispose()
   })
 
   it('7. stats 计数：多次 emit 后各计数正确；快照独立', async () => {

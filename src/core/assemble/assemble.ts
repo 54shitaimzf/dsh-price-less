@@ -228,14 +228,21 @@ export function validateDigest(value: unknown): TaskDigest | undefined {
   return { blocks, coords }
 }
 
-/** 类型化摘要渲染（块序固定 plan→impl→verify→wrap；坐标层随后逐行；字节稳定）。 */
+/** 渲染顺序（F5a：结论先行 = 总→分；与 schema 校验序 DIGEST_BLOCK_ORDER 解耦）。 */
+const DIGEST_RENDER_ORDER: readonly DigestBlockType[] = ['wrap', 'plan', 'impl', 'verify']
+/** 类型标签（F5a：渲染面显式标出块类型；产物 schema 与校验序不变）。 */
+const DIGEST_LABELS: Record<DigestBlockType, string> = {
+  plan: '【计划】', impl: '【实现】', verify: '【验证】', wrap: '【结论】',
+}
+
+/** 类型化摘要渲染（F5a：结论先行 + 类型标签；坐标层随后逐行；字节稳定）。 */
 export function renderDigest(digest: TaskDigest): string {
   const parts: string[] = []
-  for (const type of DIGEST_BLOCK_ORDER) {
+  for (const type of DIGEST_RENDER_ORDER) {
     for (const block of digest.blocks) {
       if (block.type !== type) continue
       const text = block.text.trim()
-      if (text !== '') parts.push(text)
+      if (text !== '') parts.push(`${DIGEST_LABELS[type]}${text}`)
     }
   }
   const coords = digest.coords.map((coord) => {

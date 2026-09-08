@@ -270,6 +270,52 @@ describe('auto discriminator facts isolation', () => {
   })
 })
 
+describe('F2 边界判词屏障（settle）', () => {
+  it('settle：判词被挡住时保持等待，落地后返回 settled', async () => {
+    const pump = makePump()
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((r) => { release = r })
+    const llm = { stream: async function* () {
+      await gate
+      yield { type: 'text-delta', index: 0, text: '{"decision":"new_task","class":"action"}' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
+    const session = { header: { id: 's1' } }
+    pump.emit('input/user-message', { session, seq: 7, time: 1, text: '换话题' })
+    let outcome: string | undefined
+    const wait = auto.settle(session as never, 7, 5_000).then((o) => { outcome = o; return o })
+    await flush()
+    expect(outcome).toBeUndefined()
+    release!()
+    await expect(wait).resolves.toBe('settled')
+    expect(auto.stats().records[0]).toMatchObject({ decision: 'new-task' })
+    auto.dispose()
+  })
+
+  it('settle：超时返回 timeout（fail-lazy）；无在飞工作立即 settled', async () => {
+    const pump = makePump()
+    const llm = { stream: async function* () { await new Promise(() => {}); yield { type: 'finish', reason: { kind: 'stop' } } } }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
+    const session = { header: { id: 's1' } }
+    pump.emit('input/user-message', { session, seq: 3, time: 1, text: 'x' })
+    await expect(auto.settle(session as never, 3, 10)).resolves.toBe('timeout')
+    await expect(auto.settle({ header: { id: 'other' } } as never, 1, 10)).resolves.toBe('settled')
+    auto.dispose()
+  })
+
+  it('settle：已落地（seq 已处理）立即 settled，不重复等待', async () => {
+    const pump = makePump()
+    const llm = llmStream('{"decision":"continue","class":"action"}')
+    const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
+    const session = { header: { id: 's1' } }
+    pump.emit('input/user-message', { session, seq: 4, time: 1, text: '继续' })
+    await flush()
+    await expect(auto.settle(session as never, 4, 10)).resolves.toBe('settled')
+    auto.dispose()
+  })
+})
+
 describe('judge facts mapping', () => {
   it('judge-recorded 载荷往返且不含 error', () => {
     const record: JudgeRecord = { seq: 1, time: 2, trigger: 'llm', decision: 'continue', class: 'action', ctxTokens: 10, llmUsage: { inputTokens: 1, outputTokens: 2 } }

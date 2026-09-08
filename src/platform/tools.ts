@@ -10,8 +10,10 @@
  * P15b 增 `createShearToolPort`：把 harness 执行视图收敛成 `ToolResultView`（domains 零
  * harness 类型，D8 归口不变），只挂 post-execute，子分发/subagent 直接委托 next()。
  * N1 描述符扩面：`ToolResultView` 增 args/meta/kind/card/resultBytes——kind/card 取
- * `ctx.tools.get(name, agent).presentCall(args)`（软校验、只读、异常即降级为空），meta 取
+ * `getTools().get(name, agent).presentCall(args)`（软校验、只读、异常即降级为空），meta 取
  * `result.meta`（已算好，不调 presentResult）；任何取签名失败都只降级、不打断工具执行。
+ * **tools 服务必须由调用侧 `ctx.inject(['tools'], …)` 注入后经 `getTools` 回调提供**——
+ * 直接读 `ctx.tools` 在真运行时抛 "cannot get property tools without inject"（端口整体空转）。
  *
  * 模块: platform 工具事件端口（唯一 harness 触点层）
  * 平面: L0（确定性规则：注册 + 计量 + 决策转发；无模型、无机制逻辑）
@@ -134,8 +136,11 @@ export interface ToolSignatureSource {
   ): { presentCall?(args: unknown): { card?: unknown; kind?: unknown } | undefined } | undefined
 }
 
-/** 剪切工具端口 ctx（N1）：`tools` 可选——缺省即无签名通道，分类器退化为 `none`（失败默认保留）。 */
-export type ShearToolPortContext = Pick<Context, 'on'> & { tools?: ToolSignatureSource }
+/**
+ * 剪切工具端口 ctx（N1）：只取事件注册面。工具签名通道经 `getTools` 回调注入
+ * （cordis 服务必须 `ctx.inject(['tools'], …)` 取得；缺省 = 无签名通道，分类器退化 `none`）。
+ */
+export type ShearToolPortContext = Pick<Context, 'on'>
 
 /** 工具结果视图（P15b；N1 扩面；本地结构面，domains 不接触 harness 类型）。 */
 export interface ToolResultView {
@@ -224,11 +229,12 @@ export function createShearToolPort(
   ctx: ShearToolPortContext,
   hooks: ShearToolHooks,
   logger?: { warn: (...args: unknown[]) => void },
+  getTools?: () => ToolSignatureSource | undefined,
 ): ToolPort {
   return createToolPort(ctx, {
     onPostExecute: (exec, result) => {
       if (exec.parent !== undefined) return undefined
-      const view = toToolResultView(exec, result, ctx.tools)
+      const view = toToolResultView(exec, result, getTools?.())
       if (view.origin === 'subagent') return undefined
       if (!view.hasNonText) {
         const shaped = hooks.shapeEntry(view)

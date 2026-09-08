@@ -7,7 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { type Config as ConfigShape } from './config.ts'
 import { registerContextEconomySettings } from './settings.ts'
-import { createEventPump } from './platform/events.ts'
+import { createEventPump, readSessionUserMessages } from './platform/events.ts'
 import { ceLogger, registerFactMirror } from './platform/logger.ts'
 import { attachDiagSink } from './platform/diag-sink.ts'
 import type {} from '@deepseek-ai/dsh-storage-domain'
@@ -15,7 +15,7 @@ import { openContextEconomyStorage, type ContextEconomyStorage } from './platfor
 import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.ts'
 import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { mountAutoDiscriminator } from './domains/input.ts'
+import { BOUNDARY_JUDGE_WAIT_MS, mountAutoDiscriminator, type AutoDiscriminator } from './domains/input.ts'
 import { mountShearDomain } from './domains/shear.ts'
 import { mountAssembleDomain } from './domains/assemble.ts'
 import { mountCompactionDomain } from './domains/compaction.ts'
@@ -23,6 +23,7 @@ import { onAgentPreStep, onAgentRequestError, onAgentSessionStart, type AgentSes
 import { mountRestoreDomain } from './domains/restore.ts'
 import { createMeterPort, type MeterPort } from './platform/meter.ts'
 import { createFilesPort, type FilesPort } from './platform/files.ts'
+import type { ToolSignatureSource } from './platform/tools.ts'
 import { mountCommandFace } from './domains/commands.ts'
 import { mountStarHost, readSessionId, renderPreviewCommandText } from './domains/star.ts'
 import { registerStarBridge, type StarConnectionFace } from './platform/star-bridge.ts'
@@ -35,6 +36,7 @@ export { Config } from './config.ts'
 function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): () => void {
   const log = ceLogger(ctx)
   const key = projectFrameStorageKey(process.cwd().replaceAll('\\', '/'))
+  let missingLogged = false
   return watchSkillCatalog(ctx, (catalog: SkillCatalogSnapshot | undefined) => {
     try {
       const stored = storage.getEntity(PROJECT_FRAME_TABLE, key)
@@ -43,9 +45,14 @@ function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): (
         : { version: stored.version, body: stored.body as ProjectFrameBody }
       const result = reconcileProjectFrame(current, catalog, 'skill')
       if (result == null) {
-        log.info('context-economy: prefix unavailable until init frame (skill watch active, no project_frame yet)')
+        // 状态变化才记录：skill watch 每次回调都打会刷屏（实测 18 分钟 9,136 条）。
+        if (!missingLogged) {
+          missingLogged = true
+          log.info('context-economy: prefix unavailable until init frame (skill watch active, no project_frame yet)')
+        }
         return
       }
+      missingLogged = false
       if (!result.rebuilt) return
       void storage.putEntity(
         PROJECT_FRAME_TABLE,
@@ -84,7 +91,14 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   ctx.effect(() => () => pump.dispose())
 
   // P15b：工具剪切调度（独立于 storage/llm——纯机械四档 + 事实发射；开关 = config.shear.enabled）。
-  const shear = mountShearDomain(ctx, { pump, getConfig, logger: ceLogger(ctx) })
+  // N1 工具签名通道：cordis 服务必须经 inject 取得（直接读 ctx.tools 在真运行时抛
+  // "cannot get property tools without inject" → 整个端口空转）。
+  let toolsRef: ToolSignatureSource | undefined
+  ctx.inject(['tools'], (toolsCtx) => {
+    toolsRef = toolsCtx.get('tools') as ToolSignatureSource | undefined
+    toolsCtx.effect(() => () => { toolsRef = undefined })
+  })
+  const shear = mountShearDomain(ctx, { pump, getConfig, logger: ceLogger(ctx), getTools: () => toolsRef })
   ctx.effect(() => () => shear.dispose())
 
   // P17b：边界装配域（盘上取真端口 H15 + 共享事务原语执行器；压缩触发/档案落盘归 P19）。
@@ -103,6 +117,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
     meterCtx.effect(() => () => { meter = undefined })
   })
 
+  let autoDisc: AutoDiscriminator | undefined
   let stopAuto: (() => void) | undefined
   let stopPreStep: (() => void) | undefined
   let stopRequestError: (() => void) | undefined
@@ -177,12 +192,14 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           ctx.inject(['llm'], (llmCtx2) => {
             if (disposed) return
             llmCtx = llmCtx2 as Context
-            stopAuto = mountAutoDiscriminator(llmCtx, {
+            const discriminator = mountAutoDiscriminator(llmCtx, {
               pump,
               storage: opened,
               getConfig,
               logger: ceLogger(llmCtx),
-            }).dispose
+            })
+            autoDisc = discriminator
+            stopAuto = () => { autoDisc = undefined; discriminator.dispose() }
           })
           // P19b：边界压缩域（H2 闭合触发 → 调用 → 装配 → 档案 vN → 事务替换）。
           compaction = mountCompactionDomain({
@@ -196,7 +213,21 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           })
           stopPreStep = onAgentPreStep(ctx, {
             logger: ceLogger(ctx),
-            handler: ({ session, turn, step }) => compaction?.onPreStep({ session, turn, step }) ?? Promise.resolve(),
+            handler: async ({ session, turn, step }) => {
+              // F2（2026-09-09）：边界压缩必须阻塞在**新任务第一条模型调用之前**——
+              // 先等本轮判词落地（60s 有界；超时 fail-lazy，退回"下一 pre-step 再压"）。
+              const discriminator = autoDisc
+              if (discriminator !== undefined && getConfig().discriminator.auto === true) {
+                const newestSeq = readSessionUserMessages(session).at(-1)?.seq
+                if (newestSeq !== undefined) {
+                  const outcome = await discriminator.settle(session, newestSeq, BOUNDARY_JUDGE_WAIT_MS)
+                  if (outcome === 'timeout') {
+                    ceLogger(ctx).warn('context-economy: boundary judge settle timed out (fail-lazy: compression deferred to next pre-step)')
+                  }
+                }
+              }
+              await compaction?.onPreStep({ session, turn, step })
+            },
           })
           // P20b：H3 溢出接管（CONTEXT_WINDOW_EXCEEDED → 紧急压力折叠 → 本轮重试）。
           stopRequestError = onAgentRequestError(ctx, {

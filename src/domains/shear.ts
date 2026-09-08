@@ -46,7 +46,7 @@ import {
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
 import { buildNoticeUserMessage, createHistoryPort, type HistoryPort } from '../platform/history.ts'
 import { emitCeFact } from '../platform/logger.ts'
-import { createShearToolPort, type ShearToolPortContext, type ToolResultView } from '../platform/tools.ts'
+import { createShearToolPort, type ShearToolPortContext, type ToolResultView, type ToolSignatureSource } from '../platform/tools.ts'
 import type { CeDomainEvents, CeLogger, EventPump } from '../platform/events.ts'
 import type { Config } from '../config.ts'
 import {
@@ -75,6 +75,8 @@ export interface ShearDomainDeps {
   pump: EventPump
   getConfig: () => Config
   logger: CeLogger
+  /** N1 工具签名通道（调用侧经 ctx.inject(['tools']) 捕获后惰性提供；缺省 = 无签名）。 */
+  getTools?: () => ToolSignatureSource | undefined
   now?: () => number
   policy?: ShearPolicy
   runPolicy?: RunPolicy
@@ -267,7 +269,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     return negotiationNote()
   }
 
-  const port = createShearToolPort(ctx, { shapeEntry, attachNote }, logger)
+  const port = createShearToolPort(ctx, { shapeEntry, attachNote }, logger, deps.getTools)
 
   const emitError = (session: Session, opKey: string, tier: string | undefined, code: string, message: string): void => {
     const data: ShearErrorFactData = compactFact({ at: now(), opKey, ...(tier === undefined ? {} : { tier }), code, message })

@@ -24,7 +24,7 @@
 | H3 | 压力触发 | `agent/pre-step`（压力计量）+ `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | `pressureRatio=0.35` × 主模型上下文窗口按 wire 锚定计量（[04 §3](04-compactor.md)；P20c 修订：窗口缺失 → 假定窗口 → 绝对安全网）；溢出恢复走 request-error 接管 |
 | H4 | **改史唯一通道** | `session.append(type, data, {surfaceOp:{op:'replace',start,end}, sourceEventSeqs})` | replace 的 `sourceEventSeqs` 必含全部被遮蔽节点；紧邻契约：`compaction/summary` ↔ 替换 `user/message`；`compaction/prune` 影子计价紧随同步 append。**P19 落位**：`platform/history.ts` `commitCheckpoint` 原子提交 summary（影子价）+ 官方 checkpoint `user/message`（`compactCheckpointSource`，`sourceEventSeqs=[start,summary,...shadowed]`） |
 | H5 | 压缩事务 | `compaction/start` … `compaction/end`（log-only 标记对） | 持锁幂等（`turn:null` 独立事务）；`assertNoActiveCompaction` 防重入 |
-| H6 | 剪切层挂点 | `tools/post-execute` accept `content` 覆盖 = T-entry 写时整形（落账前）；accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车；`tools/execute` 仅作信号/计量 around-wrapper | 工具自有 `finalizeContent` 属定义侧（仅自有工具）；P1.2 契约闭合核验见 [03 §2](../03-shear.md) 表后注；**P15b 已接线**：T-entry/T-note 贴注 = `platform/tools.ts` `createShearToolPort`（同步相），T-loop/T0/T0-R/T-note 剪除 = `domains/shear.ts` 经 H4 执行（异步相），快照 §39；**P16 已接线**：run 冲刷 = **多节点区间** replace → `user/message`（`source:{kind:'plugin',plugin:'context-economy',form:'notice'}`，官方 `compaction/summary`+checkpoint 同构；结论消息构造收拢于 `platform/history.ts` `buildNoticeUserMessage`），快照 §40/§41 |
+| H6 | 剪切层挂点 | `tools/post-execute` accept `content` 覆盖 = T-entry 写时整形（落账前）；accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车；`tools/execute` 仅作信号/计量 around-wrapper | 工具自有 `finalizeContent` 属定义侧（仅自有工具）；P1.2 契约闭合核验见 [03 §2](../03-shear.md) 表后注；**P15b 已接线**：T-entry/T-note 贴注 = `platform/tools.ts` `createShearToolPort`（同步相），T-loop/T0/T0-R/T-note 剪除 = `domains/shear.ts` 经 H4 执行（异步相），快照 §39；**P16 已接线**：run 冲刷 = **多节点区间** replace → `user/message`（`source:{kind:'plugin',plugin:'context-economy',form:'notice'}`，官方 `compaction/summary`+checkpoint 同构；结论消息构造收拢于 `platform/history.ts` `buildNoticeUserMessage`），快照 §40/§41；**F1（2026-09-09）**：`tools` 服务必须 `ctx.inject(['tools'], …)` 后经 `getTools` 回调传入端口——直接读 `ctx.tools` 真运行时抛 `cannot get property tools without inject` 导致端口整体空转（快照 §60） |
 | H7 | 度量回放 | `step/start|end`、`assistant/message`（usage）、`request/header`、`tool/call|result`（原始 arguments + meta） | [07](07-metrics.md) 账本全部字段可从会话 JSONL 回放重算 |
 | H8 | 设置 | `ctx.settings.installSection(owner,'context-economy',Config,entry,hooks)`；写 = `mutate(ns,ops,expectedRevision)` revision-fence | 持久化归 settings-file（原子写 + 文件锁）；`settings/updated` 观察 |
 | H9 | 恢复 | `agent/session-start{source:'resume'|'startup'|'clear'|'compact'}` + Session 构造种子 | 种子**不上 firehose**（`firstLiveSeq` 定界）——重启重建 = **自扫** `snapshotEvents()` 全史；恢复序 = [09 §4](09-state.md)。**P21a 已接线**：收口 = `platform/agent-step.ts`（`onAgentSessionStart`，D16 断言锁定；apply 同步注册 + pending 缓冲防启动竞态）；域侧 = `domains/restore.ts`（`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史）；三类 ignorable 事实 `restore-step`/`restore-degraded`/`restore-done` |
@@ -61,7 +61,10 @@
 
 ```text
 turn/end → 自动断面边界信号成立（或 /task close）
-  → H2 agent/pre-step：发现 closed && 未归档的 task
+  → H2 agent/pre-step：
+     · F2 判词屏障：`AutoDiscriminator.settle(session, newestSeq, 60s)`——等本轮判词落地才放行
+       （否则压缩迟到一步：新 task 第一步背着旧任务原文跑；超时 fail-lazy，退回下一 pre-step）
+     · 发现 closed && 未归档的 task
   → 压缩器边界装配（H4/H5）：类型化摘要 + 热尾申报 → 装配（事实层冻结 + 坐标层 + 热尾 ≤10K）
      · T-boundary 搭车：段内老调用对随大 replace 折叠（剪切层清单）
   → 档案归档 vN（H10）→ 卷宗清空（新 task 新卷宗）

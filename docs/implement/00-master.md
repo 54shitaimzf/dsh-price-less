@@ -2,6 +2,7 @@
 
 > **状态**：新设计基线（2026-09-09 立）。R1–R4（P0–P21b）已完成，工单与旧总纲封存于
 > [`docs/implement/archive/`](archive/00-master.md)（历史记录，只读）。**本文件 = 当前唯一活跃总纲。**
+> **待办 / 阻塞项**：[`TODO.md`](TODO.md)（N3a 采样阻塞 + N4–N6 待立项，含出门门槛）。
 > 正典：[`docs/03`](../03-shear.md)（剪切时机 + T-note 协商）· [`docs/06 §2`](../06-cache.md)（断裂成本公式）·
 > [`docs/07`](../07-metrics.md)（度量）· [`docs/05`](../05-constitution.md)（回退链）·
 > [`docs/11`](../11-structure.md)（分层与模块树）。

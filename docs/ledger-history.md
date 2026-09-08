@@ -2488,3 +2488,35 @@ CUT-OK / CUT-HOLD / 无回复 = **0 / 0 / 633**；旧 v1 注记收到标记 **0 
 
 **下一步（N3a 真机）**：设置卡切 `shear.negotiate = shadow` → **重启**加载新构建 → 用 `price-less` 预设开新会话 →
 每 basis 攒 ≥30 样本后跑 `node scripts/probe-n3.mjs`；配合率 ≥30% 进 N4，<30% 回退通道 B。
+---
+
+## §60 真机缺陷修复 F1–F5（2026-09-09；提交 = 本账本同提交，见 `git log`）
+
+**触发**：用户真机三轮对话（会话 `session-7d73bb3f`，工作区 `C:\Users\Administrator\Desktop\Chinese-Resume-in-Typst`）复盘，
+四个问题逐一查证 → 查出 4 个真机缺陷 + 2 项待立项。
+
+**F1 · H6 端口空转（P0）**：`src/index.ts` 用插件 ctx 挂剪切域，`src/platform/tools.ts` 读 `ctx.tools`（cordis 未 inject）
+→ 真运行时抛 `cannot get property "tools" without inject`，被 `createToolPort` 兜住后 `next()`——**整个端口空转**
+（日志 211 次 warn；会话内 0 条 `shear-negotiation-*` 事实，连 `shear-applied`/`shear-decision` 也没有）。
+修：端口改收 `getTools?: () => ToolSignatureSource | undefined`；`index.ts` 经 `ctx.inject(['tools'], …)` 捕获服务后惰性提供。
+回归用例：`tests/tools.spec.ts` 9 号（Proxy 让 `ctx.tools` 抛错 → 端口不抛、仍委托 next）。
+
+**F2 · 边界压缩阻塞（用户裁定 60s）**：原实现在 **step 2** 的 pre-step 才压（判词走 pump 异步 `void drain()`），
+新任务第一步（5 次工具调用）背着旧任务 90,985 token 跑完，压缩迟到一步。
+修：`AutoDiscriminator.settle(session, newestSeq, timeoutMs)` 屏障（先让 2 个 microtask 过，等 pump 投递可见）；
+`onAgentPreStep` 先 `await settle(…, 60s)` 再 `runBoundary`；超时 fail-lazy 退回旧路径并 warn。
+用例：`tests/input.spec.ts` F2 三例（在飞等待 / 超时 / 已落地立即返回）。
+
+**F4 · 日志刷屏**：`startStablePrefixWatch` 每次 skill watch 回调都打同一句（18 分钟 9,136 条）；改为状态变化才记录。
+
+**F5a · 档案渲染可读性**：`renderDigest` 改为结论先行（wrap→plan→impl→verify）+ 类型标签
+（`【结论】/【计划】/【实现】/【验证】`）；产物 schema 与校验序 `DIGEST_BLOCK_ORDER` 不变。
+
+**未落地（待立项）**：F3 档案/前缀按会话工作区隔离（现为 `process.cwd()`，实体键 `boundary_archive:G:/deepseek-harness`，
+跨项目串档）；F5b 坐标路径相对化（依赖 F3）。
+
+**验收**：`npm run gate` = **608 tests / 56 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿（host + client）。
+
+**复盘口径（三处）**：① 边界 = **task 边界**（判别器判），不是每条用户消息——第 2 条判 `continue`、第 3 条判 `new-task` → 压 task-1；
+② 35% 压力路径未触发（阈值 = 0.35 × 1M = 350K；本次区间 90,985）；③ 假定窗口 `domainTokens` 在该配置下不参与计算。
+

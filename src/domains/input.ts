@@ -53,9 +53,17 @@ export interface AutoDiscriminatorDeps {
   cacheLimit?: number
 }
 
+/** 边界判词等待上限（F2 阻塞式边界压缩，2026-09-09 用户裁定 60s；超时 fail-lazy）。 */
+export const BOUNDARY_JUDGE_WAIT_MS = 60_000
+
 export interface AutoDiscriminator {
   dispose(): void
   stats(): { queued: number; processed: number; facts: number; records: JudgeRecord[]; ledger: ReturnType<typeof foldJudgeLedger> }
+  /**
+   * 等待 `newestSeq` 这条用户消息的判词落地（有界）。settled = 判词已产出 / 本会话无在飞工作；
+   * timeout = 超时（调用侧 fail-lazy 放行，退回"下一 pre-step 再压"）。F2：边界压缩阻塞屏障。
+   */
+  settle(session: Session, newestSeq: number, timeoutMs: number): Promise<'settled' | 'timeout'>
 }
 
 export function resolveJudgeModel(
@@ -97,6 +105,10 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
   const l1Cache = new Map<string, { decision: JudgeDecision; class: DossierClass; tableShadow?: JudgeTableShadow }>()
   const records: JudgeRecord[] = []
   const queue: CeDomainEvents['input/user-message'][] = []
+  /** 每会话在飞判词计数（settle 屏障；含排队 + 处理中）。 */
+  const pendingBySession = new Map<string, { count: number; waiters: Array<() => void> }>()
+  /** 每会话已落地判词的最大用户消息 seq（settle 快速返回判据）。 */
+  const lastDoneSeqBySession = new Map<string, number>()
   let disposed = false
   let processing = false
   let processed = 0
@@ -245,24 +257,64 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     emitRecorded(session, sid, record)
   }
 
+  const trackEnqueue = (sid: string): void => {
+    let entry = pendingBySession.get(sid)
+    if (entry === undefined) pendingBySession.set(sid, (entry = { count: 0, waiters: [] }))
+    entry.count++
+  }
+  const trackSettled = (sid: string, seq: number): void => {
+    const done = lastDoneSeqBySession.get(sid)
+    if (done === undefined || seq > done) lastDoneSeqBySession.set(sid, seq)
+    const entry = pendingBySession.get(sid)
+    if (entry === undefined) return
+    entry.count--
+    if (entry.count > 0) return
+    pendingBySession.delete(sid)
+    for (const wake of entry.waiters.splice(0)) wake()
+  }
+  /**
+   * 边界压缩阻塞屏障（F2）：等到 `newestSeq` 的判词落地才放行 pre-step，
+   * 使 task 闭合 → 压缩发生在**新任务第一条模型调用之前**。
+   * 先让两个 microtask 通过——pump 用 `queueMicrotask` 派发，同一提交周期内到达的
+   * 用户消息要等它入队后才可见（否则屏障空转）。
+   */
+  const settle = async (session: Session, newestSeq: number, timeoutMs: number): Promise<'settled' | 'timeout'> => {
+    const sid = sidOf(session)
+    await Promise.resolve()
+    await Promise.resolve()
+    if ((lastDoneSeqBySession.get(sid) ?? -1) >= newestSeq) return 'settled'
+    const entry = pendingBySession.get(sid)
+    if (entry === undefined || entry.count <= 0) return 'settled'
+    return new Promise<'settled' | 'timeout'>((resolve) => {
+      let done = false
+      const timer = setTimeout(() => { if (done) return; done = true; resolve('timeout') }, Math.max(0, timeoutMs))
+      entry.waiters.push(() => { if (done) return; done = true; clearTimeout(timer); resolve('settled') })
+    })
+  }
+
   const drain = async (): Promise<void> => {
     if (processing || disposed) return
     processing = true
     try {
       while (queue.length > 0 && !disposed) {
         const payload = queue.shift()!
-        if (getConfig().discriminator.auto !== true) continue
-        processed++
+        const sid = sidOf(payload.session)
         try {
-          await processOne(payload)
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e)
-          const code = e instanceof Error && 'code' in e ? String((e as { code?: unknown }).code) : 'CE_JUDGE_FAIL'
-          emitError(payload.session, sidOf(payload.session), payload.seq, payload.time, { code, message: msg })
-          emitRecorded(payload.session, sidOf(payload.session), {
-            seq: payload.seq, time: payload.time, trigger: 'error-fallback', decision: FAIL_LAZY_JUDGE_DECISION,
-            error: { code, message: msg },
-          })
+          if (getConfig().discriminator.auto !== true) continue
+          processed++
+          try {
+            await processOne(payload)
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            const code = e instanceof Error && 'code' in e ? String((e as { code?: unknown }).code) : 'CE_JUDGE_FAIL'
+            emitError(payload.session, sidOf(payload.session), payload.seq, payload.time, { code, message: msg })
+            emitRecorded(payload.session, sidOf(payload.session), {
+              seq: payload.seq, time: payload.time, trigger: 'error-fallback', decision: FAIL_LAZY_JUDGE_DECISION,
+              error: { code, message: msg },
+            })
+          }
+        } finally {
+          trackSettled(sid, payload.seq)
         }
       }
     } finally {
@@ -272,6 +324,7 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
 
   const offInput = pump.on('input/user-message', (payload) => {
     if (disposed) return
+    trackEnqueue(sidOf(payload.session))
     queue.push(payload)
     void drain()
   })
@@ -284,9 +337,12 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     dispose() {
       disposed = true
       queue.length = 0
+      for (const entry of pendingBySession.values()) for (const wake of entry.waiters.splice(0)) wake()
+      pendingBySession.clear()
       offInput()
       offFacts()
     },
+    settle,
     stats() {
       let facts = 0
       for (const bucket of factsBySession.values()) facts += bucket.length

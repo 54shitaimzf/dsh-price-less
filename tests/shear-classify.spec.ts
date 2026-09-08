@@ -16,6 +16,7 @@ import {
   createShearToolPort,
   type ShearToolPortContext,
   type ToolResultView,
+  type ToolSignatureSource,
 } from '../src/platform/tools.ts'
 
 /** 造一个 ≥2KB、无形态否决特征的正文（单行重复，避开语料/错误/截断特征）。 */
@@ -123,7 +124,7 @@ describe('N1 分类器 · 形态阶段（§4.2 四类否决）', () => {
 })
 
 /** 平台签名提取（N1 §3 交付物 1）：presentCall → kind/card；meta/args 直取；异常降级。 */
-function makePortCtx(tools?: ShearToolPortContext['tools']) {
+function makePortCtx(getTools?: () => ToolSignatureSource | undefined) {
   const listeners = new Map<string, ((...a: any[]) => unknown)[]>()
   const ctx = {
     on(name: string, listener: (...a: any[]) => unknown) {
@@ -136,9 +137,9 @@ function makePortCtx(tools?: ShearToolPortContext['tools']) {
         return idx >= 0
       }
     },
-    ...(tools === undefined ? {} : { tools }),
   } as unknown as ShearToolPortContext
   return {
+    getTools,
     ctx,
     async emit(name: string, ...args: unknown[]) {
       const out: unknown[] = []
@@ -165,11 +166,11 @@ function fakeResult(over: Partial<ToolExecutionResult> = {}): ToolExecutionResul
 
 describe('N1 平台描述符（§3 交付物 1）', () => {
   it('presentCall 的 kind/card 落进视图；args/meta/resultBytes 直取', async () => {
-    const fake = makePortCtx({
+    const fake = makePortCtx(() => ({
       get: () => ({ presentCall: () => ({ card: 'terminal' }) }),
-    })
+    }))
     const seen: ToolResultView[] = []
-    createShearToolPort(fake.ctx, { shapeEntry: () => undefined, attachNote: (view) => { seen.push(view); return undefined } })
+    createShearToolPort(fake.ctx, { shapeEntry: () => undefined, attachNote: (view) => { seen.push(view); return undefined } }, undefined, fake.getTools)
     await fake.emit('tools/post-execute', fakeExec(), fakeResult({ meta: { exitCode: 0 } }), () => Promise.resolve(undefined))
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({ name: 'pwsh', card: 'terminal', args: { command: 'npm test' }, meta: { exitCode: 0 } })
@@ -182,10 +183,10 @@ describe('N1 平台描述符（§3 交付物 1）', () => {
       { get: () => { throw new Error('boom') } },
       { get: () => undefined },
       { get: () => ({ presentCall: () => undefined }) },
-    ] as Array<ShearToolPortContext['tools']>) {
-      const fake = makePortCtx(tools)
+    ] as Array<ToolSignatureSource | undefined>) {
+      const fake = makePortCtx(() => tools)
       const seen: ToolResultView[] = []
-      createShearToolPort(fake.ctx, { shapeEntry: () => undefined, attachNote: (view) => { seen.push(view); return undefined } })
+      createShearToolPort(fake.ctx, { shapeEntry: () => undefined, attachNote: (view) => { seen.push(view); return undefined } }, undefined, fake.getTools)
       await expect(fake.emit('tools/post-execute', fakeExec(), fakeResult(), () => Promise.resolve(undefined))).resolves.toBeDefined()
       expect(seen[0]?.kind).toBeUndefined()
       expect(seen[0]?.card).toBeUndefined()

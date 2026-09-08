@@ -189,7 +189,7 @@ describe('P17a 热尾：通道 A 取真', () => {
 })
 
 describe('P17a 事实层：digest schema 与渲染', () => {
-  it('块序固定 plan→impl→verify→wrap，坐标层随后', () => {
+  it('渲染序 = 结论先行 wrap→plan→impl→verify + 类型标签，坐标层随后', () => {
     const digest = {
       blocks: [
         { type: 'wrap' as const, text: '收尾' },
@@ -198,7 +198,7 @@ describe('P17a 事实层：digest schema 与渲染', () => {
       ],
       coords: [{ path: 'a.ts', version: 3, lineRange: { start: 1, end: 2 } }, { path: 'b.ts', version: 1, symbol: 'fn' }],
     }
-    expect(renderDigest(digest)).toBe('计划\n\n验收\n\n收尾\n\na.ts@v3:1-2\nb.ts@v1 fn')
+    expect(renderDigest(digest)).toBe('【结论】收尾\n\n【计划】计划\n\n【验证】验收\n\na.ts@v3:1-2\nb.ts@v1 fn')
   })
 
   it('schema 违例 = fatal（坏块型 / 坏坐标 / 坏版本）', () => {
@@ -223,9 +223,9 @@ describe('P17a 事实层：digest schema 与渲染', () => {
       policy: policy(),
     })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.rendered).toBe('目标\n\n材料')
+    expect(outcome.result.rendered).toBe('【计划】目标\n\n材料')
     expect(renderArchive(outcome.result)).toBe(outcome.result.rendered)
-    expect(outcome.result.digestBytes).toBe(new TextEncoder().encode('目标').length)
+    expect(outcome.result.digestBytes).toBe(new TextEncoder().encode('【计划】目标').length)
     expect(outcome.result.digestEntryCount).toBe(1)
   })
 

@@ -137,7 +137,7 @@ describe('P17c 装配：priorChain 续传 + 追加（04 §3 机制 A）', () => 
       digest: { blocks: [{ type: 'wrap', text: '结论' }], coords: [] },
     })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.rendered).toBe('C1\n\n结论\n\n' + 'A'.repeat(4))
-    expect(outcome.result.digestBytes).toBe(Buffer.byteLength('结论', 'utf8'))
+    expect(outcome.result.rendered).toBe('C1\n\n【结论】结论\n\n' + 'A'.repeat(4))
+    expect(outcome.result.digestBytes).toBe(Buffer.byteLength('【结论】结论', 'utf8'))
   })
 })
