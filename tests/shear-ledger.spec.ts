@@ -182,6 +182,18 @@ describe('foldShearLedger · P16 对话半边', () => {
     expect(ledger.questionBacklogDepth).toBe(0)
   })
 
+  it('★ CLASS 回填（items 空、classes 有）= 分类输入（重折不依赖 SHEAR 行）', () => {
+    const classOnlyFacts: LedgerFact[] = [
+      { type: SHEAR_RUN_PLAN_FACT_TYPE, seq: 7, time: 7, data: { at: 7, source: 'star', items: [], classes: [{ anchorSeq: 1, class: 'pureQ' }, { anchorSeq: 3, class: 'action' }] } },
+    ]
+    const classEvents: LedgerSessionEvent[] = [
+      { type: 'user/message', seq: 1, time: 1, surfaceOp: 'append', data: { content: [{ type: 'text', text: 'Q1' }] } },
+      { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: 'A1' }] } } },
+      { type: 'user/message', seq: 3, time: 3, surfaceOp: 'append', data: { content: [{ type: 'text', text: '动手' }] } },
+    ]
+    expect(foldShearLedger(classEvents, classOnlyFacts).shearDecision.cut).toBe(1)
+  })
+
   it('同输入同账（含 run 半边）', () => {
     const first = JSON.stringify(foldShearLedger(runEvents, [...classFacts, runFlushFact]))
     const second = JSON.stringify(foldShearLedger(runEvents, [...classFacts, runFlushFact]))

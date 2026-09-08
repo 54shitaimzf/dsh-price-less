@@ -14,24 +14,30 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import {
+  DEFAULT_RUN_POLICY,
   DEFAULT_SHEAR_POLICY,
+  RUN_POLICY_VERSION,
   SHEAR_NOTE_TEMPLATE,
   SHEAR_POLICY_VERSION,
   buildLoopStub,
   buildSupersededStub,
+  foldRunShear,
   foldToolShear,
   ledgerEventText,
   noteEligible,
   shapeEntryContent,
   toolCategory,
   utf8ByteLength,
+  type RunEvent,
+  type RunOp,
+  type RunPolicy,
   type ShearEvent,
   type ShearOp,
   type ShearPolicy,
   type ShearToolCall,
 } from '../core/shear/index.ts'
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
-import { createHistoryPort, type HistoryPort } from '../platform/history.ts'
+import { buildNoticeUserMessage, createHistoryPort, type HistoryPort } from '../platform/history.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createShearToolPort, type ToolResultView } from '../platform/tools.ts'
 import type { CeDomainEvents, CeLogger, EventPump } from '../platform/events.ts'
@@ -40,12 +46,14 @@ import {
   SHEAR_APPLIED_FACT_TYPE,
   SHEAR_DECISION_FACT_TYPE,
   SHEAR_ERROR_FACT_TYPE,
+  SHEAR_RUN_PLAN_FACT_TYPE,
   compactFact,
   type ShearAppliedFactData,
   type ShearAppliedTier,
   type ShearDecisionFactData,
   type ShearErrorFactData,
 } from './shear-facts.ts'
+import { JUDGE_RECORDED_FACT_TYPE } from './judge-facts.ts'
 
 /** 会话内参与重折的原始事件上限（超出丢最老；只影响超老读件的 T0 检出，失败方向 = 保留）。 */
 export const SESSION_EVENT_LIMIT = 4000
@@ -60,6 +68,7 @@ export interface ShearDomainDeps {
   logger: CeLogger
   now?: () => number
   policy?: ShearPolicy
+  runPolicy?: RunPolicy
 }
 
 export interface ShearDomainStats {
@@ -69,6 +78,8 @@ export interface ShearDomainStats {
   cuts: number
   holds: number
   errors: number
+  runsCut: number
+  runsHeld: number
 }
 
 export interface ShearDomain {
@@ -96,6 +107,9 @@ interface SessionState {
   readonly resultSeqByCallId: Map<string, SessionSeq>
   readonly resultTextByCallId: Map<string, string>
   readonly resultErrorByCallId: Map<string, boolean>
+  readonly runEvents: RunEvent[]
+  readonly consumedRuns: Set<string>
+  readonly runHoldsSeen: Set<string>
 }
 
 function callIdOfResultData(data: unknown): string | undefined {
@@ -161,9 +175,10 @@ function replacementTextOf(op: ShearOp): string {
 export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps): ShearDomain {
   const { pump, getConfig, logger, now = Date.now } = deps
   const policy = deps.policy ?? DEFAULT_SHEAR_POLICY
+  const runPolicy = deps.runPolicy ?? DEFAULT_RUN_POLICY
   const states = new WeakMap<Session, SessionState>()
   const pending = new Map<string, PendingEntry>()
-  const counts = { sessions: 0, entryShaped: 0, notesAttached: 0, cuts: 0, holds: 0, errors: 0 }
+  const counts = { sessions: 0, entryShaped: 0, notesAttached: 0, cuts: 0, holds: 0, errors: 0, runsCut: 0, runsHeld: 0 }
   let disposed = false
 
   const enabled = (): boolean => getConfig().shear?.enabled !== false
@@ -209,6 +224,11 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
     if (state.events.length > SESSION_EVENT_LIMIT) state.events.shift()
   }
 
+  const pushRunEvent = (state: SessionState, event: RunEvent): void => {
+    state.runEvents.push(event)
+    if (state.runEvents.length > SESSION_EVENT_LIMIT) state.runEvents.shift()
+  }
+
   const ingest = (state: SessionState, event: SessionEvent): boolean => {
     if (isReplacement(event) || state.seqs.has(event.seq)) return false
     const data = (event.data ?? {}) as Record<string, unknown>
@@ -230,11 +250,48 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
         state.resultTextByCallId.set(callId, text)
         state.resultErrorByCallId.set(callId, data.error !== undefined && data.error !== null)
       }
+      pushRunEvent(state, { kind: 'tool-result', seq: event.seq, time: event.time, text })
       return true
     }
     if (event.type === 'assistant/message') {
+      const text = eventTextOf(event)
       state.seqs.add(event.seq)
-      pushEvent(state, { kind: 'assistant-message', seq: event.seq, time: event.time, text: eventTextOf(event) })
+      pushEvent(state, { kind: 'assistant-message', seq: event.seq, time: event.time, text })
+      pushRunEvent(state, { kind: 'assistant-message', seq: event.seq, time: event.time, text })
+      return true
+    }
+    // —— P16 run 分类输入：judge-recorded 事实（class 三分类）与星标剪切清单 ——
+    if (event.type === JUDGE_RECORDED_FACT_TYPE) {
+      const anchorSeq = Number(data.seq)
+      if (!Number.isInteger(anchorSeq) || anchorSeq < 0) return false
+      const klass = data.class
+      state.seqs.add(event.seq)
+      pushRunEvent(state, {
+        kind: 'verdict', seq: event.seq, time: event.time, anchorSeq,
+        decision: data.decision === 'new-task' ? 'new-task' : 'continue',
+        ...(klass === 'action' || klass === 'pureQ' || klass === 'verifyQ' ? { klass } : {}),
+      })
+      return true
+    }
+    if (event.type === SHEAR_RUN_PLAN_FACT_TYPE) {
+      const raw = Array.isArray(data.items) ? (data.items as { startSeq?: unknown; endSeq?: unknown; note?: unknown }[]) : []
+      const items = raw
+        .filter((item) => Number.isInteger(item.startSeq) && Number.isInteger(item.endSeq) && typeof item.note === 'string')
+        .map((item) => ({ startSeq: Number(item.startSeq), endSeq: Number(item.endSeq), note: String(item.note) }))
+      const rawClasses = Array.isArray(data.classes) ? (data.classes as { anchorSeq?: unknown; class?: unknown }[]) : []
+      const classes = rawClasses
+        .filter((entry) => Number.isInteger(entry.anchorSeq) && Number(entry.anchorSeq) >= 0
+          && (entry.class === 'action' || entry.class === 'pureQ' || entry.class === 'verifyQ'))
+        .map((entry) => ({ anchorSeq: Number(entry.anchorSeq), class: String(entry.class) }))
+      if (items.length === 0 && classes.length === 0) return false
+      state.seqs.add(event.seq)
+      if (items.length > 0) pushRunEvent(state, { kind: 'star-plan', seq: event.seq, time: event.time, items })
+      for (const entry of classes) {
+        pushRunEvent(state, {
+          kind: 'verdict', seq: event.seq, time: event.time, anchorSeq: entry.anchorSeq,
+          decision: 'continue', klass: entry.class as 'action' | 'pureQ' | 'verifyQ',
+        })
+      }
       return true
     }
     return false
@@ -255,6 +312,9 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
       resultSeqByCallId: new Map(),
       resultTextByCallId: new Map(),
       resultErrorByCallId: new Map(),
+      runEvents: [],
+      consumedRuns: new Set(),
+      runHoldsSeen: new Set(),
     }
     states.set(session, state)
     counts.sessions++
@@ -265,6 +325,10 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
     const plan = foldToolShear(state.events, policy, { entryShaped: state.entryShaped })
     for (const op of plan.ops) state.consumed.add(opKeyOf(op))
     for (const decision of plan.decisions) if (decision.decision === 'hold') state.holdsSeen.add(`${decision.tier}|${decision.callId ?? ''}`)
+    // 回填基线（run 半边）：既有 op 全部记为已消费（历史中部不回剪）；积压 run 保持可剪（证明后到即剪）。
+    const runBaseline = foldRunShear(state.runEvents, runPolicy)
+    for (const op of runBaseline.ops) state.consumedRuns.add(op.key)
+    for (const decision of runBaseline.decisions) if (decision.decision === 'hold') state.runHoldsSeen.add(`run|${decision.runKey}`)
     return state
   }
 
@@ -420,6 +484,113 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
     }
   }
 
+  /** 对话 run 裁决事实（hold 相；cut 相落 shear-applied）。 */
+  const emitRunHold = (state: SessionState, runKey: string, reason: string): void => {
+    const data: ShearDecisionFactData = compactFact({
+      policyVersion: RUN_POLICY_VERSION,
+      tier: 'run',
+      decision: 'hold',
+      reason,
+      runKey,
+      at: now(),
+    })
+    emitCeFact(state.session, SHEAR_DECISION_FACT_TYPE, data, logger)
+    counts.runsHeld++
+  }
+
+  /**
+   * run 冲刷执行（docs/03 §3）：整段表面范围 → 配对平衡收拢 → 影子计价 → H4 换一句中立结论。
+   * 门槛任一不过即 hold/error（零重试，失败默认保留）；替换节点 = 官方 compaction checkpoint 同构的 notice 用户消息。
+   */
+  const executeRunOp = (state: SessionState, op: RunOp): void => {
+    const nodes = state.session.surface.nodes
+    const inRange = nodes.filter((seq) => Number(seq) >= op.startSeq && Number(seq) <= op.endSeq)
+    if (inRange.length === 0) {
+      emitError(state.session, op.key, 'run', 'CE_SHEAR_RUN_NOT_ON_SURFACE', `run range ${op.startSeq}..${op.endSeq} has no surface node`)
+      return
+    }
+    const balanced = state.history.balanceRange({ start: inRange[0]!, end: inRange[inRange.length - 1]! })
+    if (balanced === null || Number(balanced.start) > op.startSeq) {
+      emitRunHold(state, `${op.startSeq}..${op.endSeq}`, 'run-balance-unavailable')
+      return
+    }
+    const startIdx = nodes.indexOf(balanced.start)
+    const endIdx = nodes.indexOf(balanced.end)
+    // G10 尾部窗（docs/03 §1 断裂成本公式）：剪点必须贴近尾部，否则中段剪除负收益。
+    if (nodes.length - 1 - endIdx >= TAIL_NODE_WINDOW) {
+      emitRunHold(state, `${op.startSeq}..${op.endSeq}`, 'run-too-old')
+      return
+    }
+    let beforeTokens = 0
+    for (const seq of nodes.slice(startIdx, endIdx + 1)) {
+      const event = state.session.eventAt(seq)
+      if (event !== undefined) beforeTokens += estimateTokens(ledgerEventText(event as never))
+    }
+    const afterTokens = estimateTokens(op.conclusion)
+    if (afterTokens >= beforeTokens) { emitRunHold(state, `${op.startSeq}..${op.endSeq}`, 'run-no-saving'); return }
+    state.history.recordPrune({ start: balanced.start, end: balanced.end, shadowedTokenCount: beforeTokens })
+    const landed = state.history.replaceSurface({
+      type: 'user/message',
+      data: buildNoticeUserMessage(op.conclusion, op.conclusion),
+      range: balanced,
+    })
+    const after = state.session.surface.nodes
+    const index = after.indexOf(landed.event.seq)
+    let breakTokens = 0
+    let tailNodes = 0
+    if (index >= 0) {
+      for (const seq of after.slice(index + 1)) {
+        const event = state.session.eventAt(seq)
+        if (event === undefined) continue
+        tailNodes++
+        breakTokens += estimateTokens(ledgerEventText(event as never))
+      }
+    }
+    const data: ShearAppliedFactData = compactFact({
+      policyVersion: RUN_POLICY_VERSION,
+      tier: 'run',
+      kind: 'run-flush',
+      callId: '',
+      resultSeq: balanced.end,
+      at: now(),
+      category: 'other',
+      beforeTokens,
+      afterTokens,
+      savedTokens: beforeTokens - afterTokens,
+      breakTokens,
+      tailNodes,
+      startSeq: op.startSeq,
+      endSeq: op.endSeq,
+      runPairs: op.pairs,
+      runClass: op.runClass,
+      conclusionTier: op.conclusionTier,
+    })
+    emitCeFact(state.session, SHEAR_APPLIED_FACT_TYPE, data, logger)
+    counts.runsCut++
+  }
+
+  const processRuns = (state: SessionState): void => {
+    const plan = foldRunShear(state.runEvents, runPolicy)
+    for (const decision of plan.decisions) {
+      if (decision.decision !== 'hold') continue
+      const key = `run|${decision.runKey}`
+      if (state.runHoldsSeen.has(key)) continue
+      state.runHoldsSeen.add(key)
+      // 积压是常态在飞状态（由 questionBacklogDepth 计量），不发逐 run 事实，避免噪声与 hold 重复计。
+      if (decision.reason === 'await-absorb-proof') continue
+      emitRunHold(state, decision.runKey, decision.reason)
+    }
+    for (const op of plan.ops) {
+      if (state.consumedRuns.has(op.key)) continue
+      state.consumedRuns.add(op.key)
+      try {
+        executeRunOp(state, op)
+      } catch (e) {
+        emitError(state.session, op.key, 'run', 'CE_SHEAR_OP_FAILED', e instanceof Error ? e.message : String(e))
+      }
+    }
+  }
+
   const onMetrics = ({ session, event }: CeDomainEvents['metrics/session-event']): void => {
     if (disposed || !enabled()) return
     if (session.header.origin === 'subagent') return
@@ -427,6 +598,7 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
     settlePending(session, event)
     if (!ingest(state, event)) return
     processOps(state)
+    processRuns(state)
   }
 
   const onUserMessage = (payload: CeDomainEvents['input/user-message']): void => {
@@ -437,7 +609,9 @@ export function mountShearDomain(ctx: Pick<Context, 'on'>, deps: ShearDomainDeps
     if (state.seqs.has(payload.seq)) return
     state.seqs.add(payload.seq)
     pushEvent(state, { kind: 'user-message', seq: payload.seq, time: payload.time, text: payload.text })
+    pushRunEvent(state, { kind: 'user-message', seq: payload.seq, time: payload.time, text: payload.text })
     processOps(state)
+    processRuns(state)
   }
 
   const offMetrics = pump.on('metrics/session-event', onMetrics)

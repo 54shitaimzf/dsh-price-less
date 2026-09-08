@@ -10,6 +10,7 @@ import { dossierStorageKey, sessionScopedTaskId, type DossierBody } from '../src
 import { createProjectFrame, projectFrameStorageKey, type SkillCatalogSnapshot } from '../src/core/prefix.ts'
 import { mountStarHost, readSessionId, renderPreviewCommandText, summarizeVerdict, STAR_VERDICT_SUMMARY_MAX_CHARS, type StarPreviewDto } from '../src/domains/star.ts'
 import { foldOptimizeRunFacts, OPTIMIZE_RUN_FACT_TYPE, previewRunFact, appliedRunFact, type OptimizeRunFactData } from '../src/domains/optimize-facts.ts'
+import { SHEAR_RUN_PLAN_FACT_TYPE, type ShearRunPlanFactData } from '../src/domains/shear-facts.ts'
 import { readJudgeTable } from '../src/domains/input.ts'
 import {
   parseApplyPayload, parsePreviewPayload, registerStarBridge, STAR_BRIDGE_CHANNEL, STAR_BRIDGE_CODES,
@@ -101,6 +102,8 @@ function mount(input: MountInput = {}) {
   if (input.frame === true) seed[projectFrameStorageKey('ws')] = { version: 1, body: createProjectFrame('目标', ['方面'], CATALOG).body }
   const storage = makeStorage(seed)
   const facts: OptimizeRunFactData[] = []
+  // P16：星标剪切清单事实单独收（载荷形状与 optimize-run 不同）。
+  const planFacts: ShearRunPlanFactData[] = []
   const calls = { count: 0, prompts: [] as string[], options: [] as Array<Record<string, unknown>> }
   const sessionEvents = input.dossier === undefined ? [] : userEvents(input.dossier.messages)
   const session = input.session === false ? undefined : makeSession(sessionEvents, sessionId)
@@ -121,9 +124,12 @@ function mount(input: MountInput = {}) {
     } as never,
     llmCtx: input.llm === false ? undefined : makeLlm(input.output ?? FULL_OUTPUT, calls, input.finishKind ?? 'stop', input.efforts),
     resolveSession: session === undefined ? undefined : () => session,
-    emitFact: (_session: unknown, _type: string, data: unknown) => { facts.push(data as OptimizeRunFactData) },
+    emitFact: (_session: unknown, type: string, data: unknown) => {
+      if (type === SHEAR_RUN_PLAN_FACT_TYPE) { planFacts.push(data as ShearRunPlanFactData); return }
+      facts.push(data as OptimizeRunFactData)
+    },
   })
-  return { host, storage, facts, calls, sessionId }
+  return { host, storage, facts, planFacts, calls, sessionId }
 }
 
 const okValue = <T>(result: { ok: boolean }): T => (result as { ok: true; value: T }).value
@@ -245,8 +251,8 @@ describe('star host service', () => {
     expect(storage.puts).toHaveLength(0)
   })
 
-  it('6. apply：卷宗回填 + 冲突计数 + 产物形状被 readJudgeTable 接受 + 两相事实', async () => {
-    const { host, storage, facts } = mount({
+  it('6. apply：卷宗回填 + 冲突计数 + 产物形状被 readJudgeTable 接受 + 两相事实 + 剪切清单事实', async () => {
+    const { host, storage, facts, planFacts } = mount({
       dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }, { seq: 7, time: 2, text: 'more text here' }], annotations: { '5': [{ class: 'pureQ', by: 'auto', at: 1 }] } },
       output: '[PRODUCT]\n产品文本\n\n[VERDICTS]\nCLASS 5 action\nSHEAR 5..5 已吸收：结论\n',
     })
@@ -266,6 +272,9 @@ describe('star host service', () => {
     expect(facts[0]!.previewId).toBe(facts[1]!.previewId)
     expect(facts[1]).toMatchObject({ backfillCount: 1, backfillConflicts: 1, shearPairs: 1 })
     expect(facts[1]!.shearTokens).toBeGreaterThan(0)
+    // P16：星标 = 吸收证明 → 剪切清单落成 ignorable 事实（坐标 + 结论原样搬运）
+    expect(planFacts).toHaveLength(1)
+    expect(planFacts[0]).toMatchObject({ source: 'star', items: [{ startSeq: 5, endSeq: 5, note: '结论' }] })
     expect(host.stats()).toMatchObject({ previews: 1, applies: 1, reapplies: 0, pending: 1 })
   })
 

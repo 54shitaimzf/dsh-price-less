@@ -10,7 +10,9 @@ import {
   SHEAR_APPLIED_FACT_TYPE,
   SHEAR_DECISION_FACT_TYPE,
   SHEAR_ERROR_FACT_TYPE,
+  SHEAR_RUN_PLAN_FACT_TYPE,
 } from '../src/domains/shear-facts.ts'
+import { JUDGE_RECORDED_FACT_TYPE } from '../src/domains/judge-facts.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
 
 // 测试进程内强制走 ignorable 通道直发路径（事实经 session.append 落 FakeSession）。
@@ -348,5 +350,122 @@ describe('P15b 异步相：四档执行与门槛', () => {
       return JSON.stringify(env.facts())
     }
     expect(run()).toBe(run())
+  })
+})
+
+describe('P16b 异步相：run 冲刷（吸收证明 → 整段换一句结论）', () => {
+  type Env = ReturnType<typeof makeEnv>
+  const verdict = (env: Env, anchorSeq: number, klass: 'action' | 'pureQ' | 'verifyQ', decision: 'continue' | 'new-task' = 'continue') => {
+    const event = env.session.append(JUDGE_RECORDED_FACT_TYPE, { seq: anchorSeq, time: 1000, trigger: 'llm', decision, class: klass }, { ignorable: true })
+    env.emitEvent(event)
+    return event
+  }
+  const runPlan = (env: Env, items: { startSeq: number; endSeq: number; note: string }[]) => {
+    const event = env.session.append(SHEAR_RUN_PLAN_FACT_TYPE, { at: 1000, source: 'star', items }, { ignorable: true })
+    env.emitEvent(event)
+    return event
+  }
+
+  it('吸收证明到达 → 整段 run 换 notice 用户消息（影子计价 + 配对平衡 + 表面收拢）', () => {
+    const env = makeEnv()
+    const u1 = env.appendUser('为什么要用 A？')
+    verdict(env, u1.seq, 'pureQ')
+    const a1 = env.appendAssistant([textBlock(`因为 B 更稳，而且可回放。${'说明'.repeat(120)}`)])
+    const u2 = env.appendUser('动手改吧')
+    verdict(env, u2.seq, 'action')
+    const applied = env.applied()
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.data).toMatchObject({
+      tier: 'run', kind: 'run-flush', startSeq: u1.seq, endSeq: a1.seq,
+      runClass: 'pureQ', runPairs: 1, conclusionTier: 'mechanical-quote', category: 'other',
+    })
+    expect(applied[0]!.data.savedTokens).toBeGreaterThan(0)
+    const replacements = env.replacements()
+    expect(replacements).toHaveLength(1)
+    expect(replacements[0]!.type).toBe('user/message')
+    expect(replacements[0]!.opts.surfaceOp).toEqual({ op: 'replace', start: u1.seq, end: a1.seq })
+    expect(replacements[0]!.data.source).toMatchObject({ kind: 'plugin', plugin: 'context-economy', form: 'notice' })
+    expect(replacements[0]!.data.content[0].text).toContain('已吸收：关于「为什么要用 A？」的 1 轮问答')
+    const landedSeq = env.session.events.find((event) => typeof event.surfaceOp === 'object')!.seq
+    expect(env.session.nodes).toEqual([landedSeq, u2.seq])
+    expect(env.session.appends.some((item) => item.type === 'compaction/prune')).toBe(true)
+    expect(env.domain.stats().runsCut).toBe(1)
+  })
+
+  it('星标剪切清单 = 吸收证明 + 结论来源（长 run 走 star-note）', () => {
+    const env = makeEnv()
+    const longAnswer = (label: string) => textBlock(`${label}：${'细节'.repeat(120)}`)
+    const u1 = env.appendUser('Q1'); verdict(env, u1.seq, 'pureQ'); env.appendAssistant([longAnswer('A1')])
+    const u2 = env.appendUser('Q2'); verdict(env, u2.seq, 'pureQ'); env.appendAssistant([longAnswer('A2')])
+    const u3 = env.appendUser('Q3'); verdict(env, u3.seq, 'pureQ')
+    const a3 = env.appendAssistant([longAnswer('A3')])
+    runPlan(env, [{ startSeq: u1.seq, endSeq: a3.seq, note: '三轮讨论结论是 A' }])
+    const applied = env.applied()
+    expect(applied).toHaveLength(1)
+    expect(applied[0]!.data).toMatchObject({ conclusionTier: 'star-note', runPairs: 3, startSeq: u1.seq, endSeq: a3.seq })
+    // 幂等：同清单/同分类重复到达不二次落刀
+    runPlan(env, [{ startSeq: u1.seq, endSeq: a3.seq, note: '三轮讨论结论是 A' }])
+    expect(env.applied()).toHaveLength(1)
+    expect(env.domain.stats().runsCut).toBe(1)
+  })
+
+  it('无净省（结论 ≥ 被遮蔽体积）→ hold run-no-saving，零落刀零重试', () => {
+    const env = makeEnv()
+    const u1 = env.appendUser('Q1'); verdict(env, u1.seq, 'pureQ'); const a1 = env.appendAssistant([textBlock('A1')])
+    const u2 = env.appendUser('动手'); verdict(env, u2.seq, 'action')
+    expect(env.applied()).toHaveLength(0)
+    expect(env.replacements()).toHaveLength(0)
+    const holds = env.facts().filter((fact) => fact.type === SHEAR_DECISION_FACT_TYPE && fact.data.tier === 'run')
+    expect(holds).toHaveLength(1)
+    expect(holds[0]!.data).toMatchObject({ decision: 'hold', reason: 'run-no-saving', runKey: `${u1.seq}..${a1.seq}` })
+    expect(env.domain.stats().runsHeld).toBe(1)
+  })
+
+  it('吸收证明未到 → 积压保留（不发事实、零落刀）', () => {
+    const env = makeEnv()
+    const u1 = env.appendUser('Q1'); verdict(env, u1.seq, 'pureQ'); env.appendAssistant([textBlock('A1')])
+    expect(env.applied()).toHaveLength(0)
+    expect(env.replacements()).toHaveLength(0)
+    expect(env.facts().filter((fact) => fact.type === SHEAR_DECISION_FACT_TYPE && fact.data.tier === 'run')).toHaveLength(0)
+    expect(env.domain.stats().runsCut).toBe(0)
+  })
+
+  it('★ CLASS 回填（无 SHEAR 行）= 分类输入 → 机械摘句落刀', () => {
+    const env = makeEnv()
+    const u1 = env.appendUser('为什么要用 A？')
+    env.appendAssistant([textBlock(`因为 B 更稳。${'说明'.repeat(120)}`)])
+    const u2 = env.appendUser('动手改吧')
+    const event = env.session.append(SHEAR_RUN_PLAN_FACT_TYPE, {
+      at: 1000, source: 'star', items: [],
+      classes: [{ anchorSeq: u1.seq, class: 'pureQ' }, { anchorSeq: u2.seq, class: 'action' }],
+    }, { ignorable: true })
+    env.emitEvent(event)
+    expect(env.applied()).toHaveLength(1)
+    expect(env.applied()[0]!.data).toMatchObject({ tier: 'run', kind: 'run-flush', conclusionTier: 'mechanical-quote' })
+    expect(env.applied()[0]!.data.startSeq).toBe(u1.seq)
+  })
+
+  it('G10 尾部窗：分类迟到导致 run 距尾部 ≥8 节点 → hold run-too-old（中段剪除负收益）', () => {
+    const env = makeEnv()
+    const u1 = env.appendUser('Q1')
+    verdict(env, u1.seq, 'pureQ')
+    env.appendAssistant([textBlock('说明'.repeat(120))])
+    const u2 = env.appendUser('动手')
+    for (let index = 0; index < 5; index++) {
+      env.appendUser(`后续 ${index}`)
+      env.appendAssistant([textBlock('x'.repeat(80))])
+    }
+    verdict(env, u2.seq, 'action')
+    expect(env.applied()).toHaveLength(0)
+    expect(env.facts().some((fact) => fact.type === SHEAR_DECISION_FACT_TYPE && fact.data.reason === 'run-too-old')).toBe(true)
+  })
+
+  it('G1：关闭 shear 开关 → run 半边零行为', () => {
+    const env = makeEnv({ enabled: false })
+    const u1 = env.appendUser('Q1'); verdict(env, u1.seq, 'pureQ'); env.appendAssistant([textBlock('A1')])
+    const u2 = env.appendUser('动手'); verdict(env, u2.seq, 'action')
+    expect(env.applied()).toHaveLength(0)
+    expect(env.replacements()).toHaveLength(0)
+    expect(env.domain.stats().runsCut).toBe(0)
   })
 })

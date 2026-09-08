@@ -57,6 +57,8 @@ export interface ShearRunPlanFactData {
   readonly at: number
   readonly source: 'star'
   readonly items: readonly { readonly startSeq: number; readonly endSeq: number; readonly note: string }[]
+  /** 断面 CLASS 行回填的三分类（= 判别器手动断面产出，run 状态机的分类输入之一）。 */
+  readonly classes?: readonly { readonly anchorSeq: number; readonly class: string }[]
 }
 
 /** hold / note-attached 相（keep 不发射，由重算 fold 得出）。 */
@@ -66,6 +68,8 @@ export interface ShearDecisionFactData {
   readonly decision: 'hold' | 'note-attached'
   readonly reason: string
   readonly callId?: string
+  /** 对话 run 半边（tier = 'run'）的裁决键：<startSeq>..<endSeq>。 */
+  readonly runKey?: string
   readonly at: number
   readonly noteBytes?: number
 }
@@ -271,7 +275,7 @@ export function foldShearLedger(
     const data = (fact.data ?? {}) as Record<string, unknown>
     if (fact.type === RUN_CLASS_FACT_TYPE) {
       const anchorSeq = Number(data.seq)
-      if (!Number.isInteger(anchorSeq) || anchorSeq <= 0) continue
+      if (!Number.isInteger(anchorSeq) || anchorSeq < 0) continue
       const decision = data.decision === 'new-task' ? 'new-task' : 'continue'
       const klass = data.class
       runEvents.push({
@@ -280,12 +284,20 @@ export function foldShearLedger(
       })
     } else if (fact.type === SHEAR_RUN_PLAN_FACT_TYPE) {
       const items = Array.isArray(data.items) ? (data.items as { startSeq?: unknown; endSeq?: unknown; note?: unknown }[]) : []
-      runEvents.push({
-        kind: 'star-plan', seq: fact.seq ?? fact.time, time: fact.time,
-        items: items
-          .filter((item) => Number.isInteger(item.startSeq) && Number.isInteger(item.endSeq) && typeof item.note === 'string')
-          .map((item) => ({ startSeq: Number(item.startSeq), endSeq: Number(item.endSeq), note: String(item.note) })),
-      })
+      const parsedItems = items
+        .filter((item) => Number.isInteger(item.startSeq) && Number.isInteger(item.endSeq) && typeof item.note === 'string')
+        .map((item) => ({ startSeq: Number(item.startSeq), endSeq: Number(item.endSeq), note: String(item.note) }))
+      const at = fact.seq ?? fact.time
+      if (parsedItems.length > 0) runEvents.push({ kind: 'star-plan', seq: at, time: fact.time, items: parsedItems })
+      const classes = Array.isArray(data.classes) ? (data.classes as { anchorSeq?: unknown; class?: unknown }[]) : []
+      for (const entry of classes) {
+        if (!Number.isInteger(entry.anchorSeq) || Number(entry.anchorSeq) < 0) continue
+        if (entry.class !== 'action' && entry.class !== 'pureQ' && entry.class !== 'verifyQ') continue
+        runEvents.push({
+          kind: 'verdict', seq: at, time: fact.time, anchorSeq: Number(entry.anchorSeq),
+          decision: 'continue', klass: entry.class,
+        })
+      }
     }
   }
   const runPlan = foldRunShear(runEvents, runPolicy)

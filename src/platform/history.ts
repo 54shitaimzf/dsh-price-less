@@ -16,6 +16,7 @@
 
 import type { Session, SessionEvent, SessionEventMap, SessionSeq, SurfaceEventType } from '@deepseek-ai/dsh-session'
 import { CompactionId, toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
+import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 
 export type HistoryErrorCode =
   | 'INVALID_RANGE'
@@ -65,6 +66,19 @@ export const nativePairBalanceChecker: PairBalanceChecker = {
   after: (session, seq) => toolPairingBalancedAfter(session, seq),
 }
 
+
+/**
+ * 插件来源的结论替换节点（P16 对话剪切；官方 compaction checkpoint 同构）。
+ * 内容 = 中立叙述体结论；来源 = plugin + form:'notice'（折叠成一行摘要，主模型只见结论本身）。
+ * @param text 模型可见的结论正文。
+ * @param summary UI 折叠行的一行摘要（自动钳制到 CONTEXT_SUMMARY_MAX_CHARS）。
+ */
+export function buildNoticeUserMessage(text: string, summary: string): UserMessage {
+  return createUserMessage({
+    content: [{ type: 'text', text }],
+    source: { kind: 'plugin', plugin: 'context-economy', form: 'notice', summary: boundContextSummary(summary) },
+  })
+}
 
 export interface CompactionBegin {
   compactionId: string

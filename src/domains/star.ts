@@ -31,6 +31,7 @@ import { STAR_BRIDGE_CODES, STAR_PREVIEW_LIMIT, type StarBridgeOutcome } from '.
 import { reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
 import { OPTIMIZE_RUN_FACT_TYPE, appliedRunFact, previewRunFact, type OptimizeRunFactData } from './optimize-facts.ts'
+import { SHEAR_RUN_PLAN_FACT_TYPE, compactFact, type ShearRunPlanFactData } from './shear-facts.ts'
 
 /** 行式裁决 UI 视图（与 client/star/star-types.ts 同构但独立声明——两侧不得互相 import）。 */
 export interface StarVerdictView { readonly kind: string; readonly summary: string }
@@ -338,6 +339,21 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       backfillCount, backfillConflicts: backfill.conflicts,
       shearPairs: item.parsed.shearItems.length, shearTokens: shearTokensOf(current, item.parsed.shearItems),
     }))
+    // P16：星标 = 用户明确动作 = 吸收证明——剪切清单落成 ignorable 事实，剪切域按坐标执行（选坐标不造坐标）。
+    const planItems = item.parsed.shearItems.map((entry) => ({ startSeq: entry.startSeq, endSeq: entry.endSeq, note: entry.note }))
+    const planClasses = Object.entries(item.parsed.backfillVerdicts)
+      .map(([seq, klass]) => ({ anchorSeq: Number(seq), class: String(klass) }))
+      .filter((entry) => Number.isInteger(entry.anchorSeq) && entry.anchorSeq >= 0)
+      .sort((left, right) => left.anchorSeq - right.anchorSeq)
+    if (planItems.length > 0 || planClasses.length > 0) {
+      const plan: ShearRunPlanFactData = compactFact({
+        at,
+        source: 'star' as const,
+        items: planItems,
+        ...(planClasses.length === 0 ? {} : { classes: planClasses }),
+      })
+      emit(item.session, SHEAR_RUN_PLAN_FACT_TYPE, plan, logger)
+    }
     return { ok: true, value: { text: `已应用（回填 ${backfillCount} 条，冲突 ${backfill.conflicts} 条）` } }
   }
 
