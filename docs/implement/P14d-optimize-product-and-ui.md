@@ -26,7 +26,8 @@
 | `src/platform/llm.ts` | `resolveReasoningEffort`（`resolveModelInfo` 探测 + 进程内缓存 + fail-lazy）；`CeGenerateOptions.reasoningEffort` 宽化（收窄仍在 `toHarnessGenerateOptions` 单点） |
 | `src/domains/star.ts` | ★ 传 `off`（探测后才传）；剥离/必保接入；账本记 `metaStrippedLines`/`requestedEffort`/`sentEffort`；`keptSpanIndexes` = 必保 ∪ KEEP |
 | `src/domains/optimize-facts.ts` | 三个可选字段 + fold |
-| `client/star/*` | 删 diff/`clampPreviewText`/`DiffLine`；`verdictSummary`；弹层只留正文 + 关键事实警告 + 无历史提示 + 折叠详情；点侧面不关闭；确认 → `setDraft` + `submit()` |
+| `client/star/*` | 删 diff/`clampPreviewText`/`DiffLine`；`verdictSummary`；弹层只留正文 + 关键事实警告 + 无历史提示 + 折叠详情；点侧面不关闭；确认 → `setDraft` + `submit()`；**结果复用**（同草稿二次点击只展开） |
+| 结果复用（P14e 追加） | host `previewCache`（同会话 + 同 prompt + 同输入指纹，命中零调用/零事实；apply 后失效）+ client `cached`（连桥调用都省） |
 
 ## 3. 明确不做
 
@@ -52,4 +53,5 @@
 - [x] `DSH_CHECKOUT=G:/deepseek-harness bash scripts/build.sh` 绿（host + client）
 - [x] `node scripts/verify-p14d.mjs` → `P14D VERIFY PASS (18 checks)`（双跑逐字节一致）
 - [x] `node scripts/verify-p14c.mjs` → `P14C VERIFY PASS`（无回归）
-- [x] 账本快照 = `docs/ledger-history.md` §35
+- [x] ★ 结果复用：`tests/star-host.spec.ts` 12b（同 prompt 二次点击 calls 不增、facts 不增、stats.previewCacheHits=1；apply 后失效重断面）
+- [x] 账本快照 = `docs/ledger-history.md` §35 / §36

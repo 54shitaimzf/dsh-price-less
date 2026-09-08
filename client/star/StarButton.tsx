@@ -94,6 +94,8 @@ export function StarButton(props: StarButtonProps) {
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** P14e：上次断面结果（按草稿文本保留）——同草稿再点只展开，不再调模型。 */
+  const [cached, setCached] = useState<{ draft: string; data: StarPreviewData } | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -104,21 +106,34 @@ export function StarButton(props: StarButtonProps) {
 
   const empty = draft.trim().length === 0
   const trivial = !empty && isTrivialPrompt(draft)
+  const cachedHit = cached !== null && cached.draft === draft
   const disabled = loading || applying || sessionId === undefined || empty || trivial
   const hint = empty
     ? '先在输入框写下提示词，再用 AI 优化'
     : trivial
       ? '提示词过短（去标点后不足 4 字），没有可优化的内容'
-      : 'AI 优化当前提示词（基于本任务已有消息）'
+      : cachedHit
+        ? '展开上次优化结果（不再调用模型）'
+        : 'AI 优化当前提示词（基于本任务已有消息）'
 
   const runPreview = async () => {
     if (sessionId === undefined || draft.trim().length === 0) return
+    // P14e：同草稿已有结果 → 只展开，零调用、零等待。
+    if (cachedHit) {
+      setError(null)
+      setNotice(null)
+      setPreview(cached.data)
+      setEdited(cached.data.product ?? draft)
+      setOpen(true)
+      return
+    }
     setLoading(true)
     setError(null)
     setNotice(null)
     const result = await star.preview(sessionId, draft)
     setLoading(false)
     if (result.ok) {
+      setCached({ draft, data: result.data })
       setPreview(result.data)
       setEdited(result.data.product ?? result.data.originalPrompt)
       setOpen(true)
@@ -138,10 +153,14 @@ export function StarButton(props: StarButtonProps) {
       // P14d：确认即发送——先写回草稿再走标准提交机（提交失败会恢复草稿，不吞用户输入）。
       inputActions.setDraft(edited)
       inputActions.submit()
+      // 结果已消费：失效缓存，避免复用已 apply 的预览（下次点击重新断面）。
+      setCached(null)
       setOpen(false)
       setPreview(null)
       setNotice('已发送')
     } else {
+      // 失败默认保留草稿；同时失效缓存，使下次点击重新断面而非反复撞同一个坏预览。
+      setCached(null)
       setError(result.message)
     }
   }

@@ -25,6 +25,7 @@ check('宽化单点仍是 toHarnessGenerateOptions', llm.includes('export functi
 const star = read('src/domains/star.ts')
 check('★ 传推理档 off（经探测）', star.includes('OPTIMIZE_REASONING_EFFORT') && star.includes('resolveReasoningEffort'), '')
 check('剥离/必保接入断面', star.includes('stripProductMeta(') && star.includes('mandatoryCandidateIndexes('), '')
+check('结果复用缓存（host）', star.includes('previewCache') && star.includes('previewCacheHits'), '')
 check('账本记 requested/sent effort', star.includes('requestedEffort:') && star.includes('sentEffort,'), '')
 
 const model = read('client/star/star-model.ts')
@@ -36,6 +37,7 @@ check('弹层无 diff 视图', !button.includes('DiffView') && !button.includes(
 check('裁决折叠进 details', button.includes('<details') && button.includes('verdictSummary('), '')
 check('点侧面不再关闭', !/style=\{OVERLAY\} onClick=/.test(button), '')
 check('确认即发送', button.includes('inputActions.setDraft(edited)') && button.includes('inputActions.submit()'), '')
+check('结果复用缓存（client）', button.includes('cachedHit') && button.includes('setCached({ draft, data: result.data })'), '')
 check('关键事实警告文案', button.includes('关键事实未保留'), '')
 
 const types = read('client/star/star-types.ts')

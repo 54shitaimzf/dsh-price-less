@@ -1650,3 +1650,23 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 **⑥ 待真机读数（下一次重启后）**：`metaStrippedLines` 应快速降到 0（prompt v2 生效）；
 `sentEffort: 'off'` 出现且 `outputTokens` 从 ~9600 降到 ~800 量级、`latencyMs` 从 ~35s 降到 ~5s；
 `missingAuthorityCount` 只在模型真的丢路径/数值时 > 0。
+## 36. 账本快照 §36：★ 结果复用（同 prompt 二次点击只展开；P14e）
+
+> 触发：用户要求"提示词优化结果是保留的，点击星星按钮只会优化一次，再点击则是展开界面"。
+
+**口径变化**：
+
+| 项 | §35 口径 | §36 口径 |
+|---|---|---|
+| 二次点击 | 每次都重新断面（一次 LLM 调用 + 一条 optimize-run 事实） | **同会话 + 同 prompt + 同输入指纹 → 回放缓存**：零调用、零事实、零等待 |
+| 缓存键 | — | `sessionId + prompt + (task / 历史尾序 / ctxTokens / 输入栈长度 / 目录可用性)` |
+| 失效 | — | apply 成功即失效（结果已消费）；apply 失败也失效（避免反复撞同一个坏预览）；上下文变化自动换键 |
+| 双层 | — | host `previewCache`（LRU 32，pending 同步保活，跨页面刷新仍命中）+ client `cached`（同草稿直接展开，连桥调用都省） |
+| 观测 | — | `stats.previewCacheHits`（零调用命中数；`optimizeCount` 仍只计真实断面） |
+
+**为什么双层**：client 层把"再点击"变成纯 UI 展开；host 层保证即使 client 状态丢了（刷新/重渲染），
+也不会为同一 prompt 二次付费。
+
+**验收**：`tests/star-host.spec.ts` 12b（同 prompt 二次点击 `calls` 1→1、`facts` 1→1、
+`previewCacheHits` 1、缓存预览仍可 apply、apply 后再点击重新断面、换 prompt 重新断面）；
+12 改用不同 prompt 以保持 pending 容量语义；`scripts/verify-p14d.mjs` 增两条静态断言。

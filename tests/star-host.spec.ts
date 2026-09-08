@@ -329,13 +329,33 @@ describe('star host service', () => {
     const { host } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
     let firstId = ''
     for (let i = 0; i < STAR_PREVIEW_LIMIT + 1; i++) {
-      const id = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+      const id = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: `${PROMPT} ${i}` })).previewId
       if (i === 0) firstId = id
     }
     expect(host.stats().pending).toBe(STAR_PREVIEW_LIMIT)
     expect(failCode(await host.apply({ sessionId: 's1', previewId: firstId, editedProduct: 'x' }))).toBe(STAR_BRIDGE_CODES.unknownPreview)
     host.dispose()
     expect(host.stats().pending).toBe(0)
+  })
+
+  it('12b. 结果复用：同 prompt 同上下文二次点击零调用、零事实；apply 后失效；换 prompt 重新断面', async () => {
+    const { host, facts, calls } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    const first = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))
+    const again = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))
+    expect(again).toEqual(first)
+    expect(calls.count).toBe(1)
+    expect(facts.filter((f) => f.phase === 'preview')).toHaveLength(1)
+    expect(host.stats()).toMatchObject({ previews: 1, previewCacheHits: 1, pending: 1 })
+    // 缓存的预览仍可 apply（pending 随缓存同步保活）。
+    expect((await host.apply({ sessionId: 's1', previewId: again.previewId, editedProduct: 'x' })).ok).toBe(true)
+    // 已消费 → 失效：同 prompt 再点击重新断面（新 previewId、新事实）。
+    const third = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT }))
+    expect(third.previewId).not.toBe(first.previewId)
+    expect(calls.count).toBe(2)
+    expect(facts.filter((f) => f.phase === 'preview')).toHaveLength(2)
+    // 换 prompt → 新断面。
+    await host.preview({ sessionId: 's1', prompt: `${PROMPT} 追加一句` })
+    expect(calls.count).toBe(3)
   })
 
   it('13. RPC 端口：channel/端点常量、payload 校验、分派、未知端点、handler 抛错', async () => {

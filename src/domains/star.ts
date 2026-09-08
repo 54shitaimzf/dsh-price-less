@@ -43,6 +43,9 @@ export interface StarPreviewDto {
 
 export const STAR_VERDICT_SUMMARY_MAX_CHARS = 120
 
+/** ★ 结果复用缓存容量（P14e；同会话同 prompt 同输入指纹的断面结果）。 */
+export const STAR_PREVIEW_CACHE_LIMIT = 32
+
 /** ★ 断面推理档（P14d §3）：改写任务不需要长思考；模型不支持时探测返回 undefined，按默认档发。 */
 export const OPTIMIZE_REASONING_EFFORT = 'off'
 
@@ -110,6 +113,8 @@ export interface StarHostDeps {
 export interface StarHostStats {
   previews: number; applies: number; reapplies: number; pending: number
   llmFailures: number; parseFailures: number; storageFailures: number
+  /** P14e：命中复用缓存、未调模型的次数。 */
+  previewCacheHits: number
 }
 
 export interface StarHost {
@@ -123,6 +128,8 @@ interface PendingPreview {
   sessionId: string; session: Session; taskId: string; dossier: DossierBody; parsed: OptimizeParseResult
   /** P14d：必保事实 ∪ 模型 KEEP（apply 落产物与账本用同一集合）。 */
   enforcedSpanIndexes: number[]
+  /** P14e：本预览在复用缓存中的键（apply 成功后失效该缓存）。 */
+  cacheKey: string
   applied: boolean
 }
 
@@ -153,7 +160,9 @@ export function renderPreviewCommandText(dto: StarPreviewDto): string {
 export function mountStarHost(deps: StarHostDeps): StarHost {
   const { storage, getConfig, logger, workspace = process.cwd().replaceAll('\\', '/'), now = Date.now } = deps
   const pending = new Map<string, PendingPreview>()
-  const counters = { previews: 0, applies: 0, reapplies: 0, llmFailures: 0, parseFailures: 0, storageFailures: 0 }
+  /** P14e：★ 结果复用——同会话 + 同 prompt + 同输入指纹 → 直接回放，不调模型、不发事实。 */
+  const previewCache = new Map<string, { data: StarPreviewDto; item: PendingPreview }>()
+  const counters = { previews: 0, applies: 0, reapplies: 0, llmFailures: 0, parseFailures: 0, storageFailures: 0, previewCacheHits: 0 }
   let seq = 0
   const emit = deps.emitFact ?? ((session: Session, type: string, data: unknown, log?: CeLogger) => emitCeFact(session, type as never, data as never, log))
   const emitRun = (session: Session, data: OptimizeRunFactData): void => { emit(session, OPTIMIZE_RUN_FACT_TYPE, data, logger) }
@@ -169,7 +178,6 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
         message: '提示词过短（去标点后不足 4 字），没有可优化的内容',
       }
     }
-    counters.previews++
     const at = now()
     const segment = foldSegmentState(readFacts(session)).segments.at(-1)!
     const taskId = sessionScopedTaskId(input.sessionId, segment.taskId)
@@ -185,6 +193,21 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     const rendered = renderOptimizePrompt({
       projectFrame: frameRecord?.body as ProjectFrameBody | undefined, dossier, prompt: input.prompt, catalog,
     })
+    // P14e：结果复用。指纹 = task + 历史尾序 + 输入体积 + 目录可用性——同一 prompt 在
+    // 上下文未变时二次点击不再调模型；上下文变了（新消息/换 task）即视为新断面。
+    const fingerprint = `${segment.taskId}|${rendered.historyCount}|${dossier.messages.at(-1)?.seq ?? 0}|${rendered.ctxTokens}|${rendered.prompt.length}|${catalog?.complete === false ? 'i' : 'c'}`
+    const cacheKey = `${input.sessionId}\u0000${input.prompt}\u0000${fingerprint}`
+    const cached = previewCache.get(cacheKey)
+    if (cached !== undefined) {
+      counters.previewCacheHits++
+      // LRU 刷新：缓存与 pending 同步移到末尾（预览可能已被容量淘汰）。
+      previewCache.delete(cacheKey)
+      previewCache.set(cacheKey, cached)
+      pending.delete(cached.data.previewId)
+      pending.set(cached.data.previewId, cached.item)
+      return { ok: true, value: cached.data }
+    }
+    counters.previews++
     const previewId = `${input.sessionId}#${segment.taskId}#${dossierRecord?.version ?? 0}#${++seq}`
     const candidates = extractAuthorityCandidates(input.prompt)
     let parsed: OptimizeParseResult | undefined
@@ -250,7 +273,13 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       const oldest = pending.keys().next().value
       if (oldest !== undefined) pending.delete(oldest)
     }
-    pending.set(previewId, { sessionId: input.sessionId, session, taskId, dossier, parsed: parsed!, enforcedSpanIndexes, applied: false })
+    const item: PendingPreview = { sessionId: input.sessionId, session, taskId, dossier, parsed: parsed!, enforcedSpanIndexes, applied: false, cacheKey }
+    pending.set(previewId, item)
+    if (previewCache.size >= STAR_PREVIEW_CACHE_LIMIT) {
+      const oldestKey = previewCache.keys().next().value
+      if (oldestKey !== undefined) previewCache.delete(oldestKey)
+    }
+    previewCache.set(cacheKey, { data: dto, item })
     return { ok: true, value: dto }
   }
 
@@ -300,6 +329,8 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       return { ok: false, code: STAR_BRIDGE_CODES.storageFailed, message: '优化产物写入失败' }
     }
     item.applied = true
+    // P14e：结果已消费——失效复用缓存，同 prompt 再点击会重新断面。
+    previewCache.delete(item.cacheKey)
     emitRun(item.session, appliedRunFact({ previewId: input.previewId, taskId: item.taskId, sessionId: item.sessionId, at }, {
       backfillCount, backfillConflicts: backfill.conflicts,
       shearPairs: item.parsed.shearItems.length, shearTokens: shearTokensOf(current, item.parsed.shearItems),
@@ -307,5 +338,5 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     return { ok: true, value: { text: `已应用（回填 ${backfillCount} 条，冲突 ${backfill.conflicts} 条）` } }
   }
 
-  return { preview, apply, stats: () => ({ ...counters, pending: pending.size }), dispose: () => { pending.clear() } }
+  return { preview, apply, stats: () => ({ ...counters, pending: pending.size }), dispose: () => { pending.clear(); previewCache.clear() } }
 }

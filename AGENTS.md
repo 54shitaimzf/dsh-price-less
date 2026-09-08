@@ -18,7 +18,7 @@ content 覆盖/追加 + tools/execute 信号计量）全部施工；首份 07 �
 P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修复：删 L0、对表影子记账（只算不拦）、★ 门控改为
 "本次提示词极短"、上下文读会话事件；快照 = `docs/ledger-history.md` §33）；**P14d 修正**（断面产品契约：
 关键事实保真 + 大胆重写 + 禁标签/元注释、候选段事实级预抽、元注释机械剥离入账、★ 推理档探测传 off、
-弹层删 diff 且确认即发送；快照 = §35））。`platform/`（十文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+弹层删 diff 且确认即发送；★ 结果复用（同 prompt 二次点击只展开）；快照 = §35 / §36））。`platform/`（十文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
