@@ -31,6 +31,8 @@ import {
   appendArchiveEntry,
   compressSpanHash,
   composePressureArchive,
+  fuseArmed,
+  fuseFloorTokens,
   isPressureMaterial,
   lookupCachedProduct,
   parseCompressProduct,
@@ -62,14 +64,14 @@ import {
 import { toolCategory } from '../core/shear/tool.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createHistoryPort } from '../platform/history.ts'
-import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
+import { CE_CONTEXT_OVERFLOW_CODE, resolveContextWindow, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
 import { readSessionModel, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import type { MeterPort } from '../platform/meter.ts'
 import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
 import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
-import { COMPRESS_RUN_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
+import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
 
 const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
 
@@ -101,7 +103,9 @@ export interface CompactionDomain {
   dispose(): void
   stats(): CompactionDomainStats
   /** H2 步准入回调体：一次尝试至多压一个闭合 task（挂点收口见 platform/agent-step.ts）。 */
-  onPreStep(payload: { session: Session; turn: number }): Promise<void>
+  onPreStep(payload: { session: Session; turn: number; step?: number }): Promise<void>
+  /** H3 溢出接管（P20b）：'retry' = 本轮重试；'pass' = 委派上游。 */
+  onRequestError(payload: { session: Session; turn: number; step: number; failureCode: string }): Promise<'retry' | 'pass'>
 }
 
 /** 会话内参与段状态 fold 的原始事件上限（超出丢最老；只影响超老段的发现）。 */
@@ -210,6 +214,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   const busy = new WeakSet<Session>()
   /** 压力触发 turn 守卫（一个 turn 至多一次常规压力尝试；紧急折叠另有守卫）。 */
   const pressureTurn = new WeakMap<Session, number>()
+  /** 紧急折叠守卫（同 (turn,step) 至多一次：地板以上自动折叠 / 溢出接管共用）。 */
+  const emergencyGuard = new WeakMap<Session, string>()
   let disposed = false
 
   const policiesOf = (config: ConfigShape): { assemble: AssemblePolicy; compress: CompressPolicy } => ({
@@ -754,7 +760,73 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     await pressureFold(session, turn, events, facts, { wireTokens, thresholdTokens, emergency: false })
   }
 
-  const onPreStep = async (payload: { session: Session; turn: number }): Promise<void> => {
+  /** 保险丝（时序 C 下半，P20b）：地板以上自动紧急折叠；低于地板严格 no-op（零事实零行为）。 */
+  const runFuse = async (
+    session: Session,
+    turn: number,
+    step: number,
+    events: readonly LedgerSessionEvent[],
+    facts: readonly LedgerFact[],
+  ): Promise<void> => {
+    const config = getConfig()
+    const llm = deps.getLlm?.()
+    if (llm === undefined) return
+    const wireTokens = deps.getMeter?.()?.wireTokens(session)
+    if (wireTokens === undefined) return
+    const route = resolveJudgeModel(config, readSessionModel(session))
+    const contextWindow = await resolveContextWindow(llm, route.provider, route.model, logger)
+    const floorTokens = fuseFloorTokens(contextWindow)
+    if (floorTokens === undefined || !fuseArmed({ wireTokens, contextWindow })) return
+    const guardKey = `${turn}:${step}`
+    if (emergencyGuard.get(session) === guardKey) return
+    emergencyGuard.set(session, guardKey)
+    const landed = await pressureFold(session, turn, events, facts, { wireTokens, thresholdTokens: floorTokens, emergency: true })
+    emitCeFact(session, HARD_TRUNCATE_FACT_TYPE, compactFact({
+      at: now(), wireTokens, floorTokens, outcome: 'fuse-fold' as const, landed,
+      ...(contextWindow === undefined ? {} : { contextWindow }),
+    }), logger)
+  }
+
+  /**
+   * H3 溢出接管（P20b）：仅 CONTEXT_WINDOW_EXCEEDED 且本轮未接管过时紧急压力折叠；
+   * 落刀 = 请求重试，未落刀 = 原始错误交还上游（失败方向 = 用户数据安全侧）。
+   */
+  const onRequestError = async (payload: {
+    session: Session
+    turn: number
+    step: number
+    failureCode: string
+  }): Promise<'retry' | 'pass'> => {
+    if (disposed) return 'pass'
+    const config = getConfig()
+    if (config.compression?.pressure === false) return 'pass'
+    if (payload.failureCode !== CE_CONTEXT_OVERFLOW_CODE) return 'pass'
+    const guardKey = `${payload.turn}:${payload.step}`
+    if (emergencyGuard.get(payload.session) === guardKey) return 'pass'
+    emergencyGuard.set(payload.session, guardKey)
+    if (busy.has(payload.session)) return 'pass'
+    busy.add(payload.session)
+    try {
+      const events = ledgerEventsOf(payload.session)
+      const facts = factsFromSessionEvents(events)
+      const wireTokens = deps.getMeter?.()?.wireTokens(payload.session) ?? 0
+      const thresholdTokens = pressureThreshold(config.compression) ?? 0
+      const landed = await pressureFold(payload.session, payload.turn, events, facts, { wireTokens, thresholdTokens, emergency: true })
+      emitCeFact(payload.session, HARD_TRUNCATE_FACT_TYPE, compactFact({
+        at: now(), wireTokens, floorTokens: thresholdTokens,
+        outcome: landed ? 'overflow-retry' as const : 'overflow-declined' as const, landed,
+      }), logger)
+      return landed ? 'retry' : 'pass'
+    } catch (e) {
+      counts.errors++
+      logger.warn('context-economy: overflow takeover failed (fail-lazy, original error preserved)', e instanceof Error ? e.message : String(e))
+      return 'pass'
+    } finally {
+      busy.delete(payload.session)
+    }
+  }
+
+  const onPreStep = async (payload: { session: Session; turn: number; step?: number }): Promise<void> => {
     if (disposed) return
     const { session, turn } = payload
     counts.preSteps++
@@ -766,7 +838,10 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const events = ledgerEventsOf(session)
       const facts = factsFromSessionEvents(events)
       if (config.compression?.boundary !== false) await runBoundary(session, turn, events, facts)
-      if (config.compression?.pressure !== false) await runPressure(session, turn, events, facts)
+      if (config.compression?.pressure !== false) {
+        await runPressure(session, turn, events, facts)
+        await runFuse(session, turn, payload.step ?? 0, events, facts)
+      }
     } catch (e) {
       counts.errors++
       logger.warn('context-economy: compaction failed (fail-lazy, original history preserved)', e instanceof Error ? e.message : String(e))
@@ -779,5 +854,6 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     dispose() { disposed = true },
     stats: () => ({ ...counts }),
     onPreStep,
+    onRequestError,
   }
 }

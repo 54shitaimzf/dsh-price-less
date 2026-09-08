@@ -18,7 +18,7 @@
  * 度量: usage 回执形状（docs/07 §2/§5、docs/06 §4/§6）；入账归后续工单。
  */
 
-import type { GenerateOptions, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
+import { CONTEXT_WINDOW_EXCEEDED_CODE, type GenerateOptions, type StreamChunk, type TokenUsage } from '@deepseek-ai/dsh-llm'
 // Type-only：拉入 dsh-llm 的 Context merge（ctx.llm 服务键）。
 import type {} from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
@@ -32,6 +32,9 @@ export const CE_AUX_PURPOSES = [
 ] as const
 
 export type CeAuxPurpose = (typeof CE_AUX_PURPOSES)[number]
+
+/** 溢出错误码（H3 request-error 接管判据；llm 词汇仍收口本文件，D6）。 */
+export const CE_CONTEXT_OVERFLOW_CODE = CONTEXT_WINDOW_EXCEEDED_CODE
 
 /** 宿主已支持 purpose 与插件自定义 purpose 的并集（插件侧宽化形态）。 */
 export type CePurpose = CeAuxPurpose | 'compaction' | 'session-title'
@@ -54,8 +57,11 @@ export function toHarnessGenerateOptions(options: CeGenerateOptions): GenerateOp
 /** dsh-llm 的最小调用面（P5 端口消费；此处只声明，不发调用）。 */
 export interface CeLlmStreamService {
   stream(options: GenerateOptions): AsyncIterable<StreamChunk>
-  /** 可选能力：解析某模型声明的推理档（P14d §3 探测用；缺失即视为不支持）。 */
-  resolveModelInfo?(provider: string, model: string, signal?: AbortSignal): Promise<{ reasoning?: { efforts: readonly { id: string }[] } } | undefined>
+  /** 可选能力：解析某模型声明的推理档与真实窗口（P14d §3 / P20b 保险丝地板；缺失即视为不支持）。 */
+  resolveModelInfo?(provider: string, model: string, signal?: AbortSignal): Promise<{
+    reasoning?: { efforts: readonly { id: string }[] }
+    context?: { contextWindow?: number }
+  } | undefined>
 }
 
 /** 解析 llm 服务（可选能力；未装配 → undefined，调用侧 fail-lazy）。 */
@@ -129,6 +135,34 @@ export async function resolveReasoningEffort(
     return result
   } catch (e) {
     logger?.warn('context-economy: reasoning effort probe failed (fail-lazy, no cache)', e instanceof Error ? e.message : String(e))
+    return undefined
+  }
+}
+
+/**
+ * 模型真实上下文窗口（P20b 保险丝地板用；裸窗口只喂保险丝，永不作压缩触发，04 §4）。
+ * 命中缓存以 provider/model 为键；服务缺失/探测失败**不缓存**（瞬时失败不永久降级）。
+ */
+const contextWindowCache = new Map<string, number | undefined>()
+
+export async function resolveContextWindow(
+  ctx: Pick<Context, 'llm'>,
+  provider: string,
+  model: string,
+  logger?: { warn: (...args: unknown[]) => void },
+): Promise<number | undefined> {
+  const key = `${provider}\u0000${model}`
+  if (contextWindowCache.has(key)) return contextWindowCache.get(key)
+  const service = resolveLlmService(ctx)
+  if (service?.resolveModelInfo === undefined) return undefined
+  try {
+    const info = await service.resolveModelInfo(provider, model)
+    const window = info?.context?.contextWindow
+    const value = typeof window === 'number' && Number.isFinite(window) && window > 0 ? window : undefined
+    contextWindowCache.set(key, value)
+    return value
+  } catch (e) {
+    logger?.warn('context-economy: context window probe failed (fail-lazy, no cache)', e instanceof Error ? e.message : String(e))
     return undefined
   }
 }

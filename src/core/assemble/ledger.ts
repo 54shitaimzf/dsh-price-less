@@ -1,7 +1,8 @@
 /**
  * 压缩族账本 fold（docs/07 §0.5 压缩族；docs/04 §7；P17a 度量先行）。
  * 纯函数：同输入同账；输入 = `context-economy/assemble-run` 事实（+ 后续 P19/P20/P20b 事实）。
- * 未实现项显式 0（口径先立不空转）：hardTruncateCount 归 P20b、extraSearchCalls 归 P21b。
+ * 未实现项显式 0（口径先立不空转）：extraSearchCalls 归 P21b。
+ * P20b：hardTruncateCount 由 hard-truncate 事实 fold（纯核 = core/compress/fuse.ts）。
  * P20a：pressure* 四字段由 pressure-fired 事实 fold（纯核 = core/compress/pressure.ts）；
  * compressionLayer.pressure 由 compress-run（layer=pressure ∧ outcome=ok）计数——
  * 压力路径不经边界装配器（保留区无帽、无热尾语义），两源各自唯一不双计（P18 N6 口径修正）。
@@ -18,6 +19,7 @@
  */
 import { foldCompressCalls } from '../compress/ledger.ts'
 import { foldPressureFires } from '../compress/pressure.ts'
+import { foldHardTruncates } from '../compress/fuse.ts'
 import type { LedgerFact } from '../ledger/types.ts'
 import type { AssembleLayer, HotTailDropCounts, HotTailSource, HotTailStopReason } from './types.ts'
 
@@ -87,6 +89,9 @@ export interface CompressionLedger {
   pressureRetainedTokens: number
   pressureSkips: number
   pressureEmergencies: number
+  /** P20b 保险丝自持观测位（07 hardTruncateCount 见上）。 */
+  fuseArmedFolds: number
+  overflowTakeovers: number
 }
 
 export function emptyCompressionLedger(): CompressionLedger {
@@ -128,6 +133,8 @@ export function emptyCompressionLedger(): CompressionLedger {
     pressureRetainedTokens: 0,
     pressureSkips: 0,
     pressureEmergencies: 0,
+    fuseArmedFolds: 0,
+    overflowTakeovers: 0,
   }
 }
 
@@ -159,7 +166,7 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     const layer = data.layer
     if (layer === 'boundary' || layer === 'pressure') ledger.compressionLayer[layer]++
   }
-  // P18：调用口径由 compress-run 事实汇总（compressionLayer 仍只由 assemble-run 计数，防双计）。
+  // P18：调用口径由 compress-run 事实汇总（层计数见下方两源相加，各自唯一）。
   const calls = foldCompressCalls(facts)
   // P19：边界路径的档案硬帽截断经 compress-run 生产（装配路径经 assemble-run）——两源相加，各自唯一。
   ledger.archiveTruncate.count += calls.archiveTruncate.count
@@ -192,5 +199,10 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
   // 两源各自唯一（P19 archiveTruncate 先例）：assemble-run 源 = 边界装配路径（含 P17 fixture）；
   // compress-run 源 = 压力折叠（压力路径不经装配器）。同一 fold 不会两源同时出现。
   ledger.compressionLayer.pressure += calls.pressureOk
+  // P20b：保险丝介入口径由 hard-truncate 事实汇总（07 hardTruncateCount）。
+  const fuse = foldHardTruncates(facts)
+  ledger.hardTruncateCount = fuse.hardTruncateCount
+  ledger.fuseArmedFolds = fuse.fuseArmedFolds
+  ledger.overflowTakeovers = fuse.overflowTakeovers
   return ledger
 }

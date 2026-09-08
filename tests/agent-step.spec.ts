@@ -3,7 +3,7 @@
  * 覆盖：回调载荷 / 恒 return next() / 异常遏制 / signal 中止跳过 / 退订。
  */
 import { describe, expect, it } from 'vitest'
-import { onAgentPreStep, type AgentPreStepPayload } from '../src/platform/agent-step.ts'
+import { onAgentPreStep, onAgentRequestError, type AgentPreStepPayload, type AgentRequestErrorPayload } from '../src/platform/agent-step.ts'
 
 type Listener = (payload: unknown, next: () => Promise<string>) => Promise<string>
 
@@ -73,5 +73,50 @@ describe('P19a H2 步准入端口', () => {
     const off = onAgentPreStep(ctx as never, { handler: () => {} })
     off()
     expect(offCalled()).toBe(1)
+  })
+})
+
+const errorPayload = (over: Partial<{ session: unknown; turn: number; step: number; provider: string; code: string; aborted: boolean }> = {}) => ({
+  agent: { session: over.session ?? { id: 's1' } },
+  turn: over.turn ?? 7,
+  step: over.step ?? 2,
+  provider: over.provider ?? 'p',
+  failure: { code: over.code ?? 'X', message: 'boom' },
+  signal: { aborted: over.aborted ?? false },
+})
+
+describe('P20b H3 请求失败端口', () => {
+  it('载荷归一（failureCode）+ 非接管恒 next()', async () => {
+    const { ctx, fire } = makeCtx()
+    const seen: AgentRequestErrorPayload[] = []
+    onAgentRequestError(ctx as never, { handler: (p) => { seen.push(p); return 'pass' } })
+    const decision = await fire(errorPayload({ code: 'CONTEXT_WINDOW_EXCEEDED' }))
+    expect(decision).toBe('next')
+    expect(seen[0]).toMatchObject({ turn: 7, step: 2, provider: 'p', failureCode: 'CONTEXT_WINDOW_EXCEEDED' })
+  })
+
+  it('接管：返回 retry 且不调 next()', async () => {
+    const { ctx, fire } = makeCtx()
+    onAgentRequestError(ctx as never, { handler: () => 'retry' })
+    let nextCalled = 0
+    const decision = await fire(errorPayload(), async () => { nextCalled++; return 'next' })
+    expect(decision).toEqual({ kind: 'retry' })
+    expect(nextCalled).toBe(0)
+  })
+
+  it('回调异常只 warn 并委派上游；signal 中止时直接委派', async () => {
+    const { ctx, fire } = makeCtx()
+    const warnings: unknown[][] = []
+    onAgentRequestError(ctx as never, {
+      handler: () => { throw new Error('boom') },
+      logger: { info() {}, warn: (...args: unknown[]) => { warnings.push(args) }, error() {} },
+    })
+    await expect(fire(errorPayload())).resolves.toBe('next')
+    expect(warnings).toHaveLength(1)
+    const { ctx: ctx2, fire: fire2 } = makeCtx()
+    let called = 0
+    onAgentRequestError(ctx2 as never, { handler: () => { called++; return 'retry' } })
+    await fire2(errorPayload({ aborted: true }))
+    expect(called).toBe(0)
   })
 })

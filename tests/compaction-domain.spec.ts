@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { mountCompactionDomain, boundaryArchiveKey } from '../src/domains/compaction.ts'
-import { COMPRESS_RUN_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
+import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
 import { SHEAR_APPLIED_FACT_TYPE, SHEAR_DECISION_FACT_TYPE } from '../src/core/shear/index.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
 import type { AssembleDomain } from '../src/domains/assemble.ts'
@@ -108,12 +108,18 @@ function fakeAssemble(options: { rendered?: string; ok?: boolean } = {}) {
   return { domain: domain as unknown as AssembleDomain, requests }
 }
 
-function fakeLlm(script: Array<{ text?: string; finish?: 'stop' | 'error'; code?: string; usage?: any }> = [{ text: VALID_PRODUCT }]) {
+function fakeLlm(
+  script: Array<{ text?: string; finish?: 'stop' | 'error'; code?: string; usage?: any }> = [{ text: VALID_PRODUCT }],
+  options: { contextWindow?: number } = {},
+) {
   const calls: any[] = []
   const ctx = {
     llm: {
-      stream(options: any) {
-        calls.push(options)
+      ...(options.contextWindow === undefined
+        ? {}
+        : { resolveModelInfo: async () => ({ context: { contextWindow: options.contextWindow } }) }),
+      stream(options2: any) {
+        calls.push(options2)
         const entry = script[Math.min(calls.length - 1, script.length - 1)]!
         return (async function* () {
           if (entry.usage !== undefined) yield { type: 'usage', usage: entry.usage }
@@ -432,4 +438,66 @@ describe('P20a 压力路径：触发与全路径', () => {
     expect(firesOf(env.session)).toHaveLength(0)
   })
 })
+
+const hardFactsOf = (session: FakeSession) => session.events.filter((event) => event.type === HARD_TRUNCATE_FACT_TYPE).map((event) => event.data)
+
+describe('P20b 保险丝：地板以上自动折叠 + 溢出接管', () => {
+  it('地板以上（低于压力阈）→ 紧急折叠 + hard-truncate{fuse-fold}', async () => {
+    const env = makeEnv({
+      session: makePressureSession(), wireTokens: 90000,
+      llm: fakeLlm([{ text: PRESSURE_PRODUCT }], { contextWindow: 100000 }),
+    })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3, step: 1 })
+    const hard = hardFactsOf(env.session)
+    expect(hard).toHaveLength(1)
+    expect(hard[0]).toMatchObject({ outcome: 'fuse-fold', landed: true, wireTokens: 90000, floorTokens: 80000, contextWindow: 100000 })
+    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', emergency: true })
+    expect(firesOf(env.session)[0]).toMatchObject({ outcome: 'fired', emergency: true })
+  })
+
+  it('低于地板 → 严格 no-op（零事实 / 零调用 / 零改史）', async () => {
+    const session = makePressureSession()
+    const before = session.events.length
+    const env = makeEnv({
+      session, wireTokens: 70000,
+      llm: fakeLlm([{ text: PRESSURE_PRODUCT }], { contextWindow: 100000 }),
+    })
+    await env.domain.onPreStep({ session: session as never, turn: 3, step: 1 })
+    expect(session.events.length).toBe(before)
+    expect(env.llm.calls).toHaveLength(0)
+    expect(hardFactsOf(session)).toHaveLength(0)
+    expect(firesOf(session)).toHaveLength(0)
+  })
+
+  it('溢出接管：CONTEXT_WINDOW_EXCEEDED → 紧急折叠 → retry + hard-truncate{overflow-retry}', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    const action = await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })
+    expect(action).toBe('retry')
+    expect(hardFactsOf(env.session)[0]).toMatchObject({ outcome: 'overflow-retry', landed: true })
+    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', emergency: true })
+  })
+
+  it('非溢出码 → pass 零行为；同 (turn,step) 二次接管 → pass（不重复折叠）', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'OTHER' })).toBe('pass')
+    expect(env.llm.calls).toHaveLength(0)
+    expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })).toBe('retry')
+    expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })).toBe('pass')
+    expect(env.llm.calls).toHaveLength(1)
+  })
+
+  it('接管未落刀（解析失败）→ pass + overflow-declined（原始错误交上游）', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, llm: fakeLlm([{ text: 'not json' }]) })
+    expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })).toBe('pass')
+    expect(hardFactsOf(env.session)[0]).toMatchObject({ outcome: 'overflow-declined', landed: false })
+  })
+
+  it('压力开关关闭 → 接管不生效（pass 零行为）', async () => {
+    const config = resolveConfig({ compression: { ...resolveConfig({}).compression, pressure: false } })
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, config, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })).toBe('pass')
+    expect(env.llm.calls).toHaveLength(0)
+  })
+})
+
 

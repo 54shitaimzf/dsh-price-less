@@ -10,7 +10,7 @@ import {
   type CompressRunFactData,
 } from '../src/core/compress/index.ts'
 import { ASSEMBLE_RUN_FACT_TYPE, emptyCompressionLedger, foldCompressionLedger } from '../src/core/assemble/index.ts'
-import { PRESSURE_FIRED_FACT_TYPE } from '../src/core/compress/index.ts'
+import { HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/core/compress/index.ts'
 import type { LedgerFact } from '../src/core/ledger/types.ts'
 
 const fact = (data: Partial<CompressRunFactData>, seq = 1): LedgerFact => ({ type: COMPRESS_RUN_FACT_TYPE, seq, time: seq, data })
@@ -123,6 +123,17 @@ describe('P18 账本：调用口径', () => {
     expect(ledger.pressureFoldedTokens).toBe(100)
     expect(ledger.pressureRetainedTokens).toBe(40)
     expect(ledger.pressureEmergencies).toBe(1)
+  })
+
+  it('P20b 保险丝：hardTruncateCount + 细分位透出', () => {
+    const ledger = foldCompressionLedger([
+      { type: HARD_TRUNCATE_FACT_TYPE, seq: 1, time: 1, data: { at: 1, wireTokens: 90000, floorTokens: 80000, outcome: 'fuse-fold' } },
+      { type: HARD_TRUNCATE_FACT_TYPE, seq: 2, time: 2, data: { at: 2, wireTokens: 120000, floorTokens: 0, outcome: 'overflow-retry' } },
+      { type: HARD_TRUNCATE_FACT_TYPE, seq: 3, time: 3, data: { at: 3, wireTokens: 120000, floorTokens: 0, outcome: 'overflow-declined' } },
+    ])
+    expect(ledger.hardTruncateCount).toBe(3)
+    expect(ledger.fuseArmedFolds).toBe(1)
+    expect(ledger.overflowTakeovers).toBe(1)
   })
 
   it('同输入同账（双跑逐字节一致）', () => {

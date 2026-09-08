@@ -125,6 +125,8 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D14', 'src/core/a.ts', "import type { PreStepDecision } from '@deepseek-ai/dsh-agent'\n")).not.toEqual(NO_ISSUES)
     expect(rule('D14').check({ path: 'src/platform/agent-step.ts', text: "ctx.on('agent/pre-step', handler)\nimport type { PreStepDecision } from '@deepseek-ai/dsh-agent'" }, new Map())).toEqual(NO_ISSUES)
     expect(check('D14', 'src/domains/compaction.ts', 'onAgentPreStep(ctx, { handler })\n')).toEqual(NO_ISSUES)
+    expect(check('D14', 'src/domains/a.ts', "ctx.on('agent/request-error', (p, next) => next())\n")).not.toEqual(NO_ISSUES)
+    expect(check('D14', 'src/core/a.ts', "import type { RequestErrorAction } from '@deepseek-ai/dsh-agent'\n")).not.toEqual(NO_ISSUES)
   })
   it('D9：connection RPC 桥概念越出 platform/star-bridge.ts 与 index.ts → issue（docs/10 §1 H11 + docs/13 §3.11）', () => {
     expect(check('D9', 'src/domains/star.ts', "const connection = ctx.connection\n")).not.toEqual(NO_ISSUES)

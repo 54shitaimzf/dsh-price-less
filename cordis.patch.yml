@@ -1,7 +1,12 @@
-# dsh-price-less bundle 层（模板态）：仅插入插件行，无装配 config 覆写。
+# dsh-price-less bundle 层：插入插件行 + 覆写原生自动压缩（防双触发）。
 # 观察模式设置项已清理（2026-09）；机制开关随 R2 工单按 docs/11 §6 落位。
-# 清退注：对 compaction-basic 的 auto:false 覆写随压缩域主体一并清退
-# （原文见 git 历史；重设计时按 docs/04 设计恢复对应接线）。
+# R4（P20b）：原生 compaction-basic auto:false —— 自动压力与溢出恢复的唯一提供者 = 本插件
+# （H2 边界触发 + H3 压力 / request-error 接管，docs/10 §1 辨析③）；patch 整体替换 config，
+# 未列字段保持默认（auto 是唯一覆写项）。
 - insert:
     - id: dsh-price-less
       name: 'dsh-price-less'
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  config:
+    auto: false

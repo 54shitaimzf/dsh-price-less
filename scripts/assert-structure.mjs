@@ -192,14 +192,14 @@ export const RULES = [
         && f.path !== 'src/platform/meter.ts' && f.path !== 'src/index.ts'
         ? [{ message: 'token-meter concepts must only appear in src/platform/meter.ts (index.ts wiring allowed, docs/04 §1 影子价同源)' }]
         : [] },
-  { id: 'D14', canon: 'docs/10 §1 H2 + docs/11 §2（步准入端口收口）',
+  { id: 'D14', canon: 'docs/10 §1 H2/H3 + docs/11 §2（步准入与请求失败端口收口）',
     appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
     check: (f) =>
-      // H2 收口（P19a）：agent/pre-step waterfall 与 dsh-agent 类型面只许居于 platform/agent-step.ts——
-      // 域侧只见 { session, turn, step } 回调（换挂点/换事件名只改这一处）。
-      /(agent\/pre-step|@deepseek-ai\/dsh-agent|\bPreStepDecision\b|\bAgentPreStepPayload\b)/.test(f.text)
+      // H2/H3 收口（P19a + P20b）：agent/pre-step 与 agent/request-error waterfall、dsh-agent 类型面
+      // 只许居于 platform/agent-step.ts——域侧只见 { session, turn, step } 与 'retry'/'pass' 词汇。
+      /(agent\/pre-step|agent\/request-error|@deepseek-ai\/dsh-agent|\bPreStepDecision\b|\bRequestErrorAction\b|\bAgentPreStepPayload\b|\bAgentRequestErrorPayload\b)/.test(f.text)
         && f.path !== 'src/platform/agent-step.ts'
-        ? [{ message: 'agent/pre-step concepts must only appear in src/platform/agent-step.ts (H2 步准入端口收口, docs/10 §1 H2)' }]
+        ? [{ message: 'agent/pre-step | agent/request-error concepts must only appear in src/platform/agent-step.ts (H2/H3 端口收口, docs/10 §1)' }]
         : [] },
   { id: 'D13', canon: 'docs/05 确定性优先 + docs/11 §9（压缩调用确定性）',
     appliesTo: (p) => p.startsWith('src/core/compress/'),

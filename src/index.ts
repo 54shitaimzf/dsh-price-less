@@ -19,7 +19,7 @@ import { mountAutoDiscriminator } from './domains/input.ts'
 import { mountShearDomain } from './domains/shear.ts'
 import { mountAssembleDomain } from './domains/assemble.ts'
 import { mountCompactionDomain } from './domains/compaction.ts'
-import { onAgentPreStep } from './platform/agent-step.ts'
+import { onAgentPreStep, onAgentRequestError } from './platform/agent-step.ts'
 import { createMeterPort, type MeterPort } from './platform/meter.ts'
 import { createFilesPort, type FilesPort } from './platform/files.ts'
 import { mountCommandFace } from './domains/commands.ts'
@@ -104,6 +104,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
 
   let stopAuto: (() => void) | undefined
   let stopPreStep: (() => void) | undefined
+  let stopRequestError: (() => void) | undefined
   let compaction: ReturnType<typeof mountCompactionDomain> | undefined
   let skillsCtx: Context | undefined
   let llmCtx: Context | undefined
@@ -122,6 +123,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
         stopSkillWatch?.()
         stopAuto?.()
         stopPreStep?.()
+        stopRequestError?.()
         compaction?.dispose()
         stopCommands?.()
         starHost?.dispose()
@@ -164,7 +166,12 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           })
           stopPreStep = onAgentPreStep(ctx, {
             logger: ceLogger(ctx),
-            handler: ({ session, turn }) => compaction?.onPreStep({ session, turn }) ?? Promise.resolve(),
+            handler: ({ session, turn, step }) => compaction?.onPreStep({ session, turn, step }) ?? Promise.resolve(),
+          })
+          // P20b：H3 溢出接管（CONTEXT_WINDOW_EXCEEDED → 紧急压力折叠 → 本轮重试）。
+          stopRequestError = onAgentRequestError(ctx, {
+            logger: ceLogger(ctx),
+            handler: ({ session, turn, step, failureCode }) => compaction?.onRequestError({ session, turn, step, failureCode }) ?? Promise.resolve('pass'),
           })
           ctx.inject(['sessions'], (sessionsCtx) => {
             if (disposed) return
