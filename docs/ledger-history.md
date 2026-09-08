@@ -1852,5 +1852,82 @@ P16 合计 src 净增 **656 行**（P16a 436 + P16b 220），按总纲 §3 = **L
 
 **R3 关门**：P15a + P15b + P16 全部施工；**下一未执行单元 = P17 边界装配器**（R4 压缩域首单；工单内按 L 拆纯核/接线）。
 
+## 42. 账本快照 §42：边界装配纯核（P17a，R4 第一单前半）
+
+> 触发：总纲 §3 下一未执行单元 = P17（R4 压缩域首单；工单 [implement/P17-boundary-assembler.md](implement/P17-boundary-assembler.md)）。
+> 本单先落**纯核 + 度量**（docs/04 §2 双通道坐标 / 版本重映射 / 预算三环 + §1 共享事务原语），接线归 P17b。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| 压缩族账本 | 字段只在 docs/07 设计态 | `core/assemble/ledger.ts` `foldCompressionLedger`：`digestBytes`/`digestEntryCount`/`hotTail*`/`compressionLayer` 由 `assemble-run` 事实回放；`archiveTruncate`/`compressionCall*`/`pressure*`/`hardTruncateCount`/`extraSearchCalls` **显式 0**（归属 P18/P19/P20/P20b/P21b） |
+| 坐标层（通道 A） | 设计态 | `core/assemble/chain.ts`：read 窗口 / write 全文 / edit 定位 → 逐路径版本链；vN→当前版**逐版行偏移**、恒等、替换区扩展、出界裁剪、删除丢弃、链断（定位不到 = 不猜位置） |
+| 坐标层（通道 B） | 设计态 | 单元 = tool 对（callId 为 ID，`seqStart/seqEnd` 为 span）；单元清单逐行确定（`renderUnitList`，供 P18 prompt 枚举） |
+| 事实层 | 设计态 | `validateDigest`/`renderDigest`：plan→impl→verify→wrap 块序 + 坐标层；schema 违例 = **唯一 fatal**（三环口径） |
+| 热尾装配 | 设计态 | 申报序贪心、到 10K 即停；单单元超帽 = 尾截断保头 + 可见标记；**tool 对永不拆分**；装配序 = transcript 序（字节稳定） |
+| 地板 / 兜底 | 设计态 | 地板：run 类目未覆盖且预算有余 → 末次验证 ≤3 行 + 失败/错误行 ≤5 行（逐字、同单元 ID 去重）；兜底：申报缺失/全无效 → 位置法反向累加 10K |
+| 共享事务原语 | P6 只有 platform 侧标记对 | `core/assemble/txn.ts`（中性词汇，D7 锁）：open → **prune（原区间影子价）→ replace（同区间）** → close；顺序校验 + 标记 fold（未闭合/ID 不匹配可见） |
+
+**纯核语义（可回放断言）**：文件未改 = 恒等零成本；`edit` 只在"最近已知全文/读窗口"里定位（write 全文替换与外部改写 = 链断，
+旧坐标丢弃 + 计数——失败方向 = 保留）；单单元超帽截断量 = 预算余量 − 标记长度（总 token 不超帽）；
+地板仅在预算有余且 run 类目未覆盖时补；位置兜底不产生 fatal。
+
+**验收**：`npm run gate` 绿（**378 用例 / 36 文件**；M1–M5 / S1–S5 / **D1–D10** 全 PASS）；`npm run typecheck:tests` 绿；
+`tests/assemble-chain.spec.ts` **16 用例** + `tests/assemble-hottail.spec.ts` **20 用例** + `tests/assemble-ledger.spec.ts` **4 用例**（合计 40）。
+
+**尺寸申报（偏差留档）**：工单开工估计 P17a src 净增 ≤780（红线 860）。实测 **src 净增 1229 行**
+（`types` 168 / `chain` 342 / `assemble` 466 / `txn` 131 / `ledger` 113 / `index` 9），另 spec 482 行——**超红线 369 行**。
+超量原因 = 本单含 5 个纯核模块（坐标链 + 贪心装配 + 事务原语 + 压缩族账本 + 词汇面）+ docs/05 §6 强制合规头；
+初始估计按 P16a 单模块经验给出，低估了双通道与地板/兜底分支。**不为凑预算删减契约**。
+拆单方案（后续修订若继续膨胀即执行）：P17a1 = types + chain（510 + spec 146）；P17a2 = assemble + txn + ledger（710 + spec 336）。
+
+## 43. 账本快照 §43：边界装配接线（P17b，R4 第一单后半）
+
+> 本单把装配器接进运行期：**盘上取真端口（H15）** + 装配域 + `assemble-run` 事实 + 共享事务执行器；
+> **压缩触发 / 档案 vN / 卷宗清空 / T-boundary 搭车归 P19**。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| 盘上取真 | 无（剪切层不读盘） | `platform/files.ts` `createFilesPort`（H15）：`ctx.fs` resolve/stat/readText → 行窗口；服务缺失/读失败 = `null` + warn（零重试）；**fs 概念只此一文件**（D11） |
+| 装配编排 | 无 | `domains/assemble.ts` `mountAssembleDomain`：表面 fold（被 replace 遮蔽的 tool/result 不入清单）→ 范围过滤 → 版本链 → 通道 A 盘上取真 / 通道 B 单元原文 → `assembleArchive` → 事实 |
+| 压缩事实族 | 0 类 | **1 类**：`context-economy/assemble-run`（ignorable；`domains/assemble-facts.ts`） |
+| 事务执行器 | platform 端口原语 | `runCompactionTxn`（open → prune → replace → close；业务失败带 error 闭合，绝不半开）——P19 复用 |
+| 结构断言 | D1–D10 | **D11**（fs 收口）+ **D12**（`core/assemble` 确定性）；零位快照同步 |
+| 表面 fold 归属 | `core/shear/ledger.ts` 内部工具 | 上移 `core/ledger/surface.ts`（通用回放层，P17b `6c9cbaf`；剪切面 re-export 不变 → P15/P16 接线白名单不破） |
+| 依赖面 | — | peerDep `@deepseek-ai/dsh-fs` + build.sh 链接 `packages/fs/fs` |
+
+**真机会话离线回放**（44 会话；`scripts/verify-p17.mjs`；不做臂对照）：
+
+| 指标 | 读数 |
+|---|---|
+| 文件操作（插件可见） | read **57** / write **22** / edit **24** |
+| 单元（tool 对） | **4,335** |
+| 版本链 | **60**（链断 **3**） |
+| 坐标重映射自检 | ok **74** / fail chain-break **21** |
+| 假想热尾（无申报 = 位置兜底） | **219,252** token（10K 帽下会被大幅裁剪） |
+| live `assemble-run` 事实 | **0**（装配域无触发——触发归 P19） |
+
+**读数解读（诚实声明）**：P17 交付的是**装配面就绪**，不是端到端压缩——没有触发器，故 live 事实为 0；
+假想热尾 219K token 说明 10K 帽在真实会话上确实会裁掉大部分过程材料（材料基准 vs 时序基准的设计前提）；
+重映射失败 21 次 = write 全文替换 / 外部改写 / 定位歧义，全部走"丢弃 + 计数"（失败默认保留，不复活旧版本）。
+
+**验收**：
+- `npm run gate` 绿（**391 用例 / 37 文件**；M1–M5 / S1–S5 / **D1–D12** 全 PASS）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p17.mjs` → `P17 VERIFY PASS (40 checks)`（文件 / 导出面 / S1+D7+D11+D12 / 初值 / 坐标链 6 项 / 热尾 4 项 /
+  digest 2 项 / 事务 2 项 / 账本 / spec 标记 / 真机回放 3 项 / 尺寸 / 文档同步 7 项）
+- `tests/assemble-domain.spec.ts` **11 用例**（通道 A 端到端 / 通道 B / fs 缺失降级 / 范围过滤 / 事实 / fatal / dispose / 事务执行器 4 项）
+- `node scripts/verify-p16.mjs` / `verify-p15b.mjs` / `verify-p15a.mjs` → PASS（无回归）
+
+**尺寸申报**：工单预算 P17b src 净增 ≤420。实测 **src 净增 396 行**（`platform/files.ts` 79 / `domains/assemble.ts` 257 /
+`assemble-facts.ts` 30 / `index.ts` +11 / `core/ledger` +32〔facts 7 / surface 24 / index 1〕/ `shear/ledger.ts` −14 /
+`shear-facts.ts` −5 / 注释与事务顺序修正 +12/−6），另 spec 262 行 + `verify-p17.mjs` 316 行——**在预算内**。
+P17 合计 src 净增 **1,625 行**（P17a 1,229 + P17b 396），按总纲 §3 = **L（已按 a/b 拆两单两提交）**。
+
+**R4 进行中**：P17 已施工；**下一未执行单元 = P18 压缩调用**（边界/压力两模式 prompt 组装 + 产物 schema 校验）。
+
+
 
 

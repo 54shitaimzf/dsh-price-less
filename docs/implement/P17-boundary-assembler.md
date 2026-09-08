@@ -89,7 +89,9 @@
 - 尺寸申报（**开工时估计 / 实测修正**）：P17a 估计 ≤780（红线 860）→ **实测 src 净增 1223**（types 168 / chain 342 / assemble 466 / txn 125 / ledger 113 / index 9；spec 482），超红线 363。
   超线原因 = 本单含 5 个纯核模块（坐标链 + 贪心装配 + 共享事务原语 + 压缩族账本 + 词汇面），初始估计按 P16a 单模块经验给出，低估了双通道与地板/兜底分支；**不为凑预算删减契约与合规头**。
   拆单方案（后续修订如继续膨胀即执行）：P17a1 = types + chain（510，含 spec 146）；P17a2 = assemble + txn + ledger（704，含 spec 336）。
-  P17b 估计 ≤420（红线 480）→ **实测 src 净增 384**（platform/files 80 / domains/assemble 258 / assemble-facts 31 / index +12 / ledger/facts +7 / shear-facts −4；spec 240 + verify 脚本 300），在预算内。
+  P17b 估计 ≤420（红线 480）→ **实测 src 净增 396**（platform/files 79 / domains/assemble 257 / assemble-facts 30 / index +11 /
+  core/ledger 三文件 +32〔facts 7 / surface 24 / index 1〕/ shear/ledger −14 / shear-facts −5 / chain 注释 1 / txn 顺序修正 11/5；
+  另 spec 262 + verify 脚本 316），**在预算内**。
 
 ## 7. 完成动作
 

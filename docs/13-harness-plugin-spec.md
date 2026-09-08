@@ -377,6 +377,24 @@ webserver/credentials/attachment。
 依赖装饰器 + 编译后形参名）+ client 强制 strict codec（`packages/api/gateway/src/client/index.ts:709-720`），
 且需新服务键与 zod 打进 client bundle；本插件不采用。
 
+### 3.12 `ctx.fs`（盘上取真，P17b 使用；H15）
+
+> 服务定义包 = `@deepseek-ai/dsh-fs`（`packages/fs/fs/`）；P17b 只依赖抽象面（后端可换：local / sandbox / remote）。
+
+| 符号 | 定义处 | 用途 |
+|---|---|---|
+| `Context.fs: FileSystem`（Context merge） | `src/index.ts:44-47` | 服务键（`super(ctx,'fs')` :88） |
+| `FileSystem.resolve(path, {cwd?, signal?})` | `src/index.ts:116` | 路径 → 稳定 target（同一文件同一 key） |
+| `FileSystem.stat(target, signal?)` | `src/index.ts:165` | 元数据 `{version,type,size?}`；absent → `undefined` |
+| `FileSystem.readText(target, signal?)` | `src/index.ts:189` | 整文件 UTF-8 文本 |
+| `FsTarget{targetKey,displayPath}` / `FsInfo{version,type,size?}` / `FsVersion` | `src/types.ts:60 / 76 / 35` | 类型面；**`version` 是不透明 token，消费者禁解释**（types.ts:31-35） |
+| `FsError` / `FsErrorCode` | `src/types.ts:175-203` | 失败分类（端口一律 catch → `null`） |
+| read 结果落盘 meta `{path,offset,lines,totalLines,lang?}` | `packages/fs/tool-fs/src/read.ts:122-131` → `tool/result.data.meta`（`packages/core/session/src/types.ts:337`） | 版本链的读窗口原料 |
+
+**端口策略（P17b）**：`platform/files.ts` `createFilesPort(ctx,{cwd,maxBytes,logger})` 是**唯一** fs 触点
+（D11 断言锁定；其余代码只经 `FilesPort.readLines`）。失败语义 = 服务缺失 / 文件不存在 / 非普通文件 / 超字节帽 /
+读异常 → `null` + warn，零重试（失败默认保留；坐标丢弃 + 计数）。**不解释 `FsVersion`**：插件侧版本号 = 逐路径观察计数。
+
 ## 4. 会话日志兼容契约（本插件最关键的 4 条）
 
 1. **写**：`context-economy/*` 自定义事件必须 log-only + `{ ignorable: true }`；类型先并入
@@ -406,11 +424,15 @@ webserver/credentials/attachment。
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent`、`createShearToolPort`（P15b 视图适配） | 已施工（P7 / P15b） |
 | `src/platform/star-bridge.ts` | `ctx.get('connection')` 最小结构面、`connection.rpc.handle('/context-economy')`、`ConnectionRpcResult` 信封（§3.11） | 已施工（P14b1） |
+| `src/platform/files.ts` | `ctx.get('fs')`、`FileSystem.resolve/stat/readText`、`FsTarget`（§3.12） | 已施工（P17b） |
 | `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物）；P14c：极短短路 + 上下文读会话事件 + DTO `historyCount` | 已施工（P14b1 / P14c） |
 | `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
 | `src/domains/shear.ts` | `createShearToolPort` 接线、`createHistoryPort`（H4 replace + prune 影子价）、pump 事件消费；P16：run 相（`judge-recorded`/`shear-run-plan` 入缓冲 → `foldRunShear` → G10 → `user/message` notice 替换） | 已施工（P15b / P16） |
 | `src/domains/shear-facts.ts` | `context-economy/shear-applied|decision|error|run-plan` 声明合并 + 载荷 | 已施工（P15b / P16） |
 | `src/core/shear/run.ts` | run 状态机 / 吸收证明 / 结论三档 / 中立性 + 预算 / 指纹（纯核，零 harness） | 已施工（P16a） |
+| `src/core/assemble/*` | 纯核（零 harness）：坐标链 vN 重映射 / 热尾贪心装配 / 共享事务原语 / 压缩族账本 | 已施工（P17a） |
+| `src/domains/assemble.ts` | 装配域（表面 fold → 双通道取真 → `assemble-run` 事实）+ `runCompactionTxn` | 已施工（P17b） |
+| `src/domains/assemble-facts.ts` | `context-economy/assemble-run` 声明合并 + 载荷 | 已施工（P17b） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
 | `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft` + `submit`（P14d 确认即发送）、`useInput`、`StarHostBridge` | 已施工（P14a / P14d） |
 | `client/star/star-protocol.ts` | 两侧独立声明的 channel/端点常量 + `StarPreviewData`/apply 形状守卫 | 已施工（P14b2，§3.11） |
