@@ -90,6 +90,8 @@ export interface CompressPromptInput {
   readonly units: readonly AssembleUnit[]
   /** 已归档检查点链（机制 A 续传面；只接受 empty/prefix/single/chain 形态）。 */
   readonly priorChain?: readonly ArchiveEntry[]
+  /** 渲染根（F9e：单元清单路径相对化基准）。 */
+  readonly root?: string
   readonly policy?: CompressPolicy
 }
 

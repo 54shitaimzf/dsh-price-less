@@ -18,6 +18,7 @@ import { toolCategory } from '../shear/tool.ts'
 import { archiveChainShape } from './archive.ts'
 import { foldFileChains, remapFileCoord, type FileChain, type FileOp } from './chain.ts'
 import { gateHotTailDecls } from './gate.ts'
+import { buildPathTable, pathRef, relativePath, renderPathTable, EMPTY_PATH_TABLE, type PathTable, type RootKind } from './paths.ts'
 import { messageTextOf } from '../compress/region.ts'
 import { scanFactTexts } from '../compress/fact-leak.ts'
 import {
@@ -71,6 +72,9 @@ export interface AssembleInput {
   readonly layer?: AssembleLayer
   /** 被压区间体量（估算 token；热尾份额帽的分母；缺省 = 无份额帽，只用绝对预算）。 */
   readonly regionTokens?: number
+  /** 渲染根（会话工作区；F9e 相对路径基准）。 */
+  readonly root?: string
+  readonly rootKind?: RootKind
   readonly policy?: AssemblePolicy
 }
 
@@ -269,12 +273,12 @@ function truncateChars(text: string, max: number, marker: string): string {
 
 type RawSelection = Omit<HotTailSelection, 'rank' | 'pointer' | 'pointerOnly'> & { readonly pointerOnly?: boolean }
 
-/** 指针行（机械渲染；F9：事实定位靠指针，路径相对化归 F9e）。 */
-export function pointerOf(selection: RawSelection): string {
+/** 指针行（机械渲染；F9e：相对化 + 短 ID 表）。 */
+export function pointerOf(selection: RawSelection, root?: string, table: PathTable = EMPTY_PATH_TABLE): string {
   const coord = selection.coord
   if (coord !== undefined) {
     const range = coord.lineRange === undefined ? '' : `:${coord.lineRange.start}-${coord.lineRange.end}`
-    return `[文件] ${coord.path}@v${coord.version}${range}`
+    return `[文件] ${pathRef(coord.path, root, table)}@v${coord.version}${range}`
   }
   if (selection.source === 'fact') return '[摘抄] （无坐标）'
   return `[历史] 会话 ${selection.seqStart}-${selection.seqEnd}`
@@ -288,6 +292,7 @@ export function renderProduct(
   digest: TaskDigest,
   entries: readonly HotTailSelection[],
   policy: AssemblePolicy = DEFAULT_ASSEMBLE_POLICY,
+  pathTable: PathTable = EMPTY_PATH_TABLE,
 ): { text: string; plan: DigestPlan } {
   const gist = truncateChars(digest.gist, policy.gistMaxChars, ELLIPSIS)
   const lines: string[] = []
@@ -313,7 +318,9 @@ export function renderProduct(
     const refs = refsByStep[index] ?? []
     return refs.length === 0 ? line : `${line} (${refs.map((n) => REF_PREFIX + n).join(',')})`
   })
-  const head = [gist === '' ? '' : `${GIST_LABEL}${gist}`, ...renderedSteps].filter((part) => part !== '').join('\n')
+  const head = [gist === '' ? '' : `${GIST_LABEL}${gist}`, ...renderedSteps, renderPathTable(pathTable)]
+    .filter((part) => part !== '')
+    .join('\n')
   const body = entries
     .map((entry) => `${REF_PREFIX}${entry.rank} ${entry.pointer}${entry.text === '' ? '' : `\n${entry.text}`}`)
     .join('\n')
@@ -336,12 +343,14 @@ export function renderProduct(
   }
 }
 
-/** 单元清单（压缩器输入尾部机械追加；ID·名称·路径版本·粗标体量，供模型选坐标）。 */
-export function renderUnitList(units: readonly AssembleUnit[]): string {
+/** 单元清单（压缩器输入尾部机械追加；ID·名称·路径版本·粗标体量，供模型选坐标）。F9e：路径相对化。 */
+export function renderUnitList(units: readonly AssembleUnit[], root?: string): string {
   return units
     .map((unit) => {
       const name = unit.name === undefined ? '' : ` ${unit.name}`
-      const where = unit.path === undefined ? '' : ` ${unit.path}${unit.version === undefined ? '' : `@v${unit.version}`}`
+      const where = unit.path === undefined
+        ? ''
+        : ` ${relativePath(unit.path, root)}${unit.version === undefined ? '' : `@v${unit.version}`}`
       return `[${unit.id}]${name}${where} ~${unit.tokens}t`
     })
     .join('\n')
@@ -563,13 +572,23 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   }
 
   // 装配序 = 申报序（F9：▸n = 数组下标 + 1，摘要引用与指针同源）。
+  const coordPaths = selections
+    .map((selection) => selection.coord?.path)
+    .filter((path): path is string => typeof path === 'string')
+  const pathTable = buildPathTable(coordPaths, input.root)
+  let pathBytesSaved = 0
+  for (const path of coordPaths) {
+    const before = bytesOf(path)
+    const after = bytesOf(pathRef(path, input.root, pathTable))
+    if (before > after) pathBytesSaved += before - after
+  }
   const entries: HotTailSelection[] = selections.map((selection, index) => ({
     ...selection,
     rank: index + 1,
-    pointer: pointerOf(selection),
+    pointer: pointerOf(selection, input.root, pathTable),
     ...(selection.pointerOnly === true ? { pointerOnly: true } : {}),
   }))
-  const product = renderProduct(effective, entries, policy)
+  const product = renderProduct(effective, entries, policy, pathTable)
   const dropped = dropReasons.badDecl + dropReasons.unknownUnit + dropReasons.remap + dropReasons.fetch + dropReasons.dup + dropReasons.factReject
   const result: AssembleResult = {
     layer,
@@ -589,6 +608,10 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
       tokens: used,
       budgetTokens: budget,
     },
+    pathBytesSaved,
+    pathTableEntries: pathTable.entries.length,
+    ...(input.root === undefined ? {} : { root: input.root }),
+    ...(input.rootKind === undefined ? {} : { rootKind: input.rootKind }),
     archiveForm: { form: prior.length === 0 ? 'single' : 'chain', checkpointCount: prior.length },
     unitCount: units.length,
     rendered: [...prior.map((entry) => entry.text), product.text].filter((part) => part !== '').join('\n\n'),

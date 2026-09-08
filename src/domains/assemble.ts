@@ -64,6 +64,9 @@ export interface AssembleRequest {
   readonly priorChain?: readonly ArchiveEntry[]
   /** 被压区间体量（估算 token；热尾份额帽分母；F9c 由压缩域传入）。 */
   readonly regionTokens?: number
+  /** 渲染根（会话工作区；F9e）。 */
+  readonly root?: string
+  readonly rootKind?: 'session' | 'cwd' | 'none'
   /** 档案区硬帽截断结果（生产者 = P19 档案区；P17c 只透传入账）。 */
   readonly archiveTruncate?: ArchiveTruncation
 }
@@ -218,6 +221,8 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       ...(request.digest === undefined ? {} : { digest: request.digest }),
       ...(request.priorChain === undefined ? {} : { priorChain: request.priorChain }),
       ...(request.regionTokens === undefined ? {} : { regionTokens: request.regionTokens }),
+      ...(request.root === undefined ? {} : { root: request.root }),
+      ...(request.rootKind === undefined ? {} : { rootKind: request.rootKind }),
       hotTail: decls,
       resolve,
       currentLineCounts,
@@ -246,6 +251,9 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       factRejects: result.hotTail.dropReasons.factReject ?? 0,
       dupDrops: result.hotTail.dropReasons.dup ?? 0,
       hotTailPointers: result.hotTail.entries.length,
+      pathBytesSaved: result.pathBytesSaved,
+      pathTableEntries: result.pathTableEntries,
+      ...(result.rootKind === undefined ? {} : { rootKind: result.rootKind }),
       hotTailTokens: result.hotTail.tokens,
       hotTailDeclaredUnits: result.hotTail.declaredUnits,
       hotTailStopReason: result.hotTail.stopReason,

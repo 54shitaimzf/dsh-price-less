@@ -125,6 +125,15 @@ export function boundaryArchiveKey(workspace: string): string {
   return `boundary_archive:${workspace}`
 }
 
+/** 会话工作区根（F9e：相对路径基准；缺省 = 进程 cwd，不猜）。 */
+function sessionRootOf(session: Session): { root: string; rootKind: 'session' | 'cwd' } {
+  const header = (session as unknown as { header?: { cwd?: unknown } }).header
+  if (typeof header?.cwd === 'string' && header.cwd.trim() !== '') {
+    return { root: header.cwd.replaceAll('\\', '/').replace(/\/+$/, ''), rootKind: 'session' }
+  }
+  return { root: process.cwd().replaceAll('\\', '/'), rootKind: 'cwd' }
+}
+
 function sessionIdOf(session: Session): string {
   const s = session as unknown as { header?: { id?: unknown }; id?: unknown }
   const header = s.header?.id
@@ -299,6 +308,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   ): Promise<void> => {
     const config = getConfig()
     const sid = sessionIdOf(session)
+    const { root, rootKind } = sessionRootOf(session)
     const scopedTaskId = `${sid}:${segment.taskId}`
     const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
     const base = {
@@ -334,7 +344,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const storeBody = readArchiveStore(existing?.body, workspace)
     const priorChain = priorChainFor(storeBody, scopedTaskId, sid)
     if (!planTailConsumption({ priorChain, layer: 'boundary' }).ok) { skip('chain-invalid'); return }
-    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}`
+    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}/${root}`
     const key = compressSpanHash({
       promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'boundary',
       regionText, unitIds: units.map((unit) => unit.id), priorChainTexts: priorChain.map((entry) => entry.text), policyKey,
@@ -360,7 +370,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         cacheHit = true
       } else {
         if (llm === undefined) { skip('llm-unavailable', { calls }); return undefined }
-        const rendered = renderBoundaryPrompt({ regionText, units, priorChain, policy: compressPolicy })
+        const rendered = renderBoundaryPrompt({ regionText, units, priorChain, policy: compressPolicy, root })
         renderedPromptTokens = estimateTokens(rendered.prompt, compressPolicy.density)
         const route = resolveJudgeModel(config, readSessionModel(session))
         provider = route.provider
@@ -403,7 +413,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const outcome = await deps.assemble.assemble({
         session, taskId: scopedTaskId, range, layer: 'boundary',
         digest: product.digest, hotTail: product.hotTail, priorChain,
-        regionTokens: shadowedTokens,
+        regionTokens: shadowedTokens, root, rootKind,
       })
       if (!outcome.ok) {
         emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
@@ -447,7 +457,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const written = await writeStore((body) => {
       const appended = appendArchiveEntry(
         body,
-        { taskId: scopedTaskId, kind: 'boundary', text: chosen!.rendered, sessionId: sid, layer: 'boundary', at: now() },
+        { taskId: scopedTaskId, kind: 'boundary', text: chosen!.rendered, sessionId: sid, layer: 'boundary', at: now(), root },
         assemblePolicy,
       )
       return {
@@ -579,6 +589,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   ): Promise<PressureFoldResult> => {
     const config = getConfig()
     const sid = sessionIdOf(session)
+    const { root } = sessionRootOf(session)
     const stop = (attempted: boolean): PressureFoldResult => ({ landed: false, attempted })
     const base = {
       at: now(), wireTokens: opts.wireTokens, thresholdTokens: opts.thresholdTokens, emergency: opts.emergency,
@@ -627,7 +638,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
 
     const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
     const candidateText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: replaceEnd })
-    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}`
+    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}/${root}`
     const key = compressSpanHash({
       promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'pressure',
       regionText: candidateText, unitIds: units.map((unit) => unit.id),
@@ -650,7 +661,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         cacheHit = true
       } else {
         if (llm === undefined) { fire('skip', { reason: 'llm-unavailable', chainDepth: depth }); return undefined }
-        const renderedPrompt = renderPressurePrompt({ regionText: candidateText, units, priorChain, policy: compressPolicy })
+        const renderedPrompt = renderPressurePrompt({ regionText: candidateText, units, priorChain, policy: compressPolicy, root })
         renderedPromptTokens = estimateTokens(renderedPrompt.prompt, compressPolicy.density)
         const route = resolveJudgeModel(config, readSessionModel(session))
         provider = route.provider
@@ -749,7 +760,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const written = await writeStore((body) => {
       const appended = appendArchiveEntry(body, {
         taskId: scopedTaskId, kind: 'checkpoint', text: chosen!.checkpointText, sessionId: sid,
-        layer: 'pressure', at: now(), cutPointSeq: chosen!.cutSeq, rangeEndSeq: replaceEnd,
+        layer: 'pressure', at: now(), cutPointSeq: chosen!.cutSeq, rangeEndSeq: replaceEnd, root,
       }, assemblePolicy)
       return {
         body: chosen!.cacheHit

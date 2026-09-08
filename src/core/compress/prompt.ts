@@ -80,17 +80,18 @@ export function renderPriorChain(entries: readonly ArchiveEntry[]): string {
 export function compressUnitList(
   units: readonly AssembleUnit[],
   policy: CompressPolicy = DEFAULT_COMPRESS_POLICY,
+  root?: string,
 ): { text: string; listed: number; omitted: number } {
   const cap = policy.maxUnitListEntries
   const listed = cap > 0 && units.length > cap ? units.slice(units.length - cap) : units
-  return { text: renderUnitList(listed), listed: listed.length, omitted: units.length - listed.length }
+  return { text: renderUnitList(listed, root), listed: listed.length, omitted: units.length - listed.length }
 }
 
 function renderPrompt(mode: CompressMode, input: CompressPromptInput): CompressPromptRender {
   const policy = input.policy ?? DEFAULT_COMPRESS_POLICY
   const boundary = mode === 'boundary'
   const priorChain = input.priorChain ?? []
-  const list = compressUnitList(input.units, policy)
+  const list = compressUnitList(input.units, policy, input.root)
   const sections = [
     boundary ? COMPRESS_BOUNDARY_HEAD : COMPRESS_PRESSURE_HEAD,
     boundary ? COMPRESS_BOUNDARY_RULES : COMPRESS_PRESSURE_RULES,

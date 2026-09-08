@@ -190,6 +190,12 @@ export interface AssembleResult {
   readonly digest: TaskDigest
   readonly digestPlan: DigestPlan
   readonly hotTail: HotTailPlan
+  /** 路径压缩度量（F9e）。 */
+  readonly pathBytesSaved: number
+  readonly pathTableEntries: number
+  /** 渲染根（相对路径基准；档案条目落盘时随条目保存，跨会话重放不串档）。 */
+  readonly root?: string
+  readonly rootKind?: 'session' | 'cwd' | 'none'
   /** 本次产物的档案形态（priorChain 为空 = 单块；否则续传 + 追加）。 */
   readonly archiveForm: ArchiveForm
   readonly unitCount: number

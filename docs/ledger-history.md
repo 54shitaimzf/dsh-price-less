@@ -2688,4 +2688,26 @@ compress-product（宽松修复表）、compress-prompt（新 schema 段）；�
 
 **未落地**：F9e 路径压缩、F9f 死码清理 + 文档（04/07/09/11/AGENTS/TODO）、F9g 回放验收。
 
+---
+
+## §66 F9e 路径压缩：root + 相对化 + 短 ID 表（2026-09-09；提交 = 本账本同提交）
+
+**新增 `core/assemble/paths.ts`**（纯核）：
+- `normalizeRoot`（反斜杠归一 + 去尾斜杠）/ `relativePath`（root 下去前缀，**不在 root 下原样不猜**）；
+- `buildPathTable`：同路径出现 **≥2 次**才入表（首现序 `§1`、`§2`…）；`pathRef` 指针路径引用；
+  `renderPathTable` 渲染 `【路径】§1 = src/a.ts`。
+- root = `session.header.cwd`（缺省 `process.cwd()`；`rootKind = session|cwd`），由压缩域解析后
+  经 `AssembleRequest.root` 传入装配器；**档案条目落盘带 `root`**（跨会话重放不串档；F3 全量隔离仍另立项）。
+
+**渲染面**：指针 `[文件] §1@vN:a-b`（相对路径/短 ID）；产物头插 `【路径】` 表；
+`renderUnitList` 同源相对化（省的是**压缩调用输入** token）。`policyKey` 追加 root（路径渲染变化
+必须换内容寻址键，否则跨工作区错用缓存）。
+
+**度量**：`assemble-run.pathBytesSaved / pathTableEntries / rootKind` 入账（`AssembleResult` 同名字段）。
+
+**验收**：`npm run gate` = **646 tests / 58 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿。
+新增 `tests/assemble-paths.spec.ts` 5 例（归一化/相对化/表/产物渲染/单元清单）。
+
+**未落地**：F9f 死码与死守卫清理 + 文档同步、F9g 回放验收（scripts/verify-f9.mjs + 账本对照）。
+
 
