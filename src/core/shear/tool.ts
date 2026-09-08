@@ -1,8 +1,9 @@
 /**
  * 工具剪切纯核：谓词、四档准入与确定性 fold（docs/03 §2/§2.1/§2.2/§2.3；P15a）。
  * 纯函数：T-entry 整形、T0 超越、T0-R 修复（T-note 协商与 T-loop 思考后截断均已退役）。
+ * 判据全内置（类别启发式 + 体积/年龄规则）——无工具自声明注入缝。
  * core 零 harness/platform import；不抛错，失败一律默认保留（协商不成不动刀，零重试）。
- * 平面: L0（无模型/IO/状态）｜回退链步数: 3（自带策略 → 类别启发式 → 通用体积年龄规则）
+ * 平面: L0（无模型/IO/状态）｜回退链步数: 2（类别启发式 → 通用体积年龄规则）
  * 审查清单: 不 import harness/platform（S1）；不写 KV/日志/事实；不改史（执行归 P15b）；
  *           内容零转写（只保原文行 + 中性省略/结论），不带插件内部标签（带外原则）。
  * 度量: shearDecision{cut|hold|keep} / toolPruneByClass / shearNoteAttached（入账归 P15b）。
@@ -18,7 +19,6 @@ import {
   type ShearPolicy,
   type ShearToolCall,
   type ShearToolCategory,
-  type ToolContextLifecycle,
 } from './types.ts'
 import {
   editArgsOf,
@@ -134,16 +134,12 @@ function referencedByOf(call: ShearToolCall, later: ShearEvent): boolean {
   return false
 }
 
-/** 默认生命周期 = 类别启发式（三级回退第二级）；自带策略由调用侧传入覆盖。 */
-export const DEFAULT_LIFECYCLE: ToolContextLifecycle = {
+/** 内置生命周期谓词（类别启发式；不依赖工具自声明，无注入缝——docs/03 §2）。 */
+export const DEFAULT_LIFECYCLE = {
   referenceKeys: referenceKeysOf,
   rederiveCost: rederiveCostOf,
   supersededBy: supersededByOf,
   referencedBy: referencedByOf,
-}
-
-export function resolveLifecycle(declared?: ToolContextLifecycle): ToolContextLifecycle {
-  return declared ?? DEFAULT_LIFECYCLE
 }
 
 /** 三级回退第三级：大而久的结果才允许机械剪。 */
@@ -235,12 +231,6 @@ export function isBoundaryRideCandidate(record: ShearDecisionRecord): boolean {
   return record.decision === 'hold'
 }
 
-/** fold 可选项（P15b 接线缝；全部可选，缺省 = P15a 行为逐字节一致）。 */
-export interface FoldToolShearOptions {
-  /** 生命周期谓词覆盖（三级回退第一级）；缺省 = 内置类别启发式。 */
-  readonly lifecycles?: Readonly<Record<string, ToolContextLifecycle>>
-}
-
 interface ReadState {
   readonly call: ShearToolCall
   resultText?: string
@@ -256,7 +246,7 @@ interface ReadState {
  * T-entry 在结果到达时整形；T0/T0-R 在同路径写到达时裁决
  * （streak 原位刷新；异质操作冻结摘抄 → 后续编辑退普通 T0）。
  */
-export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy = DEFAULT_SHEAR_POLICY, options: FoldToolShearOptions = {}): ShearPlan {
+export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy = DEFAULT_SHEAR_POLICY): ShearPlan {
   const ops: ShearOp[] = []
   const decisions: ShearDecisionRecord[] = []
   const callsById = new Map<string, ShearToolCall>()
@@ -319,9 +309,8 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
       continue
     }
     if (WRITE_TOOLS.has(call.name) && path !== undefined) {
-      const lifecycle = resolveLifecycle(options.lifecycles?.[call.name])
       const states = readsByPath.get(path) ?? []
-      const superseded = states.filter((state) => state.resultText !== undefined && !state.cut && lifecycle.supersededBy(state.call, call))
+      const superseded = states.filter((state) => state.resultText !== undefined && !state.cut && supersededByOf(state.call, call))
       const target = superseded[superseded.length - 1]
       for (const state of superseded) if (state !== target) cutPlainT0(state, call.callId)
       if (target !== undefined) {

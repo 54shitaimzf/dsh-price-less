@@ -2898,12 +2898,15 @@ build 绿（host + client）。`src/`、`client/` 全量 grep 已无 `negotiate`
 | 纯核 | `tool.ts` `admitLoop` / `buildLoopStub` / `FoldToolShearOptions.entryShaped`；`foldToolShear` 叙述消息分支改为 no-op（streak 语义保留） |
 | 类型 | `ShearOp.stub-replace`；`ShearTier` / `ShearAppliedTier` 的 `T-loop`；`ShearPolicy.loopMaxConclusionChars` |
 | 域/账本 | `domains/shear.ts` `opTierOf`/`replacementTextOf` 的 `stub-replace` 分支、`state.entryShaped` 集合；`ledger.ts` `ShearAppliedKind` 的 `stub-replace` |
-| 测试 | `shear-tool` T-loop 组与 `entryShaped` 用例、`shear-domain` T-loop e2e、`shear-ledger` T-loop 样本（改 T0） |
+| 自声明缝 | `ToolContextLifecycle` 接口 + `FoldToolShearOptions.lifecycles` 选项 + `resolveLifecycle` + `foldToolShear` 第三参（工具自声明无价值，判据全内置） |
+| 测试 | `shear-tool` T-loop 组、`entryShaped`/`lifecycles` 用例、`shear-domain` T-loop e2e、`shear-ledger` T-loop 样本（改 T0） |
 | 文档 | `docs/03` §1/§2 表 + 新增退役注 + §8、`docs/10` H6、`docs/13` §3.9、`docs/implement/{00-master,TODO}.md` |
 
 **保留**：T-entry 写时整形 / T0 超越 / T0-R 读件修复 / run 冲刷 / T-boundary 搭车；
-`ToolContextLifecycle` 注入缝（默认不启用，仅测试覆盖）与 `DEFAULT_LIFECYCLE` 内置谓词。
+`DEFAULT_LIFECYCLE` 内置谓词（**工具自声明注入缝一并删除**——`ToolContextLifecycle` 接口、
+`FoldToolShearOptions.lifecycles` 选项、`resolveLifecycle`、`foldToolShear` 第三参全删；
+工具自声明无价值，插件不是这个判断的权威）。
 
 **版本**：`SHEAR_POLICY_VERSION` 2 → 3（策略面删除 `loopMaxConclusionChars`）。
 
-**验收**：`npm run gate` = **609 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿。
+**验收**：`npm run gate` = **608 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿。

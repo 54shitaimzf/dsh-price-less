@@ -35,13 +35,6 @@ export type ShearEvent =
   | { readonly kind: 'assistant-message'; readonly seq: number; readonly time: number; readonly text: string }
   | { readonly kind: 'user-message'; readonly seq: number; readonly time: number; readonly text: string }
 
-/** 生命周期谓词（内置启发式，不依赖工具自声明；docs/03 §2）。 */
-export interface ToolContextLifecycle {
-  referenceKeys(call: ShearToolCall): readonly string[]
-  rederiveCost(call: ShearToolCall): RederiveCost
-  supersededBy(call: ShearToolCall, later: ShearToolCall): boolean
-  referencedBy(call: ShearToolCall, later: ShearEvent): boolean
-}
 export interface ShearRepairSegment {
   readonly startLine: number
   readonly endLine: number

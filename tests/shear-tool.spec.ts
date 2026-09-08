@@ -20,7 +20,6 @@ import {
   parseReadEnvelope,
   pathOfCall,
   repairReadAfterWrite,
-  resolveLifecycle,
   shapeEntryContent,
   textOfContentBlocks,
   toolCategory,
@@ -63,11 +62,8 @@ describe('P15a §1 谓词与三级回退', () => {
     expect(DEFAULT_LIFECYCLE.referencedBy(read, user(3, 30, '再看 src/a.ts'))).toBe(true)
     expect(DEFAULT_LIFECYCLE.referencedBy(read, user(4, 40, '无关'))).toBe(false)
   })
-  it('三级回退：自带策略优先，缺省回落类别启发式；通用体积年龄规则为大而久', () => {
+  it('通用体积年龄规则为大而久', () => {
     const read = { seq: 1, time: 0, callId: 'c1', name: 'read', argsText: '{}' }
-    const declared = { ...DEFAULT_LIFECYCLE, rederiveCost: () => 'trivial' as const }
-    expect(resolveLifecycle(declared).rederiveCost(read)).toBe('trivial')
-    expect(resolveLifecycle().rederiveCost(read)).toBe('cheap')
     expect(genericCutEligible(20_000, 700_000)).toBe(true)
     expect(genericCutEligible(20_000, 1_000)).toBe(false)
     expect(pathOfCall(read)).toBeUndefined()
@@ -220,11 +216,5 @@ describe('P15b 接线缝（纯核可选参数与模板）', () => {
   })
   it('buildSupersededStub 逐字含路径（零转写）', () => {
     expect(buildSupersededStub('src/index.ts')).toContain('src/index.ts')
-  })
-  it('lifecycles 选项：工具自声明 supersededBy 可覆盖类别启发式', () => {
-    const events: ShearEvent[] = [readCall, readResult, call(3, 20, 'w1', 'write', { file_path: 'src/index.ts', content: 'x' })]
-    expect(foldToolShear(events).ops.map((op) => op.kind)).toEqual(['t0-supersede'])
-    const frozen = { ...DEFAULT_LIFECYCLE, supersededBy: () => false }
-    expect(foldToolShear(events, DEFAULT_SHEAR_POLICY, { lifecycles: { write: frozen } }).ops).toHaveLength(0)
   })
 })

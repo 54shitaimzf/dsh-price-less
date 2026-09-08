@@ -28,7 +28,8 @@
 **生命周期谓词**（内置启发式，纯 L0 零 LLM；不依赖工具自声明）：
 `referenceKeys(call)` 身份键（read→path、edit→path、grep→query）· `rederiveCost` 重推导成本档
 （trivial/cheap/expensive）· `supersededBy(call, laterEvent)` · `referencedBy(call, laterMessage)`。
-三级回退全内置：类别启发式 → 体积/年龄规则 → 保留（判据不成立一律不动刀）。
+两级全内置：类别启发式 → 体积/年龄规则 → 保留（判据不成立一律不动刀）；**无工具自声明
+注入缝**（`ToolContextLifecycle` / `FoldToolShearOptions.lifecycles` 已删除）。
 
 **时机档**（档 = 时机，时机即经济学）：
 
