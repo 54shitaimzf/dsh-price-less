@@ -60,7 +60,7 @@ src/
 ├─ core/             # 纯核（零 harness import：事件/会话类型本地重声明，结构性兼容）
 │  ├─ units.ts       # 分划单位状态机：task 段 fold、边界记录（01 §3.5 正典）
 │  ├─ dossier.ts     # 卷宗：append-only 累积、标注、回填、边界清空（02 §2）
-│  ├─ judge.ts       # 判据组装：L1 缓存键（幂等护栏）/ 对表保守打分 / LLM prompt 渲染（模板在前）
+│  ├─ judge.ts       # 判据组装：L1 缓存键（幂等护栏）/ 对表影子记账（只算不拦）/ LLM prompt 渲染
 │  ├─ optimize.ts    # 星标断面：输入栈装配、双通道解析、行级容错、四道机械闸（02 §4）
 │  ├─ prefix.ts      # 稳定前缀：技能目录快照 + 项目帧 vN、版本 bump 语义（02 §2/06 §4）
 │  ├─ init.ts        # init 项目帧采集：prompt v1 渲染与 fail-lazy 解析（02 §2）
@@ -69,7 +69,7 @@ src/
 │  ├─ assemble/      # 装配器：热尾双通道取真、贪心停机、stub 续传/折叠（04 共享机制）
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
-│  ├─ input.ts       # 判别域：自动断面服务（T0→L1→对表→LLM→fail-lazy；三分类搭车）
+│  ├─ input.ts       # 判别域：自动断面服务（T0→L1→LLM→fail-lazy；对表影子记账；三分类搭车）
 │  ├─ commands.ts    # 命令面：/task、/init、/optimize-prompt 注册与委托（10 §2）
 │  ├─ star.ts        # 星标断面 host 服务：输入栈装配 → 断面 → 预览态 → 确认后回填/产物（10 §4 时序 B；P14b1）
 │  ├─ optimize-facts.ts # optimize-run 两相事实声明合并 + fold（07 §0.5；P14b1）

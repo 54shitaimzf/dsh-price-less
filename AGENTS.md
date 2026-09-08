@@ -15,7 +15,7 @@ P3（持久面 `platform/storage.ts`）→ P4（技能目录 `platform/skills.ts
 H5 compaction 事务 + 配对平衡守卫）→ P7（工具端口 `platform/tools.ts`：H6 tools/post-execute
 content 覆盖/追加 + tools/execute 信号计量）全部施工；首份 07 报表见
 `docs/ledger-history.md` §31；**R2 判别域已完成**（P8–P13 纯核/编排 + P14a 星标 UI + P14b1 host 断面服务/Connection RPC 桥端口 +
-P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修复：删 L0、对表保守打分、★ 门控改为
+P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修复：删 L0、对表影子记账（只算不拦）、★ 门控改为
 "本次提示词极短"、上下文读会话事件；快照 = `docs/ledger-history.md` §33））。`platform/`（十文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时

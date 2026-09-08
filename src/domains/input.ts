@@ -17,6 +17,7 @@ import {
   type JudgeDecision,
   type JudgeRecord,
   type JudgeTable,
+  type JudgeTableShadow,
 } from '../core/judge.ts'
 import { foldSegmentState } from '../core/units.ts'
 import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey, sessionScopedTaskId, type DossierBody, type DossierClass } from '../core/dossier.ts'
@@ -93,7 +94,7 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
   const factsBySession = new Map<string, LedgerFact[]>()
   const factKeys = new Map<string, Set<string>>()
   const firstSeqBySession = new Map<string, number>()
-  const l1Cache = new Map<string, { decision: JudgeDecision; class: DossierClass }>()
+  const l1Cache = new Map<string, { decision: JudgeDecision; class: DossierClass; tableShadow?: JudgeTableShadow }>()
   const records: JudgeRecord[] = []
   const queue: CeDomainEvents['input/user-message'][] = []
   let disposed = false
@@ -175,16 +176,18 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     // L1 = 重复投递护栏（P14c §1）：键含 seq，跨消息永不命中，只防同一消息被重复处理/计费。
     const cached = l1Cache.get(cacheKey)
     if (cached !== undefined) {
-      emitRecorded(session, sid, { seq, time, trigger: 'l1-cache', decision: cached.decision, class: cached.class })
+      emitRecorded(session, sid, {
+        seq, time, trigger: 'l1-cache', decision: cached.decision, class: cached.class,
+        ...(cached.tableShadow === undefined ? {} : { tableShadow: cached.tableShadow }),
+      })
       return
     }
 
-    // 对表 = 保守打分（P14c §2）：总分 ≥ 2 才机械延续，否则出表走 LLM 主路径。
+    // 对表 = 影子记账（P14c §2 修订）：**只算不拦**——命中照常走 LLM，只记录"机械本会怎么判"。
+    // 唯一允许不调模型就下结论的是 T0（用户显式宣告）与 L1（重放同一条消息的既有裁决）；
+    // 任何"用特征猜意图"的短路都会带来无声漏边界，故对表层不参与决策。
     const table = readJudgeTable(storage, workspace)
-    if (matchJudgeTable(text, table).hit) {
-      emitRecorded(session, sid, { seq, time, trigger: 'table', decision: 'continue' })
-      return
-    }
+    const tableMatch = matchJudgeTable(text, table)
 
     const rendered = renderJudgePrompt(appended, { seq, text })
     let llmText = ''
@@ -215,7 +218,11 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       ctxTokens: rendered.ctxTokens, latencyMs,
     }
     if (llmUsage !== undefined) record.llmUsage = llmUsage
-    l1Cache.set(cacheKey, { decision: parsed.decision, class: parsed.class })
+    if (tableMatch.hit) record.tableShadow = { hit: true, score: tableMatch.score }
+    l1Cache.set(cacheKey, {
+      decision: parsed.decision, class: parsed.class,
+      ...(record.tableShadow === undefined ? {} : { tableShadow: record.tableShadow }),
+    })
     if (l1Cache.size > cacheLimit) l1Cache.delete(l1Cache.keys().next().value!)
     if (appended !== body && parsed.class !== undefined) {
       const annotated = annotateDossier(appended, seq, parsed.class, 'auto', time)

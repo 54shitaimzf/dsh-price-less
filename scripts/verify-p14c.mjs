@@ -120,7 +120,8 @@ if (fs.existsSync(recPath)) {
     }
   }
   console.log('')
-  console.log('=== ③ 安全性（真实判别记录，verdict 为地面真值） ===')
+  console.log('=== ③ 对表影子基线（真实判别记录，verdict 为地面真值） ===')
+  console.log('（影子口径：这些命中不再短路，全部照常走 LLM；此处读数 = 若启用短路会漏掉的边界）')
   console.log('可判定消息 = ' + recTotal + '（其中 new-task ' + recNew + ' = ' + pct(recNew, recTotal) + '）')
   console.log('旧宽松规则：命中 ' + recOldHits + '，其中误判为延续的 new-task ' + recOldNewHits + ' 条')
   console.log('新保守打分：命中 ' + recHits + '，其中误判为延续的 new-task ' + recNewHits + ' 条')
@@ -194,6 +195,17 @@ console.log('')
 console.log('=== ④ ★ 上下文可得性 ===')
 console.log('最近会话：' + (currentLog ? path.basename(path.dirname(currentLog)) : '(未找到)'))
 console.log('真实用户消息（★ 现在可直接读到，旧实现受 auto 门控恒为 0） = ' + humanMessages)
+
+// —— ⑤ 静态断言：对表不参与决策（无无声漏边界通道） ——
+const inputSrc = fs.readFileSync(path.join(ROOT, 'src/domains/input.ts'), 'utf8')
+const tableShortCircuit = /trigger:\s*'table'/.test(inputSrc)
+const shadowWired = /tableShadow/.test(inputSrc)
+if (tableShortCircuit) fail("input.ts 仍在对表命中时短路（trigger 'table'）——违反 P14c 影子口径")
+if (!shadowWired) fail('input.ts 未接影子记账（tableShadow）')
+console.log('')
+console.log('=== ⑤ 决策链静态断言 ===')
+console.log('对表短路残留 = ' + (tableShortCircuit ? '有（FAIL）' : '无（只算不拦）'))
+console.log('影子记账接线 = ' + (shadowWired ? '已接' : '缺失（FAIL）'))
 
 // —— 断言 ——
 console.log('')

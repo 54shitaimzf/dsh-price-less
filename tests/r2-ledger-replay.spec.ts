@@ -43,6 +43,8 @@ describe('R2 ledger replay (§32)', () => {
       judgeLatencyMs: 200.75,
       l0CaptureRate: 0.2,
       tableHitRate: 0.5,
+      tableShadowHitCount: 0,
+      tableShadowMissedBoundaryCount: 0,
       judgeLLMUsage: { inputTokens: 100, outputTokens: 20, totalTokens: 120, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 },
       judgeCtxTokens: 560,
       judgeVerdictDist: { action: 2, pureQ: 1, verifyQ: 1 },

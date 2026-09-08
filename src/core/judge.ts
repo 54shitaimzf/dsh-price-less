@@ -215,6 +215,16 @@ export interface JudgeErrorInfo {
   message: string
 }
 
+/**
+ * 对表影子记账（P14c §2 修订）：对表层**只算不拦**——命中照常走 LLM 主路径，
+ * 只把"机械本会怎么判"记下来，用真机数据实时量它的精确率。
+ * `hit && decision === 'new-task'` = 一次**本会漏掉的边界**（影子假阳性）。
+ */
+export interface JudgeTableShadow {
+  hit: boolean
+  score: number
+}
+
 export interface JudgeRecord {
   seq: number
   time: number
@@ -225,6 +235,7 @@ export interface JudgeRecord {
   ctxTokens?: number
   llmUsage?: JudgeLlmUsage
   error?: JudgeErrorInfo
+  tableShadow?: JudgeTableShadow
 }
 
 export interface JudgeLedger {
@@ -234,7 +245,12 @@ export interface JudgeLedger {
   judgeLatencyMs: number
   /** 历史口径：P14c 起恒为 0（L0 已删除）；保留以回放旧账本。 */
   l0CaptureRate: number
+  /** 对表**实际短路**率（P14c 起恒为 0：对表只算不拦）；保留以回放旧账本。 */
   tableHitRate: number
+  /** 对表影子：本会命中的条数（分母 = `llmCount`）。 */
+  tableShadowHitCount: number
+  /** 对表影子假阳性：本会命中但 LLM 判 new-task —— 本会漏掉的边界数。 */
+  tableShadowMissedBoundaryCount: number
   judgeLLMUsage: {
     inputTokens: number
     outputTokens: number
@@ -254,6 +270,8 @@ export function foldJudgeLedger(records: JudgeRecord[]): JudgeLedger {
   let l0Count = 0
   let tableCount = 0
   let llmCount = 0
+  let tableShadowHitCount = 0
+  let tableShadowMissedBoundaryCount = 0
   let latencySum = 0
   let latencyCount = 0
   let ctxTokens = 0
@@ -266,6 +284,10 @@ export function foldJudgeLedger(records: JudgeRecord[]): JudgeLedger {
     if (record.trigger === 'l0-continue') l0Count++
     if (record.trigger === 'table') tableCount++
     if (record.trigger === 'llm') llmCount++
+    if (record.tableShadow?.hit === true) {
+      tableShadowHitCount++
+      if (record.decision === 'new-task') tableShadowMissedBoundaryCount++
+    }
     if (record.latencyMs !== undefined) {
       latencySum += record.latencyMs
       latencyCount++
@@ -287,6 +309,8 @@ export function foldJudgeLedger(records: JudgeRecord[]): JudgeLedger {
     judgeErrorRate: judgeCount === 0 ? 0 : errorCount / judgeCount,
     judgeCacheHitRate: judgeCount === 0 ? 0 : cacheHitCount / judgeCount,
     judgeLatencyMs: latencyCount === 0 ? 0 : latencySum / latencyCount,
+    tableShadowHitCount,
+    tableShadowMissedBoundaryCount,
     l0CaptureRate: judgeCount === 0 ? 0 : l0Count / judgeCount,
     tableHitRate: tableCount + llmCount === 0 ? 0 : tableCount / Math.max(1, tableCount + llmCount),
     judgeLLMUsage: usage,

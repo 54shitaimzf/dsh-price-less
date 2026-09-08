@@ -1588,3 +1588,25 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 **门槛复核（docs/11 §8 R2 行）**：边界 F1 达标（判据链瘦身后 `tests/judge.spec.ts` / `input.spec.ts` 全绿）；
 判别成本达标（`auto` 默认 off 零调用；机械层省 7.9%）；`tableHitRate` 字段保留并新增**够格线**——
 真机运行后若仍 < 5%，连对表层一起删；星标端到端达标（首次点击即产出产品；`tests/star-host.spec.ts` 14 用例）。
+
+## 34. 账本快照 §34：对表层降级为影子记账（只算不拦；P14c §2 修订）
+
+> 触发：用户质询"新策略能确保不漏边界吗"。结论：**不能**——任何机械短路都意味着这条消息永远
+> 不会被模型看到，漏了就无声无息。故对表层退出决策链，改为纯观测。
+
+**口径变化**：
+
+| 项 | §33 口径 | §34 口径 |
+|---|---|---|
+| 决策链 | T0 → L1 → 对表（保守打分，≥2 短路）→ LLM → fail-lazy | **T0 → L1 → LLM → fail-lazy**；对表只算不拦 |
+| 对表字段 | `tableHitRate`（短路率） | `tableHitRate`（新记录恒 0，历史可回放）+ `tableShadowHitCount` / `tableShadowMissedBoundaryCount` |
+| 事实载荷 | judge-recorded 无影子 | 新增可选 `tableShadow: {hit, score}`（旧事实缺省，可 fold） |
+
+**依据（若启用短路会怎样）**：354 条真实判别记录，影子命中 28 条（7.9%），其中 LLM 判 new-task 1 条
+→ 每千条消息省约 1.8 美分、平均漏掉约 2.8 个边界。**边界不漏 > 省钱。**
+
+**未来启用条件**：真机 `tableShadow` 数据证明精确率 ≈ 100%（即 `tableShadowMissedBoundaryCount` 长期为 0）后，
+才考虑恢复短路；在那之前一律不拦。
+
+**验收**：`npm run gate` 绿（252 用例）；`scripts/verify-p14c.mjs` 新增 §⑤ 静态断言——
+`src/domains/input.ts` 不得出现 `trigger: 'table'` 短路、必须接 `tableShadow` → PASS。

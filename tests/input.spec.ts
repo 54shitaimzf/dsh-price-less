@@ -206,7 +206,7 @@ describe('auto discriminator llm and cache', () => {
 })
 
 describe('auto discriminator table and dossier', () => {
-  it('对表命中：返回 trigger table，不调 LLM', async () => {
+  it('对表影子记账：命中不再短路，照常走 LLM 并记录 tableShadow', async () => {
     const pump = makePump()
     const storage = makeStorage({
       'optimize_artifact:optimize_artifact:latest:ws': {
@@ -214,13 +214,12 @@ describe('auto discriminator table and dossier', () => {
         body: { judgeTable: { version: 1, aspects: [], fileSignatures: ['src/a.ts'], keywords: ['cache'] } },
       },
     })
-    let llmCalled = false
-    const llm = { stream: async function* () { llmCalled = true; yield { type: 'finish', reason: { kind: 'stop' } } } }
+    const llm = llmStream('{"decision":"new_task","class":"action"}')
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never }))
     pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'use cache in src/a.ts' })
     await flush()
-    expect(llmCalled).toBe(false)
-    expect(auto.stats().records[0]).toMatchObject({ trigger: 'table', decision: 'continue' })
+    // 影子命中但 LLM 判 new-task = 一次"本会漏掉的边界"（正是短路会造成的无声错误）
+    expect(auto.stats().records[0]).toMatchObject({ trigger: 'llm', decision: 'new-task', tableShadow: { hit: true, score: 4 } })
     auto.dispose()
   })
 

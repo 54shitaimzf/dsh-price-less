@@ -138,6 +138,18 @@ describe('judge', () => {
     expect(foldJudgeLedger([]).judgeLatencyMs).toBe(0)
   })
 
+  it('judge fold: 对表影子记账（只算不拦）——命中数 / 本会漏掉的边界数', () => {
+    const ledger = foldJudgeLedger([
+      { seq: 1, time: 1, trigger: 'llm', decision: 'continue', tableShadow: { hit: true, score: 3 } },
+      { seq: 2, time: 2, trigger: 'llm', decision: 'new-task', tableShadow: { hit: true, score: 2 } },
+      { seq: 3, time: 3, trigger: 'llm', decision: 'continue' },
+      { seq: 4, time: 4, trigger: 't0', decision: 'continue' },
+    ])
+    expect(ledger.tableShadowHitCount).toBe(2)
+    expect(ledger.tableShadowMissedBoundaryCount).toBe(1)
+    expect(ledger.tableHitRate).toBe(0)
+  })
+
   it('judge P8/P9 集成: verdict 契约、toJudgeVerdictFactData、三分类 key 一致', () => {
     expect(JUDGE_VERDICT_FACT_TYPE).toBe('context-economy/judge-verdict')
     const parsed = parseJudgeLlmOutput('{"decision":"new_task","class":"action"}')!
