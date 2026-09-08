@@ -1782,4 +1782,75 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 若需守线：下一轮可把 `core/shear/ledger.ts`（账本 fold）与 `domains/shear.ts`（调度域）拆为 P15b1/P15b2，
 或把门槛表/注释压缩——两者都只动组织形态，不动行为。
 
+## 40. 账本快照 §40：对话剪切纯核（P16a，R3 第三单前半）
+
+> 触发：总纲 §3 下一未执行单元 = P16（R3 关门单；工单 [implement/P16-dialogue-shear.md](implement/P16-dialogue-shear.md)）。
+> 本单先落**纯核 + 度量**（docs/03 §3 run 状态机 / 吸收证明 / 结论三档），接线归 P16b。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| `cutEvents{question}` / `questionBacklogDepth` / `cutMisfireDetected` | 字段在位、值**显式 0**（P15b 声明） | 由重折 `foldRunShear` 计算（事实 + 事件序同口径） |
+| `thinkingCutTokens` | 0 | **仍 0**（N5：思考剪除不在本单，回放范围确认后另立单） |
+| 对话剪切纯核 | 无 | `core/shear/run.ts`（run 分段 / 吸收证明 / 三档结论 / 中立性 / 预算 / 指纹） |
+| 结论三档 | 设计态 | 机械摘句（≤2 对，零 LLM）/ 判决提取（退出码·测试计数·PASS-FAIL）/ 星标注记（断面搭车，零新增调用） |
+| 长 run 无依据 | — | `hold long-run-needs-star`（等星标或 P19 T-boundary 搭车；失败默认保留） |
+
+**纯核语义（可回放断言）**：短 run + 动作证明 → `已吸收：关于「X」的 n 轮问答，结论：…（用户已确认理解）`；
+验证 run → `已验证：X，依据：[exit code: 0]（用户已确认理解）`；结论体命中指令词/换行 → hold（「…」引用内原话不参与判定）；
+结论截断到 160 字符且包装完整；观察窗 4 条内指纹命中 → hold；未分类用户消息 = 边界（N11 保守）。
+
+**验收**：`npm run gate` 绿（**330 用例 / 33 文件**；D1–D10 全 PASS）；`npm run typecheck:tests` 绿；
+`tests/shear-run.spec.ts` **18 用例** + `tests/shear-ledger.spec.ts` 扩到 14 用例（含 run 半边三字段）。
+
+**尺寸申报**：工单预算 P16a src 净增 ≤420。实测 **src 净增 436 行**（`run.ts` 365 / `ledger.ts` +70 / `index.ts` +1），
+另 spec 266 行——**超预算 16 行**（红线未设；范围未变，验收全绿）。
+
+## 41. 账本快照 §41：对话剪切接线（P16b，R3 关门）
+
+> 本单把 run 状态机接进运行期：`judge-recorded` 分类 + 星标 `SHEAR/CLASS` 清单 → 重折 → 门槛 → H4 整段冲刷。
+> 官方先例 = `compaction-basic` 的 `compaction/summary` + `user/message` replace（`sourceEventSeqs` 含被遮蔽全部节点）。
+
+**改动前后（07 现行口径）**：
+
+| 项 | 改前 | 改后 |
+|---|---|---|
+| live 账本 | `cutEvents.question` 恒 0 | 机制在位（`tier:'run'` / `kind:'run-flush'` 落 `shear-applied`） |
+| 剪切事实族 | 3 类（applied/decision/error） | **4 类**：+ `shear-run-plan`（星标清单 + `classes` 分类回填） |
+| 改史形态 | 单节点 `tool/result` replace | **多节点区间 replace** → `user/message`（`source:{kind:'plugin',plugin:'context-economy',form:'notice'}`，官方 checkpoint 同构） |
+| 门槛 | G1–G9（工具四档） | + **G10 尾部窗**（止点距尾 ≥8 节点 → `hold run-too-old`；分类迟到不中段回剪） |
+| 分类输入 | — | `judge-recorded` 事实 **∨** ★ 断面 `CLASS` 回填（`discriminator.auto=false` 时仍可由 ★ 激活） |
+
+**真机会话离线回放**（44 会话 / 27,112 事件行；`scripts/verify-p16.mjs`；不做臂对照）：
+
+| 指标 | 读数 |
+|---|---|
+| `context-economy/*` 事实总量 | **19**（optimize-run 10 / shear-decision 9） |
+| `judge-recorded`（分类输入） | **0** |
+| 带分类用户消息 / run 候选 | **0 / 0** |
+| 假想落刀 | 三档全 0；假想节省 token = 0 |
+| live run 事实 | 0（快照时未重启；重启后由 `shear-applied`/`shear-run-plan` 观测） |
+
+**读数解读（诚实声明）**：P16 的机械路径**历史无样本**——① `discriminator.auto` 全程未开，判别域没有把
+`judge-recorded` 事实落进会话日志；② ★ 断面的 `CLASS` 回填写的是卷宗 KV（P9），不是事实轨；
+③ `SHEAR` 行协议 P14d 才入 prompt，尚无模型产出。故本单交付的是**执行面就绪**，两条激活路径：
+**(a)** 开启 `discriminator.auto` → 判别逐消息产出 `judge-recorded` → run 自动成型；
+**(b)** 点 ★ 且模型输出 `SHEAR`/`CLASS` 行 → 清单事实直接落刀（已接线）。阈值不动（docs/03 §8）。
+
+**验收**：
+- `npm run gate` 绿（**338 用例 / 33 文件**；M1–M5 / S1–S5 / D1–D10 全 PASS）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p16.mjs` → `P16 VERIFY PASS (30 checks)`（导出面 / 零 harness import / 接线白名单 / 三档 fixture /
+  中立性 + 预算 / 确定性 / 初值 / 跨层事实名 / 账本三字段 / D3+D10 / spec 标记 / 真机回放 / live / 尺寸）
+- `node scripts/verify-p15a.mjs` / `verify-p15b.mjs` → PASS（无回归）
+- `tests/shear-domain.spec.ts` **23 用例**（含 run 冲刷端到端 / ★ CLASS 路径 / G10 尾部窗 / 幂等）；`tests/shear-ledger.spec.ts` **15 用例**；
+  `tests/star-host.spec.ts` 17 用例（含清单事实断言）
+
+**尺寸申报**：工单预算 P16b src 净增 ≤260。实测 **src 净增 220 行**（`domains/shear.ts` +174 / `star.ts` +16 /
+`platform/history.ts` +14 / `ledger.ts` +12 / `shear-facts.ts` +4），另 spec 144 行 + `verify-p16.mjs` 308 行——**在预算内**。
+P16 合计 src 净增 **656 行**（P16a 436 + P16b 220），按总纲 §3 = **L（已按 a/b 拆两单两提交）**。
+
+**R3 关门**：P15a + P15b + P16 全部施工；**下一未执行单元 = P17 边界装配器**（R4 压缩域首单；工单内按 L 拆纯核/接线）。
+
+
 

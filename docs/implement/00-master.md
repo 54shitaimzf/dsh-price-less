@@ -82,7 +82,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P14f | 推理档做成设置项 + 弹层去噪（**已施工** commit `4711849`；快照 [§37](../ledger-history.md)） | R2 修正 | `discriminator.reasoningEffort`（留空 = 跟随模型默认 / off/low/medium/high/max）**判别与 ★ 共用**，能力探测后只传模型声明的档，账本记 `requestedEffort`/`sentEffort`；删除"已发送"提示 | P14e | M |
 | P15a | 工具剪切纯核（**已施工** commit `0274e4a`；工单 [P15a-shear-tool-core.md](P15a-shear-tool-core.md)；快照 §38） | R3 | `core/shear/` 工具半边（生命周期谓词 + 三级回退 / 四档准入 T-entry/T-loop/T-note/T0-R / T-note 协商；[03 §2](../03-shear.md)）；**纯核未接线**（接线 = P15b）；实测 632 行（预算 M、实际 L、未拆单，见 §38 尺寸申报） | P2 | M |
 | P15b | 工具剪切调度（**已施工**；工单 [P15b-shear-scheduling.md](P15b-shear-scheduling.md)；快照 §39） | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账 = 独立 `core/shear/ledger.ts` fold）+ `shear.enabled` 开关；实测 src 净增 883 行（预算 700 / 红线 800，见 §39 尺寸申报） | P15a,P6,P7,P12,P2 | M |
-| P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15b | M |
+| P16 | 对话剪切（**已施工** commit `9add76d`+`6abb7c0`；工单 [P16-dialogue-shear.md](P16-dialogue-shear.md)；快照 §40/§41） | R3 | `core/shear/run.ts` run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + `domains/shear.ts` run 冲刷 H4（03 §3）；★ `CLASS` 回填作分类输入、G10 尾部窗；阈值常数按 03 §8 既有结论初值落位（不做对照实验）；**L → 工单内拆 P16a/P16b 两单两提交** | P15b | M |
 | P17 | 边界装配器 | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机）+ 共享事务原语（04 §1） | P6,P8,P9 | L（拆纯核/接线两份） |
 | P18 | 压缩调用 | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验；模板在前 + datasets 同源断言，04 §7） | P5,P9 | M |
 | P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 15K 硬帽截断 + `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2,P3 | M |
@@ -132,7 +132,14 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 
 > P15b 施工记录（R3 第二单，2026-09-08）：工具剪切调度已施工（`domains/shear.ts` 四档执行 + 三类 ignorable 事实 + `core/shear/ledger.ts` 独立账本 fold + `shear.enabled` 开关；快照 §39；
 > `node scripts/verify-p15b.mjs` PASS 19 checks，gate 307 用例 / 32 文件）。顺带修正 P15a streak 语义（assistant 消息不再打断 T0-R streak）。
-> **下一未执行单元 = P16**（对话剪切：run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4；依赖 P15b）。
+
+> P16 施工记录（R3 关门单，2026-09-08）：对话剪切已施工（`core/shear/run.ts` run 状态机/吸收证明/结论三档 +
+> `domains/shear.ts` 整段 run 冲刷 H4 多节点 replace → `user/message` notice 源 + G10 尾部窗 + 第四类事实
+> `context-economy/shear-run-plan`（含 ★ `CLASS` 回填）；快照 §40/§41；`node scripts/verify-p16.mjs` PASS 30 checks，
+> gate 338 用例 / 33 文件；尺寸 P16a src 净增 436（超预算 16）/ P16b 220，合计 656 = L 已拆单）。
+> **诚实声明**：机械路径历史无样本（44 会话 / 27,112 事件行中 `judge-recorded` = 0），两条激活路径 = 开启 `discriminator.auto`
+> 或 ★ 产出 `SHEAR`/`CLASS` 行（已接线）。
+> **R3 关门；下一未执行单元 = P17 边界装配器**（R4 压缩域首单：`core/assemble/` + 共享事务原语；按 L 拆纯核/接线）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、

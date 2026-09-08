@@ -182,6 +182,14 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   `prune` 是无模型价的替换前计价）。
 - 当前插件：`src/platform/history.ts` 已施工（P6）——`createHistoryPort` 消费上述符号
   （H4 replace 唯一改史通道 + H5 事务对 + 可注入配对守卫），见 [10 §1 H4/H5](../10-wiring.md)。
+- **多节点区间替换先例（P16 核验）**：官方 `compaction-basic` `commitCompactionBody`
+  （`packages/compaction/compaction-basic/src/region.ts:437-475`）先 append log-only
+  `compaction/summary`，再 `session.append('user/message', checkpoint, {surfaceOp:{op:'replace',start,end},
+  sourceEventSeqs:[startEvent.seq, summaryEvent.seq, ...shadowedSeqs]})`——**替换节点恒为 `user/message`**，
+  且 `invariant.ts:145` 对 `user/message` 无 open turn/step 要求（`assistant/message` 有）。
+  插件侧对应构造器 = `platform/history.ts` `buildNoticeUserMessage(text, summary)`
+  （`createUserMessage` + `source:{kind:'plugin',plugin:'context-economy',form:'notice'}`，
+  `MessageSourceMap`/`ContextFormed` 见 `packages/llm/llm/src/message.ts:81-128,194`；P16 用于 run 冲刷）。
 
 ### 3.9 `tools/*` 事件（P7 已施工；P15b/P21b 使用）
 
@@ -400,8 +408,9 @@ webserver/credentials/attachment。
 | `src/platform/star-bridge.ts` | `ctx.get('connection')` 最小结构面、`connection.rpc.handle('/context-economy')`、`ConnectionRpcResult` 信封（§3.11） | 已施工（P14b1） |
 | `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物）；P14c：极短短路 + 上下文读会话事件 + DTO `historyCount` | 已施工（P14b1 / P14c） |
 | `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
-| `src/domains/shear.ts` | `createShearToolPort` 接线、`createHistoryPort`（H4 replace + prune 影子价）、pump 事件消费 | 已施工（P15b） |
-| `src/domains/shear-facts.ts` | `context-economy/shear-applied|decision|error` 声明合并 + 载荷 | 已施工（P15b） |
+| `src/domains/shear.ts` | `createShearToolPort` 接线、`createHistoryPort`（H4 replace + prune 影子价）、pump 事件消费；P16：run 相（`judge-recorded`/`shear-run-plan` 入缓冲 → `foldRunShear` → G10 → `user/message` notice 替换） | 已施工（P15b / P16） |
+| `src/domains/shear-facts.ts` | `context-economy/shear-applied|decision|error|run-plan` 声明合并 + 载荷 | 已施工（P15b / P16） |
+| `src/core/shear/run.ts` | run 状态机 / 吸收证明 / 结论三档 / 中立性 + 预算 / 指纹（纯核，零 harness） | 已施工（P16a） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
 | `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft` + `submit`（P14d 确认即发送）、`useInput`、`StarHostBridge` | 已施工（P14a / P14d） |
 | `client/star/star-protocol.ts` | 两侧独立声明的 channel/端点常量 + `StarPreviewData`/apply 形状守卫 | 已施工（P14b2，§3.11） |

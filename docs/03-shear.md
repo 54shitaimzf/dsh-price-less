@@ -3,7 +3,7 @@
 > 域定义：**剪切层管两次边界之间的高频小额上下文微削**——单位是**交换对**（问答对 / 工具对，
 > [01 §3.5](01-architecture.md)），与压缩器（[04](04-compactor.md)，边界时刻的大额回收）正交互补。
 > 两个半边：**工具剪切器**（结构半边，纯机械）与**对话剪切器**（语义半边，判别器搭车）。
-> 状态：R3 施工中——**P15a 纯核 + P15b 调度接线已施工**（`core/shear/` 生命周期谓词 + 四档准入 + T-note 协商 + T0-R；`domains/shear.ts` 四档执行 / 三类 ignorable 事实 / 独立剪切账本 fold；开关 `shear.enabled` 默认 true；快照 [§38](ledger-history.md)/[§39](ledger-history.md)）；P16 对话剪切待做。搭建序见 [11](11-structure.md) R3；§8 为阈值初值与账本观测要求。
+> 状态：**R3 剪切域已完成**——P15a 纯核 + P15b 调度接线 + **P16 对话剪切**（`core/shear/run.ts` run 状态机 / 吸收证明 / 结论三档；`domains/shear.ts` 整段 run 经 H4 换一句中立结论 + G10 尾部窗 + 第四类事实 `shear-run-plan`；快照 [§38](ledger-history.md)/[§39](ledger-history.md)/[§40](ledger-history.md)/[§41](ledger-history.md)）；开关 `shear.enabled` 默认 true。搭建序见 [11](11-structure.md) R3；§8 为阈值初值与账本观测要求。
 > 2026-09-06 定：不再组织对照实验批次——实验结论已固化进设计；实现时以 07 账本真机观测微调。
 
 ## 0. 它解决什么问题（人话版）
