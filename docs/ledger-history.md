@@ -2437,3 +2437,24 @@ golden 系统提示 `snapshots/web/ptc-round/system-prompt.expected.md`）：
 
 **权衡**：PTC 把工具 schema 放进系统提示词（+25KB），但**中间结果不进对话**（只有 print/return 进上下文）——
 对上下文经济反而是利好；native 系统提示词小，但每次工具调用都进历史。**待用户裁定本预设取哪种。**
+
+## §58 price-less 预设：显式 native + 输出措辞纪律（用户裁定 2026-09-09）
+
+**裁定**：预设**显式 `native`**（不继承部署默认），并增加本模式特有的输出措辞条款。
+
+**落地**（`presets/price-less/agent.cordis.yml`）：
+
+| 变更 | 内容 |
+|---|---|
+| 呈现模式 | 末尾新增 `tool-presentation` 行（`@deepseek-ai/dsh-agent-tool-presentation`，`mode: native`）——工具 schema 走请求的 `tools` 数组，系统提示词不含 PTC 的 SDK 声明段（§57） |
+| 措辞纪律 | persona prefix 新增 `## 输出措辞（本预设固定 native 工具呈现）` 4 条：① 名词落到文件/命令/字段/数值/步骤，不用「断面」「臂」这类内部抽象词（用户先用了除外）；② 沿用用户刚用过的名词，同一事物同一个词，不自造新词/近义词；③ 先结论后要点，必要信息（路径/命令/数字/版本/下一步）跟在后面，删寒暄与「已完成/已发送」空话；④ 简要不等于含糊，省修辞不省事实，拿不准直说 |
+
+persona prefix 全文 **1,511 B**（静态段，会话内定型，缓存前缀稳定）。
+
+**验证（机械）**：
+1. `node scripts/install-preset.mjs` 后仓库与 `$DSH_HOME/.agent-presets/price-less/` 两文件 **SHA256 逐字节一致**（`agent.cordis.yml` E4BBBBF3…）。
+2. harness 发现链 `scanRoot(userRoot, harnessBase=profiles/web/)` → `price-less` **`broken: null`**（24 行全部可解析，含新行）。
+3. 用 loader 的 `entryListSchema` 解析安装副本 → 顶层 18 行、`tool-presentation` config = `{"mode":"native"}`、prefix 含全部 4 条措辞条款。
+4. shipped `standard/agent.cordis.yml`（profile 0.1.3-alpha.2 与 checkout）**逐字节相同**——本预设仍是 standard + persona + 1 行呈现。
+
+**口径**：本预设从此**与 `DSH_TOOLS_MODE` 无关**，恒 native。

@@ -24,6 +24,9 @@
 #
 # dsh-price-less（N3 通道 A+C）：协商协议放在系统提示词里——固定段、零动态拼接、
 # 会话开始即定型（缓存前缀稳定）。工具结果里只留一行短注记（C），格式说明在这里。
+# 本预设另有两处特有：① 文件末尾 tool-presentation 行**固定 native 呈现模式**——工具
+# schema 走请求的 tools 数组，系统提示词不含 PTC 的 SDK 声明段；② persona 段附一段
+# 输出措辞纪律（具体化 / 沿用用户用词 / 简明）。
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
@@ -38,6 +41,12 @@
         结论 = 一句话说清结论；事实 = 后续可能用到的路径/数值/版本/引号内文字，逐字照抄、分号分隔；重取 = 需要原文时怎么再拿到（原命令 / 文件#行区间 / 调用摘要）。
       - 仍需原文 → `CUT-HOLD: 原因`
       拿不准就写 CUT-HOLD。
+
+      ## 输出措辞（本预设固定 native 工具呈现）
+      - 说具体：名词落到文件、命令、字段、数值、步骤；不用内部抽象词（如「断面」「臂」），除非用户自己先用了。
+      - 沿用用户的词：用户刚用过的名词就是标准叫法；同一事物前后用同一个词，不自造新词、不换近义词。
+      - 先结论后要点：一句话结论打头，必要信息（路径 / 命令 / 数字 / 版本 / 下一步）跟在后面；删掉寒暄、过程叙述和「已完成 / 已发送」这类空话。
+      - 简要不等于含糊：省的是修辞，不是事实；拿不准就直说不确定，别用抽象词糊过去。
     suffix: Your working directory is {{cwd}}.
 
 - id: agent-instructions
@@ -262,3 +271,14 @@
   config:
     fetch: true
     searchTimeoutMs: 60000
+
+# ── presentation ────────────────────────────────────────────────────────────
+
+# 固定 native：每个可见工具直接以 JSON Schema 出现在请求的 `tools` 数组里，系统提示词
+# 不含 PTC 的 TypeScript SDK 声明段（省下常驻前缀；代价是中间工具结果照常进历史）。
+# 显式声明而不继承部署默认——部署默认可能被 `DSH_TOOLS_MODE` 改成 ptc，那样本预设的
+# 系统提示词会凭空多出 25KB SDK 块。
+- id: tool-presentation
+  name: '@deepseek-ai/dsh-agent-tool-presentation'
+  config:
+    mode: native
