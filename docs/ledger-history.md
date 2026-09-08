@@ -2080,3 +2080,52 @@ spec ≈ **622**、`verify-p19.mjs` **379**、`assert-structure.mjs` **+9**。**
 
 **R4 进行中**：P17（+P17c）/ P18 / P19（a+b）完成；**下一未执行单元 = P20a 压力路径**
 （时序 C：wire 锚定计量 + 检查点/断路器；依赖 P19）。
+
+## §47 P20 压力路径与保险丝（2026-09-08；commit `0810a83` P20a + `8952cfc` P20b）
+
+**工单**：`docs/implement/P20-pressure-and-fuse.md`（R4 第五/六单；P20a M + P20b S，两单两提交）。
+**交付**：层 3 压力路径（wire 锚定触发 → 选缝 → 进行时检查点 + 保留区逐字 → 缩水校验 → 档案 checkpoint → 事务 → 断路器）
++ 层 4 保险丝（地板 0.8×模型窗口 no-op / 地板以上或溢出码紧急折叠 + `agent/request-error` retry）+ `auto:false` 防双触发。
+
+| 面 | P19 后 | P20 后 |
+|---|---|---|
+| 压力触发 | 无 | H2 每步 `meter.wireTokens`（`ctx.tokenMeter.measure().totalTokens` = provider 锚 + 表面增量，每步重锚）≥ `thresholdTokens`（绝对设计值；0.4×domain fallback）；**一个 turn 至多一次** |
+| 压力产物 | P18 纯核 | 进行时检查点（progress/currentState/nextStep/liveConstraints）+ `cutPoint` 缝（单元边界，不切工具对） |
+| 保留区 | — | `[cutPoint..end]` 全量逐字（**无帽**；不申报 span、不盘上物化）；替换节点 = 续传 C 链 + 新检查点 + 保留区 |
+| 机制 A/B | 纯核表 | 档案只存**检查点文本 C**（续传面）；保留区下次由账本原文重建后折入新检查点（被遮蔽原文重新可见） |
+| 断路器 | — | 单 task checkpoint 链 ≤ **3**（`PRESSURE_CHAIN_LIMIT`）→ `pressure-fired{outcome:'breaker'}` |
+| 缩水校验 | 边界重试 1 | 压力档重试 **2**（分母 = 折叠区材料；分子 = 检查点 + 保留区） |
+| 保险丝 | 设计态 | 地板 = floor(0.8 × contextWindow)（`llm.resolveModelInfo().context.contextWindow`，按 route 缓存）；**低于地板严格 no-op**（字节不变断言）；地板以上 = force 紧急折叠 + `hard-truncate{fuse-fold}` |
+| 溢出接管 | — | `agent/request-error`（H3 收口 D14 扩面）：`CONTEXT_WINDOW_EXCEEDED` 且同 (turn,step) 未接管 → 紧急折叠 → 落刀 `retry` / 未落刀 `pass`（原始错误交上游） |
+| 原生引擎 | auto:true 共存 | `cordis.patch.yml` 覆写 compaction-basic `auto:false`（自动压力 + 溢出恢复唯一提供者 = 本插件） |
+| 结构断言 | D1–D15 | D14 扩面（`agent/request-error`/`RequestErrorAction` 收口 platform/agent-step.ts） |
+
+**真机会话只读回放**（44 会话；`scripts/verify-p20.mjs`；不做臂对照；会话随本机活动增长，绝对值只作口径）：
+
+| 指标 | 读数 |
+|---|---|
+| 开 task 会话 / 折叠候选 | **44 / 41** |
+| 折叠区材料体量 avg / peak | **301,974 / 3,397,965** tok |
+| 折叠区转写字节漂移（双跑） | **0** |
+| live `pressure-run` / `pressure-fired` / `hard-truncate` | **0 / 0 / 0** |
+
+**读数解读（诚实声明）**：本机历史有开 task 与足量材料，但**没有一条 live 压力事实**——触发需 wire 锚定计量达阈
+（`ctx.tokenMeter` 需 provider usage 锚；离线回放无 usage），且需重启加载新构建。验收证据 = 机械断言（gate 512 用例 / 49 文件）
++ 假会话端到端（压力触发 → 调用 → 档案 checkpoint → 事务 → 事实 / 断路器 / 地板 no-op 字节不变 / 溢出接管 retry）
++ 纯核 fixture（阈值 / 断路器 / 检查点 / 续传拼接 / 折叠区转写 / 两个 fold）。
+
+**验收**：
+- `npm run gate` 绿（**512 用例 / 49 文件**；M1–M5 / S1–S5 / **D1–D15** 全 PASS，`ok=true vacuous=[]`）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p20.mjs` → `P20 VERIFY PASS (34 checks)`
+- 新增/扩 spec：`compress-pressure` **9** / `fuse` **4** / `meter` **3** / `compaction-domain` **29**（+13）/ `agent-step` **7**（+3）/ `compress-ledger` **10**（+1）/ `assert-structure` +2
+- `node scripts/verify-p19.mjs`（27）/ `verify-p18.mjs`（45）/ `verify-p17.mjs`（54）→ PASS（无回归）
+
+**尺寸申报**：P20a src 净增 **562**（估计 ≤400）、P20b **259**（估计 ≤150），合计 **821**；spec ≈ **515**、
+`verify-p20.mjs` **458**、`assert-structure.mjs` **+8**。**超估计合计 271**——合规自证头（docs/05 §6）约 60 行 +
+压力端到端七段（触发 / 缝 / 检查点 / 缩水 / 档案 / 事务 / 断路器）+ 保险丝三段（地板 / 紧急折叠 / 溢出接管）
++ 三个端口扩面（H7 wire / H3 request-error / H12 窗口）。
+**不拆单理由**：P20a/P20b 已按总纲两单两提交（各带独立验收）；P20a 内部七段互为同一条端到端路径，
+拆开产生跨提交悬空行为（P15b/P17/P19 先例）。
+
+**R4 进行中**：P17（+P17c）/ P18 / P19（a+b）/ P20（a+b）完成；**下一未执行单元 = P21a 恢复编排**
+（H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。

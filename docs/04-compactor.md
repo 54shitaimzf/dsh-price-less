@@ -13,7 +13,12 @@
 > **P19 边界路径编排已施工**（`domains/compaction.ts`：H2 闭合发现 → 单次调用 → 缩水校验〔replace 前置，重试 1〕→
 > 档案 vN 落盘〔只追加 + 15K 硬帽 + 内容寻址复用〕→ H4/H5 事务〔官方 summary + checkpoint 紧邻〕→ 卷宗结构性清空 →
 > T-boundary 补账；`platform/agent-step.ts` H2 收口 D14 / `platform/meter.ts` 影子价同源 D15；`compression.*` 配置六字段；
-> 快照 [§46](ledger-history.md)；`node scripts/verify-p19.mjs` PASS）。压力 / 保险丝见 P20a/P20b（搭建序见 [11](11-structure.md) R4）。
+> 快照 [§46](ledger-history.md)；`node scripts/verify-p19.mjs` PASS）；**P20 压力路径与保险丝已施工**
+> （`core/compress/pressure.ts`：绝对阈值 + 比例 fallback / 断路器 3 / 压力档重试 2 / 检查点渲染 / 折叠区材料转写；
+> `domains/compaction.ts`：wire 锚定触发 → 选缝 → 调用 → 缩水校验 → 档案 checkpoint → 事务；`core/compress/fuse.ts` +
+> `platform/agent-step.ts` `onAgentRequestError`：地板 0.8×窗口 no-op / 溢出码紧急折叠 + retry；
+> `cordis.patch.yml` 覆写 compaction-basic `auto:false`；快照 [§47](ledger-history.md)；`node scripts/verify-p20.mjs` PASS）。
+> R4 搭建序见 [11](11-structure.md)。
 
 ## 0. 它解决什么问题（人话版）
 

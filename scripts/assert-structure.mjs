@@ -199,7 +199,7 @@ export const RULES = [
       // 只许居于 platform/agent-step.ts——域侧只见 { session, turn, step } 与 'retry'/'pass' 词汇。
       /(agent\/pre-step|agent\/request-error|@deepseek-ai\/dsh-agent|\bPreStepDecision\b|\bRequestErrorAction\b|\bAgentPreStepPayload\b|\bAgentRequestErrorPayload\b)/.test(f.text)
         && f.path !== 'src/platform/agent-step.ts'
-        ? [{ message: 'agent/pre-step | agent/request-error concepts must only appear in src/platform/agent-step.ts (H2/H3 端口收口, docs/10 §1)' }]
+        ? [{ message: 'agent/pre-step concepts must only appear in src/platform/agent-step.ts (H2/H3 端口收口；含 agent/request-error, docs/10 §1)' }]
         : [] },
   { id: 'D13', canon: 'docs/05 确定性优先 + docs/11 §9（压缩调用确定性）',
     appliesTo: (p) => p.startsWith('src/core/compress/'),

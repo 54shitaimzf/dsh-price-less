@@ -86,8 +86,8 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P17 | 边界装配器（**已施工** commit `24c30a5`+`67de3cd`+`6c9cbaf` + **P17c 修正**；工单 [P17-boundary-assembler.md](P17-boundary-assembler.md)；快照 §42/§43/§44） | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机 + 地板/兜底）+ 共享事务原语（04 §1）+ `platform/files.ts`（H15 盘上取真）+ `domains/assemble.ts` 装配域 + `assemble-run` 事实 + P17c 修正（HT 软门 / 档案区 15K 硬帽纯核 / 追加式链两形态 / 丢弃归因）；**L → 工单内拆 P17a/P17b + P17c 修正单** | P6,P8,P9 | L |
 | P18 | 压缩调用（**已施工** commit `eab06ab`；工单 [P18-compress-call.md](P18-compress-call.md)；快照 §45） | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验 + 共享消费模块 + `compress-run` 调用账本；模板在前 + **版本化常量/字节稳定断言**〔原「datasets 同源断言」无资产可断，P18 §8 修正 #2〕，04 §2/§3/§8） | P5,P9 | M（实测超线，见工单 §6） |
 | P19 | 边界路径编排（**已施工** commit `ee39076` P19a + `0844aa1` P19b；工单 [P19-boundary-path.md](P19-boundary-path.md)；快照 §46） | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 档案区落盘 + 15K 硬帽调用〔纯核已由 P17c 交付〕+ `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车）+ **缩水校验 = replace 前置**（04 §1）+ **内容寻址复用**（P18 N5 归属）+ `platform/agent-step.ts`（H2 收口 D14）/ `platform/meter.ts`（影子价同源 D15）+ `compression.*` 配置面（[11 §6](../11-structure.md)）；**L → 工单内拆 P19a/P19b** | P17,P18,P2,P3 | L（拆 a/b） |
-| P20a | 压力路径 | R4 | 时序 C：wire 锚定计量（估计器 `CHARS_PER_TOKEN=1.5` 校准，04 §5）+ 检查点/断路器 | P19 | M |
-| P20b | 保险丝 | R4 | hard-truncate no-op 语义 + `request-error` 接管；`cordis.patch.yml` 加 compaction-basic `auto:false` | P19 | S |
+| P20a | 压力路径（**已施工** commit `0810a83`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 上半：`core/compress/pressure.ts`（触发阈 = thresholdTokens 绝对设计值 + 0.4×domain fallback / 断路器 3 / 重试 2 / 检查点渲染 / 机制 A 续传 + 机制 B 折叠区材料转写）+ `domains/compaction.ts` 压力折叠（选缝 → 调用 → 缩水校验 → 档案 checkpoint → 事务 → `pressure-fired`/`compress-run`）+ `platform/meter.ts` `wireTokens`（`measure().totalTokens` = provider 锚 + 增量，04 §5）+ `ArchiveRecord.cutPointSeq/rangeEndSeq` | P19 | M（实测超线，见工单 §6） |
+| P20b | 保险丝（**已施工** commit `8952cfc`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 下半：`core/compress/fuse.ts`（地板 0.8×窗口 + 武装谓词 + `hard-truncate` fold）+ `platform/agent-step.ts` `onAgentRequestError`（H3 收口，D14 扩面）+ `platform/llm.ts` `resolveContextWindow`/溢出码 + 紧急压力折叠（地板以上 / `CONTEXT_WINDOW_EXCEEDED` → retry）+ `cordis.patch.yml` compaction-basic `auto:false` | P19 | S（实测超线，见工单 §6） |
 | P21a | 恢复编排 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练；`restore/*` 事实发射） | P20a,P20b,P3 | M |
 | P21b | 全链验收 + 可视化 | R4 | 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P21a | M |
 
@@ -191,6 +191,25 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > **诚实声明**：真机回放 44 会话 / **含闭合段 0**（`task-boundary` 事实 = 0，与 R3 `judge-recorded` = 0 同因）——
 > 触发路径真实历史**无样本**，证据 = 机械断言 + 假会话端到端 + 纯核 fixture；live `compress-run` = **0**（需重启加载新构建）。
 > **下一未执行单元 = P20a 压力路径**（时序 C：wire 锚定计量 + 检查点/断路器）。
+
+> P20 施工记录（R4 第五/六单，2026-09-08）：压力路径 + 保险丝已施工（commit `0810a83` P20a + `8952cfc` P20b；
+> 工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47；`node scripts/verify-p20.mjs` PASS **31 checks**，
+> gate **512 用例 / 49 文件**，结构断言 D1–D15）。
+> 交付 = `core/compress/pressure.ts`（绝对阈值 + 比例 fallback / 断路器 3 / 压力档重试 2 / 检查点渲染 /
+> 折叠区材料转写〔被遮蔽原文重新可见〕+ `pressure-fired` fold）+ `core/compress/fuse.ts`（地板 0.8×窗口 +
+> `hard-truncate` fold）+ `domains/compaction.ts` 压力折叠（wire 锚定触发 → 选缝 → 调用 → 缩水校验 →
+> 档案 checkpoint〔只存 C，续传面〕→ 事务替换）+ 保险丝（低于地板严格 no-op / 地板以上或溢出码紧急折叠 +
+> request-error retry）+ `platform/meter.ts` `wireTokens` + `platform/agent-step.ts` `onAgentRequestError` +
+> `platform/llm.ts` `resolveContextWindow` + `cordis.patch.yml` auto:false。
+> 计划修正（工单 §8 八项）：触发式主次（绝对设计值为主；04 §3 的 0.4×域窗在默认值下不一致 → P21b 决策项）/
+> 压力档案只存检查点文本（保留区由账本原文重建后折叠）/ compressionLayer.pressure 由 compress-run 计数 /
+> harness 无硬截断挂点 ⇒ 04 §4「重建消息表」落为紧急压力折叠 + request-error retry / meter+llm 端口扩面 /
+> auto:false 后溢出恢复唯一提供者 = 本插件 / 两单两提交。
+> 尺寸：P20a src 净增 **562**（估计 ≤400）、P20b **259**（估计 ≤150），合计 **821**；spec ≈ **515**、verify **458**、
+> assert +8。**诚实声明**：真机回放 44 会话 / 开 task 44 / 折叠候选 41（折叠区体量 avg 302K、peak 3.4M）、
+> 字节漂移 0；live `pressure-run` / `pressure-fired` / `hard-truncate` = **0 / 0 / 0**（需重启加载新构建 +
+> 真实 wire 达阈；wire 锚定需 provider usage 锚）。
+> **下一未执行单元 = P21a 恢复编排**（H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、

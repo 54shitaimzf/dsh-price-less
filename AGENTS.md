@@ -22,7 +22,12 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 （`core/compress/{region,store}.ts` 区间转写 + 档案区〔只追加 + 15K 硬帽 + 内容寻址缓存〕；`platform/agent-step.ts` H2 收口〔D14〕；
 `platform/history.ts` `commitCheckpoint` 官方 summary+checkpoint 紧邻提交；`platform/meter.ts` 影子价同源〔D15〕；
 `domains/compaction.ts` 闭合发现 → 单次调用 → 缩水校验〔replace 前置，重试 1〕→ 档案 vN → 事务替换 → T-boundary 补账；
-`compression.*` 配置六字段 + client 同步；快照 §46；**需重启加载新构建**，live `compress-run` 当前 = 0）。`platform/`（十一文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+`compression.*` 配置六字段 + client 同步；快照 §46；**需重启加载新构建**，live `compress-run` 当前 = 0）。
+**P20 压力路径与保险丝已施工**（`core/compress/{pressure,fuse}.ts`：绝对阈值 + 比例 fallback / 断路器 3 / 压力档重试 2 /
+检查点渲染 / 折叠区材料转写 / 地板 0.8×窗口；`domains/compaction.ts`：wire 锚定触发 → 选缝 → 检查点 + 保留区逐字 →
+缩水校验 → 档案 checkpoint → 事务，以及地板以上/溢出码紧急折叠 + `agent/request-error` retry；
+`platform/{agent-step,meter,llm}.ts` 端口扩面〔H3 收口 D14 扩面〕；`cordis.patch.yml` 覆写 compaction-basic `auto:false`；
+快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。`platform/`（十一文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。

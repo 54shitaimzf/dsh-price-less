@@ -4,7 +4,9 @@
 > 域归属视角与三条主时序也在此。事件分两层：会话日志事件（`session/event` firehose，
 > append-only 落盘）与 cordis 运行时事件（waterfall/emit，不落盘）。
 > 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；**H6 四档执行已由 P15b、run 冲刷已由 P16 接线于 `domains/shear.ts`**；**H15 盘上取真已由 P17b 接线于 `platform/files.ts`（装配域 `domains/assemble.ts`，压缩触发归 P19；P17c 补 HT 软门与丢弃归因）**；**P18 压缩调用纯核已施工**（`core/compress/` 两模式 prompt + 产物 schema 校验；H12 purpose `context-economy-compaction` 的**调用契约**已定，实际 `llm.stream` 调用归 P19/P20a）；**P19 已接线 H2**（`platform/agent-step.ts` 收口 + `domains/compaction.ts` 边界触发；`compaction/summary` + checkpoint 替换经 `platform/history.ts` `commitCheckpoint`；快照 [§46](ledger-history.md)）；
-H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H3/H9 仍为设计态（P20a/P21a），模块落位见 [11 §3](11-structure.md)）。
+**P20 已接线 H3**（`platform/agent-step.ts` `onAgentRequestError` + `domains/compaction.ts` 压力触发/溢出接管；
+> `cordis.patch.yml` 覆写 compaction-basic `auto:false`；快照 [§47](ledger-history.md)）；
+H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H9 仍为设计态（P21a），模块落位见 [11 §3](11-structure.md)）。
 
 ## 0. 它解决什么问题（人话版）
 
