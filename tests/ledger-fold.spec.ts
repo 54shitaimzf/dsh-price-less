@@ -16,6 +16,7 @@ import {
   TASK_BOUNDARY_FACT_TYPE,
 } from '../src/core/ledger/index.ts'
 import type { CommonLedger, LedgerFact, LedgerSessionEvent } from '../src/core/ledger/index.ts'
+import { flatDensity } from '../src/core/meter/index.ts'
 
 const fixture = (name: string): string => readFileSync(join(__dirname, 'fixtures/ledger', name), 'utf8')
 const events = JSON.parse(fixture('session-events.json')) as LedgerSessionEvent[]
@@ -24,12 +25,13 @@ const mirrorFacts = JSON.parse(fixture('mirror-facts.json')) as LedgerFact[]
 const pricing = JSON.parse(fixture('pricing.json'))
 
 describe('estimateTokens', () => {
-  it('ceil(chars/1.5) 固定校准，支持注入 charsPerToken', () => {
+  it('两桶密度默认标定（CJK 1.5 / 其余 2.9）；支持注入密度', () => {
     expect(estimateTokens('')).toBe(0)
     expect(estimateTokens('a')).toBe(1)
-    expect(estimateTokens('ab')).toBe(2)
+    expect(estimateTokens('ab')).toBe(1)
     expect(estimateTokens('abc')).toBe(2)
-    expect(estimateTokens('abcd', 4)).toBe(1)
+    expect(estimateTokens('abcd', flatDensity(4))).toBe(1)
+    expect(estimateTokens('中文')).toBe(2)
   })
 })
 

@@ -3,19 +3,17 @@
  * 纯函数：同输入同账；不注册监听、不写事实、不触碰运行期。
  */
 import type { CommonLedger, LedgerFact, LedgerSessionEvent, PricingTable } from './types.ts'
-import { DEFAULT_CHARS_PER_TOKEN } from './types.ts'
+import { estimateTokens, type TokenDensity } from '../meter/estimate.ts'
 import { foldSegmentState } from '../units.ts'
 export type { CommonLedger } from './types.ts'
+export { estimateTokens } from '../meter/estimate.ts'
+export type { TokenDensity } from '../meter/estimate.ts'
 export interface FoldOptions {
   facts?: LedgerFact[]
   pricing?: PricingTable
   successfulTaskCount?: number
-  charsPerToken?: number
-}
-/** chars/1.5 向上取整；charsPerToken 可注入测试。 */
-export function estimateTokens(text: string, charsPerToken: number = DEFAULT_CHARS_PER_TOKEN): number {
-  const divisor = charsPerToken > 0 ? charsPerToken : DEFAULT_CHARS_PER_TOKEN
-  return Math.ceil(text.length / divisor)
+  /** 体积类 token 估算密度（默认 = core/meter 两桶标定；测试可注入）。 */
+  density?: TokenDensity
 }
 
 /** tool/result 事件 data → 首块 tool-result 内 text blocks 拼接；坏形状返回空串。 */
@@ -51,7 +49,7 @@ function toolCallIdOfResult(data: unknown): string | undefined {
 
 export function foldCommon(events: LedgerSessionEvent[], options: FoldOptions = {}): CommonLedger {
   const facts = options.facts ?? []
-  const charsPerToken = options.charsPerToken ?? DEFAULT_CHARS_PER_TOKEN
+  const density = options.density
   const stepStarts: number[] = []
   const seenCalls = new Set<string>()
   const repeatedCallIds = new Set<string>()
@@ -122,11 +120,11 @@ export function foldCommon(events: LedgerSessionEvent[], options: FoldOptions = 
   let compoundedVolume = 0
   for (const r of results) {
     const laterSteps = stepStarts.filter((seq) => seq > r.seq).length
-    compoundedVolume += estimateTokens(r.text, charsPerToken) * Math.max(1, laterSteps)
+    compoundedVolume += estimateTokens(r.text, density) * Math.max(1, laterSteps)
   }
   let reDiscoveryTokens = 0
   for (const r of results) {
-    if (r.callId && repeatedCallIds.has(r.callId)) reDiscoveryTokens += estimateTokens(r.text, charsPerToken)
+    if (r.callId && repeatedCallIds.has(r.callId)) reDiscoveryTokens += estimateTokens(r.text, density)
   }
 
   let cost: CommonLedger['cost'] = null

@@ -2520,3 +2520,47 @@ CUT-OK / CUT-HOLD / 无回复 = **0 / 0 / 633**；旧 v1 注记收到标记 **0 
 **复盘口径（三处）**：① 边界 = **task 边界**（判别器判），不是每条用户消息——第 2 条判 `continue`、第 3 条判 `new-task` → 压 task-1；
 ② 35% 压力路径未触发（阈值 = 0.35 × 1M = 350K；本次区间 90,985）；③ 假定窗口 `domainTokens` 在该配置下不参与计算。
 
+---
+
+## §61 token 估算重构 F8a/F8b：DSH 原生对齐 + 两桶密度（2026-09-09；提交 = 本账本同提交，见 git log）
+
+**触发**：用户质询「token 估算准不准 / 中英文是否分开 / 能否学 DSH 原生」。逐项查证结论：
+插件旧估 = ceil(text.length / 1.5)（全局单桶、无 CJK 分支、无块/角色开销）；
+DSH 原生 packages/llm/token-meter/src/estimate.ts = 全局 CHARS_PER_TOKEN=4 + BLOCK_OVERHEAD=4 +
+ROLE_OVERHEAD=4 + 递归块价（含 reasoning）+ **usage 锚定**（估算只作回退）。**两者都不分中英文。**
+
+**真机对账**（会话 session-7d73bb3f，压缩区间 seq 19–190，原文 136,477 字 = 20,101 CJK + 116,376 其余）：
+
+| 口径 | 值 | 误差 |
+|---|---|---|
+| 真实 usage（input 54,995 × 区间占比 90,985/93,471） | **53,532** | 基准 |
+| 插件旧估（全局 1.5 字符/token） | 90,985 | **+70%** |
+| DSH meter（4 字符/token；多计 reasoning 块） | 44,989 | −16% |
+| **两桶 A（CJK 1.5 / 其余 2.9 字符/token）** | **53,531** | **0.002%** |
+
+**用户裁定**：采两桶 A。
+
+**F8a 交付**（新模块 core/meter/）：
+
+| 文件 | 内容 |
+|---|---|
+| core/meter/estimate.ts（新） | TokenDensity{cjk,other} + DEFAULT_TOKEN_DENSITY={cjk:1.5, other:2.9} + BLOCK_OVERHEAD/ROLE_OVERHEAD（与 DSH 同值）+ classifyChars（CJK/假名/谚文/全角均入 CJK 桶）+ estimateTokens + tokensToChars（截断反解）+ DSH 同形块/内容/消息价 + calibrationRatio + flatDensity（迁移/测试） |
+| core/meter/index.ts | barrel（仅具名导出） |
+| 策略面 | AssemblePolicy.charsPerToken / CompressPolicy.charsPerToken / FoldOptions.charsPerToken → density: TokenDensity；删 DEFAULT_CHARS_PER_TOKEN；policyKey 改 cjk,other 序列化 |
+| 调用面 | core/{ledger/fold, assemble, compress/{prompt,region,pressure}, prefix, optimize, dossier, shear/ledger} + domains/{compaction, shear, star} 随迁 |
+
+**F8b 标定对账**：
+- CompressCallLedger.calibration {samples, estimated, actual, ratio}——promptTokens（估）vs llmUsage.inputTokens + cacheReadTokens（真实；inputTokens 只计未缓存部分，缓存读必须相加）。
+- domains/compaction.ts warnTokenDrift：比值偏离 ±25% 即 logger.warn（只观察、不改行为）。
+
+**未做（下一步）**：**F8c 口径统一**——压力触发/保险丝仍用 DSH meter（ctx.tokenMeter，对中文低估 ~2.7×），
+体积账用两桶，两套单位并存；thresholdTokens/domainTokens/retainTokens/archiveCapTokens 换单位必须同时重标定，
+待真机 calibration.ratio 攒够样本后再拍。
+
+**验收**：npm run gate = **625 tests / 57 files** + assert ok=true vacuous=[]；npm run typecheck:tests 绿；build 绿（host + client）。
+- 新增 tests/meter-estimate.spec.ts 16 例（含真机标定锚点：20,101 CJK + 116,376 其余 → 53,531）。
+- 迁移期测试改法：tests/{assemble-archive,assemble-hottail,compress-prompt,compress-region,compress-store,cache-invariants,ledger-fold} 改用 flatDensity(n) 保持原期望；tests/fixtures/ledger/session-events.expected.json 冻结期望随默认密度更新（compoundedVolume 20→12、reDiscoveryTokens 12→7）。
+
+**口径同步**：docs/04 §5（估计器两条改两桶 + 标定锚点 + 对账比）、docs/11 §2（新增 core/meter/ 行）、AGENTS.md 标定条。
+
+

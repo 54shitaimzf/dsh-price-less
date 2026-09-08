@@ -12,6 +12,7 @@
  * 度量: hotTail* / digest* 字段经 assemble-run 事实入账（fold 见 ledger.ts）。
  */
 import { estimateTokens, extractTextFromToolResult } from '../ledger/fold.ts'
+import { tokensToChars } from '../meter/estimate.ts'
 import type { LedgerSessionEvent } from '../ledger/types.ts'
 import { toolCategory } from '../shear/tool.ts'
 import { archiveChainShape } from './archive.ts'
@@ -292,7 +293,7 @@ function resolveSelection(
         seqEnd: unit.seqEnd,
         source: 'span',
         text: unit.text,
-        tokens: estimateTokens(unit.text, policy.charsPerToken),
+        tokens: estimateTokens(unit.text, policy.density),
       },
     }
   }
@@ -312,7 +313,7 @@ function resolveSelection(
       source: 'file',
       coord,
       text,
-      tokens: estimateTokens(text, policy.charsPerToken),
+      tokens: estimateTokens(text, policy.density),
       ...(remap.clipped ? { clipped: true } : {}),
     },
   }
@@ -370,7 +371,7 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
     stopReason = 'list-end'
     for (let i = units.length - 1; i >= 0; i--) {
       const unit = units[i] as AssembleUnit
-      const tokens = estimateTokens(unit.text, policy.charsPerToken)
+      const tokens = estimateTokens(unit.text, policy.density)
       if (used + tokens > budget) { stopReason = 'budget'; break }
       push({ unitId: unit.id, tier: 'fallback', seqStart: unit.seqStart, seqEnd: unit.seqEnd, source: 'span', text: unit.text, tokens })
       if (used >= budget) { stopReason = 'budget'; break }
@@ -389,10 +390,10 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
       if (used + selection.tokens > budget) {
         if (selections.length === 0) {
           const remaining = budget - used
-          const chars = Math.floor(remaining * policy.charsPerToken) - HOT_TAIL_TRUNCATION_MARKER.length
+          const chars = tokensToChars(selection.text, remaining, policy.density) - HOT_TAIL_TRUNCATION_MARKER.length
           if (chars >= policy.minTruncatedChars) {
             const text = `${selection.text.slice(0, chars)}${HOT_TAIL_TRUNCATION_MARKER}`
-            push({ ...selection, text, tokens: estimateTokens(text, policy.charsPerToken), truncated: true })
+            push({ ...selection, text, tokens: estimateTokens(text, policy.density), truncated: true })
             truncated++
           }
         }
@@ -422,7 +423,7 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
             seqEnd: unit.seqEnd,
             source: 'span',
             text,
-            tokens: estimateTokens(text, policy.charsPerToken),
+            tokens: estimateTokens(text, policy.density),
           }
           if (used + selection.tokens > budget) return
           push(selection)

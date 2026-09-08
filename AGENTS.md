@@ -64,8 +64,8 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
   `harness-session` 真集成）；机制测试以回放/注入/确定性为主，不做臂对照（`docs/08` 已封存为历史方法学，不再作为施工门禁）。
 - **压缩域标定常数（实验结论 + P20c 用户裁定）**：压力阀门 = `pressureRatio`（默认 **0.35**）
   × 主模型上下文窗口；窗口缺失 → 假定窗口 `domainTokens=125K`（2026-09 实测峰值 233K 标定）
-  → 绝对安全网 `thresholdTokens=100K`；`retainTokens=10K`（边界热尾）；估计器
-  `CHARS_PER_TOKEN=1.5` 校准；不变量 `retain < thresholdTokens`、`0 < pressureRatio < 0.8`。**触发器语义**：task 边界
+  → 绝对安全网 `thresholdTokens=100K`；`retainTokens=10K`（边界热尾）；估计器 = **两桶密度**
+  （CJK 1.5 / 其余 2.9 字符/token；结构模型对齐 DSH `token-meter/estimate.ts`，`core/meter/estimate.ts`）；不变量 `retain < thresholdTokens`、`0 < pressureRatio < 0.8`。**触发器语义**：task 边界
   自动触发 = `agent/pre-step` 发现 `status==='closed' && !compactedTaskIds` 的 task 就压
   （`docs/10` 时序 A），不是 `trigger.tokenThreshold`（那是 DSH 压力/溢出触发）。
 - **上下文窗口硬截断（仅防溢出安全阀）**：独立于压缩域逻辑，平时 no-op；只做防溢出，

@@ -11,6 +11,7 @@
  * 度量: 本文件即压缩族调用口径（07 回放管道消费面）。
  */
 import type { LedgerFact } from '../ledger/types.ts'
+import { calibrationRatio } from '../meter/estimate.ts'
 import type { CompressMode, CompressOutcome } from './types.ts'
 
 /** 压缩调用事实（ignorable log-only；声明合并随生产者 P19 落 domains/compaction-facts.ts）。 */
@@ -96,6 +97,8 @@ export interface CompressCallLedger {
   archiveAppends: number
   shearBoundaryFolded: number
   retiredDossiers: number
+  /** 估算标定（F8b）：估算 promptTokens vs 真实 llmUsage.inputTokens 的对账；无样本 = ratio null。 */
+  calibration: { samples: number; estimated: number; actual: number; ratio: number | null }
   /** P20a 压力自持位（不属 07 字段；pressure* 四字段由 pressure-fired 事实 fold）。 */
   pressureOk: number
   pressureFoldedTokens: number
@@ -120,6 +123,7 @@ export function emptyCompressCallLedger(): CompressCallLedger {
     archiveAppends: 0,
     shearBoundaryFolded: 0,
     retiredDossiers: 0,
+    calibration: { samples: 0, estimated: 0, actual: 0, ratio: null },
     pressureOk: 0,
     pressureFoldedTokens: 0,
     pressureRetainedTokens: 0,
@@ -167,7 +171,17 @@ export function foldCompressCalls(facts: readonly LedgerFact[]): CompressCallLed
     ledger.pressureFoldedTokens += numberField(data.foldedTokens)
     ledger.pressureRetainedTokens += numberField(data.retainedTokens)
     if (data.emergency === true) ledger.pressureEmergencies++
+    // F8b 标定对账：只在真正发生调用且两侧都有值时取样（缓存命中/跳过/缺 usage 不污染比值）。
+    // 真实 prompt 体量 = inputTokens + cacheReadTokens（usage 的 inputTokens 只计未缓存部分）。
+    const estimated = numberField(data.promptTokens)
+    const actual = numberField(usage.inputTokens) + numberField(usage.cacheReadTokens)
+    if (calls > 0 && estimated > 0 && actual > 0) {
+      ledger.calibration.samples++
+      ledger.calibration.estimated += estimated
+      ledger.calibration.actual += actual
+    }
   }
   ledger.compressionCacheHitRate = ledger.invocations === 0 ? 0 : ledger.cacheHits / ledger.invocations
+  ledger.calibration.ratio = calibrationRatio(ledger.calibration.estimated, ledger.calibration.actual)
   return ledger
 }

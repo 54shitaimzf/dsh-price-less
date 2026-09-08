@@ -96,5 +96,5 @@ export function regionTokens(
   range: RegionRange,
   policy: CompressPolicy = DEFAULT_COMPRESS_POLICY,
 ): number {
-  return estimateTokens(renderRegionTranscript(events, range), policy.charsPerToken)
+  return estimateTokens(renderRegionTranscript(events, range), policy.density)
 }

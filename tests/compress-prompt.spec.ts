@@ -17,6 +17,7 @@ import {
   type AssembleUnit,
   type CompressPolicy,
 } from '../src/core/compress/index.ts'
+import { flatDensity } from '../src/core/meter/index.ts'
 
 const unit = (id: string, extra: Partial<AssembleUnit> = {}): AssembleUnit => ({
   id,
@@ -89,8 +90,8 @@ describe('P18 prompt：两模式组装', () => {
     expect(capped.text).toContain('[c]')
   })
 
-  it('regionTokens 按注入 cpt 机械计量；空区域/空清单不抛错', () => {
-    const render = renderBoundaryPrompt({ regionText: 'x'.repeat(30), units: [], policy: policy({ charsPerToken: 1 }) })
+  it('regionTokens 按注入密度机械计量；空区域/空清单不抛错', () => {
+    const render = renderBoundaryPrompt({ regionText: 'x'.repeat(30), units: [], policy: policy({ density: flatDensity(1) }) })
     expect(render.regionTokens).toBe(30)
     expect(render.unitCount).toBe(0)
     expect(render.listedUnits).toBe(0)

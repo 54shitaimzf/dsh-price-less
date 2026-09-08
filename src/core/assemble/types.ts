@@ -9,6 +9,7 @@
  * 审查清单: 不 import harness/platform（S1）；不写 KV/日志/事实；不改史；无时钟随机（D12）。
  * 度量: 阈值初值集中于此（docs/04 §2 预算三环 / §5 标定 / §6 硬帽）。
  */
+import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
 /** 策略版本（阈值口径可复现；docs/03 §4 同哲学）。 */
 export const ASSEMBLE_POLICY_VERSION = 1
@@ -179,8 +180,8 @@ export interface AssemblePolicy {
   readonly hotTailTokens: number
   /** 档案区硬帽（04 §6 绝对设计值 15K；超限从最老档案条目起整条机械截断）。 */
   readonly archiveTokens: number
-  /** wire 校准字符/token（04 §5：CHARS_PER_TOKEN=1.5）。 */
-  readonly charsPerToken: number
+  /** 字符密度（04 §5：两桶标定 CJK 1.5 / 其余 2.9；与压缩器同源）。 */
+  readonly density: TokenDensity
   /** 地板：逐字末次验证 ≤3 条。 */
   readonly floorVerifyLines: number
   /** 地板：逐字失败/错误行 ≤5 条。 */
@@ -195,7 +196,7 @@ export const DEFAULT_ASSEMBLE_POLICY: AssemblePolicy = {
   version: ASSEMBLE_POLICY_VERSION,
   hotTailTokens: 10000,
   archiveTokens: 15000,
-  charsPerToken: 1.5,
+  density: DEFAULT_TOKEN_DENSITY,
   floorVerifyLines: 3,
   floorErrorLines: 5,
   maxFetchUnits: 64,

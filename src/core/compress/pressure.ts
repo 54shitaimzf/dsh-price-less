@@ -154,7 +154,7 @@ export function foldMaterialTokens(
   range: { startSeq: number; endSeq: number },
   policy: CompressPolicy = DEFAULT_COMPRESS_POLICY,
 ): number {
-  return estimateTokens(renderFoldMaterialTranscript(events, range), policy.charsPerToken)
+  return estimateTokens(renderFoldMaterialTranscript(events, range), policy.density)
 }
 
 /** 压力触发事实载荷（每次**决定开火**一条；outcome=fired|breaker|skip）。 */

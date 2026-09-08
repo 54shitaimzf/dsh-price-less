@@ -162,8 +162,13 @@ token 数 + 回合生成量 + 仅新增消息的校准估计——每步被新 u
   × 主模型上下文窗口；模型未声明窗口 → × **假定窗口** `domainTokens`（默认 125K）；
   两者都不可用 → 绝对安全网 `thresholdTokens`（默认 100K）。不变量
   `retain < thresholdTokens` 与 `0 < pressureRatio < 0.8`（config 校验强制，违例整块回退设计值）。
-- **估计器必须 wire 校准**：字符/token 常数按 wire 实测校准（`CHARS_PER_TOKEN=1.5`；
-  chars/4 会低估 ~2.7×）；wire 锚定 = 精确 usage + 增量估计（§3），每步重锚不累积误差。
+- **估计器 = 两桶字符密度（DSH 原生对齐）**：结构模型对齐 harness `llm/token-meter/src/estimate.ts`
+  （块/角色结构开销 + 递归块价），但把单一 `CHARS_PER_TOKEN=4` 换成两桶——**CJK 1.5 字符/token**
+  （0.67 token/字）与**其余 2.9 字符/token**（`core/meter/estimate.ts`）。真机标定锚点（2026-09-09）：
+  region 136,477 字（20,101 CJK / 116,376 其余）→ 真实 53,532 token，估算 53,531（误差 0.002%）。
+  chars/4 对中文低估 ~2.7×，全局 1.5 对代码高估 ~1.7×——两桶才同时成立。
+  wire 锚定 = 精确 usage + 增量估计（§3），每步重锚不累积误差；**估算 vs 真实 usage 对账比**由
+  `compressionCall.calibration`（`core/compress/ledger.ts`）落账，偏离即回标定。
 - 所有 token 预算（retain/threshold/热尾 10K/检查点）按校准后语义解读；
   保险丝地板独立（§4），两者不可互相当。
 

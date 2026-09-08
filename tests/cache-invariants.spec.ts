@@ -5,6 +5,7 @@
  * 纯函数断言：零网络、零模型、零 IO；同输入同输出。
  */
 import { describe, expect, it } from 'vitest'
+import { flatDensity } from '../src/core/meter/index.ts'
 import {
   COMPRESS_BOUNDARY_HEAD,
   COMPRESS_BOUNDARY_OUTPUT,
@@ -119,9 +120,9 @@ describe('断言 4：档案堆只追加（硬帽整条截断，不改写）', ()
   })
 
   it('硬帽截断只删最老整条：保留后缀逐字节不变 + 计数入账', () => {
-    // 三条各 40 token（60 字符 / 1.5）；帽 45 → 只留最新整条。
-    const policy = { ...DEFAULT_ASSEMBLE_POLICY, archiveTokens: 45 }
-    const big = [entry('t', 'boundary', 'x'.repeat(60)), entry('t', 'boundary', 'y'.repeat(60)), entry('t', 'boundary', 'z'.repeat(60))]
+    // 三条各 30 token（单桶密度 1 字符/token）；帽 45 → 只留最新整条且不超帽。
+    const policy = { ...DEFAULT_ASSEMBLE_POLICY, density: flatDensity(1), archiveTokens: 45 }
+    const big = [entry('t', 'boundary', 'x'.repeat(30)), entry('t', 'boundary', 'y'.repeat(30)), entry('t', 'boundary', 'z'.repeat(30))]
     const result = truncateArchiveArea(big, policy)
     expect(result.kept.length).toBe(1)
     expect(result.truncated.count).toBe(2)
@@ -130,7 +131,7 @@ describe('断言 4：档案堆只追加（硬帽整条截断，不改写）', ()
   })
 
   it('截断本身是受控 bump：追加后的 body 是新对象，原 body 不变', () => {
-    const policy = { ...DEFAULT_ASSEMBLE_POLICY, archiveTokens: 10 }
+    const policy = { ...DEFAULT_ASSEMBLE_POLICY, density: flatDensity(1), archiveTokens: 10 }
     const body = { ...emptyArchiveStore('w'), entries: [entry('t', 'boundary', 'x'.repeat(60))] }
     const snapshot = JSON.stringify(body)
     const appended = appendArchiveEntry(body, entry('t', 'boundary', 'y'.repeat(60)), policy)

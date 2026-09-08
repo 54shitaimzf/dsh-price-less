@@ -17,9 +17,10 @@ import {
   type CompressCacheEntry,
 } from '../src/core/compress/index.ts'
 import { DEFAULT_ASSEMBLE_POLICY } from '../src/core/assemble/index.ts'
+import { flatDensity } from '../src/core/meter/index.ts'
 import type { BoundaryProduct } from '../src/core/compress/index.ts'
 
-const policy = { ...DEFAULT_ASSEMBLE_POLICY, archiveTokens: 30 }
+const policy = { ...DEFAULT_ASSEMBLE_POLICY, density: flatDensity(1), archiveTokens: 30 }
 const product: BoundaryProduct = { mode: 'boundary', digest: { blocks: [{ type: 'plan', text: '目标' }], coords: [] }, hotTail: [] }
 const cacheEntry = (key: string, at = 1): CompressCacheEntry => ({ key, at, layer: 'boundary', product })
 

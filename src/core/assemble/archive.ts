@@ -66,7 +66,7 @@ export function truncateArchiveArea(
   policy: AssemblePolicy = DEFAULT_ASSEMBLE_POLICY,
 ): ArchiveAreaResult {
   const list = entries.slice()
-  const tokens = list.map((entry) => estimateTokens(entry.text, policy.charsPerToken))
+  const tokens = list.map((entry) => estimateTokens(entry.text, policy.density))
   let total = tokens.reduce((sum, value) => sum + value, 0)
   if (total <= policy.archiveTokens) return { kept: list, truncated: { count: 0, tokens: 0 }, keptTokens: total, overCap: false }
   let cut = 0

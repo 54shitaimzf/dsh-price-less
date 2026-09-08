@@ -17,6 +17,7 @@ import type {
   HotTailDropCounts,
   TaskDigest,
 } from '../assemble/types.ts'
+import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
 /** prompt 模板版本（改模板必须升版本：产物 schema 与模板同版演进）。 */
 export const COMPRESS_PROMPT_VERSION = 1
@@ -29,15 +30,15 @@ export type CompressMode = 'boundary' | 'pressure'
 
 export interface CompressPolicy {
   readonly version: number
-  /** wire 校准字符/token（04 §5；与装配器同源）。 */
-  readonly charsPerToken: number
+  /** 字符密度（04 §5；与装配器同源，两桶标定）。 */
+  readonly density: TokenDensity
   /** 单元清单最多列出条数；0 = 不限（正典行为）。超限保留**最近**单元 + 计数。 */
   readonly maxUnitListEntries: number
 }
 
 export const DEFAULT_COMPRESS_POLICY: CompressPolicy = {
   version: COMPRESS_POLICY_VERSION,
-  charsPerToken: 1.5,
+  density: DEFAULT_TOKEN_DENSITY,
   maxUnitListEntries: 0,
 }
 

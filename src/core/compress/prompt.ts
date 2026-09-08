@@ -101,7 +101,7 @@ function renderPrompt(mode: CompressMode, input: CompressPromptInput): CompressP
     mode,
     version: COMPRESS_PROMPT_VERSION,
     prompt: sections.join('\n\n'),
-    regionTokens: estimateTokens(input.regionText, policy.charsPerToken),
+    regionTokens: estimateTokens(input.regionText, policy.density),
     unitCount: input.units.length,
     listedUnits: list.listed,
     omittedUnits: list.omitted,

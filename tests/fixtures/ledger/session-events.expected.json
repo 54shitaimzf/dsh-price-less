@@ -19,8 +19,8 @@
     "reasoningTokens": 7,
     "totalTokens": 350
   },
-  "compoundedVolume": 20,
-  "reDiscoveryTokens": 12,
+  "compoundedVolume": 12,
+  "reDiscoveryTokens": 7,
   "cost": {
     "inputCost": 273,
     "outputCost": 150,

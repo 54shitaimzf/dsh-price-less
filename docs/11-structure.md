@@ -75,6 +75,7 @@ src/
 │  │                 #   + region.ts 区间逐字节转写 + store.ts 档案区（只追加/硬帽/内容寻址缓存；P19a）
 │  │                 #   + pressure.ts 压力触发/检查点/折叠区转写（P20a）+ fuse.ts 保险丝地板（P20b）
 │  ├─ assemble/      # 装配器（P17 已施工，P17c 修正）：坐标链 vN 重映射、热尾双通道取真、贪心停机 + 共享事务原语 + HT 软门 + 档案硬帽/追加式链（04 §1/§2/§3/§6；档案区落盘 = P19）
+│  ├─ meter/         # token 估算纯核（F8a，04 §5）：对齐 DSH token-meter/estimate.ts 结构模型（块/角色价 + 递归块价），密度改两桶（CJK 1.5 / 其余 2.9 字符/token）+ token→字符反解 + 标定比
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
 │  ├─ input.ts       # 判别域：自动断面服务（T0→L1→LLM→fail-lazy；对表影子记账；三分类搭车）

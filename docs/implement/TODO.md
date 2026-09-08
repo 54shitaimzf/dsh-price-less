@@ -3,7 +3,7 @@
 > **用途**：只记**未完成 / 被阻塞**项与出门门槛；单元定义、硬规则、决策记录见
 > [`00-master.md`](00-master.md) §2/§3/§6（不在此重复）。
 > **口径**：🔶 进行中（等用户动作）· ⬜ 待办 · ✅ 已完成不展开。
-> **建立**：2026-09-09（N3b 落地之后）。**更新**：2026-09-09 真机缺陷修复单 F1–F5。
+> **建立**：2026-09-09（N3b 落地之后）。**更新**：2026-09-09 真机缺陷修复单 F1–F5 + token 估算重构 F8a/F8b。
 
 ---
 
@@ -37,6 +37,9 @@
 | **F5a** | **档案渲染可读性**：结论先行（wrap→plan→impl→verify）+ 类型标签（`【结论】/【计划】/【实现】/【验证】`） | ✅ | `src/core/assemble/assemble.ts` |
 | **F3** | **档案/前缀按会话工作区隔离**：现为 `process.cwd()`（实体键 `boundary_archive:G:/deepseek-harness`），跨项目串档；需按 `session.header.cwd` 解析（4 个域 + 装配接线） | ⬜ | 待立项（M/L） |
 | **F5b** | **坐标路径相对化**：`renderDigest` 的 coords 逐行打印绝对路径；相对化依赖 F3 的会话工作区 | ⬜ | 待 F3 |
+| **F8a** | **token 估算重构**：新 core/meter/estimate.ts（DSH 结构对齐 + 两桶密度 CJK 1.5 / 其余 2.9 字符/token）；策略面 charsPerToken → density 全量随迁 | ✅ | src/core/meter/、src/core/{assemble,compress,ledger}/、src/domains/compaction.ts |
+| **F8b** | **标定对账**：CompressCallLedger.calibration（估算 promptTokens vs 真实 input+cacheRead）+ warnTokenDrift（±25% 告警，只观察） | ✅ | src/core/compress/ledger.ts、src/domains/compaction.ts |
+| **F8c** | **口径统一**：压力触发/保险丝用 DSH meter（中文低估 ~2.7×）、体积账用两桶——两套单位并存；统一前必须重标定 thresholdTokens/domainTokens/retainTokens/archiveCapTokens | ⬜ | 待真机 calibration.ratio 样本 |
 
 **F5a 说明**：只改渲染面（块序 + 标签），产物 schema 与校验序（`DIGEST_BLOCK_ORDER`）不变；若要真正的「总述块」需第 5 种块型，属 schema 变更，另行拍板。
 
@@ -65,3 +68,4 @@
 - **2026-09-09** 初版：N3b 完成后落盘，记录 N3a 采样阻塞项与 N4–N6 待立项。
 - **2026-09-09** 更新：真机复盘新增修复单 F1–F5（F1/F2/F4/F5a 已落地，F3/F5b 待立项）；
   §1 阻塞原因从「通道未验证」改为「H6 端口空转（F1 已修，待重新 build + 重启）」。
+- **2026-09-09** 更新：新增 F8a/F8b（token 估算重构 + 标定对账，已落地，账本 §61）；F8c 口径统一待真机样本。

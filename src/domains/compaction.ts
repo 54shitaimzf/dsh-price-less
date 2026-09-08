@@ -63,6 +63,7 @@ import {
   type ShearDecisionFactData,
 } from '../core/shear/index.ts'
 import { toolCategory } from '../core/shear/tool.ts'
+import { calibrationRatio } from '../core/meter/estimate.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createHistoryPort } from '../platform/history.ts'
 import { CE_CONTEXT_OVERFLOW_CODE, resolveContextWindow, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
@@ -75,6 +76,14 @@ import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
 import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
 
 const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
+
+/** F8b 标定对账（只观察、不改行为）：估算 promptTokens vs 真实 input+cacheRead，偏离 ±25% 即 warn。 */
+function warnTokenDrift(estimated: number | undefined, usage: CeLlmUsage | undefined, logger: CeLogger): void {
+  const actual = (usage?.inputTokens ?? 0) + (usage?.cacheReadTokens ?? 0)
+  const ratio = calibrationRatio(estimated ?? 0, actual)
+  if (ratio === null || (ratio >= 0.75 && ratio <= 1.25)) return
+  logger.warn(`context-economy: token estimate drift (estimated ${estimated}, actual ${actual}, ratio ${ratio.toFixed(2)})`)
+}
 
 export interface CompactionDomainDeps {
   storage: ContextEconomyStorage
@@ -296,13 +305,13 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const storeBody = readArchiveStore(existing?.body, workspace)
     const priorChain = priorChainFor(storeBody, scopedTaskId, sid)
     if (!planTailConsumption({ priorChain, layer: 'boundary' }).ok) { skip('chain-invalid'); return }
-    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.charsPerToken}`
+    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}`
     const key = compressSpanHash({
       promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'boundary',
       regionText, unitIds: units.map((unit) => unit.id), priorChainTexts: priorChain.map((entry) => entry.text), policyKey,
     })
     const cached = lookupCachedProduct(storeBody, key)
-    const shadowedTokens = estimateTokens(regionText, compressPolicy.charsPerToken)
+    const shadowedTokens = estimateTokens(regionText, compressPolicy.density)
 
     // ③ 产物获取：缓存复用（零调用）或单次调用 + 解析；每次装配后做缩水校验。
     const llm = deps.getLlm?.()
@@ -323,7 +332,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       } else {
         if (llm === undefined) { skip('llm-unavailable', { calls }); return undefined }
         const rendered = renderBoundaryPrompt({ regionText, units, priorChain, policy: compressPolicy })
-        renderedPromptTokens = estimateTokens(rendered.prompt, compressPolicy.charsPerToken)
+        renderedPromptTokens = estimateTokens(rendered.prompt, compressPolicy.density)
         const route = resolveJudgeModel(config, readSessionModel(session))
         provider = route.provider
         model = route.model
@@ -352,6 +361,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
           return undefined
         }
         calls++
+        warnTokenDrift(renderedPromptTokens, usage, logger)
         const parsed = parseCompressProduct(llmText, 'boundary', units)
         if (!parsed.ok) {
           emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({ ...base, outcome: parsed.reason, calls, ...(usage === undefined ? {} : { llmUsage: usage }) }), logger)
@@ -381,7 +391,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       )
       return {
         product, dropped, calls, cacheHit, rendered: outcome.result.rendered,
-        productTokens: estimateTokens(outcome.result.rendered, compressPolicy.charsPerToken),
+        productTokens: estimateTokens(outcome.result.rendered, compressPolicy.density),
         truncation: append.truncation, entries: append.kept,
         ...(usage === undefined ? {} : { usage }),
         ...(rawOutput === undefined ? {} : { rawOutput }),
@@ -452,7 +462,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     // ⑥ T-boundary 搭车补账（会计；折叠由大 replace 构造性完成）。
     const held = heldPairsInRange(events, facts, range)
     for (const pair of held) {
-      const beforeTokens = estimateTokens(pair.text, compressPolicy.charsPerToken)
+      const beforeTokens = estimateTokens(pair.text, compressPolicy.density)
       const data: ShearAppliedFactData = compactFact({
         policyVersion: SHEAR_POLICY_VERSION, tier: 'T-boundary', kind: 't-boundary',
         callId: pair.callId, resultSeq: pair.resultSeq, at: now(), category: toolCategory(pair.name),
@@ -577,7 +587,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
 
     const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
     const candidateText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: taskEndSeq })
-    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.charsPerToken}`
+    const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}`
     const key = compressSpanHash({
       promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'pressure',
       regionText: candidateText, unitIds: units.map((unit) => unit.id),
@@ -601,7 +611,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       } else {
         if (llm === undefined) { fire('skip', { reason: 'llm-unavailable', chainDepth: depth }); return undefined }
         const renderedPrompt = renderPressurePrompt({ regionText: candidateText, units, priorChain, policy: compressPolicy })
-        renderedPromptTokens = estimateTokens(renderedPrompt.prompt, compressPolicy.charsPerToken)
+        renderedPromptTokens = estimateTokens(renderedPrompt.prompt, compressPolicy.density)
         const route = resolveJudgeModel(config, readSessionModel(session))
         provider = route.provider
         model = route.model
@@ -636,6 +646,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
           return undefined
         }
         calls++
+        warnTokenDrift(renderedPromptTokens, usage, logger)
         const parsed = parseCompressProduct(llmText, 'pressure', units)
         if (!parsed.ok) {
           emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
@@ -657,9 +668,9 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const rendered = composePressureArchive({ priorChain, checkpointText, retainedText })
       return {
         product, checkpointText, rendered, cutSeq,
-        foldedTokens: estimateTokens(foldText, compressPolicy.charsPerToken),
-        retainedTokens: estimateTokens(retainedText, compressPolicy.charsPerToken),
-        productTokens: estimateTokens(`${checkpointText}\n\n${retainedText}`, compressPolicy.charsPerToken),
+        foldedTokens: estimateTokens(foldText, compressPolicy.density),
+        retainedTokens: estimateTokens(retainedText, compressPolicy.density),
+        productTokens: estimateTokens(`${checkpointText}\n\n${retainedText}`, compressPolicy.density),
         calls, cacheHit, provider, model,
         ...(usage === undefined ? {} : { usage }),
         ...(rawOutput === undefined ? {} : { rawOutput }),
@@ -720,7 +731,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     // 事务：open → prune（影子价）→ summary + checkpoint 替换 → close。
     const history = createHistoryPort(session)
     const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, replaceStart, taskEndSeq)
-      ?? estimateTokens(renderRegionTranscript(events, { startSeq: replaceStart, endSeq: taskEndSeq }), compressPolicy.charsPerToken)
+      ?? estimateTokens(renderRegionTranscript(events, { startSeq: replaceStart, endSeq: taskEndSeq }), compressPolicy.density)
     const plan = planTxn({
       txnId: `ce-compact-pressure-${segment.taskId}-${replaceStart}-${taskEndSeq}`,
       layer: 'pressure', taskId: scopedTaskId, range: { start: replaceStart, end: taskEndSeq },

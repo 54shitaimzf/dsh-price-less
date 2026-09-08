@@ -67,5 +67,3 @@ export interface CommonLedger {
   costPerSuccessfulTask: number | null
 }
 
-/** 固定校准：体积类字段的 token 估算（AGENTS.md 决策点⑤；不进入模型路径）。 */
-export const DEFAULT_CHARS_PER_TOKEN = 1.5

@@ -13,11 +13,12 @@ import {
   type AssemblePolicy,
   type AssembleUnit,
 } from '../src/core/assemble/index.ts'
+import { flatDensity } from '../src/core/meter/index.ts'
 
 const entry = (kind: 'checkpoint' | 'boundary', text: string, taskId = 't1'): ArchiveEntry => ({ taskId, kind, text })
 const policy = (over: Partial<AssemblePolicy> = {}): AssemblePolicy => ({
   ...DEFAULT_ASSEMBLE_POLICY,
-  charsPerToken: 1,
+  density: flatDensity(1),
   archiveTokens: 20,
   ...over,
 })

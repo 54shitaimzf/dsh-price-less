@@ -51,6 +51,19 @@ describe('P18 账本：调用口径', () => {
     expect(ledger.compressionCallCount).toBe(3)
   })
 
+  it('F8b 标定对账：估算 promptTokens vs 真实 input+cacheRead；命中/跳过不入样', () => {
+    const ledger = foldCompressCalls([
+      fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok', promptTokens: 1000, llmUsage: { inputTokens: 400, outputTokens: 10, cacheReadTokens: 100 } }),
+      fact({ at: 2, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok', promptTokens: 2000, llmUsage: { inputTokens: 1000, outputTokens: 10 } }, 2),
+      fact({ at: 3, layer: 'boundary', promptVersion: 1, policyVersion: 1, cacheHit: true, outcome: 'ok', promptTokens: 9999, llmUsage: { inputTokens: 9999 } }, 3),
+      fact({ at: 4, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'skipped', promptTokens: 500, llmUsage: { inputTokens: 500 } }, 4),
+    ])
+    expect(ledger.calibration.samples).toBe(2)
+    expect(ledger.calibration.estimated).toBe(3000)
+    expect(ledger.calibration.actual).toBe(1500)
+    expect(ledger.calibration.ratio).toBeCloseTo(0.5, 10)
+  })
+
   it('合并进压缩族 fold：compressionCall* 可算且 compressionLayer 不双计', () => {
     const assemble = (layer: 'boundary' | 'pressure'): LedgerFact => ({
       type: ASSEMBLE_RUN_FACT_TYPE, seq: 1, time: 1,

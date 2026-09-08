@@ -3,6 +3,7 @@
  * 覆盖：四类表面节点转写 / 被遮蔽节点不入正文 / 区间过滤 / 坏形状不抛错 / 字节稳定 / 体量计量。
  */
 import { describe, expect, it } from 'vitest'
+import { estimateTokens, flatDensity } from '../src/core/meter/index.ts'
 import { REGION_TRANSCRIPT_VERSION, regionTokens, renderRegionTranscript, surfaceEventsInRange } from '../src/core/compress/index.ts'
 import type { LedgerSessionEvent } from '../src/core/ledger/types.ts'
 
@@ -63,8 +64,8 @@ describe('P19a 区间转写', () => {
     const events = [user(0, 'x'.repeat(30))]
     const text = renderRegionTranscript(events, { startSeq: 0, endSeq: 0 })
     expect(text).toBe(`[0] user/message\n${'x'.repeat(30)}`)
-    expect(regionTokens(events, { startSeq: 0, endSeq: 0 })).toBe(Math.ceil(text.length / 1.5))
-    expect(regionTokens(events, { startSeq: 0, endSeq: 0 }, { version: 1, charsPerToken: 3, maxUnitListEntries: 0 })).toBe(Math.ceil(text.length / 3))
+    expect(regionTokens(events, { startSeq: 0, endSeq: 0 })).toBe(estimateTokens(text))
+    expect(regionTokens(events, { startSeq: 0, endSeq: 0 }, { version: 1, density: flatDensity(3), maxUnitListEntries: 0 })).toBe(Math.ceil(text.length / 3))
     expect(renderRegionTranscript(events, { startSeq: 0, endSeq: 0 })).toBe(text)
   })
 })

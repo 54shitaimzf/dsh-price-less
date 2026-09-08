@@ -19,10 +19,11 @@ import {
   type HotTailDecl,
   type LedgerSessionEvent,
 } from '../src/core/assemble/index.ts'
+import { flatDensity } from '../src/core/meter/index.ts'
 
 const policy = (over: Partial<AssemblePolicy> = {}): AssemblePolicy => ({
   ...DEFAULT_ASSEMBLE_POLICY,
-  charsPerToken: 1,
+  density: flatDensity(1),
   hotTailTokens: 100,
   minTruncatedChars: 5,
   ...over,
@@ -265,7 +266,8 @@ describe('P17a 输入 fold：单元清单', () => {
 
   it('单元清单逐行确定（供压缩器 prompt 枚举）', () => {
     const inputs = foldAssembleInputs(events)
-    expect(renderUnitList(inputs.units)).toBe('[c1] read a.ts@v1 ~8t\n[c2] bash ~10t')
+    // 两桶密度（其余 2.9 字符/token）：'1: l1\n2: l2'(11) → 4；'5 tests passed'(14) → 5
+    expect(renderUnitList(inputs.units)).toBe('[c1] read a.ts@v1 ~4t\n[c2] bash ~5t')
   })
 })
 
@@ -344,8 +346,8 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
     expect(outcome.result.hotTail.source).toBe('positional-fallback')
   })
 
-  it('位置兜底 token 按 policy.charsPerToken 现算（不混用 fold 期默认 cpt）', () => {
-    const outcome = assembleArchive({ units: [unit('a', 1, 'A'.repeat(10))], policy: policy({ charsPerToken: 2, hotTailTokens: 100 }) })
+  it('位置兜底 token 按 policy.density 现算（不混用 fold 期默认密度）', () => {
+    const outcome = assembleArchive({ units: [unit('a', 1, 'A'.repeat(10))], policy: policy({ density: flatDensity(2), hotTailTokens: 100 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.selections[0]!.tokens).toBe(5)
   })
