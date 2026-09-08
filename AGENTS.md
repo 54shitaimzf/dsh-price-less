@@ -34,10 +34,11 @@ harness checkout 的本地实现（上游共识形态，待合并），插件经
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
 （历史记录，只读）；**新设计 = N 系列「协商剪除」（语义层）**，总纲 `docs/implement/00-master.md`
-（**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 ✅ 影子模式**（`core/shear/negotiate.ts` 纯核 + 域接线 + `shear-negotiation-note|reply` 两型 ignorable 事实 + 账本 fold + `shear.negotiate` 三态〔默认 off〕+ `scripts/probe-n3.mjs`；通道 A+C：预设 `presets/price-less/` persona 段声明协议 + 措辞纪律、**固定 native 呈现** + 短注记；**待真机采样**）；**2026-09-09 真机复盘修复 F1–F5**（H6 端口 `ctx.tools` 未 inject 空转 → F1 修；边界压缩加 60s 判词屏障 F2；诊断日志去重 F4；档案渲染结论先行+标签 F5a；F3 工作区隔离待立项 / F5b 路径相对化已由 **F9e** 落地〔每档案条目带 root + 相对化 + 短 ID 表〕；
+（**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 ✅ 影子模式**（`core/shear/negotiate.ts` 纯核 + 域接线 + `shear-negotiation-note|reply` 两型 ignorable 事实 + 账本 fold + `shear.negotiate` 三态〔默认 off〕+ `scripts/probe-n3.mjs`；通道 A+C：预设 `presets/price-less/` persona 段声明协议 + 措辞纪律、**固定 native 呈现** + 短注记；**待真机采样**）；**2026-09-09 真机复盘修复 F1–F5**（H6 端口 `ctx.tools` 未 inject 空转 → F1 修；边界压缩加 60s 判词屏障 F2；诊断日志去重 F4；档案渲染结论先行+标签 F5a；**F3 工作区隔离已落地**（`domains/workspace.ts` 唯一键源 = 会话 `header.cwd`；快照 §70）/ F5b 路径相对化已由 **F9e** 落地〔每档案条目带 root + 相对化 + 短 ID 表〕；
 快照 §60）→ **F9 压缩产物重构**（F9a 区间权威 + F9b schema v2 + F9c 热尾事实载体 + F9d 双预算/存储 v2/
 单调守卫 + F9e 路径压缩；快照 §62–§66）→ **F10 契约 v3**（总分零指针 + 热尾指向档案 + 档案只存总分 +
-错误不进热尾；快照 §69）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
+错误不进热尾；快照 §69）→ **F11/F12/F13 真机复盘修正**（列表类命令不剪 / 影子模式零字节〔注记只记事实〕/
+判别器 v4 任务定义〔同一工作对象或同类目标持续改进；子task 不分流〕；快照 §70）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。

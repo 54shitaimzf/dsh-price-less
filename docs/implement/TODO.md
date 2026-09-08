@@ -3,7 +3,7 @@
 > **用途**：只记**未完成 / 被阻塞**项与出门门槛；单元定义、硬规则、决策记录见
 > [`00-master.md`](00-master.md) §2/§3/§6（不在此重复）。
 > **口径**：🔶 进行中（等用户动作）· ⬜ 待办 · ✅ 已完成不展开。
-> **建立**：2026-09-09（N3b 落地之后）。**更新**：2026-09-09 真机缺陷修复单 F1–F5 + token 估算重构 F8a/F8b。
+> **建立**：2026-09-09（N3b 落地之后）。**更新**：2026-09-09 真机复盘修复单 F1–F5 + F8a/F8b + **F3/F11/F12/F13（剪切层与判别器修正，快照 §70）**。
 
 ---
 
@@ -14,10 +14,10 @@
 
 | # | 事项 | 负责 | 出门门槛 |
 |---|---|---|---|
-| ① | **重新 build + 重启 DSH**（F1/F2 已落地，旧进程仍跑 9/9 03:33 的构建） | 用户 | 重启后长工具结果末尾出现单独一行 `（协商：…）` |
+| ① | **采样通道重建（F12 后阻塞）**：shadow 已改「只观察零字节」→ 正文不再出现 `（协商：…）`，旧口径采样停摆；需先落 N4 的**独立 notice 通道**（`source.kind='plugin'`，不进判别输入面） | 我 | 通道落地后每个 basis 攒到 ≥30 条 |
 | ② | 用「价格低耗（协商剪除）」预设开**新会话**正常干活 | 用户 | 每个 basis 攒到 **≥30** 条样本 |
 | ③ | `node scripts/probe-n3.mjs` | 我 | 产出三张表 + 每 basis 晋升判定 |
-| ④ | 兜底（条件项）：配合率 <30% → 试通道 B（`additionalContexts`）；仍 <30% → **停止 N4 立项** | 我 | — |
+| ④ | 兜底（条件项）：独立 notice 通道配合率仍 <30% → **停止 N4 立项**（N2 探针在正文注记通道已实测 0/134） | 我 | — |
 
 **前置已就绪**：`~/.dsh/settings.yaml` = `context-economy.shear.negotiate: shadow` + `discriminator.auto: true`。
 
@@ -35,7 +35,10 @@
 | **F2** | **边界压缩阻塞**：pre-step 先等本轮判词落地（`settle` 屏障，**60s** 有界，超时 fail-lazy 退回下一 pre-step） | ✅ | `src/domains/input.ts`、`src/index.ts` |
 | **F4** | **诊断日志去重**：prefix 状态变化才记录（原为每次 skill watch 回调都打，18 分钟 9,136 条） | ✅ | `src/index.ts` |
 | **F5a** | **档案渲染可读性**：结论先行（wrap→plan→impl→verify）+ 类型标签（`【结论】/【计划】/【实现】/【验证】`） | ✅ | `src/core/assemble/assemble.ts` |
-| **F3** | **档案/前缀按会话工作区隔离**：现为 `process.cwd()`（实体键 `boundary_archive:G:/deepseek-harness`），跨项目串档；需按 `session.header.cwd` 解析（4 个域 + 装配接线） | ⬜ | 待立项（M/L） |
+| **F3** | **档案/前缀按会话工作区隔离**：`domains/workspace.ts` 唯一键源（`header.cwd` 优先、回落进程 cwd），compaction/restore/input/star/commands 五站点收口 | ✅ | `src/domains/workspace.ts`（新）+ 五域；`tests/workspace.spec.ts`；快照 §70 |
+| **F11** | **列表不剪**：T-entry 识别列表类命令（Get-ChildItem/gci/ls/dir/tree/fd/find）→ 不整形 + `entry-skip-listing` 事实/账本分列（真机 resume 11 次实剪全为列表，丢名字） | ✅ | `core/shear/tool.ts`、`domains/shear.ts`、`core/shear/ledger.ts`；快照 §70 |
+| **F12** | **影子模式零字节**：`shear.negotiate=shadow` 只记 `shear-negotiation-note` 事实（`attached:false`），不写正文、不入待答队列、不伪造 no-reply；`live` 保留旧通道（N4 改独立 notice） | ✅ | `domains/shear.ts`、`core/shear/negotiate.ts`；快照 §70 |
+| **F13** | **判别器 v4**：task 定义居中（同一工作对象/同类目标持续改进）+ 言说层限定「当前对象」+ 换对象覆盖针对新对象的评价/咨询（真机：换话题单句被 v3 规则 1 吞成 continue → 漏边界） | ✅ | `core/judge.ts`、`datasets/prompt-discriminator-v2.3.txt`；快照 §70 |
 | **F5b** | **坐标路径相对化**：`renderDigest` 的 coords 逐行打印绝对路径；相对化依赖 F3 的会话工作区 | ⬜ | 待 F3 |
 | **F8a** | **token 估算重构**：新 core/meter/estimate.ts（DSH 结构对齐 + 两桶密度 CJK 1.5 / 其余 2.9 字符/token）；策略面 charsPerToken → density 全量随迁 | ✅ | src/core/meter/、src/core/{assemble,compress,ledger}/、src/domains/compaction.ts |
 | **F8b** | **标定对账**：CompressCallLedger.calibration（估算 promptTokens vs 真实 input+cacheRead）+ warnTokenDrift（±25% 告警，只观察） | ✅ | src/core/compress/ledger.ts、src/domains/compaction.ts |

@@ -132,6 +132,17 @@ describe('N3 协商纯核 · 账本 fold', () => {
     expect(report).toContain('medianDepth')
   })
 
+  it('W2(B)：attached=false 的 shadow 样本不计入率的分母', () => {
+    const shadowNotes: LedgerFact[] = [
+      { type: SHEAR_NEGOTIATION_NOTE_FACT_TYPE, time: 1, data: { at: 1, callId: 'a', name: 'run_code', resultSeq: 2, basis: 'name', reason: 'conclusion', resultBytes: 1000, channel: 'note', noteBytes: 60, templateVersion: 2, attached: false } satisfies ShearNegotiationNoteFactData },
+    ]
+    const ledger = foldNegotiation(shadowNotes)
+    expect(ledger.notes).toBe(1)
+    expect(ledger.attachedNotes).toBe(0)
+    expect(ledger.okRate).toBe(0)
+    expect(formatNegotiationLedger(ledger)).toContain('attached=0')
+  })
+
   it('确定性双跑逐字节一致 + 输入不 mutate', () => {
     const snapshot = JSON.stringify([...noteFacts, ...replyFacts])
     const a = JSON.stringify(foldNegotiation([...noteFacts, ...replyFacts]))

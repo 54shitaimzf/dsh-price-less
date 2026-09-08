@@ -20,6 +20,7 @@ import { readSessionModel, type CeLogger } from '../platform/events.ts'
 import type { Config as ConfigShape } from '../config.ts'
 import { clampInitGoal, parseInitOutput, renderInitPrompt } from '../core/init.ts'
 import { buildTaskBoundaryData } from './task-facts.ts'
+import { workspaceOf } from './workspace.ts'
 
 // 默认辅助模型 = 当前主对话模型（2026-09-08 定；设置卡可覆盖，缺省时优先跟随会话当前模型）。
 const DEFAULT_INIT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' }
@@ -150,7 +151,8 @@ export function mountCommandFace(
     const session = invocation.agent.session
     const sid = sidOf(session)
     const raw = invocation.rawInput.trim()
-    const frameKey = projectFrameStorageKey(workspace)
+    // F3：项目帧按会话工作区取键。
+    const frameKey = projectFrameStorageKey(workspaceOf(session, workspace))
 
     if (raw === 'confirm') {
       const pending = pendingInit.get(sid)

@@ -67,7 +67,7 @@ export interface ShearRunPlanFactData {
 export interface ShearDecisionFactData {
   readonly policyVersion: number
   readonly tier: ShearAppliedTier
-  readonly decision: 'hold' | 'note-attached'
+  readonly decision: 'hold' | 'note-attached' | 'keep'
   readonly reason: string
   readonly callId?: string
   /** 对话 run 半边（tier = 'run'）的裁决键：<startSeq>..<endSeq>。 */
@@ -95,6 +95,8 @@ export interface ShearLedger {
   /** 挂出的注记数 = 历史 T-note 事实 + N3 协商注记事实（两代通道不重叠）。 */
   shearNoteAttached: number
   shearDecision: { cut: number; hold: number; keep: number }
+  /** W1 列表跳过 T-entry 整形数（keep 相；reason = entry-skip-listing）。 */
+  entrySkipListing: number
   /** N3 协商族（docs/implement/N3-shadow-mode.md §4；fold 见 core/shear/negotiate.ts）。 */
   negotiation: NegotiationLedger
   thinkingCutTokens: number
@@ -114,6 +116,7 @@ function emptyLedger(): ShearLedger {
     toolPruneByClass: { read: 0, write: 0, search: 0, cmd: 0, other: 0 },
     shearNoteAttached: 0,
     shearDecision: { cut: 0, hold: 0, keep: 0 },
+    entrySkipListing: 0,
     negotiation: foldNegotiation([]),
     thinkingCutTokens: 0,
     tableRepair: { count: 0, tokens: 0 },
@@ -203,7 +206,10 @@ export function foldShearLedger(
 
   const options: FoldToolShearOptions = { entryShaped }
   const plan = foldToolShear(shearEvents, policy, options)
-  for (const decision of plan.decisions) ledger.shearDecision[decision.decision]++
+  for (const decision of plan.decisions) {
+    ledger.shearDecision[decision.decision]++
+    if (decision.decision === 'keep' && decision.reason === 'entry-skip-listing') ledger.entrySkipListing++
+  }
 
   const callsById = new Map<string, { name: string; argsText: string; seq: number }>()
   const calls: Array<{ name: string; argsText: string; seq: number }> = []
@@ -321,7 +327,7 @@ export function formatShearLedger(ledger: ShearLedger): string {
   lines.push(`  cutBreakCost: ${ledger.cutBreakCost}`)
   lines.push(`  toolPruneByClass: read=${ledger.toolPruneByClass.read} write=${ledger.toolPruneByClass.write} search=${ledger.toolPruneByClass.search} cmd=${ledger.toolPruneByClass.cmd} other=${ledger.toolPruneByClass.other}`)
   lines.push(`  shearNoteAttached: ${ledger.shearNoteAttached}`)
-  lines.push(`  shearDecision: cut=${ledger.shearDecision.cut} hold=${ledger.shearDecision.hold} keep=${ledger.shearDecision.keep}`)
+  lines.push(`  shearDecision: cut=${ledger.shearDecision.cut} hold=${ledger.shearDecision.hold} keep=${ledger.shearDecision.keep} (entrySkipListing=${ledger.entrySkipListing})`)
   lines.push(`  tableRepair: count=${ledger.tableRepair.count} tokens=${ledger.tableRepair.tokens} coverage=${ledger.repairCoverage}`)
   lines.push(`  rereadAfterRepair: ${ledger.rereadAfterRepair} / rerunAfterCut: ${ledger.rerunAfterCut}`)
   lines.push(`  cutMisfireDetected: ${ledger.cutMisfireDetected} / questionBacklogDepth: ${ledger.questionBacklogDepth} / thinkingCutTokens: ${ledger.thinkingCutTokens}`)

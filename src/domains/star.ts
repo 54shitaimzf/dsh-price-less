@@ -30,6 +30,7 @@ import { readSessionModel, readSessionUserMessages, type CeLogger } from '../pla
 import { STAR_BRIDGE_CODES, STAR_PREVIEW_LIMIT, type StarBridgeOutcome } from '../platform/star-bridge.ts'
 import { reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
+import { workspaceOf } from './workspace.ts'
 import { OPTIMIZE_RUN_FACT_TYPE, appliedRunFact, previewRunFact, type OptimizeRunFactData } from './optimize-facts.ts'
 import { SHEAR_RUN_PLAN_FACT_TYPE, compactFact, type ShearRunPlanFactData } from './shear-facts.ts'
 
@@ -194,7 +195,8 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     const messages = readSessionUserMessages(session)
       .filter((message) => (segment.startSeq === null || message.seq >= segment.startSeq) && !isTrivialMessage(message.text))
     const dossier: DossierBody = { taskId, messages, annotations: stored?.annotations ?? {} }
-    const frameRecord = storage.getEntity('project_frame', projectFrameStorageKey(workspace))
+    // F3：项目帧按会话工作区取键。
+    const frameRecord = storage.getEntity('project_frame', projectFrameStorageKey(workspaceOf(session, workspace)))
     const catalog = deps.skillsCtx === undefined ? undefined : await listSkillCatalog(deps.skillsCtx)
     const rendered = renderOptimizePrompt({
       projectFrame: frameRecord?.body as ProjectFrameBody | undefined, dossier, prompt: input.prompt, catalog,
@@ -320,7 +322,8 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       logger.warn('context-economy: optimize dossier backfill failed (contained, fail-lazy)', e instanceof Error ? e.message : String(e))
       return { ok: false, code: STAR_BRIDGE_CODES.storageFailed, message: '卷宗回填写入失败' }
     }
-    const artifactKey = optimizeArtifactStorageKey(workspace)
+    // F3：优化产物按会话工作区取键。
+    const artifactKey = optimizeArtifactStorageKey(workspaceOf(item.session, workspace))
     const previous = storage.getEntity('optimize_artifact', artifactKey)
     const body = buildArtifactBody({
       parsed: item.parsed, product: input.editedProduct, previewId: input.previewId, taskId: item.taskId,

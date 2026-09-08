@@ -218,6 +218,17 @@ describe('P21a 恢复域端到端', () => {
     expect((storage.getEntity('boundary_archive', ARCHIVE_KEY)!.body as any).entries).toHaveLength(1)
   })
 
+  it('F3：恢复键按会话 header.cwd（跨项目会话不互踩）', async () => {
+    const storage = new FakeStorage()
+    const session = makeResumedSession()
+    ;(session.header as { id: string; cwd?: string }).cwd = 'C:\\proj\\a\\'
+    const { domain } = mount(storage)
+    const result = await domain.onSessionStart({ session: session as unknown as Session, source: 'resume' })
+    expect(stepOf(result, 'boundary_archive').entityKey).toBe(boundaryArchiveKey('C:/proj/a'))
+    expect(stepOf(result, 'optimize_artifact').entityKey).toBe(optimizeArtifactStorageKey('C:/proj/a'))
+    expect(stepOf(result, 'project_frame').entityKey).toBe(projectFrameStorageKey('C:/proj/a'))
+  })
+
   it('双源漂移（镜像非空且不等价）→ mirror-divergence 降级', async () => {
     const storage = new FakeStorage()
     storage.mirror = [{ type: 'context-economy/task-boundary', seq: 99, time: 1, data: { boundary: 'close' } }]

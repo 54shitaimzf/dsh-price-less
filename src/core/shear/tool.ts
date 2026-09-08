@@ -42,6 +42,8 @@ export const ENTRY_MAX_ERROR_LINES = 8
 export const ENTRY_FAILURE_RE = /\[exit code: [1-9]\d*\]|\b(?:error|failed|failure|exception|traceback|fatal)\b/i
 export const GENERIC_CUT_MIN_BYTES = 16_384
 export const GENERIC_CUT_MIN_AGE_MS = 600_000
+/** W1 列表识别（docs/03 §2.1）：列表载荷 = 名字集合，保头尾会丢名字 → T-entry 一律不整形。 */
+export const LISTING_COMMAND_RE = /(?:^\s*|[\n|;&("']\s*)(?:get-childitem|gci|ls|dir|tree|fd|find)\b|\brg\b[^\n]{0,60}--files/i
 
 export function toolCategory(name: string): ShearToolCategory {
   if (READ_TOOLS.has(name)) return 'read'
@@ -49,6 +51,30 @@ export function toolCategory(name: string): ShearToolCategory {
   if (SEARCH_TOOLS.has(name)) return 'search'
   if (CMD_TOOLS.has(name)) return 'cmd'
   return 'other'
+}
+
+/** 列表类命令参数扫描（args 优先，argsText 兜底；纯函数、无 IO）。 */
+function listingCommandIn(call: ShearToolCall, args?: unknown): boolean {
+  const values: string[] = []
+  if (typeof args === 'object' && args !== null) {
+    for (const key of ['command', 'cmd', 'script', 'args']) {
+      const value = (args as Record<string, unknown>)[key]
+      if (typeof value === 'string') values.push(value)
+      else if (Array.isArray(value)) values.push(value.filter((item): item is string => typeof item === 'string').join(' '))
+    }
+  }
+  if (call.argsText !== '') values.push(call.argsText)
+  return values.some((value) => LISTING_COMMAND_RE.test(value))
+}
+
+/**
+ * W1：列表类 cmd 结果识别（**只认命令名**，不做文本启发——文本启发会把普通日志误判为列表）。
+ * 方向性：漏判只损失一次整形收益，误判会白丢收益；两者都不丢内容（失败方向 = 保留）。
+ */
+export function looksLikeListing(call: ShearToolCall, resultText: string, args?: unknown): boolean {
+  if (toolCategory(call.name) !== 'cmd') return false
+  if (resultText.split('\n').length <= ENTRY_MIN_LINES) return false
+  return listingCommandIn(call, args)
 }
 
 export function parseToolArgs(call: ShearToolCall): Record<string, unknown> | undefined {
@@ -154,10 +180,12 @@ export interface Admission {
 }
 
 /** T-entry 写时整形（落账前，断裂成本 0）：cmd 类成功保首尾、失败保错因；只保原文行 + 中性省略标记。 */
-export function shapeEntryContent(call: ShearToolCall, resultText: string): string | undefined {
+export function shapeEntryContent(call: ShearToolCall, resultText: string, args?: unknown): string | undefined {
   if (toolCategory(call.name) !== 'cmd' || resultText === '') return undefined
   const lines = resultText.split('\n')
   if (lines.length <= ENTRY_MIN_LINES) return undefined
+  // W1：列表载荷 = 名字集合，保头尾会丢名字 → 不整形（记 entry-skip-listing）。
+  if (looksLikeListing(call, resultText, args)) return undefined
   const keep: number[] = []
   if (ENTRY_FAILURE_RE.test(resultText)) {
     keep.push(0)
@@ -185,8 +213,8 @@ export function shapeEntryContent(call: ShearToolCall, resultText: string): stri
   return shaped.length < resultText.length ? shaped : undefined
 }
 
-export function admitEntry(call: ShearToolCall, resultText: string): Admission {
-  const shaped = shapeEntryContent(call, resultText)
+export function admitEntry(call: ShearToolCall, resultText: string, args?: unknown): Admission {
+  const shaped = shapeEntryContent(call, resultText, args)
   if (shaped === undefined) return { decision: 'keep', reason: 'entry-keep' }
   return { decision: 'cut', reason: 'entry-shaped', op: { kind: 'shape-entry', callId: call.callId, content: shaped } }
 }
@@ -333,6 +361,9 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
         ops.push({ kind: 'shape-entry', callId: call.callId, content: shaped })
         entryShaped.add(call.callId)
         record('T-entry', 'cut', 'entry-shaped', call.callId)
+      } else if (looksLikeListing(call, result.text)) {
+        // W1：列表跳过可观测（keep 相由 domains/shear.ts 发射 shear-decision 事实）。
+        record('T-entry', 'keep', 'entry-skip-listing', call.callId)
       }
       continue
     }

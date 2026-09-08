@@ -21,6 +21,7 @@ import {
   indentLevelOf,
   isBoundaryRideCandidate,
   isDeclarationTable,
+  looksLikeListing,
   noteEligible,
   parseNoteMarker,
   parseReadEnvelope,
@@ -103,6 +104,31 @@ describe('P15a §2 T-entry 写时整形', () => {
     expect(shaped).toContain('[exit code: 1]')
     expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c2', name: 'read', argsText: '{}' }, bigLog(20))).toBeUndefined()
     expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c3', name: 'bash', argsText: '{}' }, 'ok\n')).toBeUndefined()
+  })
+})
+
+describe('W1 列表识别（目录列表不整形）', () => {
+  const listing = ['Mode  LastWriteTime  Length Name', '----  -------------  ------ ----', ...Array.from({ length: 40 }, (_, i) => `d----  2024/1/1  12:00  dir-${i}`)].join('\n')
+  const toolCall = (callId: string, name: string, args: Record<string, unknown>) => ({ seq: 1, time: 0, callId, name, argsText: JSON.stringify(args) })
+  it('Get-ChildItem / ls / dir 命令 → 不整形；普通日志仍整形', () => {
+    expect(looksLikeListing(toolCall('c1', 'pwsh', { command: 'Get-ChildItem -Force' }), listing)).toBe(true)
+    expect(shapeEntryContent(toolCall('c1', 'pwsh', { command: 'Get-ChildItem -Force' }), listing)).toBeUndefined()
+    expect(looksLikeListing(toolCall('c2', 'bash', { command: 'ls -la' }), listing)).toBe(true)
+    expect(looksLikeListing(toolCall('c3', 'pwsh', { command: 'Get-Content C:\\dir\\x.log' }), listing)).toBe(false)
+    expect(looksLikeListing(toolCall('c4', 'bash', { command: 'npm test' }), bigLog(20))).toBe(false)
+    expect(shapeEntryContent(toolCall('c5', 'bash', { command: 'npm test' }), bigLog(20))).toBeDefined()
+  })
+  it('read 类 / 短输出 / args 缺失时回退 argsText', () => {
+    expect(looksLikeListing(toolCall('c1', 'read', { file_path: 'a.ts' }), listing)).toBe(false)
+    expect(looksLikeListing(toolCall('c2', 'bash', { command: 'ls' }), 'a\nb\nc')).toBe(false)
+    const viaArgsText = { seq: 1, time: 0, callId: 'c3', name: 'pwsh', argsText: JSON.stringify({ command: 'gci -Recurse' }) }
+    expect(looksLikeListing(viaArgsText, listing)).toBe(true)
+  })
+  it('fold：列表跳过记 keep/entry-skip-listing（可观测，不改史）', () => {
+    const events: ShearEvent[] = [call(1, 10, 'c1', 'pwsh', { command: 'Get-ChildItem' }), result(2, 11, 'c1', listing)]
+    const plan = foldToolShear(events)
+    expect(plan.ops).toHaveLength(0)
+    expect(plan.decisions).toContainEqual({ tier: 'T-entry', decision: 'keep', reason: 'entry-skip-listing', callId: 'c1' })
   })
 })
 

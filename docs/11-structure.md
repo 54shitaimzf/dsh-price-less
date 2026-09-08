@@ -107,7 +107,7 @@ platform 是唯一 `ctx` 触点（index.ts 装配根除外）；client 只经 se
 | **durable 真源** | storageDomain KV（H10） | 四实体：卷宗 / 项目帧（含技能目录快照）/ 边界档案 / 优化产物（[09 §2](09-state.md) 协议） | 回退上一版本（快照） |
 | 会话事实 | 自定义 **ignorable 事件**进会话 JSONL（§5 纪律①） | `task-boundary`、`judge-*`、`optimize-run`、`shear-applied`、`pressure-fired`、`restore/*`（全 log-only） | **可回放重建**（KV 只是加速缓存，损毁 = 重放日志重建）；通道缺失时降级 KV 镜像（[12 §3](12-platform-capabilities.md)，失效方向不变） |
 
-workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
+workspace 隔离（F3）：按**会话 `header.cwd`** 分域（缺失回落进程 cwd），项目级实体键含 workspace 标识；键站点统一走 `domains/workspace.ts`，禁止各域各自 `process.cwd()`。
 
 ## 4. 日志面：原生日志兼容三纪律
 

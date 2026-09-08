@@ -15,6 +15,7 @@ import {
   JUDGE_PROMPT_HEAD,
   JUDGE_PROMPT_OUTPUT,
   JUDGE_PROMPT_RULES_CLAUSES,
+  JUDGE_PROMPT_VERSION,
   createEmptyJudgeTable,
   foldJudgeLedger,
   freezeJudgeConfig,
@@ -162,12 +163,20 @@ describe('judge', () => {
     expect(Object.keys(dist).sort()).toEqual([...DOSSIER_CLASSES].sort())
   })
 
-  it('judge datasets 同源: 规则分句与 v2.2 切片逐字节一致、输出含三分类', () => {
-    const v22 = readFileSync('datasets/prompt-discriminator-v2.2.txt', 'utf8')
-    const expected = v22.slice(v22.indexOf('先决排除：'), v22.indexOf('\n\n<anchor>'))
+  it('judge datasets 同源: 规则分句与 v2.3 切片逐字节一致、输出含三分类', () => {
+    const v23 = readFileSync('datasets/prompt-discriminator-v2.3.txt', 'utf8')
+    const expected = v23.slice(v23.indexOf('先决排除：'), v23.indexOf('\n\n<anchor>'))
     expect(expected.length).toBeGreaterThan(800)
     expect(JUDGE_PROMPT_RULES_CLAUSES).toBe(expected)
     expect(JUDGE_PROMPT_OUTPUT).toContain('"action"|"pureQ"|"verifyQ"')
+  })
+
+  it('v4 任务定义：同一对象/目标持续改进 + 子task 不分流 + 换对象覆盖言说层', () => {
+    expect(JUDGE_PROMPT_VERSION).toBe(4)
+    expect(JUDGE_PROMPT_CONTEXT).toContain('对同一工作对象')
+    expect(JUDGE_PROMPT_CONTEXT).toContain('子task，不是任务边界')
+    expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('同对象言说层')
+    expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('若针对的是新的工作对象，同样算换对象')
   })
 
   it('judge deterministic: prompt 与 fold 连续三次字节一致', () => {

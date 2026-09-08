@@ -23,6 +23,7 @@ import { foldSegmentState } from '../core/units.ts'
 import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey, sessionScopedTaskId, type DossierBody, type DossierClass } from '../core/dossier.ts'
 import type { LedgerFact } from '../core/ledger/types.ts'
 import { parseT0Command } from '../core/t0.ts'
+import { workspaceOf } from './workspace.ts'
 import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { readSessionModel, type EventPump, type CeDomainEvents, type CeLogger } from '../platform/events.ts'
@@ -198,7 +199,8 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     // 对表 = 影子记账（P14c §2 修订）：**只算不拦**——命中照常走 LLM，只记录"机械本会怎么判"。
     // 唯一允许不调模型就下结论的是 T0（用户显式宣告）与 L1（重放同一条消息的既有裁决）；
     // 任何"用特征猜意图"的短路都会带来无声漏边界，故对表层不参与决策。
-    const table = readJudgeTable(storage, workspace)
+    // F3：优化产物表按会话工作区取键。
+    const table = readJudgeTable(storage, workspaceOf(session, workspace))
     const tableMatch = matchJudgeTable(text, table)
 
     const rendered = renderJudgePrompt(appended, { seq, text })

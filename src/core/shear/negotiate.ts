@@ -83,6 +83,8 @@ export interface ShearNegotiationNoteFactData {
   readonly channel: NegotiationChannel
   readonly noteBytes: number
   readonly templateVersion: number
+  /** W2(B)：注记是否真的写进模型可见正文（shadow = false 只观察；缺省 = true 兼容历史事实）。 */
+  readonly attached?: boolean
 }
 
 /** 回复判定（每条注记恰好结算一次：ok / hold / none）。 */
@@ -120,8 +122,10 @@ export function judgeNegotiationReply(
 }
 
 export interface NegotiationLedger {
-  /** 挂出的注记数（分母）。 */
+  /** 选样注记数（含 shadow 未写正文的观察样本）。 */
   notes: number
+  /** W2(B)：真的写进正文的注记数（率的分母）。 */
+  attachedNotes: number
   notesByBasis: Record<string, number>
   controlNotes: number
   /** 已结算的回复数（ok + hold + noReply；每条注记恰好一条）。 */
@@ -147,6 +151,7 @@ export interface NegotiationLedger {
 function emptyNegotiationLedger(): NegotiationLedger {
   return {
     notes: 0,
+    attachedNotes: 0,
     notesByBasis: {},
     controlNotes: 0,
     replies: 0,
@@ -191,6 +196,7 @@ export function foldNegotiation(facts: readonly LedgerFact[]): NegotiationLedger
       const data = fact.data as ShearNegotiationNoteFactData | undefined
       if (data == null || typeof data.basis !== 'string') continue
       ledger.notes++
+      if (data.attached !== false) ledger.attachedNotes++
       ledger.notesByBasis[data.basis] = (ledger.notesByBasis[data.basis] ?? 0) + 1
       if (data.channel === 'control') ledger.controlNotes++
       continue
@@ -216,9 +222,9 @@ export function foldNegotiation(facts: readonly LedgerFact[]): NegotiationLedger
       ledger.noReply++
     }
   }
-  ledger.okRate = ratio(ledger.ok, ledger.notes)
-  ledger.holdRate = ratio(ledger.hold, ledger.notes)
-  ledger.noReplyRate = ratio(ledger.noReply, ledger.notes)
+  ledger.okRate = ratio(ledger.ok, ledger.attachedNotes)
+  ledger.holdRate = ratio(ledger.hold, ledger.attachedNotes)
+  ledger.noReplyRate = ratio(ledger.noReply, ledger.attachedNotes)
   ledger.completeRate = ratio(ledger.complete, ledger.ok)
   ledger.verifyOkRate = ratio(ledger.verifyOk, ledger.ok)
   ledger.medianDepth = median(depths)
@@ -231,7 +237,7 @@ export function formatNegotiationLedger(ledger: NegotiationLedger): string {
   const lines: string[] = ['协商剪除：']
   const bases = Object.entries(ledger.notesByBasis).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .map(([basis, n]) => `${basis}=${n}`).join(' ')
-  lines.push(`  notes: ${ledger.notes}${bases === '' ? '' : ` (${bases})`} / control=${ledger.controlNotes}`)
+  lines.push(`  notes: ${ledger.notes}${bases === '' ? '' : ` (${bases})`} / control=${ledger.controlNotes} / attached=${ledger.attachedNotes}`)
   lines.push(`  replies: ${ledger.replies} ok=${ledger.ok} hold=${ledger.hold} noReply=${ledger.noReply}`)
   lines.push(`  rates: ok=${ledger.okRate} hold=${ledger.holdRate} noReply=${ledger.noReplyRate}`)
   lines.push(`  completeRate: ${ledger.completeRate} / verifyOkRate: ${ledger.verifyOkRate}`)

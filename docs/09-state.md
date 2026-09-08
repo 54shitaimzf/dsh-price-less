@@ -31,7 +31,9 @@ log-only 事件——日志 append 后永不重写，状态损毁也能按事件
 - **发射通道与降级**：本轨的写入依赖 ignorable 通道契约——能力探测、KV 事实镜像降级、
   删除清单见 [12 §1–§3](12-platform-capabilities.md)；通道缺失不改变本表失效语义的**方向**，
   仅改变真源位置（日志 → KV 镜像）。
-- **workspace 隔离**：按 cwd 分域——项目级实体（项目帧/档案）键含 workspace 标识。
+- **workspace 隔离（F3）**：按**会话 `header.cwd`** 分域（缺失回落进程 cwd）——项目级实体
+  （项目帧/边界档案/优化产物）键含 workspace 标识；**禁止各域各自 `process.cwd()`**：跨项目会话
+  共用一个键会互相驱逐（真机 2026-09-09：resume 档案被本会话挤出）。键站点统一走 `domains/workspace.ts`。
 - **会话级 task 卷宗隔离**：`task-<n>` 只在单会话 fold 内唯一；同一 workspace 多会话共用
   storage domain 时，卷宗键必须先经会话级限定（`sessionScopedTaskId(sid, taskId)`）再交给
   `dossierStorageKey`，防止不同会话的 task-1/task-2 相互覆盖（落地见 P13/P12）。

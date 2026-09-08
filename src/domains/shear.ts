@@ -25,6 +25,7 @@ import {
   foldToolShear,
   judgeNegotiationReply,
   ledgerEventText,
+  looksLikeListing,
   negotiationNote,
   selectNegotiation,
   shapeEntryContent,
@@ -111,6 +112,8 @@ interface PendingEntry {
     readonly selection: NegotiationSelection
     readonly negotiatedText: string
     readonly noteBytes: number
+    /** W2(B)：live 才写正文；shadow 只观察。 */
+    readonly attached: boolean
   }
 }
 
@@ -130,6 +133,8 @@ interface SessionState {
   readonly seqs: Set<number>
   readonly consumed: Set<string>
   readonly holdsSeen: Set<string>
+  /** W1：已记过 entry-skip-listing 的 callId（事实去重）。 */
+  readonly skipsSeen: Set<string>
   readonly entryShaped: Set<string>
   readonly nameByCallId: Map<string, string>
   readonly resultSeqByCallId: Map<string, SessionSeq>
@@ -229,6 +234,9 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     return mode === 'shadow' || mode === 'live'
   }
 
+  /** W2(B)：只有 live 才把注记写进模型可见正文；shadow 只观察（零字节、零改史）。 */
+  const negotiateAttaches = (): boolean => getConfig().shear?.negotiate === 'live'
+
   const descriptorOf = (view: ToolResultView): ToolDescriptor => ({
     name: view.name,
     resultText: view.resultText,
@@ -245,12 +253,12 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     if (!negotiateActive()) return undefined
     const selection = selectNegotiation(descriptorOf(view), view.callId)
     if (selection === undefined) return undefined
-    return { selection, negotiatedText, noteBytes: utf8ByteLength(negotiationNote()) }
+    return { selection, negotiatedText, noteBytes: utf8ByteLength(negotiationNote()), attached: negotiateAttaches() }
   }
 
   const shapeEntry = (view: ToolResultView): string | undefined => {
     if (disposed || !enabled()) return undefined
-    const shaped = shapeEntryContent(callOf(view), view.resultText)
+    const shaped = shapeEntryContent(callOf(view), view.resultText, view.args)
     if (shaped === undefined) return undefined
     const beforeTokens = estimateTokens(view.resultText)
     const afterTokens = estimateTokens(shaped)
@@ -258,7 +266,8 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     // 整形后仍可挂协商注记：模型看到的是整形文本，结论必须保住它里面的关键事实。
     const negotiation = negotiationOf(view, shaped)
     rememberPending(view.callId, { view, entry: { beforeTokens, afterTokens }, ...(negotiation === undefined ? {} : { negotiation }) })
-    return negotiation === undefined ? shaped : `${shaped}\n${negotiationNote()}`
+    // W2(B)：shadow 只观察不写正文；注记只属于 live（N4 起改走独立 notice 通道）。
+    return negotiation === undefined || negotiation.attached !== true ? shaped : `${shaped}\n${negotiationNote()}`
   }
 
   const attachNote = (view: ToolResultView): string | undefined => {
@@ -266,7 +275,8 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     const negotiation = negotiationOf(view, view.resultText)
     if (negotiation === undefined) return undefined
     rememberPending(view.callId, { view, negotiation })
-    return negotiationNote()
+    // W2(B)：shadow 只观察不写正文。
+    return negotiation.attached === true ? negotiationNote() : undefined
   }
 
   const port = createShearToolPort(ctx, { shapeEntry, attachNote }, logger, deps.getTools)
@@ -365,6 +375,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       seqs: new Set(),
       consumed: new Set(),
       holdsSeen: new Set(),
+      skipsSeen: new Set(),
       entryShaped: new Set(),
       nameByCallId: new Map(),
       resultSeqByCallId: new Map(),
@@ -454,7 +465,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       counts.entryShaped++
     }
     if (entry.negotiation === undefined) return
-    const { selection, negotiatedText, noteBytes } = entry.negotiation
+    const { selection, negotiatedText, noteBytes, attached } = entry.negotiation
     const resultBytes = utf8ByteLength(negotiatedText)
     const note: ShearNegotiationNoteFactData = compactFact({
       at: now(),
@@ -467,9 +478,12 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       channel: selection.channel,
       noteBytes,
       templateVersion: SHEAR_CONCLUSION_VERSION,
+      attached,
     })
     emitCeFact(session, SHEAR_NEGOTIATION_NOTE_FACT_TYPE, note, logger)
     counts.negotiationNotes++
+    // W2(B)：shadow 样本没有写进正文，模型无从应答 → 不入待答队列（不伪造 no-reply）。
+    if (!attached) return
     counts.notesAttached++
     state.negotiationPending.push({ callId, resultSeq: event.seq, negotiatedText, resultBytes, basis: selection.basis })
     if (state.negotiationPending.length > NEGOTIATION_PENDING_LIMIT) {
@@ -546,6 +560,22 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
   const processOps = (state: SessionState): void => {
     const plan = foldToolShear(state.events, policy, { entryShaped: state.entryShaped })
     for (const decision of plan.decisions) {
+      // W1：列表跳过（keep 相）——只记一条事实，不改史。
+      if (decision.decision === 'keep' && decision.reason === 'entry-skip-listing') {
+        const skipKey = 'T-entry|skip|' + (decision.callId ?? '')
+        if (state.skipsSeen.has(skipKey)) continue
+        state.skipsSeen.add(skipKey)
+        const skipFact: ShearDecisionFactData = compactFact({
+          policyVersion: SHEAR_POLICY_VERSION,
+          tier: 'T-entry',
+          decision: 'keep',
+          reason: 'entry-skip-listing',
+          ...(decision.callId === undefined ? {} : { callId: decision.callId }),
+          at: now(),
+        })
+        emitCeFact(state.session, SHEAR_DECISION_FACT_TYPE, skipFact, logger)
+        continue
+      }
       if (decision.decision !== 'hold') continue
       const key = `${decision.tier}|${decision.callId ?? ''}`
       if (state.holdsSeen.has(key)) continue

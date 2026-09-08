@@ -34,7 +34,7 @@
 
 | 档 | 时机 | 挂点 | 断裂成本 | 准入与动作 |
 |---|---|---|---|---|
-| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因 |
+| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | 严格最优，能做尽做：编译类成功裁几行 / 失败留错因；**列表类命令（Get-ChildItem/gci/ls/dir/tree/fd/find）不整形**——载荷 = 名字集合，保头尾会丢名字，记 `entry-skip-listing` |
 | T-loop | 思考后占位（模型消费完结果） | surfaceOp replace | 一次 + 短尾（剪点 = 刚消费完） | 当次结论极短 + cmd/bash 类；**read 类排除**（喂后续编辑，剪 = 逼重读）；**必须 stub 占位替换而非移除**（保 tool_call 配对防 400） |
 | T-note | 注记协商（写时贴注 + 消费后协商剪） | 贴注 = `tools/post-execute` accept 追加；剪除 = surfaceOp replace | 同 T-loop（剪点贴消费） | 见 §2.1 |
 | T-boundary | 边界搭车 | task 压缩大 replace | 已付（搭车） | **老调用对唯一合法去处**，绝不中段独立剪 |
@@ -55,6 +55,10 @@
   语义在场）；`CUT-HOLD:〈原因〉` = 保留原文至边界搭车。
 - **失败语义**：无标记 / 解析失败 / 超时 = **默认保留**——协商不成不动刀，零重试，
   绝不机械代剪（T-loop 有自己独立的类准入，不是 T-note 的失败兜底）。
+- **通道纪律（W2(B)，2026-09-09）**：`shear.negotiate` 三态中 **shadow = 只观察、零字节**——注记只落
+  `shear-negotiation-note` 事实（`attached:false`），不写进工具结果正文（协议文本不得污染用户可见
+  正文，影子模式也不得改史）；`live` 才写正文，且 N4 起改走独立 notice 通道（`source.kind='plugin'`，
+  不进判别输入面）。
 - **思考剪除前提**：reasoning 回放范围确认后剥离后续 assistant 消息的思考；若回合内回放
   依赖 reasoning，思考剪除推迟至回合闭合，调用对剪除照常（两段分离，账本分开记）。
 
@@ -148,7 +152,7 @@
 - 事件（log-only）：`shear-applied {kind, policyVersion}` 随每次剪除；
 - 度量（定义见 [07](07-metrics.md)）：`cutEvents{kind: question|tool}` · `cutTokensSaved` ·
   `cutBreakCost` · `cutMisfireDetected`（重问/重读检出）· `questionBacklogDepth` ·
-  `toolPruneByClass` · `shearNoteAttached` · `shearDecision{cut|hold|keep}` ·
+  `toolPruneByClass` · `shearNoteAttached` · `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）·
   `thinkingCutTokens` · `rerunAfterCut` · `tableRepair{Count,Tokens}` · `repairCoverage` ·
   `rereadAfterRepair`。全部可从会话日志回放（stub 的 `sourceEventSeqs` 溯源 + prune 影子价）。
 

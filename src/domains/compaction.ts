@@ -21,6 +21,7 @@ import { compactFact, factsFromSessionEvents } from '../core/ledger/facts.ts'
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
+import { workspaceOf } from './workspace.ts'
 import { DEFAULT_ASSEMBLE_POLICY, archiveChainMonotone, foldAssembleInputs, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
 import {
   COMPRESS_PROMPT_VERSION,
@@ -239,8 +240,8 @@ interface ProductAttempt {
 
 export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDomain {
   const { storage, getConfig, logger, now = Date.now } = deps
-  const workspace = deps.workspace ?? process.cwd().replaceAll('\\', '/')
-  const storeKey = boundaryArchiveKey(workspace)
+  /** F3：会话级工作区（header.cwd 优先；deps.workspace/进程 cwd 仅作回落）。 */
+  const workspaceFor = (session: Session): string => workspaceOf(session, deps.workspace ?? process.cwd())
   const counts: CompactionDomainStats = { preSteps: 0, triggers: 0, compactions: 0, cacheHits: 0, skips: 0, rangeSkips: 0, errors: 0 }
   const busy = new WeakSet<Session>()
   /** 压力触发 turn 守卫（一个 turn 至多一次常规压力尝试；紧急折叠另有守卫）。 */
@@ -269,6 +270,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     mutate: (body: ArchiveStoreBody) => { body: ArchiveStoreBody; entries: number; overCap: boolean },
     baseVersion: number | undefined,
     taskId: string,
+    workspace: string,
+    storeKey: string,
   ): Promise<{ entries: number; overCap: boolean } | undefined> => {
     const source = { taskId, eventType: 'boundary-archive', evidence: { workspace } }
     const apply = (
@@ -311,6 +314,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   ): Promise<void> => {
     const config = getConfig()
     const sid = sessionIdOf(session)
+    const workspace = workspaceFor(session)
+    const storeKey = boundaryArchiveKey(workspace)
     const { root, rootKind } = sessionRootOf(session)
     const scopedTaskId = `${sid}:${segment.taskId}`
     const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
@@ -470,7 +475,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         entries: appended.kept,
         overCap: appended.overCap,
       }
-    }, existing?.version, scopedTaskId)
+    }, existing?.version, scopedTaskId, workspace, storeKey)
     if (written === undefined) {
       skip('storage', { calls: chosen.calls, retry, shadowedTokens, productTokens: chosen.productTokens, cacheHit: chosen.cacheHit, ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }) })
       return
@@ -592,6 +597,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   ): Promise<PressureFoldResult> => {
     const config = getConfig()
     const sid = sessionIdOf(session)
+    const workspace = workspaceFor(session)
+    const storeKey = boundaryArchiveKey(workspace)
     const { root } = sessionRootOf(session)
     const stop = (attempted: boolean): PressureFoldResult => ({ landed: false, attempted })
     const base = {
@@ -771,7 +778,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         entries: appended.kept,
         overCap: appended.overCap,
       }
-    }, existing?.version, scopedTaskId)
+    }, existing?.version, scopedTaskId, workspace, storeKey)
     if (written === undefined) {
       fire('skip', { reason: 'storage', chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({

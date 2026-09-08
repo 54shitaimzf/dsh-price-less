@@ -2802,5 +2802,40 @@ fact-leak.ts）；`AGENTS.md`（双预算 + 产物形状 + F9 进度）；`docs/
 
 **待补**：DSH 重启后真机冒烟（新 prompt 实产样本 + `logs/context-economy.log` 的档案条目体量对照）；
 `scripts/verify-f9-replay.mjs` 已随契约 v3 更新为「档案正文 / 热尾」分列，真机日志重跑待补。
+---
+
+## §70 F3 + F11/F12/F13 真机复盘修正：工作区隔离 / 列表不剪 / 影子零字节 / 判别器 v4（2026-09-09；提交 = 本账本同提交）
+
+**触发**：用户要求按 **resume 项目**会话（`session-7cc0a1b0` / `session-7d73bb3f`）逐条复盘并修复——
+① 目录列表被 `… (省略 N 行)` 剪掉（11 次实剪全为 `Get-ChildItem` 列表，丢文件名）；
+② 协商注记 `（协商：…）` 被追加到工具结果**用户可见正文**末尾；
+③ resume 的 30 KB 边界档案从 KV 消失（`boundary_archive:G:/deepseek-harness` 只剩本会话条目）；
+④ 换话题的单句提问被判 `continue`（ctx 21 tok）→ 前一个 task 不闭合 → 不触发边界压缩。
+
+**用户裁定（task 定义，F13 判据中心）**：task = 对**同一对象/类似目标持续改进的努力**（如聚焦 UI / 某模块，
+上下文特点相近）；**子task = task 中不同类型过程的分流**（构建/审查/验证…），不构成任务边界。W2 取 **B**（影子期不写正文）。
+
+| 单 | 根因 | 修复 | 落点 |
+|---|---|---|---|
+| **F11** 列表不剪 | `shapeEntryContent` 对所有 cmd 结果「保头 2 尾 2」——列表载荷 = 中间行（名字） | 新增 `looksLikeListing`（**只认命令名**：Get-ChildItem/gci/ls/dir/tree/fd/find，参数起点/管道段判定；不做文本启发，避免把日志误判为列表）→ 不整形；fold 记 `keep/entry-skip-listing`；`domains/shear.ts` 发 `shear-decision` 事实（去重）；账本 `entrySkipListing` 分列 | `core/shear/tool.ts`、`core/shear/ledger.ts`、`domains/shear.ts` |
+| **F12** 影子零字节 | `domains/shear.ts` 把 `negotiationNote()` 拼进 tool result content（`shapeEntry` 追加 / `attachNote` 返回）——影子模式**改了史**，协议文本污染用户正文 | shadow 只落 `shear-negotiation-note`（`attached:false`），**不写字节、不入待答队列、不伪造 no-reply**；`live` 保留旧通道（N4 改走独立 notice，`source.kind='plugin'` 不进判别输入面）；`NegotiationLedger.attachedNotes` 为率的分母 | `domains/shear.ts`、`core/shear/negotiate.ts` |
+| **F3** 工作区隔离 | 五处键站点各自 `process.cwd()`（`deps.workspace` 由 index 传入）→ 所有会话共用一个档案/产物/项目帧键，跨项目互相驱逐 | 新 `domains/workspace.ts` 唯一键源 `workspaceOf(session) = header.cwd ?? fallback`（规范化 + 去尾斜杠）；compaction（边界/压力两路径各自解析 + `writeStore` 收 workspace/storeKey）、restore、input、star、commands 全部收口 | `domains/workspace.ts`（新）+ 五域 |
+| **F13** 判别器 v4 | 先决排除规则 1「言说层」排在换对象/换域之前且写明「与讨论对象是否变化无关」→ 针对**新对象**的评价/咨询被吞成 continue | `JUDGE_PROMPT_VERSION` 3→4：task 定义居中；规则 1 限定「当前工作对象/目标」；规则 5/6 明确「针对新对象的评价/咨询/方案同样算换对象」；continue 侧写明「同一 task 内过程类型分流（子task）不是边界」 | `core/judge.ts`、`datasets/prompt-discriminator-v2.3.txt`（新） |
+
+**验收**：`npm run gate` = **657 tests / 59 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿。
+新增/改写用例：`tests/workspace.spec.ts`（3 例：规范化 / 回落 / 三键不同）+ `tests/restore-domain.spec.ts`
+「F3 恢复键按会话 header.cwd」；`tests/shear-tool.spec.ts` W1 三例（命令识别 / read 与短输出 / fold 记 skip）；
+`tests/shear-domain.spec.ts` N3 改「shadow 零字节 + 不伪造回复」+「live 仍写正文」，回复机制用例迁到 `live`；
+`tests/shear-negotiate.spec.ts` 增 `attached=false` 不计入率分母；`tests/judge.spec.ts` datasets 同源改 v2.3 + v4 定义断言。
+
+**口径同步**：`docs/02` §3（task 定义 + v4）、`docs/03` §2 T-entry 行 + §2.1 通道纪律 + §6 度量、
+`docs/07`（`entrySkipListing` / `attachedNotes`）、`docs/09` §1（workspace = 会话 header.cwd）、
+`docs/11` §3、`AGENTS.md`、`docs/implement/TODO.md`（F3 ✅ + F11/F12/F13 行；§1 采样通道重建）。
+
+**后果与待补**：
+1. **N3a 真机采样按旧口径停摆**——shadow 不再往正文写注记，模型无从应答；采样必须先落 N4 的**独立 notice 通道**（`source.kind='plugin'` 已验证不进判别输入面），TODO §1 ① 已改写。
+2. **键变更**：旧 `boundary_archive:<进程 cwd>` 条目不再被读取（均为可重算缓存，不迁移）；进程 cwd 与会话 cwd 相同的场景键不变。
+3. **需 build + 重启**加载新构建；真机冒烟（resume 场景 0 次列表剪、正文无 `（协商：`、v4 判词是否产出边界压缩）待补。
+4. `project_frame` 的**写入方**仍是进程级 skill-catalog watcher（`index.ts:38`）——本单只统一读侧键；watcher 会话化另立小单。
 
 

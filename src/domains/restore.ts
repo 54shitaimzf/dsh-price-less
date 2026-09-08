@@ -39,6 +39,7 @@ import { emitCeFact } from '../platform/logger.ts'
 import { readSessionUserMessages, type CeLogger } from '../platform/events.ts'
 import { CE_STORAGE_SCHEMA_VERSION, type ContextEconomyStorage } from '../platform/storage.ts'
 import { boundaryArchiveKey } from './compaction.ts'
+import { workspaceOf } from './workspace.ts'
 import { optimizeArtifactStorageKey } from './star.ts'
 import { JUDGE_RECORDED_FACT_TYPE } from './judge-facts.ts'
 import {
@@ -57,7 +58,8 @@ export interface RestoreDrillOptions {
 export interface RestoreDomainDeps {
   storage: ContextEconomyStorage
   logger: CeLogger
-  workspace: string
+  /** F3：仅作回落；键优先取会话 header.cwd。 */
+  workspace?: string
   now?: () => number
   drill?: RestoreDrillOptions
 }
@@ -166,7 +168,7 @@ function entityKeyOf(spec: RestoreStepSpec, workspace: string): string {
  */
 export function mountRestoreDomain(deps: RestoreDomainDeps): RestoreDomain {
   const now = deps.now ?? Date.now
-  const { storage, logger, workspace } = deps
+  const { storage, logger } = deps
   const drill = deps.drill?.damaged ?? {}
   const counters: RestoreDomainStats = { runs: 0, steps: 0, rebuilt: 0, degraded: 0, skipped: 0, internalErrors: 0 }
   const seen = new WeakSet<Session>()
@@ -174,6 +176,8 @@ export function mountRestoreDomain(deps: RestoreDomainDeps): RestoreDomain {
 
   const run = async (payload: { session: Session; source: RestoreSource }): Promise<RestoreRunResult> => {
     const { session, source } = payload
+    // F3：恢复键 = 会话工作区（跨项目会话不再互踩）。
+    const workspace = workspaceOf(session, deps.workspace)
     const startedAt = now()
     const steps: RestoreStepFactData[] = []
     const degraded: RestoreDegradedFactData[] = []
