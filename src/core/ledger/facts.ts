@@ -32,6 +32,13 @@ export function assertFactSourcesEquivalent(a: LedgerFact[], b: LedgerFact[]): b
   return normalize(a) === normalize(b)
 }
 
+/** 去掉 undefined 键（事实事件载荷不落空键；JSONL 可回放、逐字确定）。 */
+export function compactFact<T extends object>(value: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) if (item !== undefined) out[key] = item
+  return out as T
+}
+
 /** 按类型计数（闭口计数用；不做语义解析）。 */
 export function countFactsOfType(facts: LedgerFact[], type: string): number {
   let count = 0

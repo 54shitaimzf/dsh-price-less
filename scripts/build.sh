@@ -94,6 +94,8 @@ link_pkg @deepseek-ai/dsh-llm packages/llm/llm
 link_pkg @deepseek-ai/dsh-skill packages/skill/skill
 # P7：工具端口（H6 tools/execute + post-execute）
 link_pkg @deepseek-ai/dsh-tools packages/core/tools
+# P17b：盘上取真端口（H15 ctx.fs 抽象服务；本地后端由部署装配，端口只依赖抽象面）
+link_pkg @deepseek-ai/dsh-fs packages/fs/fs
 link_pkg @deepseek-ai/dsh-brand packages/util/brand
 link_pkg @deepseek-ai/dsh-util-values packages/util/values
 link_pkg @deepseek-ai/dsh-scope packages/core/scope

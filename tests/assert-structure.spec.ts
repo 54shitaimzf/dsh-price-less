@@ -101,6 +101,19 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D10', 'src/core/shear/ledger.ts', 'const x = Math.random()\n')).not.toEqual(NO_ISSUES)
     expect(check('D10', 'src/core/shear/t0r.ts', 'const d = new Date()\n')).not.toEqual(NO_ISSUES)
   })
+  it('D11：fs 服务概念越出 platform/files.ts → issue（docs/10 §1 H15 盘上取真收口）', () => {
+    expect(check('D11', 'src/domains/a.ts', "const fs = ctx.get('fs')\n")).not.toEqual(NO_ISSUES)
+    expect(check('D11', 'src/core/a.ts', "import type { FsTarget } from '@deepseek-ai/dsh-fs'\n")).not.toEqual(NO_ISSUES)
+    expect(check('D11', 'src/platform/events.ts', 'await fs.readText(target)\n')).not.toEqual(NO_ISSUES)
+    expect(rule('D11').check({ path: 'src/platform/files.ts', text: "ctx.get('fs'); FileSystem; FsTarget; readText(t)" }, new Map())).toEqual(NO_ISSUES)
+    expect(check('D11', 'src/index.ts', "ctx.inject(['fs'], (fsCtx) => {})\n")).toEqual(NO_ISSUES)
+  })
+  it('D12：core/assemble 出现时钟/随机 → issue（装配器确定性，docs/11 §9）', () => {
+    expect(check('D12', 'src/core/assemble/assemble.ts', 'const t = Date.now()\n')).not.toEqual(NO_ISSUES)
+    expect(check('D12', 'src/core/assemble/chain.ts', 'const x = Math.random()\n')).not.toEqual(NO_ISSUES)
+    expect(check('D12', 'src/core/assemble/ledger.ts', 'const d = new Date()\n')).not.toEqual(NO_ISSUES)
+    expect(check('D12', 'src/core/assemble/types.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
+  })
   it('D9：connection RPC 桥概念越出 platform/star-bridge.ts 与 index.ts → issue（docs/10 §1 H11 + docs/13 §3.11）', () => {
     expect(check('D9', 'src/domains/star.ts', "const connection = ctx.connection\n")).not.toEqual(NO_ISSUES)
     expect(check('D9', 'src/platform/events.ts', "type X = ConnectionRpcResult<unknown>\n")).not.toEqual(NO_ISSUES)
@@ -188,6 +201,7 @@ describe('真实树集成', () => {
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
       D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass', D8: 'pass', D9: 'pass', D10: 'pass',
+      D11: 'pass', D12: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

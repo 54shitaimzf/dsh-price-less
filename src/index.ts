@@ -17,6 +17,8 @@ import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, t
 import type { Session } from '@deepseek-ai/dsh-session'
 import { mountAutoDiscriminator } from './domains/input.ts'
 import { mountShearDomain } from './domains/shear.ts'
+import { mountAssembleDomain } from './domains/assemble.ts'
+import { createFilesPort, type FilesPort } from './platform/files.ts'
 import { mountCommandFace } from './domains/commands.ts'
 import { mountStarHost, readSessionId, renderPreviewCommandText } from './domains/star.ts'
 import { registerStarBridge, type StarConnectionFace } from './platform/star-bridge.ts'
@@ -80,6 +82,15 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   // P15b：工具剪切调度（独立于 storage/llm——纯机械四档 + 事实发射；开关 = config.shear.enabled）。
   const shear = mountShearDomain(ctx, { pump, getConfig, logger: ceLogger(ctx) })
   ctx.effect(() => () => shear.dispose())
+
+  // P17b：边界装配域（盘上取真端口 H15 + 共享事务原语执行器；压缩触发/档案落盘归 P19）。
+  let files: FilesPort | undefined
+  ctx.inject(['fs'], (fsCtx) => {
+    files = createFilesPort(fsCtx, { logger: ceLogger(fsCtx) })
+    fsCtx.effect(() => () => { files = undefined })
+  })
+  const assemble = mountAssembleDomain({ pump, logger: ceLogger(ctx), getFiles: () => files })
+  ctx.effect(() => () => assemble.dispose())
 
   let stopAuto: (() => void) | undefined
   let skillsCtx: Context | undefined

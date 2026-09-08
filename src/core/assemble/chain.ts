@@ -7,7 +7,7 @@
  * 模块: core 边界装配纯核（坐标层）
  * 平面: L0（行偏移算术 + 唯一匹配；零模型、零 IO、不读盘）
  * 回退链步数: 1（定位失败 / 位置不可知 → chain-break，调用方降级丢弃）
- * 审查清单: 不 import harness/platform（S1）；不解释 harness 不透明 FsVersion（只用插件侧版本计数）；
+ * 审查清单: 不 import harness/platform（S1）；不解释 harness 不透明版本 token（只用插件侧计数）；
  *           无时钟随机（D12）；不抛错、不改输入。
  * 度量: 无 07 字段（重映射计数由 assemble.ts 汇总进 assemble-run 事实）。
  */

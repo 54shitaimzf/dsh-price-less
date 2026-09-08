@@ -1,6 +1,6 @@
 /**
  * 共享压缩事务原语（docs/04 §1；P17a）。边界/压力两路径共用同一顺序契约：
- * open → (replace | prune)* → close；单事务持锁、ID 幂等、失败带 error 收尾。
+ * open → prune（原区间影子计价）→ replace（同区间遮蔽）→ close；单事务持锁、ID 幂等、失败带 error 收尾。
  * **中性词汇**：`compaction/*` 事件名与配对平衡守卫锁在 `platform/history.ts`（D7），
  * 本层只描述顺序与不变量，执行器见 `domains/assemble.ts` 的 `runCompactionTxn`。
  *
@@ -52,10 +52,11 @@ export interface TxnPlanInput {
 
 /** 计划事务（顺序固定；调用方只负责执行，不再自行编排顺序）。 */
 export function planTxn(input: TxnPlanInput): TxnPlan {
+  // prune 必须在 replace 之前：影子计价引用的是**被遮蔽的原区间**（替换后区间已不在表面）。
   const steps: TxnStep[] = [
     { kind: 'open' },
-    { kind: 'replace', range: input.range, replaceKind: input.replaceKind },
     { kind: 'prune', range: input.range, shadowedTokenCount: input.shadowedTokenCount },
+    { kind: 'replace', range: input.range, replaceKind: input.replaceKind },
     input.error === undefined ? { kind: 'close' } : { kind: 'close', error: input.error },
   ]
   return {
@@ -101,23 +102,28 @@ export function foldTxnMarkers(markers: readonly TxnMarker[]): TxnFoldState {
   return { ...(active === undefined ? {} : { active }), completed, mismatched }
 }
 
-/** 顺序校验：open 首、close 尾且各恰一次，replace/prune 居中且成对同区间。 */
+/**
+ * 顺序校验：open 首、close 尾且各恰一次；prune 先于 replace、同区间（prune 引用被遮蔽原区间）。
+ */
 export function txnOrderValid(steps: readonly TxnStep[]): boolean {
   if (steps.length < 4) return false
   if (steps[0]?.kind !== 'open' || steps[steps.length - 1]?.kind !== 'close') return false
   let opens = 0
   let closes = 0
+  let replaceIndex = -1
+  let pruneIndex = -1
   let replace: TxnStep | undefined
   let prune: TxnStep | undefined
   for (let i = 1; i < steps.length - 1; i++) {
     const step = steps[i] as TxnStep
     if (step.kind === 'open') opens++
     else if (step.kind === 'close') closes++
-    else if (step.kind === 'replace') replace = step
-    else if (step.kind === 'prune') prune = step
+    else if (step.kind === 'replace') { replace = step; replaceIndex = i }
+    else if (step.kind === 'prune') { prune = step; pruneIndex = i }
   }
   if (opens !== 0 || closes !== 0) return false
   if (replace === undefined || prune === undefined) return false
+  if (pruneIndex >= replaceIndex) return false
   const a = replace.range
   const b = prune.range
   if (a === undefined || b === undefined) return false

@@ -37,12 +37,7 @@ export {
 } from '../core/shear/ledger.ts'
 export type { ShearAppliedFactData, ShearAppliedTier, ShearDecisionFactData, ShearErrorFactData, ShearRunPlanFactData } from '../core/shear/ledger.ts'
 
-/** 去掉 undefined 键（事实事件载荷不落空键；JSONL 可回放、逐字确定）。 */
-export function compactFact<T extends object>(value: T): T {
-  const out: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value)) if (item !== undefined) out[key] = item
-  return out as T
-}
+export { compactFact } from '../core/ledger/facts.ts'
 
 /** 声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。 */
 // ignorable: 三型事实键的声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。
