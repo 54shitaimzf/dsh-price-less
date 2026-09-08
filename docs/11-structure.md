@@ -8,7 +8,7 @@
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
 > 状态：**R4 进行中**（P17 边界装配器已施工：`core/assemble/` 纯核 + `platform/files.ts` 盘上取真 H15 + `domains/assemble.ts` 装配域；
 > 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；**P17c 修正**：HT 软门 + 档案区 15K 硬帽 + 追加式链两形态 + 计数修复
-> （快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**（快照 [§45](ledger-history.md)）；下一单 = P19 边界路径编排）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
+> （快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**（快照 [§45](ledger-history.md)）；**P19 边界路径编排已施工**（`core/compress/{region,store}.ts` + `platform/{agent-step,meter}.ts` + `domains/compaction.ts` + `compression.*` 配置面；快照 [§46](ledger-history.md)）；下一单 = P20a 压力路径）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -56,6 +56,8 @@ src/
 │  ├─ llm.ts         # H12 辅助调用端口（CeAuxPurpose 单点适配 + purpose 路由 + usage/缓存观测回执）
 │  ├─ storage.ts     # H10 storageDomain 封装（四实体表声明、版本化读写、CAS）
 │  ├─ skills.ts      # H13 技能目录枚举 + watch（稳定前缀原料 + 引用守卫查表）
+│  ├─ agent-step.ts  # H2 步准入端口（agent/pre-step 唯一收口；P19a，D14）
+│  ├─ meter.ts       # H7 计量端口（ctx.tokenMeter 影子价同源；P19b，D15）
 │  ├─ logger.ts      # ctx.logger('context-economy') + ignorable 自定义事件发射
 │  ├─ star-bridge.ts # H11 星标 Connection RPC 桥端口（channel/端点/信封/错误码；P14b1）
 │  └─ diag-sink.ts   # 诊断落盘：ctx.logger.exporter() → 插件 logs/ JSONL（P1.1，agent 自审入口）
@@ -68,6 +70,7 @@ src/
 │  ├─ init.ts        # init 项目帧采集：prompt v1 渲染与 fail-lazy 解析（02 §2）
 │  ├─ shear/         # 剪切纯核（已施工：types/t0r/tool/run/ledger/index，P15a+P15b+P16）（03）
 │  ├─ compress/      # 两模式压缩 prompt 组装 + 产物 schema 校验 + 共享消费模块 + compress-run 调用账本（04 §2/§3；P18）
+│  │                 #   + region.ts 区间逐字节转写 + store.ts 档案区（只追加/硬帽/内容寻址缓存；P19a）
 │  ├─ assemble/      # 装配器（P17 已施工，P17c 修正）：坐标链 vN 重映射、热尾双通道取真、贪心停机 + 共享事务原语 + HT 软门 + 档案硬帽/追加式链（04 §1/§2/§3/§6；档案区落盘 = P19）
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
@@ -76,7 +79,8 @@ src/
 │  ├─ star.ts        # 星标断面 host 服务：输入栈装配 → 断面 → 预览态 → 确认后回填/产物（10 §4 时序 B；P14b1）
 │  ├─ optimize-facts.ts # optimize-run 两相事实声明合并 + fold（07 §0.5；P14b1）
 │  ├─ shear.ts       # 剪切域（已施工：工具四档 P15b + run 冲刷/误剪反馈 P16）
-│  ├─ compaction.ts  # 压缩域：边界触发（H2）+ 压力触发（H3）+ 断路器 + 事务编排（H5）
+│  ├─ compaction.ts  # 压缩域：边界路径编排（H2 触发 → 调用 → 装配 → 缩水校验 → 档案 vN → 事务；P19b）
+│  │                 #   压力触发（H3）+ 断路器（P20a）；恢复编排 = restore.ts（P21a）
 │  └─ restore.ts     # 恢复编排：启动回放（H9）→ KV/日志双源核对 → 降级清单（09 §4）
 └─ client/           # 产品面（壳已保留，零结构改动）：Card/controller/components/field-model
 ```
@@ -132,10 +136,10 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | `discriminator.auto` | false | 判别 | 自动断面总开关（boolean）；false=不挂载零成本 / true=发 verdict 接入投影；**星标通道常在，不受此开关门控**（观察模式已取消，2026-09） |
 | `discriminator.reasoningEffort` | 空（跟随模型默认） | 判别/断面 | 辅助调用（自动判别 / ★）推理档（adapter 词汇 off/low/medium/high/max）；**默认不覆盖**——关闭思考可能明显影响任务边界判断与改写质量；模型未声明所选档时自动回退为跟随（P14f） |
 | `shear.enabled` | true | 剪切 | 工具剪切 + 对话剪切总开关（分层可再关 T-note / T0-R）；**P15b 落位、P16 复用**（host `config.ts` ↔ client `field-model.ts`，设置卡可关） |
-| `compression.boundary` | true | 压缩 | task 边界压缩（开关随 P19 落位；P17 装配域无触发，常驻零成本；P17c 已备档案区 15K 硬帽纯核） |
-| `compression.pressure` | true | 压缩 | 压力路径（`pressureRatio=0.4` × 压缩域窗口） |
-| `compressionDomain` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 压缩域标定（[04 §5](04-compactor.md) 硬规则；`retain < threshold` 校验强制） |
-| `archiveCapTokens` | 15K | 压缩 | 档案区硬上限；超限截断最老条目（[04 §6](04-compactor.md)） |
+| `compression.boundary` | true | 压缩 | task 边界压缩（**P19 已落位**：H2 闭合触发 → 调用 → 装配 → 缩水校验 → 档案 vN → 事务替换；关闭 = 零行为） |
+| `compression.pressure` | true | 压缩 | 压力路径（`pressureRatio=0.4` × 压缩域窗口；生产者 = P20a） |
+| `compression.domainTokens` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 压缩域标定（[04 §5](04-compactor.md) 硬规则；**P19 落位**；`retain < threshold` 违例自动回退设计值） |
+| `compression.archiveCapTokens` | 15K | 压缩 | 档案区硬上限；超限截断最老条目（[04 §6](04-compactor.md)；**P19 落位**） |
 
 关闭任一层其余功能完整；`cordis.patch.yml` 在 R4 加 compaction-basic `auto:false`。
 

@@ -2030,3 +2030,53 @@ T-boundary 搭车；**owns 缩水校验 = replace 前置**）。
 
 
 
+
+## §46 P19 边界路径编排（2026-09-08；commit `ee39076` P19a + `0844aa1` P19b）
+
+**工单**：`docs/implement/P19-boundary-path.md`（R4 第三/四单；总纲尺寸规则 M ≤400 行 → 实测 L，按 L 规则拆 P19a/P19b 两提交）。
+**交付**：第一条会真正开火的压缩路径——H2 闭合发现 → 单次调用 → P18 校验 → P17 装配 → 缩水校验（replace 前置，重试 1）→
+档案 vN 落盘 → H4/H5 事务（官方 `compaction/summary` + checkpoint 紧邻）→ 卷宗结构性清空 → T-boundary 补账 → `compress-run` 事实。
+
+| 面 | P18 后 | P19 后 |
+|---|---|---|
+| 触发 | 无（零接线） | `agent/pre-step`（H2 端口 `platform/agent-step.ts`，D14）→ `foldSegmentState` 闭合段发现；**事实键防每步重复计费**（`llm-unavailable` 允许重试） |
+| 调用 | 纯核 prompt/校验 | `streamCeLlm(purpose:'context-economy-compaction', temperature:0)`；模型 = 辅助调用路由（判别/★ 同源）；usage 入 `compress-run.llmUsage` |
+| 档案 | 无生产者 | `boundary_archive:<workspace>` 实体（只追加 + 15K 硬帽整条截断 + 追加式链 + 内容寻址缓存 32 条） |
+| 改史 | 无 | `runCompactionTxn`：open → prune（影子价）→ `compaction/summary` → checkpoint `user/message` 替换 → close（**summary 紧邻替换**，docs/10 §1 H4） |
+| 缩水 | 无 | 产物 token < 区间 token 才落刀；失败重试 1 次 → 放弃并保留原文（04 §1） |
+| 卷宗 | — | 结构性清空（`sessionScopedTaskId` 分键；**不删旧卷宗**，失败方向保留） |
+| T-boundary | hold 只判不执行 | 区间内 hold 对补发 `shear-applied{tier:'T-boundary',kind:'t-boundary'}`（会计；折叠由大 replace 构造性完成） |
+| 计量 | — | `platform/meter.ts`（H7 `ctx.tokenMeter`，D15）：`shadowedTokenCount` 与 harness 固定估计器同源 |
+| 配置 | 常量承接 | `compression.{boundary,pressure,domainTokens,retainTokens,thresholdTokens,archiveCapTokens}`（违例自动回退设计值）+ client 对应律 |
+| 结构断言 | D1–D13 | **+ D14**（H2 收口）+ **+ D15**（计量收口） |
+| 档案硬帽入账 | `assemble-run` 源（恒 0 生产者） | `compress-run` 源（边界路径）+ `assemble-run` 源（装配路径）**两源相加**，各自唯一（07 `archiveTruncate`） |
+
+**真机会话只读回放**（44 会话；`scripts/verify-p19.mjs`；不做臂对照；会话随本机活动增长，绝对值只作口径）：
+
+| 指标 | 读数 |
+|---|---|
+| 含闭合段会话 / 闭合段 | **0 / 0** |
+| 可触发（区间非空） | **0** |
+| 区间转写字节漂移（双跑） | **0** |
+| live `compress-run` 事实 | **0**（需重启加载新构建；本进程运行 P18 及以前代码） |
+
+**读数解读（诚实声明）**：本机 44 份会话历史里**没有一个闭合 task**（`context-economy/task-boundary` 事实 = 0，
+与 R3 的 `judge-recorded` = 0 同因：`discriminator.auto` 默认关闭、`/task close` 未使用）——P19 的触发路径在真实历史中
+**无样本**；验收证据 = 机械断言 + 假会话端到端（`verify-p19` ⑥：触发 → 调用 → 档案 vN → 事务四段 → 事实 → 内容寻址复用零调用）
++ 纯核 fixture。live 读数需开启 `discriminator.auto` 或使用 `/task close` 后重启验证（P21b 真机冒烟项）。
+
+**验收**：
+- `npm run gate` 绿（**478 用例 / 46 文件**；M1–M5 / S1–S5 / **D1–D15** 全 PASS，`ok=true vacuous=[]`）；`npm run typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p19.mjs` → `P19 VERIFY PASS (27 checks)`
+- 新增/扩 spec：`compress-region` **4** / `compress-store` **6** / `compaction-domain` **16** / `agent-step` **4** /
+  `compress-ledger` +3 / `field-model` +1 / `history` +2 / `assert-structure` +D14/D15
+- `node scripts/verify-p18.mjs`（45）/ `verify-p17.mjs`（54）/ `verify-p16.mjs`（30）→ PASS（无回归）
+
+**尺寸申报**：P19a src 净增 **512**（估计 ≤420）、P19b src 净增 **577**（估计 ≤450），合计 **1,089**；
+spec ≈ **622**、`verify-p19.mjs` **379**、`assert-structure.mjs` **+9**。**超估计合计 297**——合规自证头（docs/05 §6）约 100 行 +
+端到端域编排（触发 / 区间 / 缓存 / 落盘 / 事务 / T-boundary 六段）+ 两个新端口（H2/H7）。
+**不拆单理由**：P19a/P19b 已按 L 规则拆两提交（各带独立验收）；P19b 内部六段互为同一条端到端路径，
+拆开产生跨提交悬空行为（P15b/P17 先例）。
+
+**R4 进行中**：P17（+P17c）/ P18 / P19（a+b）完成；**下一未执行单元 = P20a 压力路径**
+（时序 C：wire 锚定计量 + 检查点/断路器；依赖 P19）。

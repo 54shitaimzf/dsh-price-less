@@ -85,7 +85,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P16 | 对话剪切（**已施工** commit `9add76d`+`6abb7c0`；工单 [P16-dialogue-shear.md](P16-dialogue-shear.md)；快照 §40/§41） | R3 | `core/shear/run.ts` run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + `domains/shear.ts` run 冲刷 H4（03 §3）；★ `CLASS` 回填作分类输入、G10 尾部窗；阈值常数按 03 §8 既有结论初值落位（不做对照实验）；**L → 工单内拆 P16a/P16b 两单两提交** | P15b | M |
 | P17 | 边界装配器（**已施工** commit `24c30a5`+`67de3cd`+`6c9cbaf` + **P17c 修正**；工单 [P17-boundary-assembler.md](P17-boundary-assembler.md)；快照 §42/§43/§44） | R4 | `core/assemble/`（[04 §2](../04-compactor.md)：事实层冻结 / 坐标层 vN / 热尾双通道取真 / 贪心停机 + 地板/兜底）+ 共享事务原语（04 §1）+ `platform/files.ts`（H15 盘上取真）+ `domains/assemble.ts` 装配域 + `assemble-run` 事实 + P17c 修正（HT 软门 / 档案区 15K 硬帽纯核 / 追加式链两形态 / 丢弃归因）；**L → 工单内拆 P17a/P17b + P17c 修正单** | P6,P8,P9 | L |
 | P18 | 压缩调用（**已施工** commit `eab06ab`；工单 [P18-compress-call.md](P18-compress-call.md)；快照 §45） | R4 | `core/compress/`（边界/压力两模式 prompt 组装 + 产物 schema 校验 + 共享消费模块 + `compress-run` 调用账本；模板在前 + **版本化常量/字节稳定断言**〔原「datasets 同源断言」无资产可断，P18 §8 修正 #2〕，04 §2/§3/§8） | P5,P9 | M（实测超线，见工单 §6） |
-| P19 | 边界路径编排 | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 档案区落盘 + 15K 硬帽调用〔纯核已由 P17c 交付〕+ `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车） | P17,P18,P2,P3 | M |
+| P19 | 边界路径编排（**已施工** commit `ee39076` P19a + `0844aa1` P19b；工单 [P19-boundary-path.md](P19-boundary-path.md)；快照 §46） | R4 | `domains/compaction.ts` 边界触发（H2 闭合发现 → 时序 A：装配→档案 vN（[04 §6](../04-compactor.md) 档案区落盘 + 15K 硬帽调用〔纯核已由 P17c 交付〕+ `archiveTruncate` 入账）→卷宗清空→T-boundary 搭车）+ **缩水校验 = replace 前置**（04 §1）+ **内容寻址复用**（P18 N5 归属）+ `platform/agent-step.ts`（H2 收口 D14）/ `platform/meter.ts`（影子价同源 D15）+ `compression.*` 配置面（[11 §6](../11-structure.md)）；**L → 工单内拆 P19a/P19b** | P17,P18,P2,P3 | L（拆 a/b） |
 | P20a | 压力路径 | R4 | 时序 C：wire 锚定计量（估计器 `CHARS_PER_TOKEN=1.5` 校准，04 §5）+ 检查点/断路器 | P19 | M |
 | P20b | 保险丝 | R4 | hard-truncate no-op 语义 + `request-error` 接管；`cordis.patch.yml` 加 compaction-basic `auto:false` | P19 | S |
 | P21a | 恢复编排 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练；`restore/*` 事实发射） | P20a,P20b,P3 | M |
@@ -178,6 +178,19 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > **诚实声明**：真机回放 44 会话 / 37 会话含单元 / 单元 4,462 / 渲染 74 次 prompt（平均 6,402 token、峰值 26,581）、
 > 字节漂移 0、模板预算泄漏 0、清单帽省略 4,117 条；live `compress-run` = **0**（调用归 P19/P20a）。
 > **下一未执行单元 = P19 边界路径编排**（触发 H2 + 档案 vN + 卷宗清空 + T-boundary 搭车 + 缩水校验）。
+
+> P19 施工记录（R4 第三/四单，2026-09-08）：边界路径编排已施工（commit `ee39076` P19a 纯核/端口 + `0844aa1` P19b 编排/接线；
+> 快照 §46；`node scripts/verify-p19.mjs` PASS **27 checks**，gate **477 用例 / 46 文件**，结构断言 D1–**D15**）。
+> 交付 = `core/compress/region.ts`（区间逐字节转写）+ `store.ts`（档案区：只追加 + 15K 硬帽 + 内容寻址缓存）+
+> `platform/agent-step.ts`（H2 收口）+ `platform/history.ts` `commitCheckpoint`（官方 summary + checkpoint 紧邻）+
+> `platform/meter.ts`（H7 影子价同源）+ `domains/compaction.ts`（闭合发现 → 调用 → 校验 → 装配 → 缩水校验 →
+> 档案 vN → 事务替换 → T-boundary 补账）+ `compression.*` 配置六字段 + client 对应律。
+> 计划修正（工单 §8 九项 + 执行追加三项）：缩水校验纳入 / 内容寻址键落位 / 模板在前与 docs/06 §6 的偏差如实记账（P21b 决策项）/
+> 档案键含 workspace / T-boundary 会计 / H2 收口 + D14 / config 六字段 / L 拆 a/b / 原生 compaction-basic `auto:true` 共存上报。
+> 尺寸：P19a src 净增 **512**（估计 ≤420）、P19b **577**（估计 ≤450），合计 **1,089**；spec ≈622、verify 379。
+> **诚实声明**：真机回放 44 会话 / **含闭合段 0**（`task-boundary` 事实 = 0，与 R3 `judge-recorded` = 0 同因）——
+> 触发路径真实历史**无样本**，证据 = 机械断言 + 假会话端到端 + 纯核 fixture；live `compress-run` = **0**（需重启加载新构建）。
+> **下一未执行单元 = P20a 压力路径**（时序 C：wire 锚定计量 + 检查点/断路器）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、

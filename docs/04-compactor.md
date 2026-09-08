@@ -10,7 +10,10 @@
 > （`core/compress/` 两模式 prompt 组装〔模板在前 + 清单在尾 + 零预算泄漏〕+ 产物 schema 校验〔仅解析/schema fatal；
 > 坏热尾申报降级计数〕+ 共享消费模块〔机制 A 续传 / 机制 B 折叠 + 四触发次序闭合表〕+ `compress-run` 调用账本
 > 〔`compressionCallCount`/`compressionCacheHitRate` fold 路径打通〕；**零调用零接线**，快照 [§45](ledger-history.md)）；
-> 边界编排（档案区落盘）/ 压力 / 保险丝见 P19–P20b（搭建序见 [11](11-structure.md) R4）。
+> **P19 边界路径编排已施工**（`domains/compaction.ts`：H2 闭合发现 → 单次调用 → 缩水校验〔replace 前置，重试 1〕→
+> 档案 vN 落盘〔只追加 + 15K 硬帽 + 内容寻址复用〕→ H4/H5 事务〔官方 summary + checkpoint 紧邻〕→ 卷宗结构性清空 →
+> T-boundary 补账；`platform/agent-step.ts` H2 收口 D14 / `platform/meter.ts` 影子价同源 D15；`compression.*` 配置六字段；
+> 快照 [§46](ledger-history.md)；`node scripts/verify-p19.mjs` PASS）。压力 / 保险丝见 P20a/P20b（搭建序见 [11](11-structure.md) R4）。
 
 ## 0. 它解决什么问题（人话版）
 
