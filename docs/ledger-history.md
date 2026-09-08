@@ -2632,7 +2632,33 @@ ROLE_OVERHEAD=4 + 递归块价（含 reasoning）+ **usage 锚定**（估算只�
 随迁测试：assemble-hottail（27 例，含归一化/硬帽/事实泄漏）、assemble-archive、assemble-domain、
 compress-product（宽松修复表）、compress-prompt（新 schema 段）；两处域夹具 `VALID_PRODUCT` 改 v2 形状。
 
-**未落地（续单）**：F9c 热尾事实载体（user/message 单元 + Zipf 分配 + 仅指针降级）、F9d 预算 10K/10K +
-存储 v1→v2 + 单调性守卫、F9e 路径压缩、F9f 死码清理 + 文档、F9g 回放验收。
+**未落地（续单）**：F9d 预算 10K/10K + 存储 v1→v2 + 单调性守卫、F9e 路径压缩、F9f 死码清理 + 文档、F9g 回放验收。
+
+---
+
+## §64 F9c 热尾事实载体：消息单元 + tool-call 转写 + Zipf 分配（2026-09-09；提交 = 本账本同提交）
+
+**"事实全部挪到热尾"的两处前置修复**：
+1. `AssembleUnit.kind:'message'` 原是**死词汇**（`foldAssembleInputs` 只产 tool-pair 单元）——
+   用户约束/引号内文本/assistant 结论永远进不了热尾。现按表面 user/assistant 消息产
+   `kind:'message'` 单元（`seqStart=seqEnd=seq`，插件/官方检查点 `source.kind='plugin'` 排除）。
+2. `messageTextOf` 只拼 text 块 → **tool-call 块的命令/参数不在转写面**（真机 tool/call 是非表面
+   日志事件，工具调用只存在于 assistant/message 的 tool-call 块里）。现机械转写 `[tool-call] name args`，
+   压缩输入与热尾内容都不再丢命令事实。
+
+**预算分配（替代贪心 winner-take-all）**：
+- `budget = min(hotTailTokens, max(minShare×region, maxShare×region − 摘要估算))`（`regionTokens` 由压缩域
+  传入 = `shadowedTokens`）——**份额帽 = 防缩水校验把整单打回**的结构保证。
+- 申报候选择 **Zipf `w_i = 1/i`** 配额（重要者多分），未用配额**向后 carry-over**；
+  每条先扣 `pointerOverheadTokens`；配额放不下最小内容（`minTruncatedChars`）→ **仅指针降级**
+  （`pointerOnly`，仍保留定位价值，计 `pointerOnlyCount`）。
+- 重复 `unitId` 只留首次（`dup` 归因，原缺陷 = 申报循环不查 `picked`，同单元可重复占预算）。
+- `fact` 子串校验 + 盘上取真缺失时的**仅摘抄兜底**（事实不丢）。
+
+**验收**：`npm run gate` = **638 tests / 57 files** + assert `ok=true vacuous=[]`。
+新增 6 例（份额帽 / 仅指针 / dup / fact 命中与拒绝 / fact 兜底 / 消息单元 + tool-call 转写）；
+贪心用例改 Zipf 语义（重要者多分、全部入选）。
+
+**未落地**：F9d 预算 10K/10K + 存储 v1→v2 + 单调性守卫、F9e 路径压缩、F9f 死码清理 + 文档、F9g 回放验收。
 
 

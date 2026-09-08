@@ -386,6 +386,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const outcome = await deps.assemble.assemble({
         session, taskId: scopedTaskId, range, layer: 'boundary',
         digest: product.digest, hotTail: product.hotTail, priorChain,
+        regionTokens: shadowedTokens,
       })
       if (!outcome.ok) {
         emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({

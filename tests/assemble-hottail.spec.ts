@@ -38,15 +38,22 @@ const unit = (id: string, seqStart: number, text: string, extra: Partial<Assembl
 })
 
 describe('P17a 热尾：贪心停机与预算', () => {
-  it('按申报序累加、到预算即停（可少不多）', () => {
-    const units = [unit('a', 1, 'x'.repeat(6)), unit('b', 3, 'y'.repeat(6)), unit('c', 5, 'z'.repeat(6))]
-    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }, { unitId: 'b' }, { unitId: 'c' }], policy: policy({ hotTailTokens: 10 }) })
+  it('Zipf 分配：重要者多分（w_i = 1/i），全部申报都入选', () => {
+    const units = [unit('a', 1, 'A'.repeat(300)), unit('b', 3, 'B'.repeat(300)), unit('c', 5, 'C'.repeat(300))]
+    const outcome = assembleArchive({
+      units,
+      hotTail: [{ unitId: 'a' }, { unitId: 'b' }, { unitId: 'c' }],
+      policy: policy({ hotTailTokens: 400, pointerOverheadTokens: 0, minTruncatedChars: 5 }),
+    })
     expect(outcome.ok).toBe(true)
     if (!outcome.ok) return
-    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['a'])
-    expect(outcome.result.hotTail.stopReason).toBe('budget')
+    const entries = outcome.result.hotTail.entries
+    expect(entries.map((s) => s.unitId)).toEqual(['a', 'b', 'c'])
+    expect(entries[0]!.tokens).toBeGreaterThan(entries[1]!.tokens)
+    expect(entries[1]!.tokens).toBeGreaterThan(entries[2]!.tokens)
     expect(outcome.result.hotTail.source).toBe('model')
     expect(outcome.result.hotTail.declaredUnits).toBe(3)
+    expect(outcome.result.hotTail.tokens).toBeLessThanOrEqual(400)
   })
 
   it('申报耗尽 = list-end（预算有余）', () => {
@@ -59,7 +66,7 @@ describe('P17a 热尾：贪心停机与预算', () => {
 
   it('单单元超帽 → 尾截断保头 + 可见标记（总 token 不超预算）', () => {
     const units = [unit('big', 1, 'A'.repeat(100))]
-    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'big' }], policy: policy({ hotTailTokens: 30 }) })
+    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'big' }], policy: policy({ hotTailTokens: 30, pointerOverheadTokens: 0 }) })
     if (!outcome.ok) throw new Error('expected ok')
     const selection = outcome.result.hotTail.entries[0]!
     expect(selection.truncated).toBe(true)
@@ -389,4 +396,83 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
     expect(outcome.result.hotTail.entries[0]!.tokens).toBe(5)
   })
 })
+
+describe('F9c 热尾：事实载体与预算（份额帽 / 仅指针 / 去重 / 消息单元）', () => {
+  it('份额帽：热尾 ≤ maxShare × 区间 − 摘要（防缩水校验打回）', () => {
+    const units = [unit('a', 1, 'A'.repeat(1000))]
+    const outcome = assembleArchive({
+      units,
+      hotTail: [{ unitId: 'a' }],
+      regionTokens: 1000,
+      policy: policy({ hotTailTokens: 10000, pointerOverheadTokens: 0, minTruncatedChars: 5 }),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    // maxShare 0.4 × 1000 = 400（摘要估算 = 0）；minShare 0.05 × 1000 = 50。
+    expect(outcome.result.hotTail.budgetTokens).toBe(400)
+    expect(outcome.result.hotTail.tokens).toBeLessThanOrEqual(400)
+  })
+
+  it('配额不足 → 仅指针降级（仍保留定位价值）', () => {
+    const units = [unit('a', 1, 'A'.repeat(100))]
+    const outcome = assembleArchive({
+      units,
+      hotTail: [{ unitId: 'a' }],
+      policy: policy({ hotTailTokens: 10, pointerOverheadTokens: 0, minTruncatedChars: 20 }),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    const entry = outcome.result.hotTail.entries[0]!
+    expect(entry.pointerOnly).toBe(true)
+    expect(entry.text).toBe('')
+    expect(entry.tokens).toBe(0)
+    expect(outcome.result.hotTail.pointerOnly).toBe(1)
+    expect(entry.pointer).toBe('[历史] 会话 1-2')
+  })
+
+  it('重复 unitId 只留首次（dup 归因）', () => {
+    const units = [unit('a', 1, 'AAA')]
+    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }, { unitId: 'a' }], policy: policy() })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.hotTail.entries).toHaveLength(1)
+    expect(outcome.result.hotTail.dropReasons.dup).toBe(1)
+  })
+
+  it('fact 子串校验：命中即并入内容；未命中丢弃并计数（防自造事实）', () => {
+    const units = [unit('a', 1, 'line1\ncmd --flag=1\nline3')]
+    const hit = assembleArchive({ units, hotTail: [{ unitId: 'a', fact: 'cmd --flag=1' }], policy: policy() })
+    if (!hit.ok) throw new Error('expected ok')
+    expect(hit.result.hotTail.entries[0]!.text).toContain('cmd --flag=1')
+    const miss = assembleArchive({ units, hotTail: [{ unitId: 'a', fact: 'not-in-unit' }], policy: policy() })
+    if (!miss.ok) throw new Error('expected ok')
+    expect(miss.result.hotTail.dropReasons.factReject).toBe(1)
+    expect(miss.result.hotTail.entries[0]!.text).not.toContain('not-in-unit')
+  })
+
+  it('fact 兜底：盘上取真缺失但摘抄命中原文 → 仅摘抄条目（事实不丢）', () => {
+    const chains = foldFileChains([{ seq: 1, path: 'a.ts', kind: 'write', content: 'l1\nl2' }])
+    const units = [unit('u', 1, '原文 l1')]
+    const outcome = assembleArchive({
+      units, chains,
+      hotTail: [{ unitId: 'u', coord: { path: 'a.ts', version: 1, lineRange: { start: 1, end: 1 } }, fact: '原文 l1' }],
+      policy: policy(),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.hotTail.entries[0]!.source).toBe('fact')
+    expect(outcome.result.hotTail.entries[0]!.text).toBe('原文 l1')
+    expect(outcome.result.hotTail.dropped).toBe(0)
+  })
+
+  it('user/assistant 消息成单元（kind=message；插件检查点排除）', () => {
+    const events: LedgerSessionEvent[] = [
+      { type: 'user/message', seq: 0, time: 1, data: { content: [{ type: 'text', text: '约束：不得改 X' }], source: { kind: 'user' } } },
+      { type: 'assistant/message', seq: 1, time: 2, data: { message: { content: [{ type: 'text', text: '结论 A' }, { type: 'tool-call', toolCallId: 'c1', name: 'bash', arguments: '{"command":"npm test"}' }] } } },
+      { type: 'user/message', seq: 2, time: 3, data: { content: [{ type: 'text', text: 'C1' }], source: { kind: 'plugin', plugin: 'compact' } } },
+    ]
+    const inputs = foldAssembleInputs(events)
+    expect(inputs.units.map((u) => [u.id, u.kind, u.text])).toEqual([
+      ['seq-0', 'message', '约束：不得改 X'],
+      ['seq-1', 'message', '结论 A\n[tool-call] bash {"command":"npm test"}'],
+    ])
+  })
+})
+
 

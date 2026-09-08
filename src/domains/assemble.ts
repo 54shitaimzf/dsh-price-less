@@ -62,6 +62,8 @@ export interface AssembleRequest {
   readonly hotTail?: readonly HotTailDecl[]
   /** 已存在的压力检查点链（04 §3 机制 A 续传；P17c）。 */
   readonly priorChain?: readonly ArchiveEntry[]
+  /** 被压区间体量（估算 token；热尾份额帽分母；F9c 由压缩域传入）。 */
+  readonly regionTokens?: number
   /** 档案区硬帽截断结果（生产者 = P19 档案区；P17c 只透传入账）。 */
   readonly archiveTruncate?: ArchiveTruncation
 }
@@ -215,6 +217,7 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       chains,
       ...(request.digest === undefined ? {} : { digest: request.digest }),
       ...(request.priorChain === undefined ? {} : { priorChain: request.priorChain }),
+      ...(request.regionTokens === undefined ? {} : { regionTokens: request.regionTokens }),
       hotTail: decls,
       resolve,
       currentLineCounts,

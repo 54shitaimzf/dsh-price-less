@@ -26,7 +26,11 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
-/** 消息事件（user/assistant）文本：text blocks 拼接（坏形状 = 空串）。 */
+/**
+ * 消息事件（user/assistant）文本：text blocks 拼接 + **tool-call 块机械转写**
+ * （`[tool-call] name args`；F9c：工具调用只存在于 assistant/message 的 tool-call 块里，
+ * 命令/参数属关键事实，转写面不得丢；坏形状 = 空串）。
+ */
 export function messageTextOf(data: unknown): string {
   const root = recordOf(data)
   if (root === undefined) return ''
@@ -36,8 +40,13 @@ export function messageTextOf(data: unknown): string {
   let text = ''
   for (const block of content) {
     const item = recordOf(block)
-    if (item === undefined || item.type !== 'text') continue
-    if (typeof item.text === 'string') text += item.text
+    if (item === undefined) continue
+    if (item.type === 'text' && typeof item.text === 'string') { text += item.text; continue }
+    if (item.type === 'tool-call') {
+      const name = typeof item.name === 'string' ? item.name : ''
+      const args = typeof item.arguments === 'string' ? item.arguments : ''
+      text += `${text === '' ? '' : '\n'}[tool-call] ${name} ${args}`
+    }
   }
   return text
 }

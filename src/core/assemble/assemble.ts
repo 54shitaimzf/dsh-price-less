@@ -18,6 +18,7 @@ import { toolCategory } from '../shear/tool.ts'
 import { archiveChainShape } from './archive.ts'
 import { foldFileChains, remapFileCoord, type FileChain, type FileOp } from './chain.ts'
 import { gateHotTailDecls } from './gate.ts'
+import { messageTextOf } from '../compress/region.ts'
 import { scanFactTexts } from '../compress/fact-leak.ts'
 import {
   DEFAULT_ASSEMBLE_POLICY,
@@ -68,6 +69,8 @@ export interface AssembleInput {
   /** 盘上当前行数：`null` = 文件不存在（丢弃）。 */
   readonly currentLineCounts?: Readonly<Record<string, number | null>>
   readonly layer?: AssembleLayer
+  /** 被压区间体量（估算 token；热尾份额帽的分母；缺省 = 无份额帽，只用绝对预算）。 */
+  readonly regionTokens?: number
   readonly policy?: AssemblePolicy
 }
 
@@ -88,6 +91,15 @@ function pathOfArgs(args: Record<string, unknown> | undefined): string | undefin
   if (args === undefined) return undefined
   if (typeof args.file_path === 'string') return args.file_path
   return typeof args.path === 'string' ? args.path : undefined
+}
+
+/** 插件/官方压缩检查点消息（source.kind = 'plugin'）不是任务材料，不进单元清单。 */
+function isPluginMessage(data: unknown): boolean {
+  const root = recordOf(data)
+  if (root === undefined) return false
+  const message = recordOf(root.message) ?? root
+  const source = recordOf(message?.source)
+  return source?.kind === 'plugin'
 }
 
 function callIdOfResult(data: unknown): string | undefined {
@@ -150,6 +162,21 @@ export function foldAssembleInputs(events: readonly LedgerSessionEvent[]): Assem
           })
         }
       }
+      continue
+    }
+    // F9c：user/assistant 消息也是任务材料（用户约束、引号内文本、结论）——可被热尾逐字携带。
+    if (event.type === 'user/message' || event.type === 'assistant/message') {
+      if (isPluginMessage(event.data)) continue
+      const text = messageTextOf(event.data)
+      if (text.trim() === '') continue
+      units.push({
+        id: `seq-${event.seq}`,
+        kind: 'message',
+        seqStart: event.seq,
+        seqEnd: event.seq,
+        text,
+        tokens: estimateTokens(text),
+      })
       continue
     }
     if (event.type !== 'tool/result') continue
@@ -407,7 +434,16 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   const byId = new Map<string, AssembleUnit>()
   for (const unit of units) if (!byId.has(unit.id)) byId.set(unit.id, unit)
 
-  const budget = policy.hotTailTokens
+  // F9 预算：绝对帽 + 份额帽（≤ maxShare × 区间，防产物 ≥ 被压区间被缩水校验打回）。
+  const regionTokens = input.regionTokens ?? 0
+  const digestHead = effective.gist === '' && effective.steps.length === 0
+    ? ''
+    : `${effective.gist}\n${effective.steps.map((step) => step.text).join('\n')}`
+  const digestEstimate = digestHead === '' ? 0 : estimateTokens(digestHead, policy.density)
+  const shareCap = regionTokens > 0
+    ? Math.max(Math.ceil(regionTokens * policy.hotTailMinShare), Math.ceil(regionTokens * policy.hotTailMaxShare) - digestEstimate)
+    : policy.hotTailTokens
+  const budget = Math.max(0, Math.min(policy.hotTailTokens, shareCap))
   const selections: RawSelection[] = []
   const picked = new Set<string>()
   let used = 0
@@ -447,6 +483,8 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   if (declared.length === 0) {
     positionalFallback()
   } else {
+    // 第一趟：解析申报（去重 / 重映射 / fact 子串校验）→ 候选序 = 申报序。
+    const candidates: RawSelection[] = []
     for (const decl of declared) {
       const unit = byId.get(decl.unitId)
       if (unit === undefined) { dropReasons.unknownUnit++; continue }
@@ -463,23 +501,35 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
           dropReasons.factReject++
         }
       }
-      if (used + selection.tokens > budget) {
-        if (selections.length === 0) {
-          const remaining = budget - used
-          const chars = tokensToChars(selection.text, remaining, policy.density) - HOT_TAIL_TRUNCATION_MARKER.length
-          if (chars >= policy.minTruncatedChars) {
-            const text = `${selection.text.slice(0, chars)}${HOT_TAIL_TRUNCATION_MARKER}`
-            push({ ...selection, text, tokens: estimateTokens(text, policy.density), truncated: true })
-            truncated++
-          }
-        }
-        stopReason = 'budget'
-        break
-      }
-      push(selection)
-      if (used >= budget) { stopReason = 'budget'; break }
+      picked.add(selection.unitId)
+      candidates.push(selection)
     }
-    if (selections.length === 0 && dropReasons.remap + dropReasons.fetch === declared.length) positionalFallback()
+    // 第二趟：Zipf 权重分配（w_i = 1/i，重要者多分），未用配额向后 carry-over；
+    // 配额不足以放最小内容 → 仅指针降级（仍保留定位价值）。
+    const overhead = policy.pointerOverheadTokens * candidates.length
+    const allocatable = Math.max(0, budget - overhead)
+    const weights = candidates.map((_, index) => 1 / (index + 1))
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
+    let carry = 0
+    for (let index = 0; index < candidates.length; index++) {
+      const candidate = candidates[index] as RawSelection
+      const quota = Math.floor((allocatable * (weights[index] as number)) / totalWeight) + carry
+      if (candidate.tokens <= quota) {
+        push(candidate)
+        carry = quota - candidate.tokens
+        continue
+      }
+      const chars = tokensToChars(candidate.text, quota, policy.density) - HOT_TAIL_TRUNCATION_MARKER.length
+      if (chars >= policy.minTruncatedChars) {
+        const text = `${candidate.text.slice(0, chars)}${HOT_TAIL_TRUNCATION_MARKER}`
+        push({ ...candidate, text, tokens: estimateTokens(text, policy.density), truncated: true })
+        truncated++
+      } else {
+        push({ ...candidate, text: '', tokens: 0, pointerOnly: true })
+      }
+      carry = 0
+    }
+    if (candidates.length === 0 && dropReasons.remap + dropReasons.fetch === declared.length) positionalFallback()
   }
 
   // 地板填充（04 §2）：模型申报装填停机后，run 结果类目未覆盖且预算有余。
