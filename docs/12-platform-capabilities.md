@@ -36,9 +36,14 @@ JSONL（账本可回放、KV 只是加速缓存）。插件事件类型按构造
 携带标记、拒绝非 true 值；append 现场对未知无标记类型去重告警（loud-write）；拒读文案指向
 仓外插件事件。读侧严格性保持原样。
 
-**现状（诚实记录）**：本仓 harness checkout 已实现（commit `04cba8f394` + `a3c0a8bc02`
-+ `ea04b581a5`，session 包 82 测试全绿，api-catalog 重生成校验过）；上游未开放 PR，
-vanilla 0.1.3-alpha.1 无此通道——插件按 §2 探测自动适配。
+**现状（诚实记录）**：本仓 harness checkout 已实现，并已在 **0.1.3-alpha.2** 上按社区形态重放
+（分支 `feat/ignorable-logintent-alpha2`，commit `2fa55bc741`，base `82a5fd61a7` = tag
+`dsh-v0.1.3-alpha.2`；原始系列 `04cba8f394` + `a3c0a8bc02` + `ea04b581a5` 基于 alpha.1，
+随版本切换掉出装配栈后于 2026-09-08 重放）。验收：session 包 81 测试 + 持久化/工具目录
+360 测试全绿，api-catalog / persistence-catalog 重生成校验过，插件侧 226 测试全绿。
+上游 `origin/master` `c389f96bf3` 仍未开放写入参数（官方仅保留读侧字段，
+`.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md`）
+——插件按 §2 探测自动适配；**宿主需重启**才加载重建后的 lib。
 
 ### C2 · 辅助调用 purpose 标记（插件侧类型适配，不修 harness）
 

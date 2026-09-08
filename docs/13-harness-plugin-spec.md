@@ -5,7 +5,7 @@
 > 而是 docs/00–12 之外“harness 现状是什么”的事实层；正典冲突时以 docs/00–11 为准，harness
 > 事实冲突时以源码为准。
 >
-> 审查对象：`G:/deepseek-harness`（checkout commit `ea04b581a5`，根包版本 `0.1.3-alpha.1`；2026-09-06 首审，2026-09-08 P14a client 面增补）。
+> 审查对象：`G:/deepseek-harness`（当前 checkout `82a5fd61a7` = tag `dsh-v0.1.3-alpha.2` + 本地补丁分支 `feat/ignorable-logintent-alpha2@2fa55bc741`；2026-09-06 首审基于 `ea04b581a5`/`0.1.3-alpha.1`，2026-09-08 P14a client 面增补，2026-09-08 ignorable 补丁在 alpha.2 重放）。
 > 当前插件：`dsh-price-less`（`D:/deepseek-plugin`，P14a 已施工；R2 判别域 P8–P13 + P14a 完成）。
 > 使用方式：后续工单（P2 起）凡涉及 harness API，先查本文 §3/§4 的“核验源”列；表中未列的符号
 > 仍按总纲铁律逐条 grep 到定义处才准 import。
