@@ -32,15 +32,15 @@ describe('star mock preview', () => {
     expect(data.product).toContain('P14a 预览占位')
     expect(data.missingAuthority).toHaveLength(2)
     expect(data.ctxTokens).toBeGreaterThan(0)
-    expect(data.short).toBe(false)
+    expect(data.historyCount).toBe(0)
     expect(data.droppedLines).toBe(0)
   })
 
-  it('空草稿：无权威段，short=true', () => {
+  it('空草稿：无权威段，无历史素材', () => {
     const data = parseMockPreview('')
     expect(data.product).toBeNull()
     expect(data.missingAuthority).toEqual([])
-    expect(data.short).toBe(true)
+    expect(data.historyCount).toBe(0)
   })
 })
 

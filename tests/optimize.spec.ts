@@ -7,7 +7,6 @@ import { describe, expect, it } from 'vitest'
 import type { DossierBody, DossierMessage } from '../src/core/dossier.ts'
 import { renderStablePrefix, type ProjectFrameBody, type SkillCatalogSnapshot } from '../src/core/prefix.ts'
 import {
-  OPTIMIZE_GATE_DEFAULTS,
   OPTIMIZE_PROMPT_HEAD,
   OPTIMIZE_PROMPT_OUTPUT,
   assembleOptimizeInput,
@@ -15,6 +14,7 @@ import {
   clampOptimizePrompt,
   extractAuthorityCandidates,
   foldOptimizeLedger,
+  isTrivialOptimizePrompt,
   parseOptimizeOutput,
   renderOptimizePrompt,
   validateSkillName,
@@ -35,20 +35,21 @@ const input = (overrides: Partial<Parameters<typeof renderOptimizePrompt>[0]> = 
 })
 
 describe('optimize gate', () => {
-  it('门控阈值冻结；短卷宗只出空产品，足量卷宗正常出产品段', () => {
-    expect(OPTIMIZE_GATE_DEFAULTS).toEqual({ minMessages: 2, minTextLength: 10 })
-    const short = renderOptimizePrompt(input({ dossier: body([msg(1, 'hi')]) }))
-    expect(short.short).toBe(true)
-    expect(short.prompt).toContain('[PRODUCT]\n(空)')
-    // 短卷宗也必须保持“严格两段”单一输出契约，不得出现重复的 [PRODUCT]/[VERDICTS] 分界。
-    expect(short.prompt.match(/\[PRODUCT\]/g)).toHaveLength(1)
-    expect(short.prompt.match(/\[VERDICTS\]/g)).toHaveLength(1)
-    expect(short.prompt).not.toContain('[PRODUCT]\n(空)\n\n[VERDICTS]\n输出格式')
-    const long = renderOptimizePrompt(input())
-    expect(long.short).toBe(false)
-    expect(long.prompt).toContain('[PRODUCT]\n\n[VERDICTS]')
-    expect(long.prompt.match(/\[PRODUCT\]/g)).toHaveLength(1)
-    expect(long.prompt.match(/\[VERDICTS\]/g)).toHaveLength(1)
+  it('唯一门控 = 本次提示词极短；无历史素材也出完整产品段（P14c）', () => {
+    expect(isTrivialOptimizePrompt('好')).toBe(true)
+    expect(isTrivialOptimizePrompt('继续')).toBe(true)
+    expect(isTrivialOptimizePrompt('继续完成计划')).toBe(false)
+    const empty = renderOptimizePrompt(input({ dossier: body([]) }))
+    expect(empty.historyCount).toBe(0)
+    expect(empty.prompt).toContain('[PRODUCT]\n\n[VERDICTS]')
+    expect(empty.prompt).not.toContain('[PRODUCT]\n(空)')
+    expect(empty.prompt.match(/\[PRODUCT\]/g)).toHaveLength(1)
+    expect(empty.prompt.match(/\[VERDICTS\]/g)).toHaveLength(1)
+    const one = renderOptimizePrompt(input({ dossier: body([msg(1, 'hi')]) }))
+    expect(one.historyCount).toBe(1)
+    expect(one.prompt).toContain('[PRODUCT]\n\n[VERDICTS]')
+    const full = renderOptimizePrompt(input())
+    expect(full.historyCount).toBe(2)
   })
 })
 

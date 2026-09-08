@@ -10,6 +10,18 @@ import type { DiffLine, StarPreviewData, StarVerdictView } from './star-types.ts
 const MOCK_PRODUCT = 'mock 优化后 prompt\n（P14a 预览占位，P14b 接入真实断面）'
 const MOCK_PREVIEW_ID = 'mock-preview-1'
 
+/**
+ * 极短提示词阈值与判据（镜像 host `src/core/dossier.ts` 的 TRIVIAL_MESSAGE_MAX_CHARS；
+ * client 不得 import host src，S4——两侧由 tests/star-model.spec.ts 的漂移断言守住）。
+ */
+export const TRIVIAL_PROMPT_MAX_CHARS = 4
+const PROMPT_NOISE_RE = /[\s\u3000！？。，、；：""''（）《》【】!?.,;:()\[\]{}~\-—_…]/gu
+
+/** 去噪后短于阈值的提示词：★ 按钮禁用、host 零调用短路（两侧同口径）。 */
+export function isTrivialPrompt(text: string): boolean {
+  return text.replace(PROMPT_NOISE_RE, '').length < TRIVIAL_PROMPT_MAX_CHARS
+}
+
 function localCandidates(prompt: string): Array<{ index: number; text: string }> {
   return prompt.split('\n')
     .map((line) => line.trim())
@@ -76,7 +88,7 @@ export function parseMockPreview(input: string): StarPreviewData {
     missingAuthority: candidates,
     droppedLines: 0,
     ctxTokens: Math.ceil(input.length / 1.5),
-    short: candidates.length < 2,
+    historyCount: 0,
   }
 }
 

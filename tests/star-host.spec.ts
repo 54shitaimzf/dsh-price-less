@@ -46,6 +46,14 @@ function makeSession(events: unknown[] = [], id = 's1'): Session {
   return { header: { id }, id, snapshotEvents: () => events } as unknown as Session
 }
 
+/** 把卷宗消息装成会话 user/message 事件（P14c：★ 上下文改从会话事件读）。 */
+function userEvents(messages: DossierBody['messages']): unknown[] {
+  return messages.map((m) => ({
+    type: 'user/message', seq: m.seq, time: m.time, surfaceOp: 'append',
+    data: { role: 'user', content: [{ type: 'text', text: m.text }], source: { kind: 'user' } },
+  }))
+}
+
 function makeLlm(output: string, calls: { count: number; prompts: string[] }, finishKind = 'stop') {
   return {
     llm: {
@@ -81,7 +89,8 @@ function mount(input: MountInput = {}) {
   const storage = makeStorage(seed)
   const facts: OptimizeRunFactData[] = []
   const calls = { count: 0, prompts: [] as string[] }
-  const session = input.session === false ? undefined : makeSession([], sessionId)
+  const sessionEvents = input.dossier === undefined ? [] : userEvents(input.dossier.messages)
+  const session = input.session === false ? undefined : makeSession(sessionEvents, sessionId)
   const host = mountStarHost({
     storage: storage as never,
     getConfig: () => ({ discriminator: {} }) as never,
@@ -119,7 +128,7 @@ describe('star host service', () => {
     expect(dto.missingAuthority).toEqual([])
     expect(dto.droppedLines).toBe(0)
     expect(dto.ctxTokens).toBeGreaterThan(0)
-    expect(dto.short).toBe(false)
+    expect(dto.historyCount).toBe(2)
     expect(calls.count).toBe(1)
     expect(calls.prompts[0]).toContain('[稳定前缀]')
     expect(calls.prompts[0]).toContain('目标')
@@ -127,23 +136,30 @@ describe('star host service', () => {
     expect(calls.prompts[0]).toContain('[候选权威段]')
     expect(storage.puts).toHaveLength(0)
     expect(facts).toHaveLength(1)
-    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0 })
+    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0, short: false, historyCount: 2 })
     expect(facts[0]!.llmUsage).toBeUndefined()
     expect(renderPreviewCommandText(dto)).toContain('断面预览')
     expect(readSessionId(makeSession([], 'sid-2'))).toBe('sid-2')
   })
 
-  it('2. 门控：短卷宗 → short=true 且 product=null（只回填裁决）', async () => {
-    const { host, facts } = mount({
-      dossier: { messages: [{ seq: 5, time: 1, text: 'hi' }] },
-      output: '[PRODUCT]\n(空)\n\n[VERDICTS]\nCLASS 5 action\n',
-    })
+  it('2. 唯一门控：极短提示词 → 零调用短路（不调 LLM、不发事实、不写盘）', async () => {
+    const { host, facts, calls, storage } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    const result = await host.preview({ sessionId: 's1', prompt: '好' })
+    expect(failCode(result)).toBe(STAR_BRIDGE_CODES.badRequest)
+    expect(calls.count).toBe(0)
+    expect(facts).toHaveLength(0)
+    expect(storage.puts).toHaveLength(0)
+    expect(host.stats().previews).toBe(0)
+  })
+
+  it('2b. 无历史素材不再跳过产品层：product 正常产出、historyCount=0', async () => {
+    const { host, facts, calls } = mount({ output: FULL_OUTPUT })
     const result = await host.preview({ sessionId: 's1', prompt: PROMPT })
     const dto = okValue<StarPreviewDto>(result)
-    expect(dto.short).toBe(true)
-    expect(dto.product).toBeNull()
-    expect(dto.verdicts.map((v) => v.kind)).toEqual(['class'])
-    expect(facts[0]).toMatchObject({ short: true, productChars: 0, verdictCount: 1 })
+    expect(dto.historyCount).toBe(0)
+    expect(dto.product).toBe(PROMPT)
+    expect(calls.count).toBe(1)
+    expect(facts[0]).toMatchObject({ short: true, historyCount: 0, productChars: PROMPT.length })
   })
 
   it('3. 解析失败：乱码输出 → CE_STAR_PARSE_FAILED 且零 putEntity', async () => {

@@ -76,6 +76,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P14a | 星标按钮 UI（槽 + 预览） | R2 | H11 `conversation.input.right` 槽注册 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿（mock host 方法契约） | P13 | M |
 | P14b1 | 星标 host 断面服务 + RPC 桥端口（**已施工** [P14b1-star-host-service.md](P14b1-star-host-service.md)） | R2 | `platform/star-bridge.ts`（Connection RPC 通道 `/context-economy` = P14a 桥接口的 host 实现；**否决 Typert Remote**，依据见工单 §0.1）+ `domains/star.ts`（装配输入栈 → H12 断面 → 双通道解析 → 预览态 → 确认后回填/优化产物落盘）+ `domains/optimize-facts.ts`（`optimize-run` 两相事实 + fold）；剪切清单本阶段只落盘记账；client 仍用 mock | P14a,P11,P13,P6,P3 | M |
 | P14b2 | 星标真实桥 + 时序 B 端到端（**已施工** [P14b2-star-live-bridge.md](P14b2-star-live-bridge.md)） | R2 | client 真实 `StarHostBridge`（Connection RPC → P14b1 端口；常量两侧独立声明 + 契约测试）+ 预览→确认→回填端到端 + 隔离 home 冒烟 + R2 出门验收（07 快照 §32） | P14b1 | M |
+| P14c | 判别链瘦身 + ★ 断面修复（**已施工** [P14c-gate-slim-and-star-fix.md](P14c-gate-slim-and-star-fix.md)） | R2 修正 | 删 L0 词表；对表保守打分（签名2/具体词2/泛词1，≥2 命中）；★ 唯一门控 = 本次提示词极短（零调用短路）；★ 上下文读会话事件（不受 `auto` 门控）+ 四角星勾线图标 | P14b2 | M |
 | P15a | 工具剪切纯核 | R3 | `core/shear/` 工具半边（ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则；[03 §2](../03-shear.md)） | P2 | M |
 | P15b | 工具剪切调度 | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面） | P15a,P6,P7,P12,P2 | M |
 | P16 | 对话剪切 | R3 | run 状态机 + 吸收证明触发 + 结论三档 + 带外标志 + run 冲刷 H4（03 §3）；阈值常数按 03 §8 既有结论初值落位（不做对照实验） | P15b | M |

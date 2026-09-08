@@ -13,8 +13,8 @@ export const STAR_APPLY_ENDPOINT = 'star.apply'
 /** client 侧错误码（host 侧错误码原样透传；这两个只由 client 产生）。 */
 export const STAR_CLIENT_CODES = { unavailable: 'CE_STAR_UNAVAILABLE', badValue: 'CE_STAR_BAD_REQUEST' } as const
 
-/** 短卷宗提示文案（P14b2 冻结；UI 壳消费归后续 UI 工单——本单禁区不动 StarButton.tsx）。 */
-export const STAR_SHORT_NOTICE = '卷宗过短，本次仅回填裁决'
+/** 无历史素材提示文案（P14c：★ 不再因历史短而跳过产品层，仅在无历史时提示）。 */
+export const STAR_NO_CONTEXT_NOTICE = '无历史素材：仅基于当前提示词与项目帧优化'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -34,7 +34,7 @@ export function isStarPreviewData(value: unknown): value is StarPreviewData {
     && Array.isArray(value.missingAuthority) && value.missingAuthority.every(isMissingAuthority)
     && isFiniteNumber(value.droppedLines)
     && isFiniteNumber(value.ctxTokens)
-    && typeof value.short === 'boolean'
+    && isFiniteNumber(value.historyCount) && value.historyCount >= 0
 }
 
 /** apply 成功值：`{text?}`；text 缺失合法，存在必须是字符串。 */

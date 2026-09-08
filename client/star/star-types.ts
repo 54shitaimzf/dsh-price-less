@@ -28,7 +28,8 @@ export interface StarPreviewData {
   readonly missingAuthority: readonly StarMissingAuthority[]
   readonly droppedLines: number
   readonly ctxTokens: number
-  readonly short: boolean
+  /** 本次组装用到的 task 内用户消息条数（P14c 取代原 short 标志）。 */
+  readonly historyCount: number
 }
 
 /** 预览返回：成功带数据，失败带稳定错误码/文案。 */

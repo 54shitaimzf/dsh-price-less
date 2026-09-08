@@ -85,6 +85,27 @@ export function passesInputFace(origin: string | undefined, event: SessionEvent)
   return userMessageText(event.data) !== null
 }
 
+/** 一条 task 内用户消息（★ 上下文组装原料；P14c）。 */
+export interface SessionUserMessage { readonly seq: number; readonly time: number; readonly text: string }
+
+/**
+ * 从会话事件读取「task 内用户消息」上下文（P14c §4）。
+ * 过滤口径同输入面五条件（source.kind==='user' / append / 主会话 / 文本非空），按事件序升序；
+ * 极短消息与 task 切分由调用侧处理。只读无副作用；会话未提供 snapshotEvents 时返回空数组（防御）。
+ */
+export function readSessionUserMessages(session: Session): SessionUserMessage[] {
+  const events = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents?.() ?? []
+  const origin = (session as unknown as { header?: { origin?: string } }).header?.origin
+  const out: SessionUserMessage[] = []
+  for (const event of events) {
+    if (!passesInputFace(origin, event)) continue
+    const text = userMessageText(event.data as UserMessage)
+    if (text === null) continue
+    out.push({ seq: event.seq, time: event.time, text })
+  }
+  return out
+}
+
 export interface EventPumpStats {
   enqueued: number   // 入队总数（过滤后）
   dispatched: number // 已派发总数

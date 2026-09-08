@@ -12,10 +12,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session } from '@deepseek-ai/dsh-session'
 import {
-  checkAuthoritySpans, extractAuthorityCandidates, parseOptimizeOutput, renderOptimizePrompt,
+  checkAuthoritySpans, extractAuthorityCandidates, isTrivialOptimizePrompt, parseOptimizeOutput, renderOptimizePrompt,
   type OptimizeParseResult, type OptimizeVerdict,
 } from '../core/optimize.ts'
-import { backfillDossier, createDossier, dossierStorageKey, sessionScopedTaskId, type DossierBody } from '../core/dossier.ts'
+import { backfillDossier, dossierStorageKey, isTrivialMessage, sessionScopedTaskId, type DossierBody } from '../core/dossier.ts'
 import { projectFrameStorageKey, type ProjectFrameBody } from '../core/prefix.ts'
 import { foldSegmentState } from '../core/units.ts'
 import { factsFromSessionEvents } from '../core/ledger/facts.ts'
@@ -25,7 +25,7 @@ import { streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platfor
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
-import { readSessionModel, type CeLogger } from '../platform/events.ts'
+import { readSessionModel, readSessionUserMessages, type CeLogger } from '../platform/events.ts'
 import { STAR_BRIDGE_CODES, STAR_PREVIEW_LIMIT, type StarBridgeOutcome } from '../platform/star-bridge.ts'
 import type { Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
@@ -37,7 +37,7 @@ export interface StarMissingAuthority { readonly index: number; readonly text: s
 export interface StarPreviewDto {
   readonly previewId: string; readonly originalPrompt: string; readonly product: string | null
   readonly verdicts: readonly StarVerdictView[]; readonly missingAuthority: readonly StarMissingAuthority[]
-  readonly droppedLines: number; readonly ctxTokens: number; readonly short: boolean
+  readonly droppedLines: number; readonly ctxTokens: number; readonly historyCount: number
 }
 
 export const STAR_VERDICT_SUMMARY_MAX_CHARS = 120
@@ -61,13 +61,13 @@ export function summarizeVerdict(verdict: OptimizeVerdict): StarVerdictView {
 
 export function buildPreviewDto(input: {
   previewId: string; originalPrompt: string; product: string | null; verdicts: readonly OptimizeVerdict[]
-  missingAuthority: readonly StarMissingAuthority[]; droppedLines: number; ctxTokens: number; short: boolean
+  missingAuthority: readonly StarMissingAuthority[]; droppedLines: number; ctxTokens: number; historyCount: number
 }): StarPreviewDto {
   return {
     previewId: input.previewId, originalPrompt: input.originalPrompt, product: input.product,
     verdicts: input.verdicts.map(summarizeVerdict),
     missingAuthority: input.missingAuthority.map((item) => ({ index: item.index, text: item.text })),
-    droppedLines: input.droppedLines, ctxTokens: input.ctxTokens, short: input.short,
+    droppedLines: input.droppedLines, ctxTokens: input.ctxTokens, historyCount: input.historyCount,
   }
 }
 
@@ -134,8 +134,8 @@ function shearTokensOf(dossier: DossierBody, items: readonly { startSeq: number;
 export function renderPreviewCommandText(dto: StarPreviewDto): string {
   return [
     '断面预览（未写入任何状态）',
-    dto.product === null ? '（短卷宗：跳过产品层，仅回填裁决）' : dto.product,
-    `裁决 ${dto.verdicts.length} 条 / 丢弃行 ${dto.droppedLines} / 输入栈 ${dto.ctxTokens} tokens / 缺失权威段 ${dto.missingAuthority.length} 条`,
+    dto.product === null ? '（模型未产出产品，仅回填裁决）' : dto.product,
+    `裁决 ${dto.verdicts.length} 条 / 丢弃行 ${dto.droppedLines} / 输入栈 ${dto.ctxTokens} tokens / 历史消息 ${dto.historyCount} 条 / 缺失权威段 ${dto.missingAuthority.length} 条`,
     ...dto.verdicts.slice(0, 10).map((verdict) => `- ${verdict.kind}: ${verdict.summary}`),
   ].join('\n')
 }
@@ -152,18 +152,30 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
   const preview = async (input: { sessionId: string; prompt: string }): Promise<StarBridgeOutcome<StarPreviewDto>> => {
     const session = deps.resolveSession?.(input.sessionId)
     if (session === undefined) return { ok: false, code: STAR_BRIDGE_CODES.noSession, message: '会话不存在或未激活' }
+    // P14c §3 唯一门控：本次提示词极短 → 零调用短路（不计数、不写盘、不发事实）。
+    if (isTrivialOptimizePrompt(input.prompt)) {
+      return {
+        ok: false, code: STAR_BRIDGE_CODES.badRequest,
+        message: '提示词过短（去标点后不足 4 字），没有可优化的内容',
+      }
+    }
     counters.previews++
     const at = now()
-    const localTaskId = foldSegmentState(readFacts(session)).segments.at(-1)!.taskId
-    const taskId = sessionScopedTaskId(input.sessionId, localTaskId)
+    const segment = foldSegmentState(readFacts(session)).segments.at(-1)!
+    const taskId = sessionScopedTaskId(input.sessionId, segment.taskId)
+    // P14c §4：task 内用户消息直接读会话事件（与 auto 开关无关，挂载/重启不丢历史）；
+    // KV 卷宗只提供既有标注，不再充当消息来源。
     const dossierRecord = storage.getEntity('dossier', dossierStorageKey(taskId))
-    const dossier = dossierRecord === undefined ? createDossier(taskId) : dossierRecord.body as DossierBody
+    const stored = dossierRecord?.body as DossierBody | undefined
+    const messages = readSessionUserMessages(session)
+      .filter((message) => (segment.startSeq === null || message.seq >= segment.startSeq) && !isTrivialMessage(message.text))
+    const dossier: DossierBody = { taskId, messages, annotations: stored?.annotations ?? {} }
     const frameRecord = storage.getEntity('project_frame', projectFrameStorageKey(workspace))
     const catalog = deps.skillsCtx === undefined ? undefined : await listSkillCatalog(deps.skillsCtx)
     const rendered = renderOptimizePrompt({
       projectFrame: frameRecord?.body as ProjectFrameBody | undefined, dossier, prompt: input.prompt, catalog,
     })
-    const previewId = `${input.sessionId}#${localTaskId}#${dossierRecord?.version ?? 0}#${++seq}`
+    const previewId = `${input.sessionId}#${segment.taskId}#${dossierRecord?.version ?? 0}#${++seq}`
     const candidates = extractAuthorityCandidates(input.prompt)
     let parsed: OptimizeParseResult | undefined
     let usage: CeLlmUsage | undefined
@@ -190,11 +202,13 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
         if (parsed.product === null && parsed.verdicts.length === 0) errorCode = STAR_BRIDGE_CODES.parseFailed
       }
     }
-    const product = parsed === undefined || rendered.short ? null : parsed.product
+    const product = parsed === undefined ? null : parsed.product
     const missingAuthority = checkAuthoritySpans(product ?? '', candidates, parsed?.keptSpanIndexes ?? [])
       .missing.map((candidate) => ({ index: candidate.index, text: candidate.text }))
     emitRun(session, previewRunFact({ previewId, taskId, sessionId: input.sessionId, at }, {
-      short: rendered.short, ctxTokens: rendered.ctxTokens, productChars: product?.length ?? 0,
+      // short 保留为账本字段，P14c 语义修订为「无历史素材」（= historyCount === 0）。
+      short: rendered.historyCount === 0, historyCount: rendered.historyCount,
+      ctxTokens: rendered.ctxTokens, productChars: product?.length ?? 0,
       verdictCount: parsed?.verdicts.length ?? 0, droppedLines: parsed?.droppedLines ?? 0,
       keptSpanCount: parsed?.keptSpanIndexes.length ?? 0, missingAuthorityCount: missingAuthority.length,
       shearPairs: parsed?.shearItems.length ?? 0, shearTokens: parsed === undefined ? 0 : shearTokensOf(dossier, parsed.shearItems),
@@ -210,7 +224,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     }
     const dto = buildPreviewDto({
       previewId, originalPrompt: input.prompt, product, verdicts: parsed!.verdicts, missingAuthority,
-      droppedLines: parsed!.droppedLines, ctxTokens: rendered.ctxTokens, short: rendered.short,
+      droppedLines: parsed!.droppedLines, ctxTokens: rendered.ctxTokens, historyCount: rendered.historyCount,
     })
     if (pending.size >= STAR_PREVIEW_LIMIT) {
       const oldest = pending.keys().next().value

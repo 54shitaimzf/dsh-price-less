@@ -26,7 +26,10 @@ export interface OptimizeRunFactData {
   sessionId: string
   at: number
   // preview 相（含失败相：errorCode 非空时其余字段为已观测部分）
+  /** P14c 语义修订：true = 本次组装无历史素材（historyCount === 0）。 */
   short?: boolean
+  /** 本次组装用到的 task 内用户消息条数（P14c）。 */
+  historyCount?: number
   ctxTokens?: number
   productChars?: number
   verdictCount?: number

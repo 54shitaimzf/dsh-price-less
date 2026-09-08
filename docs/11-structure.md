@@ -60,7 +60,7 @@ src/
 ├─ core/             # 纯核（零 harness import：事件/会话类型本地重声明，结构性兼容）
 │  ├─ units.ts       # 分划单位状态机：task 段 fold、边界记录（01 §3.5 正典）
 │  ├─ dossier.ts     # 卷宗：append-only 累积、标注、回填、边界清空（02 §2）
-│  ├─ judge.ts       # 判据组装：L0 词表 / L1 缓存键 / 对表层 / LLM prompt 渲染（模板在前）
+│  ├─ judge.ts       # 判据组装：L1 缓存键（幂等护栏）/ 对表保守打分 / LLM prompt 渲染（模板在前）
 │  ├─ optimize.ts    # 星标断面：输入栈装配、双通道解析、行级容错、四道机械闸（02 §4）
 │  ├─ prefix.ts      # 稳定前缀：技能目录快照 + 项目帧 vN、版本 bump 语义（02 §2/06 §4）
 │  ├─ init.ts        # init 项目帧采集：prompt v1 渲染与 fail-lazy 解析（02 §2）
@@ -69,7 +69,7 @@ src/
 │  ├─ assemble/      # 装配器：热尾双通道取真、贪心停机、stub 续传/折叠（04 共享机制）
 │  └─ ledger/        # 度量 fold：从事件流计算 07 字段（纯函数，回放 = 同输入同账）
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
-│  ├─ input.ts       # 判别域：自动断面服务（T0→L0→L1→对表→LLM→fail-lazy；三分类搭车）
+│  ├─ input.ts       # 判别域：自动断面服务（T0→L1→对表→LLM→fail-lazy；三分类搭车）
 │  ├─ commands.ts    # 命令面：/task、/init、/optimize-prompt 注册与委托（10 §2）
 │  ├─ star.ts        # 星标断面 host 服务：输入栈装配 → 断面 → 预览态 → 确认后回填/产物（10 §4 时序 B；P14b1）
 │  ├─ optimize-facts.ts # optimize-run 两相事实声明合并 + fold（07 §0.5；P14b1）
@@ -143,7 +143,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 |---|---|---|
 | 模型可见工具（tools 数组） | **恒 0**——全层走官方缝（H2/H4/H6）；唯一例外通道 = T-note 注记贴在工具结果内容内（非 schema） | [03 §2.1](03-shear.md) |
 | 主模型系统提示词 | **恒 0**——知识出口唯一 = 优化后 prompt（用户确认后可见替换） | [01 §4](01-architecture.md) |
-| 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式）· T-note 注记模板 · 机械摘句规则（L0 非 LLM） | 02/03/04 各域 |
+| 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式）· T-note 注记模板 · 机械摘句规则（对表打分非 LLM） | 02/03/04 各域 |
 | 斜杠命令 | `/task` 系列（Tier-0 边界）· `/optimize-prompt`（星标命令形态） | [10 §2](10-wiring.md) |
 | 预设 | **不提供**（首批预设候选见 [00](00-overview.md) 路线图：预设开发结合系统提示词改造） | 路线图 |
 | client 工具 | 设置卡壳 + 星标按钮 + 度量消息列表可视化 | 本文 §5 |

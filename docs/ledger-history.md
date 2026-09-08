@@ -1551,3 +1551,40 @@ diag-sink 诊断面）；core/ledger 空转只记账（零监听器、零行为�
 | optimizePromptTokens 入账 | `optimize-run(preview).llmUsage` → `foldOptimizeRunFacts.optimizePromptTokens`；`tests/star-host.spec.ts` 用例 10 | 达标 |
 | `auto` 开关可用（默认关） | docs/11 §6 默认 false；`tests/input.spec.ts` auto=false 零行为；星标通道不受门控 | 达标 |
 | 星标端到端（断面→预览→确认→回填） | host：`tests/star-host.spec.ts` 13 用例；两侧契约 + 进程内 E2E：`tests/star-transport.spec.ts`；隔离冒烟真机 401/信封；**主 profile 浏览器点击 = 待人工确认** | 机制/隔离达标；人工点击待办 |
+
+## 33. 账本快照 §33：P14c 判别链瘦身 + ★ 断面修复（纯回放管道产出）
+
+> 工单：[P14c-gate-slim-and-star-fix.md](implement/P14c-gate-slim-and-star-fix.md)。口径：本快照为 R2 的**修正**，
+> 不替换 §32（历史只增不改）；判别/断面事实 schema 未变，§32 fixture 回放逐字段不变。
+
+**机械层历史回放（真实数据，`scripts/verify-p14c.mjs`）**：
+
+| 指标 | 读数 | 口径 |
+|---|---|---|
+| 历史用户消息 / 会话 | 159 条 / 41 个 | `session_projcache` + 归档投影 |
+| 极短消息（不进 ★ 上下文） | 2.5% | 去标点空白后 < 4 字符 |
+| 删 L0 的代价 | 1.9% 消息改走 LLM | 反事实：旧词表整句命中率 |
+| 对表命中率（保守打分） | 7.9%（28/354） | 354 条真实判别记录 + 模拟表 |
+| 对表精确率（保守打分） | **96.4%**（误判 new-task 1 条） | verdict 为地面真值 |
+| 对表命中率 / 精确率（旧宽松） | 9.0% / 93.8%（误判 2 条） | 关键词 OR 签名 |
+| ★ 上下文可得性 | 最近会话 19 条真实用户消息 | 旧实现受 auto 门控恒为 0 |
+
+**判别族（R2 fixture 回放，与 §32 逐字段相等）**：`judgeCount` 5 · `judgeErrorRate` 0.2 ·
+`judgeCacheHitRate` 0.2 · `judgeLatencyMs` 200.75 · `l0CaptureRate` 0.2（历史口径，P14c 起新事实不再产生）·
+`tableHitRate` 0.5 · `judgeCtxTokens` 560 · verdict 分布 action 2 / pureQ 1 / verifyQ 1。
+
+**断面族（R2 fixture 回放，与 §32 逐字段相等）**：`optimizeCount` 2 · `optimizePromptTokens` in 250 / out 90 ·
+`verdictBackfill` count 2 / conflicts 1 · `shearAtStar` pairs 1 / tokens 30。
+
+**行为修订（可观测）**：
+
+| 项 | §32 口径 | P14c 口径 |
+|---|---|---|
+| 决策链 | T0 → L0 → L1 → 对表 → LLM → fail-lazy | **T0 → L1（幂等护栏）→ 对表（保守打分）→ LLM → fail-lazy** |
+| ★ 门控 | 卷宗太短 → 产品层跳过（仍调 LLM） | **本次提示词极短 → 零调用短路**；历史少不再跳过产品层 |
+| ★ 上下文来源 | KV 卷宗（受 auto 门控） | **会话事件**（与 auto 无关，挂载/重启不丢历史） |
+| 预览 DTO | `short: boolean` | `historyCount: number`（端点 / 错误码不变） |
+
+**门槛复核（docs/11 §8 R2 行）**：边界 F1 达标（判据链瘦身后 `tests/judge.spec.ts` / `input.spec.ts` 全绿）；
+判别成本达标（`auto` 默认 off 零调用；机械层省 7.9%）；`tableHitRate` 字段保留并新增**够格线**——
+真机运行后若仍 < 5%，连对表层一起删；星标端到端达标（首次点击即产出产品；`tests/star-host.spec.ts` 14 用例）。

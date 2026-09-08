@@ -1,8 +1,9 @@
 /**
  * P12 自动断面服务（docs/02 §3 / docs/11 §2 domains/input.ts）。
  * 订阅 pump 的 input/user-message 与 facts/session-event，按
- * T0→L0→L1→对表→LLM→fail-lazy 决策链逐消息处理；卷宗追加、判别事实发射、
+ * T0→L1（重复投递护栏）→对表（保守）→LLM→fail-lazy 决策链逐消息处理；卷宗追加、判别事实发射、
  * 按会话分桶/去重。domains 允许 import core + platform；本文件不直接调用会话追加。
+ * P14c：L0 延续词表已删除（实测 0.6% 命中，见 docs/implement/P14c §1）；对表改为打分制。
  */
 import {
   FAIL_LAZY_JUDGE_DECISION,
@@ -10,7 +11,6 @@ import {
   freezeJudgeConfig,
   judgeL1CacheKey,
   matchJudgeTable,
-  matchL0Continue,
   parseJudgeLlmOutput,
   renderJudgePrompt,
   toJudgeVerdictFactData,
@@ -169,20 +169,17 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       emitRecorded(session, sid, { seq, time, trigger: 't0', decision: 'continue' })
       return
     }
-    if (matchL0Continue(text)) {
-      emitRecorded(session, sid, { seq, time, trigger: 'l0-continue', decision: 'continue' })
-      return
-    }
-
     const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
     const fingerprint = freezeJudgeConfig({ provider, model, auto: true })
     const cacheKey = judgeL1CacheKey({ sessionId: sid, seq, text, configFingerprint: fingerprint })
+    // L1 = 重复投递护栏（P14c §1）：键含 seq，跨消息永不命中，只防同一消息被重复处理/计费。
     const cached = l1Cache.get(cacheKey)
     if (cached !== undefined) {
       emitRecorded(session, sid, { seq, time, trigger: 'l1-cache', decision: cached.decision, class: cached.class })
       return
     }
 
+    // 对表 = 保守打分（P14c §2）：总分 ≥ 2 才机械延续，否则出表走 LLM 主路径。
     const table = readJudgeTable(storage, workspace)
     if (matchJudgeTable(text, table).hit) {
       emitRecorded(session, sid, { seq, time, trigger: 'table', decision: 'continue' })

@@ -5,23 +5,24 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { DOSSIER_CLASSES, createDossier, foldDossierLedger, type DossierBody, type DossierMessage } from '../src/core/dossier.ts'
+import {
+  DOSSIER_CLASSES, TRIVIAL_MESSAGE_MAX_CHARS, createDossier, foldDossierLedger, isTrivialMessage,
+  normalizeMessageText, type DossierBody, type DossierMessage,
+} from '../src/core/dossier.ts'
 import { JUDGE_VERDICT_FACT_TYPE } from '../src/core/units.ts'
 import {
   JUDGE_PROMPT_CONTEXT,
   JUDGE_PROMPT_HEAD,
   JUDGE_PROMPT_OUTPUT,
   JUDGE_PROMPT_RULES_CLAUSES,
-  L0_CONTINUE_WORDS,
   createEmptyJudgeTable,
   foldJudgeLedger,
   freezeJudgeConfig,
+  judgeKeywordScore,
   judgeL1CacheKey,
   matchJudgeTable,
-  matchL0Continue,
   parseJudgeLlmOutput,
   renderJudgePrompt,
-  stripL0Text,
   toJudgeVerdictFactData,
   type JudgeRecord,
 } from '../src/core/judge.ts'
@@ -35,17 +36,17 @@ function bodyWith(messages: DossierMessage[]): DossierBody {
 }
 
 describe('judge', () => {
-  it('judge L0: 延续词表匹配、strip 标点/空白/大小写', () => {
-    expect(matchL0Continue('好')).toBe(true)
-    expect(matchL0Continue('ok')).toBe(true)
-    expect(matchL0Continue('继续吧')).toBe(true)
-    expect(matchL0Continue('继续做')).toBe(true)
-    expect(matchL0Continue('好的，请继续')).toBe(false)
-    expect(matchL0Continue('')).toBe(false)
-    expect(matchL0Continue('帮我写个测试')).toBe(false)
-    for (const word of ['继续', '好的', 'ok', 'k']) expect(L0_CONTINUE_WORDS).toContain(word)
-    expect(stripL0Text('  Hello，World！ ')).toBe('helloworld')
-    expect(stripL0Text('ＯＫ？')).toBe('ｏｋ')
+  it('judge 极短消息判据（P14c：L0 延续词表已删——实测 0.6% 命中）', () => {
+    expect(TRIVIAL_MESSAGE_MAX_CHARS).toBe(4)
+    expect(isTrivialMessage('好')).toBe(true)
+    expect(isTrivialMessage('ok')).toBe(true)
+    expect(isTrivialMessage('继续')).toBe(true)
+    expect(isTrivialMessage('好，继续！')).toBe(true)
+    expect(isTrivialMessage('')).toBe(true)
+    expect(isTrivialMessage('继续做')).toBe(true)   // 去噪后 3 字 < 4
+    expect(isTrivialMessage('继续做完')).toBe(false)  // 4 字 = 阈值，保留
+    expect(isTrivialMessage('帮我写个测试')).toBe(false)
+    expect(normalizeMessageText('  Hello，World！ ')).toBe('helloworld')
   })
 
   it('judge L1: 缓存键确定性、配置指纹与嵌套顺序无关', () => {
@@ -63,15 +64,25 @@ describe('judge', () => {
       .toBe(freezeJudgeConfig({ y: [3, { c: 5, d: 4 }], x: { a: 2, b: 1 } }))
   })
 
-  it('judge table: 空表不命中、keyword/fileSignature 命中、双命中 reason、纯函数', () => {
-    expect(matchJudgeTable('hello', undefined)).toEqual({ hit: false })
-    expect(matchJudgeTable('hello', { version: 0, aspects: [], fileSignatures: [], keywords: ['x'] })).toEqual({ hit: false })
-    const table = { version: 1, aspects: [], fileSignatures: ['Report.pdf'], keywords: ['Cache'] }
+  it('judge table: 保守打分（签名 2 分 / 关键词各 1 分，总分 ≥2 才命中）', () => {
+    expect(matchJudgeTable('hello', undefined)).toEqual({ hit: false, score: 0 })
+    expect(matchJudgeTable('hello', { version: 0, aspects: [], fileSignatures: [], keywords: ['cache'] })).toEqual({ hit: false, score: 0 })
+    const table = { version: 1, aspects: [], fileSignatures: ['Report.pdf'], keywords: ['缓存', '解析器', '自动判别'] }
     const before = JSON.stringify(table)
-    expect(matchJudgeTable('use cache', table)).toEqual({ hit: true, reason: 'keyword' })
-    expect(matchJudgeTable('open REPORT.PDF', table)).toEqual({ hit: true, reason: 'file-signature' })
-    expect(matchJudgeTable('report.pdf cache', table)).toEqual({ hit: true, reason: 'file-signature' })
-    expect(matchJudgeTable('unrelated', table)).toEqual({ hit: false })
+    expect(judgeKeywordScore('缓存')).toBe(1)
+    expect(judgeKeywordScore('自动判别')).toBe(2)
+    expect(judgeKeywordScore('p14b')).toBe(2)
+    expect(judgeKeywordScore('b2')).toBe(1)
+    // 单条泛关键词只值 1 分——不再足以静默短路（P14c §2）
+    expect(matchJudgeTable('use 缓存', table)).toEqual({ hit: false, score: 1 })
+    // 具体关键词 = 强特征（2 分）
+    expect(matchJudgeTable('自动判别', table)).toEqual({ hit: true, reason: 'keyword', score: 2 })
+    // 文件签名 = 强特征（2 分）
+    expect(matchJudgeTable('open REPORT.PDF', table)).toEqual({ hit: true, reason: 'file-signature', score: 2 })
+    expect(matchJudgeTable('report.pdf 缓存', table)).toEqual({ hit: true, reason: 'file-signature', score: 3 })
+    // 两条泛关键词共现 = 2 分
+    expect(matchJudgeTable('缓存 解析器', table)).toEqual({ hit: true, reason: 'keyword', score: 2 })
+    expect(matchJudgeTable('unrelated', table)).toEqual({ hit: false, score: 0 })
     expect(JSON.stringify(table)).toBe(before)
     expect(createEmptyJudgeTable()).toEqual({ version: 1, aspects: [], fileSignatures: [], keywords: [] })
   })

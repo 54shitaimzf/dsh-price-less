@@ -1,7 +1,7 @@
 /**
  * 判据与对表纯核（docs/02 §3 / docs/07 §0.5 / docs/11 §2 core/judge.ts）。
- * 纯函数：L0 延续词表、L1 精确缓存键、对表层谓词、judge prompt v3 渲染与 fail-lazy 解析、
- * 判别族度量 fold。core 零 harness/platform import；不抛错，异常边界交给调用侧 fail-lazy。
+ * 纯函数：极短消息判据、L1 精确缓存键（重复投递护栏）、对表层保守打分谓词、judge prompt v3
+ * 渲染与 fail-lazy 解析、判别族度量 fold。core 零 harness/platform import；不抛错，异常边界交给调用侧 fail-lazy。
  */
 import { DOSSIER_CLASSES, foldDossierLedger, type DossierBody, type DossierClass } from './dossier.ts'
 import type { JudgeVerdictFactData } from './units.ts'
@@ -26,27 +26,10 @@ export const JUDGE_PROMPT_RULES_CLAUSES = `先决排除：
 否则 = continue，包括：同一工作进行、细化、推进、对工作本身的讨论等。`
 export const JUDGE_PROMPT_OUTPUT = '输出（仅 JSON，无其他文本）：\n{"decision":"new_task"|"continue","class":"action"|"pureQ"|"verifyQ"}'
 
-// —— L0 延续词表（冻结口径；同源文件 scripts/attic/phase_a_l0.mjs 已于 2026-09 清理，原内容保留在 git 历史） ——
-export const L0_CONTINUE_WORDS: readonly string[] = [
-  '继续', '继续吧', '继续继续', '好的', '好的好的', '好', '好哦', '好呀', '好吧', '行', '行吧', '嗯', '嗯嗯',
-  '对', '对的', '是的', '没错', '确实', '明白了', '明白', '知道了', '可以', '可以了', '没问题', '收到', '好滴',
-  '谢谢', '然后呢', '还有', '接着', '接着吧', '继续做', '接着做', '继续说', '继续搞', '来吧', '请继续',
-  'ok', 'okay', 'yes', 'yep', 'yeah', 'sure', 'great', 'nice', 'gotit', 'understood', 'thanks', 'thanks!',
-  'continue', 'goon', 'alright', 'fine', 'right', 'indeed', 'good', 'perfect', 'done', 'works', 'ok!',
-  'k', 'kk', 'ok.', 'yes.', 'sure.', 'thanks.', 'right.', 'great.', 'nice.', 'perfect.',
-]
-
-const L0_STRIP_RE = /[\s\u3000！？。，、；：""''（）《》【】!?.,;:()\[\]{}~\-—_…]/gu
-
-export function stripL0Text(text: string): string {
-  return text.replace(L0_STRIP_RE, '').toLowerCase()
-}
-
-export function matchL0Continue(text: string): boolean {
-  const s = stripL0Text(text)
-  if (s.length === 0) return false
-  return L0_CONTINUE_WORDS.includes(s)
-}
+// —— 极短消息判据：见 core/dossier.ts ——
+// 原 L0 延续词表（整句 = 延续词）已删除：真实数据 356 次自动判别仅命中 2 次（0.6%），
+// 158 条历史用户消息命中 1 条（0.7%）——省不下调用即为负资产（docs/implement/P14c §1）。
+// 「是不是延续」是语义判断，归 LLM 主路径；机械层只做**查表**（见下方对表层）。
 
 // —— L1 精确缓存键 ——
 function freezeValue(value: unknown): string {
@@ -88,21 +71,56 @@ export interface JudgeTable {
 export interface JudgeTableMatch {
   hit: boolean
   reason?: 'file-signature' | 'keyword'
+  /** 命中强度：文件签名 2 分、每个不同关键词 1 分（最多计 2 个）。 */
+  score: number
+}
+
+/** 命中门槛（保守：宁可多花一次 LLM，也不静默漏切边界）。 */
+export const JUDGE_TABLE_HIT_SCORE = 2
+export const JUDGE_TABLE_SIGNATURE_SCORE = 2
+export const JUDGE_TABLE_SPECIFIC_KEYWORD_SCORE = 2
+export const JUDGE_TABLE_GENERIC_KEYWORD_SCORE = 1
+/** 短于该长度的关键词不参与匹配（单字符关键词会到处命中）。 */
+export const JUDGE_TABLE_MIN_KEYWORD_CHARS = 2
+
+/**
+ * 关键词命中强度：**具体**关键词（≥4 字符，或 ≥3 字符的标识符——含数字/分隔符，如 `p14b`/`star.ts`）记 2 分；
+ * **泛**关键词（2–3 字符中文词，如"插件""优化"）记 1 分。
+ * 理由：泛词共现是巧合高发区；路径与具体词才是"高度吻合"。单条泛词永不短路。
+ */
+export function judgeKeywordScore(keyword: string): number {
+  const key = keyword.trim()
+  if (key.length >= 4) return JUDGE_TABLE_SPECIFIC_KEYWORD_SCORE
+  if (key.length >= 3 && /[0-9]|[-_.]/.test(key)) return JUDGE_TABLE_SPECIFIC_KEYWORD_SCORE
+  return JUDGE_TABLE_GENERIC_KEYWORD_SCORE
 }
 
 export function createEmptyJudgeTable(): JudgeTable {
   return { version: JUDGE_TABLE_VERSION, aspects: [], fileSignatures: [], keywords: [] }
 }
 
+/**
+ * 对表层保守打分（P14c §2）：
+ * 文件签名 2 分；具体关键词 2 分；泛关键词 1 分；**总分 ≥ 2 才机械判延续**。
+ * 即：一条路径或一个具体词足以短路；两条泛词共现也可；单条泛词一律出表走 LLM。
+ * 方向性理由：机械误判"延续"是无声错误（边界漏切且无复核），多问一次模型只是多花一次钱。
+ * 实测（354 条真实判别记录）：本口径命中 7.9%、精确率 96.4%；旧宽松口径命中 9.0%、精确率 93.8%。
+ */
 export function matchJudgeTable(text: string, table: JudgeTable | undefined): JudgeTableMatch {
-  if (!table || table.version < 1) return { hit: false }
+  if (!table || table.version < 1) return { hit: false, score: 0 }
   const lower = text.toLowerCase()
-  const keyword = table.keywords.some((k) => lower.includes(k.toLowerCase()))
-  const fileSignature = table.fileSignatures.some((s) => lower.includes(s.toLowerCase()))
-  if (keyword && fileSignature) return { hit: true, reason: 'file-signature' }
-  if (keyword) return { hit: true, reason: 'keyword' }
-  if (fileSignature) return { hit: true, reason: 'file-signature' }
-  return { hit: false }
+  const signature = table.fileSignatures.some(
+    (s) => s.trim().length >= JUDGE_TABLE_MIN_KEYWORD_CHARS && lower.includes(s.trim().toLowerCase()),
+  )
+  let score = 0
+  for (const raw of table.keywords) {
+    const key = raw.trim().toLowerCase()
+    if (key.length < JUDGE_TABLE_MIN_KEYWORD_CHARS) continue
+    if (lower.includes(key)) score += judgeKeywordScore(key)
+  }
+  if (signature) score += JUDGE_TABLE_SIGNATURE_SCORE
+  if (score < JUDGE_TABLE_HIT_SCORE) return { hit: false, score }
+  return { hit: true, reason: signature ? 'file-signature' : 'keyword', score }
 }
 
 // —— LLM 主路径：prompt 渲染 + fail-lazy 解析 ——
@@ -180,6 +198,7 @@ export function toJudgeVerdictFactData(decision: JudgeDecision, anchorSeq: numbe
 }
 
 // —— 判别族度量 fold（度量先行） ——
+/** `l0-continue` 为历史口径：P14c 起不再产生，但既有账本事实仍须可 fold（ledger-history 只增不改）。 */
 export type JudgeTrigger = 't0' | 'l0-continue' | 'l1-cache' | 'table' | 'llm' | 'error-fallback'
 
 export interface JudgeLlmUsage {
@@ -213,6 +232,7 @@ export interface JudgeLedger {
   judgeErrorRate: number
   judgeCacheHitRate: number
   judgeLatencyMs: number
+  /** 历史口径：P14c 起恒为 0（L0 已删除）；保留以回放旧账本。 */
   l0CaptureRate: number
   tableHitRate: number
   judgeLLMUsage: {

@@ -393,7 +393,7 @@ webserver/credentials/attachment。
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent` | 已施工（P7） |
 | `src/platform/star-bridge.ts` | `ctx.get('connection')` 最小结构面、`connection.rpc.handle('/context-economy')`、`ConnectionRpcResult` 信封（§3.11） | 已施工（P14b1） |
-| `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物） | 已施工（P14b1） |
+| `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物）；P14c：极短短路 + 上下文读会话事件 + DTO `historyCount` | 已施工（P14b1 / P14c） |
 | `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
 | `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft`、`useInput`、`StarHostBridge` | 已施工（P14a） |

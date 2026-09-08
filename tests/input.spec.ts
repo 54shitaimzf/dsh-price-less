@@ -1,6 +1,6 @@
 /**
  * P12 自动断面服务测试（docs/implement/P12-input.md §3.7）。
- * 十一组：T0 解析、模型路由、auto=false 零行为、T0/L0/L1/对表/LLM/fail-lazy、
+ * 十一组：T0 解析、模型路由、auto=false 零行为、T0/L1/对表/LLM/fail-lazy（P14c 已删 L0）、
  * 卷宗追加、会话事实隔离。全部 fake，零 cordis 运行时 import。
  */
 import { describe, expect, it } from 'vitest'
@@ -136,15 +136,19 @@ describe('auto discriminator quick paths', () => {
     auto.dispose()
   })
 
-  it('L0：好的 命中延续词，不调 LLM', async () => {
+  it('极短消息不再机械延续（P14c 删 L0）→ 走 LLM 主路径', async () => {
     const pump = makePump()
     let llmCalled = false
-    const llm = { stream: async function* () { llmCalled = true; yield { type: 'finish', reason: { kind: 'stop' } } } }
+    const llm = { stream: async function* () {
+      llmCalled = true
+      yield { type: 'text-delta', index: 0, text: '{"decision":"continue","class":"action"}' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
     pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: '好的' })
     await flush()
-    expect(llmCalled).toBe(false)
-    expect(auto.stats().records[0]).toMatchObject({ trigger: 'l0-continue', decision: 'continue' })
+    expect(llmCalled).toBe(true)
+    expect(auto.stats().records[0]).toMatchObject({ trigger: 'llm', decision: 'continue' })
     auto.dispose()
   })
 })
@@ -207,13 +211,13 @@ describe('auto discriminator table and dossier', () => {
     const storage = makeStorage({
       'optimize_artifact:optimize_artifact:latest:ws': {
         version: 1,
-        body: { judgeTable: { version: 1, aspects: [], fileSignatures: [], keywords: ['cache'] } },
+        body: { judgeTable: { version: 1, aspects: [], fileSignatures: ['src/a.ts'], keywords: ['cache'] } },
       },
     })
     let llmCalled = false
     const llm = { stream: async function* () { llmCalled = true; yield { type: 'finish', reason: { kind: 'stop' } } } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'use cache' })
+    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'use cache in src/a.ts' })
     await flush()
     expect(llmCalled).toBe(false)
     expect(auto.stats().records[0]).toMatchObject({ trigger: 'table', decision: 'continue' })

@@ -15,7 +15,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { CeButton } from '../components/CeButton.tsx'
 import { TOKEN, Z_POPOVER, tint } from '../theme.ts'
-import { diffLines, summaryOfVerdicts } from './star-model.ts'
+import { STAR_NO_CONTEXT_NOTICE } from './star-protocol.ts'
+import { diffLines, isTrivialPrompt, summaryOfVerdicts } from './star-model.ts'
 import type { StarButtonInjected, StarPreviewData } from './star-types.ts'
 
 /** 槽位组件 props：标准运行时 share + 注入的 star 桥。 */
@@ -64,6 +65,23 @@ const CODE: CSSProperties = {
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-word',
 }
+/**
+ * 四角星闪光图标（勾线，AI/生成语义——业界共识；五角星会被读成"收藏"）。
+ * 内联 SVG：不引入图标依赖；stroke=currentColor，随主题 token 变色。
+ */
+function SparkleIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      style={{ display: 'block' }}
+    >
+      <path d="M11 2c.55 5.5 2.5 7.45 8 8-5.5.55-7.45 2.5-8 8-.55-5.5-2.5-7.45-8-8 5.5-.55 7.45-2.5 8-8Z" />
+      <path d="M18 13.5c.3 2.2.8 2.7 3 3-2.2.3-2.7.8-3 3-.3-2.2-.8-2.7-3-3 2.2-.3 2.7-.8 3-3Z" />
+    </svg>
+  )
+}
+
 function DiffView({ original, product }: { original: string; product: string }) {
   const lines = diffLines(original, product)
   const lineStyle = (type: string): CSSProperties => ({
@@ -106,7 +124,14 @@ export function StarButton(props: StarButtonProps) {
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
 
-  const disabled = loading || applying || sessionId === undefined || draft.trim().length === 0
+  const empty = draft.trim().length === 0
+  const trivial = !empty && isTrivialPrompt(draft)
+  const disabled = loading || applying || sessionId === undefined || empty || trivial
+  const hint = empty
+    ? '先在输入框写下提示词，再用 AI 优化'
+    : trivial
+      ? '提示词过短（去标点后不足 4 字），没有可优化的内容'
+      : 'AI 优化当前提示词（基于本任务已有消息）'
 
   const runPreview = async () => {
     if (sessionId === undefined || draft.trim().length === 0) return
@@ -170,12 +195,13 @@ export function StarButton(props: StarButtonProps) {
     <>
       <button
         type="button"
-        title="星标优化当前 prompt（P14a mock 预览）"
+        title={hint}
+        aria-label="AI 优化提示词"
         disabled={disabled}
         style={button}
         onClick={() => { void runPreview() }}
       >
-        {loading ? '…' : '★'}
+        {loading ? '…' : <SparkleIcon />}
       </button>
       {error !== null ? (
         <div role="alert" style={{
@@ -210,9 +236,11 @@ export function StarButton(props: StarButtonProps) {
       {open && preview !== null ? (
         <div style={OVERLAY} onClick={close}>
           <div style={CARD} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>星标优化预览</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>提示词优化预览</div>
             <div style={{ fontSize: 11.5, color: TOKEN.labelTertiary }}>
-              {preview.short ? '短卷宗：仅展示预览占位，不执行回填' : `上下文估算 ${preview.ctxTokens} tokens · 丢失行 ${preview.droppedLines}`}
+              {preview.historyCount === 0
+                ? STAR_NO_CONTEXT_NOTICE
+                : `上下文估算 ${preview.ctxTokens} tokens · 历史消息 ${preview.historyCount} 条 · 丢失行 ${preview.droppedLines}`}
             </div>
             {preview.missingAuthority.length > 0 ? (
               <div style={{ border: `1px solid ${tint(TOKEN.warnPrimary, 0.5)}`, borderRadius: 8, padding: '6px 8px', fontSize: 12, color: TOKEN.warnPrimary }}>

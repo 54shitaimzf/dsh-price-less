@@ -14,9 +14,11 @@ import {
 import { createHostStarBridge } from '../client/star/star-bridge.ts'
 import {
   isStarApplyValue, isStarPreviewData, STAR_APPLY_ENDPOINT, STAR_BRIDGE_CHANNEL, STAR_CLIENT_CODES,
-  STAR_PREVIEW_ENDPOINT, STAR_SHORT_NOTICE,
+  STAR_NO_CONTEXT_NOTICE, STAR_PREVIEW_ENDPOINT,
 } from '../client/star/star-protocol.ts'
+import { TRIVIAL_PROMPT_MAX_CHARS as CLIENT_TRIVIAL_PROMPT_MAX_CHARS } from '../client/star/star-model.ts'
 import type { StarPreviewData } from '../client/star/star-types.ts'
+import { TRIVIAL_MESSAGE_MAX_CHARS as HOST_TRIVIAL_MESSAGE_MAX_CHARS } from '../src/core/dossier.ts'
 
 const logger = { info() {}, warn() {}, error() {} }
 
@@ -25,7 +27,7 @@ const HOST_DTO: StarPreviewDto = buildPreviewDto({
   previewId: 'p1', originalPrompt: '原始 prompt', product: '产品文本',
   verdicts: [{ kind: 'aspect', text: '构建' }],
   missingAuthority: [{ index: 1, text: '权威段' }],
-  droppedLines: 2, ctxTokens: 30, short: false,
+  droppedLines: 2, ctxTokens: 30, historyCount: 2,
 })
 
 /** client 侧类型样例（satisfies 保证必填键齐全；运行时比对键集合）。 */
@@ -33,7 +35,7 @@ const CLIENT_SAMPLE = {
   previewId: 'p1', originalPrompt: '原始 prompt', product: '产品文本',
   verdicts: [{ kind: 'aspect', summary: '方面：构建' }],
   missingAuthority: [{ index: 1, text: '权威段' }],
-  droppedLines: 2, ctxTokens: 30, short: false,
+  droppedLines: 2, ctxTokens: 30, historyCount: 2,
 } satisfies StarPreviewData
 
 const clientCtx = (connection: unknown): Pick<ClientContext, 'get'> =>
@@ -68,11 +70,14 @@ describe('star transport (P14b2)', () => {
     expect(Object.keys(HOST_DTO).sort()).toEqual(Object.keys(CLIENT_SAMPLE).sort())
     expect(isStarPreviewData(HOST_DTO)).toBe(true)
     expect(isStarPreviewData(CLIENT_SAMPLE)).toBe(true)
-    expect(STAR_SHORT_NOTICE).toBe('卷宗过短，本次仅回填裁决')
+    expect(STAR_NO_CONTEXT_NOTICE).toBe('无历史素材：仅基于当前提示词与项目帧优化')
+    // 两侧极短判据常量不得漂移（client 镜像 host，S4）
+    expect(CLIENT_TRIVIAL_PROMPT_MAX_CHARS).toBe(HOST_TRIVIAL_MESSAGE_MAX_CHARS)
     expect(isStarPreviewData({ ...CLIENT_SAMPLE, product: 1 })).toBe(false)
     expect(isStarPreviewData({ ...CLIENT_SAMPLE, droppedLines: Number.NaN })).toBe(false)
     expect(isStarPreviewData({ ...CLIENT_SAMPLE, verdicts: [{}] })).toBe(false)
-    expect(isStarPreviewData({ ...CLIENT_SAMPLE, short: 'yes' })).toBe(false)
+    expect(isStarPreviewData({ ...CLIENT_SAMPLE, historyCount: 'yes' })).toBe(false)
+    expect(isStarPreviewData({ ...CLIENT_SAMPLE, historyCount: -1 })).toBe(false)
     expect(isStarPreviewData(null)).toBe(false)
     expect(isStarApplyValue({})).toBe(true)
     expect(isStarApplyValue({ text: 1 })).toBe(false)

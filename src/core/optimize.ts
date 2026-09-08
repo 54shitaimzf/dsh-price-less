@@ -3,13 +3,18 @@
  * 纯函数：输入栈装配与预算钳制、断面 prompt v1 渲染、候选 span、四道机械闸、
  * 双通道行级容错解析、断面族度量 fold。core 零 harness/platform import；不抛错。
  */
-import { DOSSIER_CLASSES, isDossierShort, type DossierBody, type DossierClass, type DossierMessage } from './dossier.ts'
+import { DOSSIER_CLASSES, isTrivialMessage, type DossierBody, type DossierClass, type DossierMessage } from './dossier.ts'
 import { estimateTokens } from './ledger/fold.ts'
 import { normalizeSkillCatalog, renderStablePrefix, type ProjectFrameBody, type SkillCatalogSnapshot } from './prefix.ts'
 
-// —— 常量与门控 ——
+// —— 常量与门控（P14c：产品层不再受「历史消息太短」门控；唯一门控 = 本次提示词极短） ——
 export const OPTIMIZE_PROMPT_VERSION = 1
-export const OPTIMIZE_GATE_DEFAULTS = { minMessages: 2, minTextLength: 10 }
+
+/**
+ * ★ 唯一门控（P14c §3）：本次提示词极短 → 零调用短路、不产出。
+ * 与 client 禁用判据同口径（client 侧常量镜像见 client/star/star-model.ts）。
+ */
+export const isTrivialOptimizePrompt = isTrivialMessage
 export const OPTIMIZE_INPUT_TOKEN_BUDGET = 24_000
 export const OPTIMIZE_PROMPT_MAX_CHARS = 4_000
 export const OPTIMIZE_CONCLUSION_MAX_CHARS = 40
@@ -40,8 +45,8 @@ KEYWORD <keyword>`
 
 // —— 输入栈装配与 prompt 渲染 ——
 export interface OptimizeInput { projectFrame: ProjectFrameBody | undefined; dossier: DossierBody; prompt: string; catalog: SkillCatalogSnapshot | undefined }
-export interface OptimizeRender { version: number; prompt: string; short: boolean; ctxTokens: number; truncatedDossierCount: number }
-export type OptimizeAssembled = { prefixText: string; dossierMessages: DossierMessage[]; promptText: string; ctxTokens: number; truncatedDossierCount: number; short: boolean }
+export interface OptimizeRender { version: number; prompt: string; ctxTokens: number; truncatedDossierCount: number; historyCount: number }
+export type OptimizeAssembled = { prefixText: string; dossierMessages: DossierMessage[]; promptText: string; ctxTokens: number; truncatedDossierCount: number; historyCount: number }
 
 function dossierText(messages: readonly DossierMessage[]): string { return messages.map((m) => m.text).join('\n') }
 
@@ -51,20 +56,18 @@ export function clampOptimizePrompt(prompt: string, maxChars: number = OPTIMIZE_
 }
 
 export function assembleOptimizeInput(input: OptimizeInput): OptimizeAssembled {
-  const short = isDossierShort(input.dossier, OPTIMIZE_GATE_DEFAULTS)
   const prefixText = input.projectFrame ? renderStablePrefix(input.projectFrame) : '(无项目帧)'
   const promptText = clampOptimizePrompt(input.prompt)
   let dossierMessages = input.dossier.messages.slice()
-  let truncatedDossierCount = 0
-  if (!short) {
-    const originalCount = dossierMessages.length
-    while (dossierMessages.length > 0 && estimateTokens(prefixText + dossierText(dossierMessages) + promptText) > OPTIMIZE_INPUT_TOKEN_BUDGET) {
-      dossierMessages = dossierMessages.slice(1)
-    }
-    truncatedDossierCount = originalCount - dossierMessages.length
+  const originalCount = dossierMessages.length
+  while (dossierMessages.length > 0 && estimateTokens(prefixText + dossierText(dossierMessages) + promptText) > OPTIMIZE_INPUT_TOKEN_BUDGET) {
+    dossierMessages = dossierMessages.slice(1)
   }
   const ctxTokens = estimateTokens(`${prefixText}\n${dossierText(dossierMessages)}\n${promptText}`)
-  return { prefixText, dossierMessages, promptText, ctxTokens, truncatedDossierCount, short }
+  return {
+    prefixText, dossierMessages, promptText, ctxTokens,
+    truncatedDossierCount: originalCount - dossierMessages.length, historyCount: originalCount,
+  }
 }
 
 function renderSkillCatalog(catalog: SkillCatalogSnapshot | undefined): string {
@@ -82,9 +85,11 @@ export function renderOptimizePrompt(input: OptimizeInput): OptimizeRender {
   const promptSection = `[当前 prompt]\n${a.promptText}`
   const candidateSection = `[候选权威段]\n${candidates.length === 0 ? '(无)' : candidates.map((c) => `${c.index}. ${c.text}`).join('\n')}`
   const skillSection = `[技能目录]\n${renderSkillCatalog(input.catalog)}`
-  const outputSection = a.short ? OPTIMIZE_PROMPT_OUTPUT.replace('[PRODUCT]\n\n[VERDICTS]', '[PRODUCT]\n(空)\n\n[VERDICTS]') : OPTIMIZE_PROMPT_OUTPUT
-  const prompt = [OPTIMIZE_PROMPT_HEAD, `[稳定前缀]\n${a.prefixText}`, dossierSection, promptSection, candidateSection, skillSection, outputSection].join('\n\n')
-  return { version: OPTIMIZE_PROMPT_VERSION, prompt, short: a.short, ctxTokens: a.ctxTokens, truncatedDossierCount: a.truncatedDossierCount }
+  const prompt = [OPTIMIZE_PROMPT_HEAD, `[稳定前缀]\n${a.prefixText}`, dossierSection, promptSection, candidateSection, skillSection, OPTIMIZE_PROMPT_OUTPUT].join('\n\n')
+  return {
+    version: OPTIMIZE_PROMPT_VERSION, prompt, ctxTokens: a.ctxTokens,
+    truncatedDossierCount: a.truncatedDossierCount, historyCount: a.historyCount,
+  }
 }
 
 // —— 候选 span 与四道机械闸 ——

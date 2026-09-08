@@ -64,6 +64,30 @@ export function createDossier(taskId: string): DossierBody {
   return { taskId, messages: [], annotations: {} }
 }
 
+// —— 极短消息判据（P14c） ——
+/** 去噪后短于该长度的消息视为「极短/无实质内容」，不进 task 用户消息上下文。 */
+export const TRIVIAL_MESSAGE_MAX_CHARS = 4
+
+const MESSAGE_NOISE_RE = /[\s\u3000！？。，、；：""''（）《》【】!?.,;:()\[\]{}~\-—_…]/gu
+
+/** 去噪归一（空白/标点剥离 + 小写）：判据与展示共用，避免两处口径漂移。 */
+export function normalizeMessageText(text: string): string {
+  return text.replace(MESSAGE_NOISE_RE, '').toLowerCase()
+}
+
+/**
+ * 极短/无实质内容消息（去噪后长度 < {@link TRIVIAL_MESSAGE_MAX_CHARS}）。
+ * 用途仅限两处：① 不进 task 用户消息上下文（★ 组装与卷宗追加同口径）；
+ * ② ★ 按钮禁用判据。**不参与任务边界判定**——边界是语义判断，交 LLM 主路径。
+ */
+export function isTrivialMessage(text: string): boolean {
+  return normalizeMessageText(text).length < TRIVIAL_MESSAGE_MAX_CHARS
+}
+
+/**
+ * 追加一条 task 内用户消息（append-only 全量；docs/09 §2）。
+ * 极短消息过滤只作用于 ★ 的上下文组装（P14c §4），不改变卷宗追加口径。
+ */
 export function appendDossierMessage(body: DossierBody, message: DossierMessage): DossierBody {
   if (message.text === '') return body
   const last = body.messages.at(-1)
