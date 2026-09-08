@@ -2,7 +2,7 @@
  * 压缩调用账本 fold（docs/07 §0.5 压缩族；docs/04 §6/§7；P18 度量先行）。
  * 纯函数：同输入同账；输入 = `context-economy/compress-run` 事实（生产者 = P19/P20a）。
  * P17 N5 显式留 0 的 `compressionCallCount`/`compressionCacheHitRate` 在此打通——
- * 本单只立口径（零调用零接线），键与 KV 缓存实现归 P19（04 §6）。
+ * P18 只立口径（零调用零接线）；P19 起生产者为边界路径（`domains/compaction.ts`，内容寻址复用键 = `compress/store.ts`）。
  *
  * 模块: core 压缩调用纯核（调用账本）
  * 平面: L0（确定性重放；无模型、无 IO）
@@ -41,6 +41,28 @@ export interface CompressRunFactData {
   readonly outcome?: CompressOutcome
   readonly droppedHotTail?: number
   readonly llmUsage?: CompressLlmUsage
+  // —— P19 边界路径归因（压力路径 P20a 复用同字段） ——
+  /** 会话级 taskId（`sessionScopedTaskId`；一次尝试一条事实，重放可判"已归档"）。 */
+  readonly taskId?: string
+  /** 未落刀/降级原因（skipped 细分：llm-unavailable / parse / schema / shrink / storage / range / no-units）。 */
+  readonly reason?: string
+  /** 被压区间体量（缩水校验分母）。 */
+  readonly shadowedTokens?: number
+  /** 产物（替换文本）体量（缩水校验分子）。 */
+  readonly productTokens?: number
+  /** 缩水校验重试次数（边界档 ≤1）。 */
+  readonly retry?: number
+  /** 续传链条数（机制 A）。 */
+  readonly carried?: number
+  /** 档案区条目数（落盘后）。 */
+  readonly archiveEntries?: number
+  /** 档案区硬帽截断（04 §6）。 */
+  readonly archiveTruncateCount?: number
+  readonly archiveTruncateTokens?: number
+  /** T-boundary 搭车折叠的老调用对数（会计）。 */
+  readonly shearFolded?: number
+  /** 卷宗清空（结构性：新 task 新卷宗；本字段仅审计）。 */
+  readonly dossierRetired?: boolean
 }
 
 export interface CompressCallLedger {
@@ -55,6 +77,14 @@ export interface CompressCallLedger {
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
   parseFailures: number
   schemaFailures: number
+  /** P19 自持观测位（不属 07 字段；同 `assembleRuns` 先例，07 缺压缩族细分字段）。 */
+  skips: number
+  retries: number
+  shrinkRejects: number
+  storageFailures: number
+  archiveAppends: number
+  shearBoundaryFolded: number
+  retiredDossiers: number
 }
 
 export function emptyCompressCallLedger(): CompressCallLedger {
@@ -66,6 +96,13 @@ export function emptyCompressCallLedger(): CompressCallLedger {
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
     parseFailures: 0,
     schemaFailures: 0,
+    skips: 0,
+    retries: 0,
+    shrinkRejects: 0,
+    storageFailures: 0,
+    archiveAppends: 0,
+    shearBoundaryFolded: 0,
+    retiredDossiers: 0,
   }
 }
 
@@ -95,6 +132,13 @@ export function foldCompressCalls(facts: readonly LedgerFact[]): CompressCallLed
     ledger.usage.cacheWriteTokens += numberField(usage.cacheWriteTokens)
     if (data.outcome === 'parse') ledger.parseFailures++
     if (data.outcome === 'schema') ledger.schemaFailures++
+    if (data.outcome === 'skipped') ledger.skips++
+    ledger.retries += numberField(data.retry)
+    if (data.reason === 'shrink') ledger.shrinkRejects++
+    if (data.reason === 'storage') ledger.storageFailures++
+    if (numberField(data.archiveEntries) > 0) ledger.archiveAppends++
+    ledger.shearBoundaryFolded += numberField(data.shearFolded)
+    if (data.dossierRetired === true) ledger.retiredDossiers++
   }
   ledger.compressionCacheHitRate = ledger.invocations === 0 ? 0 : ledger.cacheHits / ledger.invocations
   return ledger

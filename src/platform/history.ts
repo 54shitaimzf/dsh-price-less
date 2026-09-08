@@ -15,7 +15,7 @@
  */
 
 import type { Session, SessionEvent, SessionEventMap, SessionSeq, SurfaceEventType } from '@deepseek-ai/dsh-session'
-import { CompactionId, toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
+import { CompactionId, compactCheckpointSource, toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 
 export type HistoryErrorCode =
@@ -97,8 +97,48 @@ export interface ActiveCompaction {
   startSeq: SessionSeq
 }
 
+/** 压缩调用用量（与平台 llm 端口 CeLlmUsage / 宿主用量类型结构同构；本层不 import 宿主 llm 类型，D6 收口）。 */
+export interface CheckpointUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  reasoningTokens?: number
+}
+
+/** 压缩检查点提交输入（P19a）：官方 summary 计量事件 + checkpoint 替换的原子对。 */
+export interface CommitCheckpointInput {
+  /** 活动事务 ID（必须与已打开事务一致）。 */
+  compactionId: string
+  /** 替换正文（模型可见的档案块；本插件档案格式）。 */
+  text: string
+  /** 摘要原文（官方 `compaction/summary` 载荷；审计与回放面）。 */
+  summary: string
+  /** 被替换的表面区间（会话序，含端点）。 */
+  range: SurfaceRange
+  /** 被压区间启发式体量（影子价；与 token-meter 固定估计器同源）。 */
+  shadowedTokenCount: number
+  provider: string
+  model: string
+  usage?: CheckpointUsage
+  /** 压缩器原始输出（审计面；可选）。 */
+  rawOutput?: string
+}
+
+export interface CommitCheckpointResult {
+  summaryEvent: SessionEvent<'compaction/summary'>
+  landed: HistoryReplaceResult<'user/message'>
+}
+
 export interface HistoryPort {
   replaceSurface<T extends SurfaceEventType>(request: ReplaceSurfaceRequest<T>): HistoryReplaceResult<T>
+  /**
+   * 事务内提交一次带摘要的压缩（docs/04 §1 + docs/10 §1 H4 紧邻契约）：
+   * `compaction/summary` 计量事件 → 官方 checkpoint `user/message` 替换（`sourceEventSeqs` 含事务起点与摘要）。
+   * 必须在 `beginCompaction` 之后调用；区间端点必须是当前表面节点。
+   */
+  commitCheckpoint(input: CommitCheckpointInput): CommitCheckpointResult
   beginCompaction(init: CompactionBegin): SessionEvent<'compaction/start'>
   endCompaction(init: CompactionEnd): SessionEvent<'compaction/end'>
   recordPrune(input: SurfaceRange & { shadowedTokenCount: number }): SessionEvent<'compaction/prune'>
@@ -153,16 +193,17 @@ export function createHistoryPort(
 ): HistoryPort {
   const balanceChecker = options.balanceChecker ?? nativePairBalanceChecker
 
+  const appendSurface = session.append.bind(session) as unknown as <U extends SurfaceEventType>(
+    type: U,
+    data: SessionEventMap[U],
+    opts: { surfaceOp: { op: 'replace'; start: SessionSeq; end: SessionSeq }; sourceEventSeqs?: SessionSeq[] },
+  ) => SessionEvent<U>
+
   const replaceSurface = <T extends SurfaceEventType>(request: ReplaceSurfaceRequest<T>): HistoryReplaceResult<T> => {
     const span = findSpan(session, request.range)
     if (request.type === 'assistant/message' && request.sourceEventSeqs !== undefined) {
       throw new HistoryError('ASSISTANT_SOURCE_SEQS', 'ASSISTANT_SOURCE_SEQS: assistant/message replacement cannot carry sourceEventSeqs')
     }
-    const appendSurface = session.append.bind(session) as unknown as <U extends SurfaceEventType>(
-      type: U,
-      data: SessionEventMap[U],
-      opts: { surfaceOp: { op: 'replace'; start: SessionSeq; end: SessionSeq }; sourceEventSeqs?: SessionSeq[] },
-    ) => SessionEvent<U>
     const sourceEventSeqs = request.type === 'assistant/message'
       ? undefined
       : mergeSourceSeqs(request.sourceEventSeqs, span.shadowedSeqs)
@@ -171,6 +212,39 @@ export function createHistoryPort(
       ...(sourceEventSeqs === undefined ? {} : { sourceEventSeqs }),
     })
     return { event, shadowedSeqs: span.shadowedSeqs }
+  }
+
+  /**
+   * 事务内提交压缩检查点：summary（计量事件，影子价）紧邻替换 user/message
+   * （docs/10 §1 H4 紧邻契约；token-meter 以紧邻计量事件定价）。
+   */
+  const commitCheckpoint = (input: CommitCheckpointInput): CommitCheckpointResult => {
+    const active = activeOrThrow(session)
+    if (String(active.compactionId) !== input.compactionId) {
+      throw new HistoryError('COMPACTION_ID_MISMATCH', `COMPACTION_ID_MISMATCH: cannot commit ${input.compactionId}: active transaction is ${String(active.compactionId)}`)
+    }
+    const span = findSpan(session, input.range)
+    const summaryEvent = session.append('compaction/summary', {
+      compactionId: CompactionId(input.compactionId),
+      summary: [{ type: 'text', text: input.summary }],
+      ...(input.rawOutput === undefined ? {} : { rawOutput: [{ type: 'text', text: input.rawOutput }] }),
+      shadowedRange: { start: input.range.start, end: input.range.end },
+      shadowedSeqs: span.shadowedSeqs,
+      shadowedTokenCount: input.shadowedTokenCount,
+      provider: input.provider,
+      model: input.model,
+      ...(input.usage === undefined ? {} : { usage: input.usage }),
+    })
+    const checkpoint = createUserMessage({
+      content: [{ type: 'text', text: input.text }],
+      source: compactCheckpointSource(CompactionId(input.compactionId)),
+    })
+    const sourceEventSeqs = mergeSourceSeqs([active.startSeq, summaryEvent.seq], span.shadowedSeqs)
+    const event = appendSurface('user/message', checkpoint, {
+      surfaceOp: { op: 'replace', start: input.range.start, end: input.range.end },
+      sourceEventSeqs,
+    })
+    return { summaryEvent, landed: { event, shadowedSeqs: span.shadowedSeqs } }
   }
 
   const assertNoActiveCompaction = (): void => {
@@ -224,6 +298,7 @@ export function createHistoryPort(
 
   return {
     replaceSurface,
+    commitCheckpoint,
     beginCompaction,
     endCompaction,
     recordPrune,

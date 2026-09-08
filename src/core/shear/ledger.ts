@@ -23,8 +23,8 @@ export const SHEAR_ERROR_FACT_TYPE = 'context-economy/shear-error' // ignorable
 /** 星标剪切清单事实（P16；星标 = 用户明确动作 = 吸收证明，清单来自断面行记录）。 */
 export const SHEAR_RUN_PLAN_FACT_TYPE = 'context-economy/shear-run-plan' // ignorable
 
-export type ShearAppliedKind = 'shape-entry' | 'stub-replace' | 'note-cut' | 't0-supersede' | 't0r-repair' | 'run-flush'
-export type ShearAppliedTier = 'T-entry' | 'T-loop' | 'T-note' | 'T0' | 'T0-R' | 'run'
+export type ShearAppliedKind = 'shape-entry' | 'stub-replace' | 'note-cut' | 't0-supersede' | 't0r-repair' | 'run-flush' | 't-boundary'
+export type ShearAppliedTier = 'T-entry' | 'T-loop' | 'T-note' | 'T0' | 'T0-R' | 'run' | 'T-boundary'
 
 /** 每次落刀一条（cut 相；失败不落此事实，落 shear-error）。 */
 export interface ShearAppliedFactData {

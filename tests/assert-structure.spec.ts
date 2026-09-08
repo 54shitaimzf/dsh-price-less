@@ -120,6 +120,12 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D13', 'src/core/compress/ledger.ts', 'const d = new Date()\n')).not.toEqual(NO_ISSUES)
     expect(check('D13', 'src/core/compress/types.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
   })
+  it('D14：agent/pre-step 与 dsh-agent 概念越出 platform/agent-step.ts → issue（docs/10 §1 H2 步准入收口）', () => {
+    expect(check('D14', 'src/domains/a.ts', "ctx.on('agent/pre-step', (p, next) => next())\n")).not.toEqual(NO_ISSUES)
+    expect(check('D14', 'src/core/a.ts', "import type { PreStepDecision } from '@deepseek-ai/dsh-agent'\n")).not.toEqual(NO_ISSUES)
+    expect(rule('D14').check({ path: 'src/platform/agent-step.ts', text: "ctx.on('agent/pre-step', handler)\nimport type { PreStepDecision } from '@deepseek-ai/dsh-agent'" }, new Map())).toEqual(NO_ISSUES)
+    expect(check('D14', 'src/domains/compaction.ts', 'onAgentPreStep(ctx, { handler })\n')).toEqual(NO_ISSUES)
+  })
   it('D9：connection RPC 桥概念越出 platform/star-bridge.ts 与 index.ts → issue（docs/10 §1 H11 + docs/13 §3.11）', () => {
     expect(check('D9', 'src/domains/star.ts', "const connection = ctx.connection\n")).not.toEqual(NO_ISSUES)
     expect(check('D9', 'src/platform/events.ts', "type X = ConnectionRpcResult<unknown>\n")).not.toEqual(NO_ISSUES)
@@ -191,6 +197,10 @@ describe('正样本（干净文件 → 0 issue）', () => {
   it('D13：core/compress 纯核无时钟/随机（确定性）', () => {
     expect(check('D13', 'src/core/compress/prompt.ts', "export function renderBoundaryPrompt(input) { return { prompt: '' } }\n")).toEqual(NO_ISSUES)
   })
+  it('D14：agent/pre-step 概念只许在 platform/agent-step.ts（docs/10 §1 H2）', () => {
+    expect(rule('D14').check({ path: 'src/platform/agent-step.ts', text: "ctx.on('agent/pre-step', h)\nAgentPreStepPayload; PreStepDecision" }, new Map())).toEqual(NO_ISSUES)
+    expect(check('D14', 'src/platform/history.ts', 'export const x = 1\n')).toEqual(NO_ISSUES)
+  })
   it('D9：connection RPC 桥概念只许在 platform/star-bridge.ts 与 index.ts 接线（docs/13 §3.11）', () => {
     const bridgeFile = "connection.rpc.handle('/context-economy', handler)\nimport type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection/src/rpc.ts'"
     expect(rule('D9').check({ path: 'src/platform/star-bridge.ts', text: bridgeFile }, new Map())).toEqual(NO_ISSUES)
@@ -210,7 +220,7 @@ describe('真实树集成', () => {
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
       D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass', D8: 'pass', D9: 'pass', D10: 'pass',
-      D11: 'pass', D12: 'pass', D13: 'pass',
+      D11: 'pass', D12: 'pass', D13: 'pass', D14: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

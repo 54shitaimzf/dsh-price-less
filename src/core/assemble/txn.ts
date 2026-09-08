@@ -33,7 +33,8 @@ export interface TxnPlan {
   readonly version: number
   readonly txnId: string
   readonly layer: TxnLayer
-  readonly turn: null
+  /** 事务属主轮：打开轮内触发必须传当前轮号（harness 不变式）；null = 轮间独立事务。 */
+  readonly turn: number | null
   readonly steps: readonly TxnStep[]
   readonly idempotenceKey: string
 }
@@ -46,6 +47,8 @@ export interface TxnPlanInput {
   readonly range: LineRange
   readonly shadowedTokenCount: number
   readonly replaceKind: 'digest' | 'checkpoint' | 'stub'
+  /** 事务属主轮（缺省 null = 轮间独立事务；H2 pre-step 触发须传当前轮）。 */
+  readonly turn?: number | null
   /** 收尾错误（失败路径仍闭合事务，绝不留下半开标记）。 */
   readonly error?: string
 }
@@ -63,7 +66,7 @@ export function planTxn(input: TxnPlanInput): TxnPlan {
     version: TXN_POLICY_VERSION,
     txnId: input.txnId,
     layer: input.layer,
-    turn: null,
+    turn: input.turn ?? null,
     steps,
     idempotenceKey: `${input.layer}|${input.taskId}|${input.range.start}..${input.range.end}`,
   }

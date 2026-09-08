@@ -89,6 +89,8 @@ link_pkg @deepseek-ai/dsh-session packages/core/session
 # P6：改史端口（H4/H5 共享事务原语；dsh-compaction 提供 compaction/* 类型与配对平衡守卫）
 link_pkg @deepseek-ai/dsh-commands packages/interaction/commands
 link_pkg @deepseek-ai/dsh-compaction packages/compaction/compaction
+# P19a：H2 步准入端口类型面（agent/pre-step waterfall；type-only peerDep）
+link_pkg @deepseek-ai/dsh-agent packages/core/agent
 link_pkg @deepseek-ai/dsh-llm packages/llm/llm
 # P4：技能目录端口（ctx.skills 官方注册表；只 import dsh-skill，不手写文件扫描）
 link_pkg @deepseek-ai/dsh-skill packages/skill/skill

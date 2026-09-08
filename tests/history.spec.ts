@@ -182,6 +182,53 @@ describe('H5 compaction 事务（docs/10 §1 H5；docs/04 §1）', () => {
   })
 })
 
+describe('P19a 压缩检查点提交（docs/04 §1 + docs/10 §1 H4 紧邻契约）', () => {
+  it('summary 紧邻 checkpoint 替换：官方 source + sourceEventSeqs 含事务起点与摘要', () => {
+    const session = makeSession([1, 2, 3])
+    const port = makePort(session)
+    port.beginCompaction({ compactionId: 'c1', turn: 3 })
+    const result = port.commitCheckpoint({
+      compactionId: 'c1',
+      text: '档案块正文',
+      summary: '摘要原文',
+      range: { start: seq(2), end: seq(3) },
+      shadowedTokenCount: 120,
+      provider: 'deepseek-official',
+      model: 'm',
+      usage: { inputTokens: 10, outputTokens: 2 },
+      rawOutput: '原始输出',
+    })
+    expect(result.summaryEvent.type).toBe('compaction/summary')
+    expect(result.summaryEvent.data).toMatchObject({
+      compactionId: 'c1',
+      summary: [{ type: 'text', text: '摘要原文' }],
+      shadowedRange: { start: seq(2), end: seq(3) },
+      shadowedSeqs: [2, 3],
+      shadowedTokenCount: 120,
+      provider: 'deepseek-official',
+      model: 'm',
+      usage: { inputTokens: 10, outputTokens: 2 },
+      rawOutput: [{ type: 'text', text: '原始输出' }],
+    })
+    expect(result.landed.shadowedSeqs.map(Number)).toEqual([2, 3])
+    expect(result.landed.event.type).toBe('user/message')
+    expect((result.landed.event as unknown as { sourceEventSeqs: number[] }).sourceEventSeqs).toEqual([2, 3, 4])
+    expect(result.landed.event.surfaceOp).toEqual({ op: 'replace', start: seq(2), end: seq(3) })
+    const source = (result.landed.event.data as { source: { plugin?: string; compactionId?: string } }).source
+    expect(source.plugin).toBe('compact')
+    expect(source.compactionId).toBe('c1')
+  })
+
+  it('无活动事务 / ID 不符 → 拒绝（不产生半截替换）', () => {
+    const session = makeSession([1, 2])
+    const port = makePort(session)
+    const input = { compactionId: 'c1', text: 't', summary: 's', range: { start: seq(1), end: seq(2) }, shadowedTokenCount: 1, provider: 'p', model: 'm' }
+    expect(catchCode(() => port.commitCheckpoint(input))?.code).toBe('NO_ACTIVE_COMPACTION')
+    port.beginCompaction({ compactionId: 'c-other', turn: null })
+    expect(catchCode(() => port.commitCheckpoint(input))?.code).toBe('COMPACTION_ID_MISMATCH')
+  })
+})
+
 describe('配对平衡守卫（docs/04 §1 / docs/05 守卫表）', () => {
   it('balanceRange 收缩到最近平衡边界；无平衡点返回 null', () => {
     const session = makeSession([1, 2, 3, 4, 5])

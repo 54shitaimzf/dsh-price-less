@@ -6,6 +6,7 @@
  * P17c：`archiveTruncate` fold 路径打通（纯核截断 = `core/assemble/archive.ts`；生产者 = P19 档案区）。
  * P18：`compressionCallCount`/`compressionCacheHitRate` fold 路径打通（事实 = `compress-run`，
  * 纯核 = `core/compress/ledger.ts`；生产者 = P19/P20a）。
+ * P19：边界路径生产者落位（`domains/compaction.ts`），新增自持位（skips/retries/shrink/storage/archive/shearFold）。
  *
  * 模块: core 压缩账本 fold（零 harness/platform import）
  * 平面: L0（确定性重放；无模型、无 IO）
@@ -70,6 +71,14 @@ export interface CompressionLedger {
   compressUsage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
   compressParseFailures: number
   compressSchemaFailures: number
+  /** P19 边界路径自持观测位（07 缺压缩族细分字段；同 assembleRuns 先例）。 */
+  compressSkips: number
+  compressRetries: number
+  compressShrinkRejects: number
+  compressStorageFailures: number
+  compressArchiveAppends: number
+  compressShearBoundaryFolded: number
+  compressRetiredDossiers: number
 }
 
 export function emptyCompressionLedger(): CompressionLedger {
@@ -100,6 +109,13 @@ export function emptyCompressionLedger(): CompressionLedger {
     compressUsage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
     compressParseFailures: 0,
     compressSchemaFailures: 0,
+    compressSkips: 0,
+    compressRetries: 0,
+    compressShrinkRejects: 0,
+    compressStorageFailures: 0,
+    compressArchiveAppends: 0,
+    compressShearBoundaryFolded: 0,
+    compressRetiredDossiers: 0,
   }
 }
 
@@ -140,5 +156,12 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
   ledger.compressUsage = calls.usage
   ledger.compressParseFailures = calls.parseFailures
   ledger.compressSchemaFailures = calls.schemaFailures
+  ledger.compressSkips = calls.skips
+  ledger.compressRetries = calls.retries
+  ledger.compressShrinkRejects = calls.shrinkRejects
+  ledger.compressStorageFailures = calls.storageFailures
+  ledger.compressArchiveAppends = calls.archiveAppends
+  ledger.compressShearBoundaryFolded = calls.shearBoundaryFolded
+  ledger.compressRetiredDossiers = calls.retiredDossiers
   return ledger
 }

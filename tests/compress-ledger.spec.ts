@@ -67,6 +67,33 @@ describe('P18 账本：调用口径', () => {
     expect(emptyCompressionLedger().compressInvocations).toBe(0)
   })
 
+  it('P19 自持位：skips/retries/shrink/storage/archive/shearFold/dossier', () => {
+    const ledger = foldCompressCalls([
+      fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'skipped', reason: 'llm-unavailable' }),
+      fact({ at: 2, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'skipped', reason: 'shrink', retry: 1, calls: 2 }, 2),
+      fact({ at: 3, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'skipped', reason: 'storage', calls: 1 }, 3),
+      fact({ at: 4, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok', archiveEntries: 2, shearFolded: 3, dossierRetired: true }, 4),
+    ])
+    expect(ledger.skips).toBe(3)
+    expect(ledger.retries).toBe(1)
+    expect(ledger.shrinkRejects).toBe(1)
+    expect(ledger.storageFailures).toBe(1)
+    expect(ledger.archiveAppends).toBe(1)
+    expect(ledger.shearBoundaryFolded).toBe(3)
+    expect(ledger.retiredDossiers).toBe(1)
+    expect(ledger.compressionCallCount).toBe(4)
+  })
+
+  it('合并进压缩族 fold 时 P19 自持位同步透出', () => {
+    const ledger = foldCompressionLedger([
+      fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'skipped', reason: 'shrink', calls: 1, retry: 1, shearFolded: 2 }),
+    ])
+    expect(ledger.compressSkips).toBe(1)
+    expect(ledger.compressRetries).toBe(1)
+    expect(ledger.compressShrinkRejects).toBe(1)
+    expect(ledger.compressShearBoundaryFolded).toBe(2)
+  })
+
   it('同输入同账（双跑逐字节一致）', () => {
     const facts = [fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok' })]
     expect(JSON.stringify(foldCompressCalls(facts))).toBe(JSON.stringify(foldCompressCalls(facts)))

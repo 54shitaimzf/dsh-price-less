@@ -1,0 +1,77 @@
+/**
+ * P19a H2 步准入端口单测（docs/implement/P19-boundary-path.md §5；docs/10 §1 H2）。
+ * 覆盖：回调载荷 / 恒 return next() / 异常遏制 / signal 中止跳过 / 退订。
+ */
+import { describe, expect, it } from 'vitest'
+import { onAgentPreStep, type AgentPreStepPayload } from '../src/platform/agent-step.ts'
+
+type Listener = (payload: unknown, next: () => Promise<string>) => Promise<string>
+
+function makeCtx() {
+  let listener: Listener | undefined
+  let offCalled = 0
+  const ctx = {
+    on(_name: string, fn: Listener) {
+      listener = fn
+      return () => { offCalled++; listener = undefined }
+    },
+  }
+  const fire = (payload: unknown, next: () => Promise<string> = async () => 'next'): Promise<string> => {
+    if (listener === undefined) throw new Error('listener not registered')
+    return listener(payload, next)
+  }
+  return { ctx, fire, offCalled: () => offCalled }
+}
+
+const payload = (over: Partial<{ session: unknown; turn: number; step: number; aborted: boolean }> = {}) => ({
+  agent: { session: over.session ?? { id: 's1' } },
+  messages: [],
+  turn: over.turn ?? 7,
+  step: over.step ?? 2,
+  signal: { aborted: over.aborted ?? false },
+})
+
+describe('P19a H2 步准入端口', () => {
+  it('回调收到 session/turn/step；waterfall 恒 return next()', async () => {
+    const { ctx, fire } = makeCtx()
+    const seen: AgentPreStepPayload[] = []
+    onAgentPreStep(ctx as never, { handler: (p) => { seen.push(p) } })
+    const decision = await fire(payload())
+    expect(decision).toBe('next')
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toMatchObject({ turn: 7, step: 2 })
+    expect(seen[0]!.session).toMatchObject({ id: 's1' })
+  })
+
+  it('回调异常只 warn 不外溢，仍放行下一步', async () => {
+    const { ctx, fire } = makeCtx()
+    const warnings: unknown[][] = []
+    onAgentPreStep(ctx as never, {
+      handler: () => { throw new Error('boom') },
+      logger: { info() {}, warn: (...args: unknown[]) => { warnings.push(args) }, error() {} },
+    })
+    await expect(fire(payload())).resolves.toBe('next')
+    expect(warnings).toHaveLength(1)
+    expect(String(warnings[0]![0])).toContain('fail-lazy')
+  })
+
+  it('异步回调被等待；signal 中止时跳过回调', async () => {
+    const { ctx, fire } = makeCtx()
+    let finished = false
+    onAgentPreStep(ctx as never, { handler: async () => { await Promise.resolve(); finished = true } })
+    await fire(payload())
+    expect(finished).toBe(true)
+    const { ctx: ctx2, fire: fire2 } = makeCtx()
+    let called = 0
+    onAgentPreStep(ctx2 as never, { handler: () => { called++ } })
+    await fire2(payload({ aborted: true }))
+    expect(called).toBe(0)
+  })
+
+  it('退订后监听器注销', () => {
+    const { ctx, offCalled } = makeCtx()
+    const off = onAgentPreStep(ctx as never, { handler: () => {} })
+    off()
+    expect(offCalled()).toBe(1)
+  })
+})
