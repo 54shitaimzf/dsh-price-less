@@ -9,6 +9,11 @@
  * 回退链步数: 2（密度非法 → 回默认密度；空文本 → 0）
  * 审查清单: 不 import harness/platform（S1）；无时钟随机（D13）；不读盘、不写事实、不改史。
  * 度量: 体积类字段同源（07 §5）；标定对账 = 估算值 vs 真实 usage（compress-run / judge-recorded）。
+ *
+ * 使用面（F9f 明账）：`estimateTokens` / `tokensToChars` 是**唯一 live 口径**（体积账、预算分配、
+ * 截断反解）。`estimateBlockTokens`/`estimateContentTokens`/`estimateMessagesTokens`/`calibrationRatio`
+ * 是 DSH 同形结构价与标定面（测试 + 对账）；`flatDensity` 是测试/迁移辅助。压力触发/保险丝仍用
+ * DSH meter 服务（4 字符/token，对中文低估 ~2.7×）——两套单位并存，统一归 F8c（待样本）。
  */
 
 /** 字符密度（chars per token）：同一段文本按 CJK / 其余两桶分别折算。 */

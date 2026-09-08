@@ -47,6 +47,7 @@ import {
   renderCheckpoint,
   renderFoldMaterialTranscript,
   renderPressurePrompt,
+  foldMaterialTokens,
   renderRegionTranscript,
   type ArchiveStoreBody,
   type BoundaryProduct,
@@ -715,13 +716,12 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const cutSeq = cutUnit.seqStart
       // 缝必须落在替换区间内：否则保留区会把区间外的原文重复带进产物（或区间内原文被截断丢失）。
       if (cutSeq < replaceStart || cutSeq > replaceEnd) { fire('skip', { reason: 'cutpoint', chainDepth: depth }); return undefined }
-      const foldText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: cutSeq - 1 })
       const retainedText = renderRegionTranscript(events, { startSeq: cutSeq, endSeq: replaceEnd }, visibleSeqs)
       const checkpointText = renderCheckpoint(product.checkpoint)
       const rendered = composePressureArchive({ priorChain, checkpointText, retainedText })
       return {
         product, checkpointText, rendered, cutSeq,
-        foldedTokens: estimateTokens(foldText, compressPolicy.density),
+        foldedTokens: foldMaterialTokens(events, { startSeq: foldStartSeq, endSeq: cutSeq - 1 }, compressPolicy),
         retainedTokens: estimateTokens(retainedText, compressPolicy.density),
         productTokens: estimateTokens(`${checkpointText}\n\n${retainedText}`, compressPolicy.density),
         calls, cacheHit, provider, model,

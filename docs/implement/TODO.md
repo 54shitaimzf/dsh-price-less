@@ -40,6 +40,12 @@
 | **F8a** | **token 估算重构**：新 core/meter/estimate.ts（DSH 结构对齐 + 两桶密度 CJK 1.5 / 其余 2.9 字符/token）；策略面 charsPerToken → density 全量随迁 | ✅ | src/core/meter/、src/core/{assemble,compress,ledger}/、src/domains/compaction.ts |
 | **F8b** | **标定对账**：CompressCallLedger.calibration（估算 promptTokens vs 真实 input+cacheRead）+ warnTokenDrift（±25% 告警，只观察） | ✅ | src/core/compress/ledger.ts、src/domains/compaction.ts |
 | **F8c** | **口径统一**：压力触发/保险丝用 DSH meter（中文低估 ~2.7×）、体积账用两桶——两套单位并存；统一前必须重标定 thresholdTokens/domainTokens/retainTokens/archiveCapTokens | ⬜ | 待真机 calibration.ratio 样本 |
+| **F9a** | **区间权威化 + 配对平衡守卫**：压力路径补 `balanceRange`；范围端点取 `HistoryPort.surfaceNodes()`（权威表面，事件窗自折会复活已遮蔽节点）；`INVALID_RANGE` 回归 | ✅ | `platform/history.ts`、`domains/compaction.ts`、`core/compress/region.ts`；快照 §62 |
+| **F9b** | **产物 schema v2**：总述（零事实）+ 分步（带 ▸n 引用）+ 热尾 1:1 指针；宽松修复（唯一硬失败 = 非 JSON）+ `fact-leak` 扫描 + parse/schema 有界重试 | ✅ | `core/assemble/{types,assemble,gate,ledger}.ts`、`core/compress/{types,prompt,product,fact-leak}.ts`；快照 §63 |
+| **F9c** | **热尾事实载体**：user/assistant 消息单元 + tool-call 块转写 + Zipf `1/i` 分配 + 份额帽 + 仅指针降级 + `fact` 子串校验 + dup 去重 | ✅ | `core/assemble/assemble.ts`、`core/compress/region.ts`、`domains/{assemble,compaction}.ts`；快照 §64 |
+| **F9d** | **双预算 10K/10K + 存储 v2**：`archiveCapTokens` 15K→10K；`ARCHIVE_STORE_VERSION` 2 + v1 条目兼容迁移；`archiveChainMonotone` 运行时守卫；`overCap` 入账 | ✅ | `config.ts`、`client/field-model.ts`、`core/compress/store.ts`、`core/assemble/archive.ts`、`core/restore/plan.ts`；快照 §65 |
+| **F9e** | **路径压缩**：`root`（session.header.cwd）+ 相对化 + 同路径 ≥2 次短 ID 表；单元清单同源相对化；`policyKey` 含 root | ✅ | `core/assemble/paths.ts`（新）、`core/assemble/assemble.ts`、`core/compress/prompt.ts`、`domains/compaction.ts`；快照 §66 |
+| **F9g** | **回放验收**：`scripts/verify-f9.mjs` 对照表（摘要/热尾/总量/路径字节/事实泄漏/引用完整率）+ 真机重启冒烟 | ⬜ | 待 F9 全链 |
 
 **F5a 说明**：只改渲染面（块序 + 标签），产物 schema 与校验序（`DIGEST_BLOCK_ORDER`）不变；若要真正的「总述块」需第 5 种块型，属 schema 变更，另行拍板。
 
@@ -69,3 +75,5 @@
 - **2026-09-09** 更新：真机复盘新增修复单 F1–F5（F1/F2/F4/F5a 已落地，F3/F5b 待立项）；
   §1 阻塞原因从「通道未验证」改为「H6 端口空转（F1 已修，待重新 build + 重启）」。
 - **2026-09-09** 更新：新增 F8a/F8b（token 估算重构 + 标定对账，已落地，账本 §61）；F8c 口径统一待真机样本。
+- **2026-09-09** 更新：新增 **F9 压缩产物重构**（F9a–F9e 已落地：区间权威/schema v2/热尾事实载体/双预算 10K+存储 v2/路径压缩；
+  F9g 回放验收待跑；F5b 由 F9e 落地，F3 仍待立项；账本 §62–§66）。

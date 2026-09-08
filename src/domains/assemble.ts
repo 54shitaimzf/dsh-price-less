@@ -193,15 +193,20 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
     const resolve: Record<string, string> = {}
     const currentLineCounts: Record<string, number | null> = {}
     const files = deps.getFiles?.()
+    let fetchCapped = 0
     if (files === undefined) {
       if (gated.accepted.some((decl) => decl.coord !== undefined)) counts.degraded++
     } else {
       const windows = new Map<string, Awaited<ReturnType<FilesPort['readLines']>>>()
       let fetches = 0
-      for (const decl of gated.accepted) {
+      for (const [index, decl] of gated.accepted.entries()) {
         const coord = decl.coord
         if (coord === undefined) continue
-        if (fetches >= policy.maxFetchUnits) break
+        if (fetches >= policy.maxFetchUnits) {
+          // F9f：申报洪泛时静默截断改明账（不再无计数）。
+          fetchCapped = gated.accepted.slice(index).filter((item) => item.coord !== undefined).length
+          break
+        }
         if (!windows.has(coord.path)) {
           windows.set(coord.path, await files.readLines(coord.path))
           fetches++
@@ -253,6 +258,8 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       hotTailPointers: result.hotTail.entries.length,
       pathBytesSaved: result.pathBytesSaved,
       pathTableEntries: result.pathTableEntries,
+      fetchCapped,
+      archiveForm: result.archiveForm.form,
       ...(result.rootKind === undefined ? {} : { rootKind: result.rootKind }),
       hotTailTokens: result.hotTail.tokens,
       hotTailDeclaredUnits: result.hotTail.declaredUnits,

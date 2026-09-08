@@ -19,7 +19,7 @@
 | 判别 | `segmentsPerSession` · `taskSwitchRate` · `judgeCount` · `judgeErrorRate` · `judgeCacheHitRate` · `judgeLatencyMs` · `judgeLLMUsage` · `judgeCtxTokens`（卷宗体积）· `judgeVerdictDist{action|pureQ|verifyQ}` · `l0CaptureRate` · `tableHitRate`（对表命中）· `judgeEffort{requested,sent}`（推理档，缺省=跟随） |
 | 断面（星标） | `optimizePromptTokens{in,out}`（含 reasoning，usage 分列）· `verdictBackfill{count,conflicts}` · `shearAtStar{pairs,tokens}` · `metaStrippedLines`（元注释剥离）· `optimizeEffort{requested,sent}` · `previewCacheHits`（结果复用命中，零调用）· `explorationAvoided`（星标后探索类调用配对 Δ）· `rerunAfterCut` |
 | 剪切 | `cutEvents{kind}` · `cutTokensSaved` · `cutBreakCost` · `cutMisfireDetected` · `questionBacklogDepth` · `toolPruneByClass` · `shearNoteAttached` · `shearDecision{cut|hold|keep}` · `thinkingCutTokens` · `tableRepair{Count,Tokens}` · `repairCoverage` · `rereadAfterRepair` · **协商剪除（N3）**：`negotiation.notes{byBasis,controlNotes}` · `negotiation.replies{ok|hold|noReply}` · `negotiation.{okRate,holdRate,noReplyRate,completeRate,verifyOkRate}` · `negotiation.medianDepth{byBasis}` |
-| 压缩 | `digestBytes` · `digestEntryCount` · `archiveTruncate{count,tokens}` · `compressionCallCount` · `compressionCacheHitRate` · `extraSearchCalls` · `hotTailTokens` · `hotTailDeclaredUnits` · `hotTailStopReason{budget|list-end}` · `hotTailSource{model|positional-fallback}` · `hotTailFloorFilled` · `pressureFireCount` · `pressureTriggerWireTokens` · `pressureChainDepth` · `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` · `hardTruncateCount` |
+| 压缩 | `digestBytes` · `digestEntryCount` · `digestTokens` · `gistBytes` · `stepCount` · `stepTokens` · `refCount` · `refDrops` · `factLeaks` · `pointerOnlyCount` · `factRejects` · `dupDrops` · `hotTailPointers` · `fetchCapped` · `pathBytesSaved` · `pathTableEntries` · `archiveOverCap` · `archiveTruncate{count,tokens}` · `compressionCallCount` · `compressionCacheHitRate` · `extraSearchCalls` · `hotTailTokens` · `hotTailDeclaredUnits` · `hotTailStopReason{budget|list-end}` · `hotTailSource{model|positional-fallback}` · `hotTailFloorFilled` · `pressureFireCount` · `pressureTriggerWireTokens` · `pressureChainDepth` · `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` · `hardTruncateCount` |
 | 缓存/守卫 | `cacheReadTokens`（标准 usage 路径 + 别名兜底）· `cacheHitInputTokens{cold|hot}` · `prefixRebuildCount` · `prefixRebuildTokens` · `prefixRebuildCause{shear|compaction|note|skill|frame}` · `violationRate` · `restoreDegraded` |
 
 全部字段可从会话 JSONL 回放计算（`sourceEventSeqs` 溯源 + `compaction/prune` 影子价），
@@ -35,6 +35,13 @@
 - `cutMisfireDetected` / `rerunAfterCut` / `rereadAfterRepair`：三族误伤信号（重问被剪内容 /
   剪后重跑 / 修复后重读）——阈值修正依据，误判不静默。
 - `hotTailSource`：热尾来自模型申报还是位置兜底——材料基准有效性的读数。
+- **F9 摘要面**：`gistBytes/stepCount/stepTokens` = 总述与分步规模；`refCount/refDrops` = 引用
+  可解析率；`factLeaks` = 摘要中的事实泄漏命中数（应为 0；>0 = 提示词/产物需要收敛）；
+  `pointerOnlyCount` = 仅指针降级条数（配额不足）；`factRejects` = `fact` 非原文子串被丢弃数
+  （自造事实信号）；`dupDrops` = 重复 unitId 去重数；`hotTailPointers` = 指针条数。
+- **F9 档案/路径面**：`archiveOverCap` = 最新单条自身超帽次数；`pathBytesSaved` = 相对化+短 ID
+  省下的路径字节；`pathTableEntries` = 短 ID 表条目数；`fetchCapped` = 申报洪泛被 maxFetchUnits
+  截断的坐标数。
 - `pressureChainDepth` / `pressureBreakerTrips`：压力链长与断路器——背stop 健康度。
 - `prefixRebuildCause`：前缀断裂的归因枚举——缓存纪律的账面。
 

@@ -41,7 +41,11 @@ export function archiveChainShape(entries: unknown): ArchiveShapeCheck {
   return { shape: 'prefix' }
 }
 
-/** append-only（stub 不可重压律）：next 以 prev 为前缀，逐条 task/kind/text 字节恒等。 */
+/**
+ * append-only（stub 不可重压律）：next 以 prev 为前缀，逐条 task/kind/text 字节恒等。
+ * **测试/校验面**（verify-p17/p21b 与缓存不变量用例）；运行时守卫 = `archiveChainMonotone`
+ * （F9d 起在 `writeStore` 生效，允许最老整条截断，本函数不允许截断故不能直接用）。
+ */
 export function archiveChainAppendOnly(prev: readonly ArchiveEntry[], next: readonly ArchiveEntry[]): boolean {
   if (next.length < prev.length) return false
   for (let i = 0; i < prev.length; i++) {

@@ -43,6 +43,8 @@ export interface AssembleRunFactData {
   readonly factRejects?: number
   readonly dupDrops?: number
   readonly hotTailPointers?: number
+  /** F9f：申报洪泛被 maxFetchUnits 截断的坐标数（明账，原为静默 break）。 */
+  readonly fetchCapped?: number
   /** F9d/F9e（档案硬帽与路径压缩面；生产者逐步接入）。 */
   readonly archiveOverCap?: boolean
   readonly pathBytesSaved?: number
@@ -59,6 +61,8 @@ export interface AssembleRunFactData {
   readonly dropReasons?: Partial<HotTailDropCounts>
   readonly clipped: number
   readonly truncated: number
+  /** 档案形态（F9f：single = 无续传链 / chain = [C…] 续传 + 追加；审计面）。 */
+  readonly archiveForm?: 'single' | 'chain'
   /** 档案区硬帽截断（P17c；生产者 = P19 档案区，缺省 0）。 */
   readonly archiveTruncateCount?: number
   readonly archiveTruncateTokens?: number
@@ -79,6 +83,7 @@ export interface CompressionLedger {
   factRejects: number
   dupDrops: number
   hotTailPointers: number
+  fetchCapped: number
   archiveOverCap: number
   pathBytesSaved: number
   pathTableEntries: number
@@ -141,6 +146,7 @@ export function emptyCompressionLedger(): CompressionLedger {
     factRejects: 0,
     dupDrops: 0,
     hotTailPointers: 0,
+    fetchCapped: 0,
     archiveOverCap: 0,
     pathBytesSaved: 0,
     pathTableEntries: 0,
@@ -208,6 +214,7 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     ledger.factRejects += numberField(data.factRejects)
     ledger.dupDrops += numberField(data.dupDrops)
     ledger.hotTailPointers += numberField(data.hotTailPointers)
+    ledger.fetchCapped += numberField(data.fetchCapped)
     if (data.archiveOverCap === true) ledger.archiveOverCap++
     ledger.pathBytesSaved += numberField(data.pathBytesSaved)
     ledger.pathTableEntries += numberField(data.pathTableEntries)

@@ -2710,4 +2710,25 @@ compress-product（宽松修复表）、compress-prompt（新 schema 段）；�
 
 **未落地**：F9f 死码与死守卫清理 + 文档同步、F9g 回放验收（scripts/verify-f9.mjs + 账本对照）。
 
+---
+
+## §67 F9f 死码/死守卫清理 + 文档同步（2026-09-09；提交 = 本账本同提交）
+
+**清理（"看起来像守卫"的死码）**：
+- `renderArchive`（F9b 已删）、`foldMaterialTokens` **接回真实调用点**（压力折叠区体量，原为域内
+  inline 重算 + 函数零引用）；`archiveChainAppendOnly` 标注**测试/校验面**（运行时守卫 =
+  `archiveChainMonotone`，F9d）；`archiveForm` 入 `assemble-run` 事实（原算而不入账）；
+  `maxFetchUnits` 静默截断 → `fetchCapped` 明账；`core/meter/estimate.ts` 使用面注释
+  （live = `estimateTokens/tokensToChars`；块/消息价与 `calibrationRatio` = 测试/标定面；
+  `flatDensity` = 测试辅助）。
+
+**文档同步**：`docs/04` §2（F9 契约 v2：总述/分步/热尾 1:1 + 预算三环重写 + fatal 口径收窄）、
+§6（档案 10K 双预算 + 单调追加守卫 + 路径压缩）；`docs/07` §0.5/§1（压缩族 17 个新字段）；
+`docs/09` §2（存储 v2 + v1 兼容 + 单调守卫）；`docs/11`（assemble/compress 模块行：paths.ts /
+fact-leak.ts）；`AGENTS.md`（双预算 + 产物形状 + F9 进度）；`docs/implement/TODO.md`（F9a–F9g 条目）。
+
+**验收**：`npm run gate` = **646 tests / 58 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿。
+
+**未落地**：F9g 回放验收（`scripts/verify-f9.mjs` + 真机重启冒烟 + 账本对照）。
+
 
