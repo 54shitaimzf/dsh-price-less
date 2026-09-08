@@ -2208,3 +2208,42 @@ spec **422**、`verify-p21a.mjs` **424**。
 
 **R4 进行中**：P17（+P17c）/ P18 / P19（a+b）/ P20（a+b）/ P20c / P21a 完成；
 **下一未执行单元 = P21b 全链验收 + 可视化**（四触发次序验收 + 四道缓存断言进 CI；依赖 P21a）。
+
+## §50 P21b 全链验收 + 可视化决策（2026-09-09；commit `2827846`）——**R4 关门**
+
+**工单**：`docs/implement/P21b-full-chain.md`（R4 关门单；依赖 P21a）。
+**正典**：`docs/10 §6` 四道缓存断言 + `docs/04 §3/§8` 四触发次序 + `docs/11 §8` R4 出门门槛。
+
+**交付**：
+- `tests/full-chain-order.spec.ts`（12 用例）：四触发次序闭合表（边→边 / 边→压 / 压→边 / 压→压，
+  `planTailConsumption` 六断言）+ 域侧交错 e2e（边→边 / 压→边 真 `mountCompactionDomain`）+ 层隔离
+  （关 boundary / 关 pressure / 双关）+ 积压多闭合段回归。
+- `tests/cache-invariants.spec.ts`（8 用例）：10 §6 断言 1–4（前缀性质 / 同版本逐字节 /
+  同 purpose 模板前缀 / 档案只追加 + 硬帽整条截断）。
+- `scripts/verify-p21b.mjs`（22 checks）：四次序 + 四断言实跑 + CI 用例实跑 + **R4 出门门槛汇总**
+  （子进程复跑 P15a–P21a 全部 verify 脚本）。
+
+**验收发现并修正 2 处（全链验收的价值）**：
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | `runBoundary` 起点 = `surface.find(seq >= segment.startSeq)`：压缩产物节点（checkpoint）seq 高但排在表面表头，「多闭合段积压」场景（恢复后 / 曾关 `compression.boundary`）被当起点 → 区间反空 → **每步 rangeSkip 卡死，后续闭合段永不归档** | 起点同时满足 `seq < nextStartSeq`；回归用例入 CI（`rangeSkips = 0`） |
+| 2 | `verify-p15a` core/shear 接线白名单陈旧（`domains/compaction.ts` 自 P19 起合法消费 shear 事实做 T-boundary 会计）→ 该脚本单跑必红，历史回归未覆盖到 | 白名单收编 `domains/compaction.ts`（带依据注释）；P21b R4 门槛汇总强制复跑全部 verify |
+
+**计划修正（工单 §8 七项）**：① 四次序落共享模块 + 域侧两混合次序；② 断言 3 以「同 purpose 共享模板前缀」
+落 CI（**R4 出门决策项**：是否改真前缀布局，未改正典）；③ 可视化**不做**（超预算 + 无浏览器验收面，进路线图）；
+④ 层隔离用例补齐；⑤⑥⑦ = 上表两处发现 + 尺寸申报。
+
+**验收**：
+- `npm run gate` 绿（**552 用例 / 53 文件**；M1–M5 / S1–S5 / D1–D17 全 PASS，ok=true vacuous=[]）；
+  `typecheck:tests` 绿；build 绿
+- `node scripts/verify-p21b.mjs` → `P21b VERIFY PASS (22 checks)`（含 R4 门槛：P15a 10 / P15b 19 / P16 30 /
+  P17 54 / P18 45 / P19 27 / P20 35 / P21a 32 全 PASS）
+- 扩 spec：full-chain-order 12 / cache-invariants 8
+
+**尺寸申报**：**src 净增 2**（唯一机制改动 = 缺陷 1 修正）；tests **428**、`verify-p21b.mjs` **168**、
+`verify-p15a.mjs` +2、工单 94。
+
+**R4 关门声明**：压缩域 P17–P21b 全部施工；四触发次序与四道缓存断言进 CI；R1–R4 机制面完成。
+**下一未执行单元 = 路线图条目**（R5+，[docs/00 §11](../00-overview.md)）：候选 = 度量消息列表可视化
+（client ConversationNodeDefinition + keyed 渲染器）与压缩/判别 prompt 真前缀布局（缓存断言 3 的强形式）。

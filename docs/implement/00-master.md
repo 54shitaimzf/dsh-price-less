@@ -90,7 +90,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P20b | 保险丝（**已施工** commit `8952cfc`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 下半：`core/compress/fuse.ts`（地板 0.8×窗口 + 武装谓词 + `hard-truncate` fold）+ `platform/agent-step.ts` `onAgentRequestError`（H3 收口，D14 扩面）+ `platform/llm.ts` `resolveContextWindow`/溢出码 + 紧急压力折叠（地板以上 / `CONTEXT_WINDOW_EXCEEDED` → retry）+ `cordis.patch.yml` compaction-basic `auto:false` | P19 | S（实测超线，见工单 §6） |
 | P20c | 压力阀门按窗口比例（**已施工** commit `d57eb7b`；工单 [P20c-pressure-valve-ratio.md](P20c-pressure-valve-ratio.md)；快照 §48） | R4 修正 | 用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针改取主会话路由（`readSessionModel`，修正 P20b 保险丝口径）；保险丝紧急折叠可越过断路器（硬上限 +3）；client 同步 | P20a,P20b | S（实测在预算内，见工单 §6） |
 | P21a | 恢复编排（**已施工** commit `0386f14`；工单 [P21a-restore.md](P21a-restore.md)；快照 §49） | R4 | `core/restore/`（步序/审计/重放/账本）+ `platform/agent-step.ts` H9 端口 + `domains/restore.ts` 恢复序 + `domains/restore-facts.ts`（[09 §4](../09-state.md)：KV 损毁→日志回放重建；`restore-step`/`restore-degraded`/`restore-done` 事实） | P20a,P20b,P3 | M（实测超线，见工单 §6.5） |
-| P21b | 全链验收 + 可视化 | R4 | 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P21a | M |
+| P21b | 全链验收 + 可视化（**已施工** commit `2827846`；工单 [P21b-full-chain.md](P21b-full-chain.md)；快照 §50） | R4 | 四触发次序闭合表 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI（`tests/full-chain-order.spec.ts` + `tests/cache-invariants.spec.ts`）；层隔离用例；**验收发现并修正 2 处问题**（边界起点定位缺陷 / 陈旧 P15a 白名单）；度量消息列表可视化 = 加分项**不做**（落位计划见工单 §4-4） | P21a | M |
 
 依赖主干（其余见各行"依赖"列）：
 
@@ -239,3 +239,17 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > **诚实声明**：真机只读回放 44 会话 / 可重放 41 / 含卷宗 41 / 重建消息 190、双跑漂移 0；
 > live `restore-*` 事实 = **0**（需重启加载新构建；恢复只在 `session-start` 触发）。
 > **下一未执行单元 = P21b 全链验收 + 可视化**（四触发次序 + 四道缓存断言进 CI；依赖 P21a）。
+
+> P21b 施工记录（R4 关门单，2026-09-09）：全链验收已施工（commit `2827846`；工单 [P21b-full-chain.md](P21b-full-chain.md)；
+> 快照 §50；`node scripts/verify-p21b.mjs` PASS **22 checks**，gate **552 用例 / 53 文件**，结构断言 D1–**D17**）。
+> 交付 = `tests/full-chain-order.spec.ts`（四触发次序闭合表〔边→边/边→压/压→边/压→压〕+ 域侧交错 e2e + 层隔离）+
+> `tests/cache-invariants.spec.ts`（10 §6 四道缓存断言：前缀性质 / 同版本逐字节 / 同 purpose 模板前缀 / 档案只追加）+
+> `scripts/verify-p21b.mjs`（R4 出门门槛汇总：P15a–P21a 全部 verify 子进程复跑）。
+> **验收发现并修正 2 处**：① `runBoundary` 起点定位缺陷——压缩产物节点（checkpoint，seq 高但排在表面表头）在
+> 「多闭合段积压」场景被当起点 → 区间反空 → 每步 rangeSkip 卡死（修正 = 起点同时 `seq < nextStartSeq`；回归用例入 CI）；
+> ② `verify-p15a` 接线白名单陈旧（`domains/compaction.ts` 自 P19 起合法消费 shear 事实）→ 白名单收编。
+> 计划修正（工单 §8 七项）：四次序落共享模块 + 域侧两混合次序 · 断言 3 以「同 purpose 模板前缀」落 CI
+> （真前缀布局 = R4 出门决策项，未改正典）· 可视化不做（超预算 + 无浏览器验收面，进路线图）· 层隔离用例补齐。
+> 尺寸：**src 净增 2**（唯一机制改动 = 缺陷修正）；tests **428**、`verify-p21b.mjs` **168**、工单 94。
+> **R4 关门**：压缩域（P17–P21b）全部施工；四触发次序 + 四道缓存断言进 CI；R1–R4 机制面完成。
+> **下一未执行单元 = 路线图条目**（R5+；[docs/00 §11](../00-overview.md)；可视化与真前缀布局为候选）。
