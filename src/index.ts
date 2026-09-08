@@ -19,7 +19,8 @@ import { mountAutoDiscriminator } from './domains/input.ts'
 import { mountShearDomain } from './domains/shear.ts'
 import { mountAssembleDomain } from './domains/assemble.ts'
 import { mountCompactionDomain } from './domains/compaction.ts'
-import { onAgentPreStep, onAgentRequestError } from './platform/agent-step.ts'
+import { onAgentPreStep, onAgentRequestError, onAgentSessionStart, type AgentSessionStartPayload } from './platform/agent-step.ts'
+import { mountRestoreDomain } from './domains/restore.ts'
 import { createMeterPort, type MeterPort } from './platform/meter.ts'
 import { createFilesPort, type FilesPort } from './platform/files.ts'
 import { mountCommandFace } from './domains/commands.ts'
@@ -105,6 +106,21 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   let stopAuto: (() => void) | undefined
   let stopPreStep: (() => void) | undefined
   let stopRequestError: (() => void) | undefined
+  let stopSessionStart: (() => void) | undefined
+  let restore: ReturnType<typeof mountRestoreDomain> | undefined
+  // P21a：H9 在 apply() 同步注册（storage 异步打开期到达的 session-start 先进缓冲，装配后回放）。
+  let restoreHandler: ((payload: AgentSessionStartPayload) => Promise<void>) | undefined
+  const pendingStarts: AgentSessionStartPayload[] = []
+  stopSessionStart = onAgentSessionStart(ctx, {
+    logger: ceLogger(ctx),
+    handler: (payload) => {
+      if (restoreHandler === undefined) {
+        pendingStarts.push(payload)
+        return
+      }
+      return restoreHandler(payload)
+    },
+  })
   let compaction: ReturnType<typeof mountCompactionDomain> | undefined
   let skillsCtx: Context | undefined
   let llmCtx: Context | undefined
@@ -124,6 +140,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
         stopAuto?.()
         stopPreStep?.()
         stopRequestError?.()
+        stopSessionStart?.()
+        restore?.dispose()
         compaction?.dispose()
         stopCommands?.()
         starHost?.dispose()
@@ -139,6 +157,18 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           }
           storage = opened
           registerFactMirror((type, data) => opened.writeFactMirror(type, data))
+          // P21a：恢复编排（H9 恢复序；依赖 P3 四实体表 + P20 档案/检查点形态）。
+          restore = mountRestoreDomain({
+            storage: opened,
+            logger: ceLogger(ctx),
+            workspace: process.cwd().replaceAll('\\', '/'),
+          })
+          restoreHandler = (payload) => restore!.onSessionStart(payload).then(() => undefined)
+          for (const pending of pendingStarts.splice(0)) {
+            void restoreHandler(pending).catch((e: unknown) => {
+              ceLogger(ctx).warn('context-economy: pending restore failed (contained, fail-lazy)', e instanceof Error ? e.message : String(e))
+            })
+          }
           ctx.inject(['skills'], (skillsCtx2) => {
             if (disposed) return
             skillsCtx = skillsCtx2 as Context

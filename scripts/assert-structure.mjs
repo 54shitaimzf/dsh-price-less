@@ -126,7 +126,7 @@ export const RULES = [
     // logger.ts 发射路径）——越界即红，保证上游合并后机制代码零改动的原子删除。
     // 能力探测 = 结构化常量 SESSION_LOG_INTENT（ea04b581a5），不再匹配 append.toString；
     // import/调用 emitFact 的路径同样锁死（事实发射只准经 logger.ts 的 emitCeFact 词汇表门）。
-    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts' && f.path !== 'src/domains/task-facts.ts' && f.path !== 'src/domains/optimize-facts.ts' && f.path !== 'src/domains/shear-facts.ts' && f.path !== 'src/domains/assemble-facts.ts' && f.path !== 'src/domains/compaction-facts.ts'
+    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts' && f.path !== 'src/domains/task-facts.ts' && f.path !== 'src/domains/optimize-facts.ts' && f.path !== 'src/domains/shear-facts.ts' && f.path !== 'src/domains/assemble-facts.ts' && f.path !== 'src/domains/compaction-facts.ts' && f.path !== 'src/domains/restore-facts.ts'
       ? [{ message: 'ignorable-channel concepts must stay in the removable unit (platform/ignorable-channel.ts + logger.ts emit path, docs/12 §2)' }]
       : [] },
     { id: 'D4', canon: 'docs/09 §1/§2 + docs/11 §2 + docs/13 §3.6',
@@ -200,6 +200,22 @@ export const RULES = [
       /(agent\/pre-step|agent\/request-error|@deepseek-ai\/dsh-agent|\bPreStepDecision\b|\bRequestErrorAction\b|\bAgentPreStepPayload\b|\bAgentRequestErrorPayload\b)/.test(f.text)
         && f.path !== 'src/platform/agent-step.ts'
         ? [{ message: 'agent/pre-step concepts must only appear in src/platform/agent-step.ts (H2/H3 端口收口；含 agent/request-error, docs/10 §1)' }]
+        : [] },
+  { id: 'D17', canon: 'docs/05 确定性优先 + docs/11 §9（恢复纯核确定性）',
+    appliesTo: (p) => p.startsWith('src/core/restore/'),
+    check: (f) =>
+      // 恢复纯核 = 确定性审计/重放（同输入同账）：时钟/随机一律不许出现（P21a 起进 CI；at 由域侧传入）。
+      [/\bMath\.random\(/, /\bDate\.now\(/, /\bnew Date\(/]
+        .filter((re) => re.test(f.text))
+        .map((re) => ({ message: `core/restore must stay deterministic (no clock/random), matches ${re}` })) },
+  { id: 'D16', canon: 'docs/10 §1 H9 + docs/11 §2（恢复端口收口）',
+    appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'),
+    check: (f) =>
+      // H9 收口（P21a）：agent/session-start 字面与 SessionStartSource 类型面只许居于
+      // platform/agent-step.ts——域侧只见 { session, source }。
+      /(agent\/session-start|\bSessionStartSource\b|\bAgentSessionStartPayload\b)/.test(f.text)
+        && f.path !== 'src/platform/agent-step.ts' && f.path !== 'src/index.ts'
+        ? [{ message: 'agent/session-start concepts must only appear in src/platform/agent-step.ts (H9 端口收口, docs/10 §1)' }]
         : [] },
   { id: 'D13', canon: 'docs/05 确定性优先 + docs/11 §9（压缩调用确定性）',
     appliesTo: (p) => p.startsWith('src/core/compress/'),

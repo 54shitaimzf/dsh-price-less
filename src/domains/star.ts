@@ -104,6 +104,11 @@ export function buildArtifactBody(input: {
   }
 }
 
+/** 优化产物实体键（workspace 隔离；docs/09 §1。P21a 恢复序复用，单一键源）。 */
+export function optimizeArtifactStorageKey(workspace: string): string {
+  return `optimize_artifact:latest:${workspace}`
+}
+
 export interface StarHostDeps {
   storage: ContextEconomyStorage; getConfig: () => ConfigShape; logger: CeLogger
   workspace?: string; now?: () => number
@@ -315,7 +320,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       logger.warn('context-economy: optimize dossier backfill failed (contained, fail-lazy)', e instanceof Error ? e.message : String(e))
       return { ok: false, code: STAR_BRIDGE_CODES.storageFailed, message: '卷宗回填写入失败' }
     }
-    const artifactKey = `optimize_artifact:latest:${workspace}`
+    const artifactKey = optimizeArtifactStorageKey(workspace)
     const previous = storage.getEntity('optimize_artifact', artifactKey)
     const body = buildArtifactBody({
       parsed: item.parsed, product: input.editedProduct, previewId: input.previewId, taskId: item.taskId,

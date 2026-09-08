@@ -1,8 +1,9 @@
 /**
- * H2/H3 步准入与请求失败端口（docs/10 §1 H2「边界/步准入：agent/pre-step」+ H3「压力触发 +
- * agent/request-error 接管」；P19a + P20b）。
- * 唯一持有 `@deepseek-ai/dsh-agent` 类型面、`agent/pre-step` 与 `agent/request-error` 字面的
- * 收口点（D14 断言锁定）：域侧只看到 `{ session, turn, step, aborted }` 与一个异步回调。
+ * H2/H3/H9 步准入、请求失败与恢复端口（docs/10 §1 H2「边界/步准入：agent/pre-step」+
+ * H3「压力触发 + agent/request-error 接管」+ H9「恢复：agent/session-start」；P19a + P20b + P21a）。
+ * 唯一持有 `@deepseek-ai/dsh-agent` 类型面、`agent/pre-step` / `agent/request-error` /
+ * `agent/session-start` 字面的收口点（D14/D16 断言锁定）：域侧只看到
+ * `{ session, turn, step, aborted }` / `{ session, source }` 与一个异步回调。
  *
  * 契约（docs/10 §1 H2/H3 + docs/11 §4 纪律②）：
  * - pre-step waterfall **必须 `return next()`**——本端口永不拒绝步骤，只做旁路动作；
@@ -18,7 +19,7 @@
  * 度量: 无 07 字段（触发结果由调用侧事实记录）。
  */
 import type { Context } from '@deepseek-ai/cordis'
-import type { PreStepDecision, RequestErrorAction } from '@deepseek-ai/dsh-agent'
+import type { PreStepDecision, RequestErrorAction, SessionStartSource } from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { CeLogger } from './events.ts'
 
@@ -92,6 +93,38 @@ export function onAgentRequestError(ctx: Pick<Context, 'on'>, options: AgentRequ
       }
     }
     return next()
+  })
+  return () => { off() }
+}
+/** H9 恢复回调载荷（域侧最小面；source 为 harness SessionStartSource 本地转发）。 */
+export interface AgentSessionStartPayload {
+  readonly session: Session
+  readonly source: SessionStartSource
+}
+
+export interface AgentSessionStartOptions {
+  /** 回调（可异步）；异常被遏制为 warn，绝不影响启动（H9 同步且不可 veto）。 */
+  handler: (payload: AgentSessionStartPayload) => void | Promise<void>
+  logger?: CeLogger
+}
+
+/**
+ * 注册 `agent/session-start` 旁路监听；返回退订函数。
+ * 事件为同步 emit（无 next/无 veto）：回调体 detached 执行，异常只 warn；
+ * 调用方若需在异步装配完成后才具备处理器，应在回调内自行缓冲（index.ts pending 缓冲先例）。
+ */
+export function onAgentSessionStart(ctx: Pick<Context, 'on'>, options: AgentSessionStartOptions): () => void {
+  const off = ctx.on('agent/session-start', ({ agent, source }) => {
+    void (async (): Promise<void> => {
+      try {
+        await options.handler({ session: agent.session, source })
+      } catch (e) {
+        options.logger?.warn(
+          'context-economy: session-start handler error contained (fail-lazy, startup continues)',
+          e instanceof Error ? e.message : String(e),
+        )
+      }
+    })()
   })
   return () => { off() }
 }
