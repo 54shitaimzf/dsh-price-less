@@ -33,6 +33,8 @@ export interface EconomyCardSettingsShape {
   /** 剪切层开关（与 host Config.shear 同步对）。 */
   shear?: {
     enabled?: boolean
+    /** N3 协商通道三态（与 host Config.shear 同步对；shadow = 只记账不剪）。 */
+    negotiate?: string
   }
   /** 压缩域开关与标定（与 host Config.compression 同步对；P19 + P20c）。 */
   compression?: {
@@ -220,7 +222,7 @@ export function economyPathField(
 /* -------------------------------------------------------------------------- */
 
 export const CLIENT_DEFAULTS = {
-  shear: { enabled: true },
+  shear: { enabled: true, negotiate: 'off' },
   compression: {
     boundary: true,
     pressure: true,
@@ -343,6 +345,7 @@ export const ECONOMY_FIELD_COPY: Record<string, { label: string; hint: string; d
   'discriminator.model': { label: '模型', hint: '留空=跟随预设。', docs: '模型覆盖；留空即跟随预设。用模型路由下拉选择即可。' },
   'discriminator.auto': { label: '自动判别', hint: '开启后逐消息判断任务边界；默认关闭。', docs: '自动断面总开关；关闭时零成本，不挂载判别器。' },
   'shear.enabled': { label: '剪切（工具结果剪枝）', hint: '默认开启：命令类长输出落账前整形、被写入超越的旧读剪除。', docs: '工具剪切总开关。开启后：命令类长输出在写入历史前保留首尾与错误行（T-entry，断裂成本 0）；被后续写超越的旧读取剪为一句结论（T0/T0-R，仅贴近尾部时执行）。关闭后四档全部零行为，历史保持原样。' },
+  'shear.negotiate': { label: '协商剪除（实验）', hint: '默认关闭：开启后给长工具结果挂一行协商注记，收集模型的 CUT-OK / CUT-HOLD 回复。', docs: '协商剪除通道（N 系列实验）。shadow = 挂注记 + 只记账不剪（零改史，产出配合率/保真率/深度分布）；live 保留给后续真正动刀。默认关闭，避免给每次工具结果增加常驻成本。需要配合「价格低耗（协商剪除）」预设使用：预设声明协商行可信，否则注记会被当成不可信工具输出忽略。' },
   'compression.boundary': {
     label: '边界压缩',
     hint: '默认开启：task 结束时把整段历史折叠成摘要 + 热尾材料。',
@@ -414,6 +417,13 @@ const discriminatorAutoField = economyBoolField('discriminator.auto', { visibili
 /** P15b：工具剪切总开关（默认开启；关闭 = 四档零行为）。 */
 const shearEnabledField = economyBoolField('shear.enabled', { visibility: 'core', default: true, deflabel: '默认开启' })
 
+/** N3：协商通道三态（默认关闭；shadow = 只记账不剪）。 */
+const shearNegotiateField = economySelectField('shear.negotiate', [
+  { value: 'off', label: '关闭（off）', pitch: '零行为：不挂注记、不记账。' },
+  { value: 'shadow', label: '影子（shadow）', pitch: '挂注记并收集回复，只记账不剪（零改史）。' },
+  { value: 'live', label: '执行（live）', pitch: '保留给后续版本：当前与影子等价。' },
+], { visibility: 'tune', default: 'off', deflabel: '默认关闭' })
+
 /** P19：压缩域开关（边界 / 压力）。 */
 const compressionBoundaryField = economyBoolField('compression.boundary', { visibility: 'core', default: true, deflabel: '默认开启' })
 const compressionPressureField = economyBoolField('compression.pressure', { visibility: 'core', default: true, deflabel: '默认开启' })
@@ -476,7 +486,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
     accent: 'var(--dsw-alias-state-error-primary)',
     tint: 'var(--dsw-alias-state-error-tertiary)',
     defaultOpen: false,
-    fields: [],
+    fields: [shearNegotiateField],
   },
 ]
 
@@ -490,6 +500,7 @@ export const ECONOMY_FIELD_GROUPS: EconomyFieldGroup[] = [
 export const ECONOMY_FIELD_SPECS: EconomyFieldSpec[] = [
   discriminatorAutoField,
   shearEnabledField,
+  shearNegotiateField,
   compressionBoundaryField,
   compressionPressureField,
   ...compressionNumberFields,

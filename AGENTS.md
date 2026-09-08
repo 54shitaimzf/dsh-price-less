@@ -34,7 +34,7 @@ harness checkout 的本地实现（上游共识形态，待合并），插件经
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
 （历史记录，只读）；**新设计 = N 系列「协商剪除」（语义层）**，总纲 `docs/implement/00-master.md`
-（**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 影子模式**（通道 A+C 已定：预设 `presets/price-less/` persona 段声明协议 + 措辞纪律、**固定 native 呈现** + 短注记）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
+（**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 ✅ 影子模式**（`core/shear/negotiate.ts` 纯核 + 域接线 + `shear-negotiation-note|reply` 两型 ignorable 事实 + 账本 fold + `shear.negotiate` 三态〔默认 off〕+ `scripts/probe-n3.mjs`；通道 A+C：预设 `presets/price-less/` persona 段声明协议 + 措辞纪律、**固定 native 呈现** + 短注记；**待真机采样**）→ N4 剪除执行 → N5 闸门退避 → N6 验收），核心纪律：core 零 harness import、改史唯一通道 = surfaceOp replace +
 sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版本化落盘再复用。诊断日志
 落盘插件根 `logs/context-economy.log`（JSONL、2 MiB 滚动，agent 自审直接 Read/grep 该文件；
 `docs/11 §4③`）。

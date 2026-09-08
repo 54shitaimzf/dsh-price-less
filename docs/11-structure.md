@@ -70,7 +70,7 @@ src/
 │  ├─ optimize.ts    # 星标断面：输入栈装配、双通道解析、行级容错、四道机械闸（02 §4）
 │  ├─ prefix.ts      # 稳定前缀：技能目录快照 + 项目帧 vN、版本 bump 语义（02 §2/06 §4）
 │  ├─ init.ts        # init 项目帧采集：prompt v1 渲染与 fail-lazy 解析（02 §2）
-│  ├─ shear/         # 剪切纯核（已施工：types/t0r/tool/run/ledger/index，P15a+P15b+P16；classify = N1 身份分类器）（03）
+│  ├─ shear/         # 剪切纯核（已施工：types/t0r/tool/run/ledger/index，P15a+P15b+P16；classify = N1 身份分类器；conclusion/negotiate = N2/N3 结论契约与协商影子）（03）
 │  ├─ compress/      # 两模式压缩 prompt 组装 + 产物 schema 校验 + 共享消费模块 + compress-run 调用账本（04 §2/§3；P18）
 │  │                 #   + region.ts 区间逐字节转写 + store.ts 档案区（只追加/硬帽/内容寻址缓存；P19a）
 │  │                 #   + pressure.ts 压力触发/检查点/折叠区转写（P20a）+ fuse.ts 保险丝地板（P20b）
@@ -81,7 +81,7 @@ src/
 │  ├─ commands.ts    # 命令面：/task、/init、/optimize-prompt 注册与委托（10 §2）
 │  ├─ star.ts        # 星标断面 host 服务：输入栈装配 → 断面 → 预览态 → 确认后回填/产物（10 §4 时序 B；P14b1）
 │  ├─ optimize-facts.ts # optimize-run 两相事实声明合并 + fold（07 §0.5；P14b1）
-│  ├─ shear.ts       # 剪切域（已施工：工具四档 P15b + run 冲刷/误剪反馈 P16）
+│  ├─ shear.ts       # 剪切域（已施工：工具四档 P15b + run 冲刷/误剪反馈 P16 + N3 协商影子〔挂注记/结算/两型事实，零改史〕）
 │  ├─ compaction.ts  # 压缩域：边界路径编排（H2 触发 → 调用 → 装配 → 缩水校验 → 档案 vN → 事务；P19b）
 │  │                 #   + 压力折叠（H3 wire 锚定触发 / 选缝 / 检查点 / 断路器；P20a）+ 保险丝紧急折叠与溢出接管（P20b）
 │  │                 #   （恢复编排 = 独立文件 restore.ts，P21a）
@@ -142,6 +142,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | `discriminator.auto` | false | 判别 | 自动断面总开关（boolean）；false=不挂载零成本 / true=发 verdict 接入投影；**星标通道常在，不受此开关门控**（观察模式已取消，2026-09） |
 | `discriminator.reasoningEffort` | 空（跟随模型默认） | 判别/断面 | 辅助调用（自动判别 / ★）推理档（adapter 词汇 off/low/medium/high/max）；**默认不覆盖**——关闭思考可能明显影响任务边界判断与改写质量；模型未声明所选档时自动回退为跟随（P14f） |
 | `shear.enabled` | true | 剪切 | 工具剪切 + 对话剪切总开关（分层可再关 T-note / T0-R）；**P15b 落位、P16 复用**（host `config.ts` ↔ client `field-model.ts`，设置卡可关） |
+| `shear.negotiate` | `off` | 剪切 | **N3 协商通道三态**：`off` = 零行为；`shadow` = 挂 v2 注记 + 只记账不剪（零改史）；`live` 保留给 N4（暂等价 shadow）。需配合 `presets/price-less/` 预设（persona 段声明协商行可信）使用（host `config.ts` ↔ client `field-model.ts`，设置卡「高级与调试」） |
 | `compression.boundary` | true | 压缩 | task 边界压缩（**P19 已落位**：H2 闭合触发 → 调用 → 装配 → 缩水校验 → 档案 vN → 事务替换；关闭 = 零行为） |
 | `compression.pressure` | true | 压缩 | 压力路径 + 保险丝（**P20/P20c 已落位**：wire 锚定触发阈 = `pressureRatio`（默认 0.35）× 主模型窗口〔缺失 → 假定窗口 → 绝对安全网〕→ 检查点 + 保留区逐字 + 断路器；地板 = 0.8×模型窗口的紧急折叠〔可越过断路器，硬上限 +3〕+ `request-error` 溢出接管；关闭 = 零行为） |
 | `compression.pressureRatio` | 0.35 | 压缩 | 压力阀门比例（**P20c 落位**：模型能力在窗口约 35% 后下降；不变量 `0 < ratio < 0.8`，违例整块回退设计值） |
@@ -158,7 +159,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 |---|---|---|
 | 模型可见工具（tools 数组） | **恒 0**——全层走官方缝（H2/H4/H6）；唯一例外通道 = T-note 注记贴在工具结果内容内（非 schema） | [03 §2.1](03-shear.md) |
 | 主模型系统提示词 | **恒 0**——知识出口唯一 = 优化后 prompt（用户确认后可见替换） | [01 §4](01-architecture.md) |
-| 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式；版本化常量 + 字节稳定断言，P18）· T-note 注记模板 · 机械摘句规则（对表打分非 LLM） | 02/03/04 各域 |
+| 辅助调用提示词（purpose 标记，主模型不可见） | 判别判据（版本化 + datasets 同源断言）· 星标断面 prompt · 压缩器 prompt（边界/压力两模式；版本化常量 + 字节稳定断言，P18）· 协商注记模板 v2（`core/shear/conclusion.ts`，N3；遗留 T-note 模板留作历史回放）· 机械摘句规则（对表打分非 LLM） | 02/03/04 各域 + N3 |
 | 斜杠命令 | `/task` 系列（Tier-0 边界）· `/optimize-prompt`（星标命令形态） | [10 §2](10-wiring.md) |
 | 预设 | **提供 1 个**：`presets/price-less/`（价格低耗·协商剪除）——persona 段声明协商协议（通道 A）+ 输出措辞纪律、**固定 native 呈现**（`tool-presentation` 行）+ 工具结果短注记（通道 C）；`node scripts/install-preset.mjs` 装到 `$DSH_HOME/.agent-presets/` | N3 §2.1 / §2.3 |
 | client 工具 | 设置卡壳 + 星标按钮 + 度量消息列表可视化 | 本文 §5 |
@@ -175,7 +176,7 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 | **R3 剪切域** | core/shear + domains/shear（工具剪切四档 + 对话 run 冲刷）——**P15a + P15b + P16 全部施工**（快照 §38/§39/§40/§41），**R3 关门** | cut*/shear*/tableRepair/questionBacklogDepth/cutMisfireDetected 全部入账（P16 补齐后三字段）；阈值常数按既有实验结论初值落位（[03 §8](03-shear.md)，不做对照实验） |
 | **R4 压缩域（完成）** | core/{compress,assemble,restore} + domains/{compaction,restore}：边界装配 → 压力路径 → 保险丝 → 恢复编排；验收按四种触发次序组织（**P17** 装配器 §42/§43 + **P17c** §44 / **P18** 调用纯核 §45 / **P19** 边界路径 §46 / **P20+P20c** 压力与保险丝 §47/§48 / **P21a** 恢复编排 §49 / **P21b** 全链验收 §50） | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效；**四触发次序 + 四道缓存断言进 CI** |
 | R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
-| **N 系列（进行中）** | **协商剪除（语义层）**：**N1 ✅ 身份通道（`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`）** → **N2 ✅ 结论契约**（探针见 N2 §10）→ **N3 影子模式**（工单已起草，通道前置待拍板） → N4 剪除执行 → N5 闸门退避 → N6 验收；总纲 [implement/00-master.md](implement/00-master.md) | 各单元自设门槛；N3 出门 = 配合率 / 保真率 / 深度分布三张表 |
+| **N 系列（进行中）** | **协商剪除（语义层）**：**N1 ✅ 身份通道（`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`）** → **N2 ✅ 结论契约**（探针见 N2 §10）→ **N3 ✅ 影子模式**（`core/shear/negotiate.ts` 纯核 + 域接线 + 两型 ignorable 事实 + 账本 fold + `shear.negotiate` 三态 + `scripts/probe-n3.mjs`；通道 A+C 见 [N3 §2](implement/N3-shadow-mode.md)；**待真机采样**）→ N4 剪除执行 → N5 闸门退避 → N6 验收；总纲 [implement/00-master.md](implement/00-master.md) | 各单元自设门槛；N3 出门 = 配合率 / 保真率 / 深度分布三张表（每 basis ≥30 样本） |
 
 施工分解：R0–R4 细化为 P0–P21b 工单（flash 级自主执行粒度，验收全机械），**已封存**至
 [implement/archive/00-master.md](implement/archive/00-master.md)（历史只读）；新设计见

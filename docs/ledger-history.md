@@ -2458,3 +2458,33 @@ persona prefix 全文 **1,511 B**（静态段，会话内定型，缓存前缀�
 4. shipped `standard/agent.cordis.yml`（profile 0.1.3-alpha.2 与 checkout）**逐字节相同**——本预设仍是 standard + persona + 1 行呈现。
 
 **口径**：本预设从此**与 `DSH_TOOLS_MODE` 无关**，恒 native。
+
+## §59 N3b 影子模式落地（2026-09-09）
+
+**交付物**（通道 A+C 裁定后的执行单）：
+
+| 文件 | 内容 |
+|---|---|
+| `core/shear/negotiate.ts`（新，242 行） | 三态词汇 + `selectNegotiation`（分类器选样 + 1% FNV-1a 对照组）+ `judgeNegotiationReply` + `foldNegotiation` + 报表段 |
+| `domains/shear.ts`（+~130） | `shapeEntry`/`attachNote` 挂注记（T-entry 整形后叠加）；`settlePending` 发 `shear-negotiation-note`；`resolveNegotiation` 发 `shear-negotiation-reply`；用户轮/溢出记 no-reply；**协商在飞时抑制旧 T-note 机械剪**（hold/negotiate-shadow） |
+| `domains/shear-facts.ts` | 两型事实声明合并（SessionEventMap + IgnorableSessionEventMap） |
+| `core/shear/ledger.ts` | `ShearLedger.negotiation` 段 + `formatShearLedger` 附协商段；`shearNoteAttached` = 遗留 T-note + 协商注记 |
+| `config.ts` / `client/field-model.ts` | `shear.negotiate` 三态（默认 off）+ 设置卡「高级与调试」 |
+| `tests/shear-negotiate.spec.ts`（11 例）/ `tests/shear-domain.spec.ts`（+8 例） | 纯核 + 域侧：零改史断言、回复归属、对照组、抑制 |
+| `scripts/probe-n3.mjs` | N3a 报告生成器（选样 / 三档率 / 保真 / 深度 + 每 basis 晋升判定） |
+
+**关键裁定（细化）**：
+1. **回复归属**：一条 assistant 消息只写一个标记 → 判给**最新**待答注记，同批其余 no-reply；用户轮 / 队列溢出（64）同样 no-reply。
+2. **与 T-entry 叠加**：整形后文本 = 模型实际看到的版本 → 在整形结果上再选样并追加注记；分类器仍看原文。
+3. **live 语义**：当前与 shadow 等价（只记账不剪）；真正动刀归 N4。
+
+**验收（全绿）**：`npm run gate` = **603 tests / 56 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿。
+- 零改史：shadow 下挂注记 + 收回复 → 零 `surfaceOp replace`、零 `shear-applied`。
+- 账本回放：`negotiation-*` 事实 → `negotiation.{notes,replies,ok,hold,noReply,okRate,holdRate,noReplyRate,completeRate,verifyOkRate,medianDepth}`（同输入同账）。
+
+**基线探针**（历史 44 会话）：tool/result 5,032 / 新规则选样 **633**（name 404 + command 229；对照组 8）；
+CUT-OK / CUT-HOLD / 无回复 = **0 / 0 / 633**；旧 v1 注记收到标记 **0 / 68**。
+→ 历史数据仍是「工具内容内注记 = 不可信」的 0% 基线，通道必须用预设 + `shadow` 的新会话重采。
+
+**下一步（N3a 真机）**：设置卡切 `shear.negotiate = shadow` → **重启**加载新构建 → 用 `price-less` 预设开新会话 →
+每 basis 攒 ≥30 样本后跑 `node scripts/probe-n3.mjs`；配合率 ≥30% 进 N4，<30% 回退通道 B。

@@ -67,7 +67,7 @@ const llmStream = (text: string) => ({ stream: async function* () {
 
 
 const cfg = (auto: boolean, provider?: string, model?: string) => resolveConfig({
-  shear: { enabled: true },
+  shear: { enabled: true, negotiate: 'off' },
   discriminator: { auto, ...(provider ? { provider } : {}), ...(model ? { model } : {}) },
 })
 

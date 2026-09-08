@@ -15,25 +15,33 @@ import type { Session, SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session
 import {
   DEFAULT_RUN_POLICY,
   DEFAULT_SHEAR_POLICY,
+  NEGOTIATION_PENDING_LIMIT,
   RUN_POLICY_VERSION,
-  SHEAR_NOTE_TEMPLATE,
+  SHEAR_CONCLUSION_VERSION,
   SHEAR_POLICY_VERSION,
   buildLoopStub,
   buildSupersededStub,
   foldRunShear,
   foldToolShear,
+  judgeNegotiationReply,
   ledgerEventText,
-  noteEligible,
+  negotiationNote,
+  selectNegotiation,
   shapeEntryContent,
   toolCategory,
   utf8ByteLength,
+  type CutBasis,
+  type NegotiationSelection,
   type RunEvent,
   type RunOp,
   type RunPolicy,
   type ShearEvent,
+  type ShearNegotiationNoteFactData,
+  type ShearNegotiationReplyFactData,
   type ShearOp,
   type ShearPolicy,
   type ShearToolCall,
+  type ToolDescriptor,
 } from '../core/shear/index.ts'
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
 import { buildNoticeUserMessage, createHistoryPort, type HistoryPort } from '../platform/history.ts'
@@ -45,6 +53,8 @@ import {
   SHEAR_APPLIED_FACT_TYPE,
   SHEAR_DECISION_FACT_TYPE,
   SHEAR_ERROR_FACT_TYPE,
+  SHEAR_NEGOTIATION_NOTE_FACT_TYPE,
+  SHEAR_NEGOTIATION_REPLY_FACT_TYPE,
   SHEAR_RUN_PLAN_FACT_TYPE,
   compactFact,
   type ShearAppliedFactData,
@@ -79,6 +89,10 @@ export interface ShearDomainStats {
   errors: number
   runsCut: number
   runsHeld: number
+  /** N3 协商：挂出的注记 / 已结算回复 / 无回复。 */
+  negotiationNotes: number
+  negotiationReplies: number
+  negotiationNoReply: number
 }
 
 export interface ShearDomain {
@@ -87,11 +101,24 @@ export interface ShearDomain {
 }
 
 interface PendingEntry {
-  readonly kind: 'entry' | 'note'
   readonly view: ToolResultView
-  readonly beforeTokens: number
-  readonly afterTokens: number
-  readonly noteBytes: number
+  /** T-entry 整形（落账前已整形；token 计量用于 shear-applied）。 */
+  readonly entry?: { readonly beforeTokens: number; readonly afterTokens: number }
+  /** N3 协商注记（选样证据 + 模型实际看到的文本，结算时补 resultSeq）。 */
+  readonly negotiation?: {
+    readonly selection: NegotiationSelection
+    readonly negotiatedText: string
+    readonly noteBytes: number
+  }
+}
+
+/** 待答注记（结果事件结算时入队；回复或用户轮到来时结算，恰好一条回复事实）。 */
+interface PendingNegotiation {
+  readonly callId: string
+  readonly resultSeq: SessionSeq
+  readonly negotiatedText: string
+  readonly resultBytes: number
+  readonly basis: CutBasis
 }
 
 interface SessionState {
@@ -109,6 +136,8 @@ interface SessionState {
   readonly runEvents: RunEvent[]
   readonly consumedRuns: Set<string>
   readonly runHoldsSeen: Set<string>
+  /** N3 待答注记（按 resultSeq 升序；回复归属 = 最新一条）。 */
+  readonly negotiationPending: PendingNegotiation[]
 }
 
 function callIdOfResultData(data: unknown): string | undefined {
@@ -177,7 +206,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
   const runPolicy = deps.runPolicy ?? DEFAULT_RUN_POLICY
   const states = new WeakMap<Session, SessionState>()
   const pending = new Map<string, PendingEntry>()
-  const counts = { sessions: 0, entryShaped: 0, notesAttached: 0, cuts: 0, holds: 0, errors: 0, runsCut: 0, runsHeld: 0 }
+  const counts = { sessions: 0, entryShaped: 0, notesAttached: 0, cuts: 0, holds: 0, errors: 0, runsCut: 0, runsHeld: 0, negotiationNotes: 0, negotiationReplies: 0, negotiationNoReply: 0 }
   let disposed = false
 
   const enabled = (): boolean => getConfig().shear?.enabled !== false
@@ -192,6 +221,31 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
 
   const callOf = (view: ToolResultView): ShearToolCall => ({ seq: 0, time: 0, callId: view.callId, name: view.name, argsText: '' })
 
+  /** N3 协商通道是否在飞（shadow / live 都只记账不剪；off = 零行为）。 */
+  const negotiateActive = (): boolean => {
+    const mode = getConfig().shear?.negotiate
+    return mode === 'shadow' || mode === 'live'
+  }
+
+  const descriptorOf = (view: ToolResultView): ToolDescriptor => ({
+    name: view.name,
+    resultText: view.resultText,
+    resultBytes: view.resultBytes,
+    isError: view.isError,
+    ...(view.kind === undefined ? {} : { kind: view.kind }),
+    ...(view.card === undefined ? {} : { card: view.card }),
+    ...(view.args === undefined ? {} : { args: view.args }),
+    ...(view.meta === undefined ? {} : { meta: view.meta }),
+  })
+
+  /** N3 选样：分类器看原文（证据完整）；保真校验原文 = 模型实际看到的文本（整形后）。 */
+  const negotiationOf = (view: ToolResultView, negotiatedText: string): PendingEntry['negotiation'] => {
+    if (!negotiateActive()) return undefined
+    const selection = selectNegotiation(descriptorOf(view), view.callId)
+    if (selection === undefined) return undefined
+    return { selection, negotiatedText, noteBytes: utf8ByteLength(negotiationNote()) }
+  }
+
   const shapeEntry = (view: ToolResultView): string | undefined => {
     if (disposed || !enabled()) return undefined
     const shaped = shapeEntryContent(callOf(view), view.resultText)
@@ -199,15 +253,18 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     const beforeTokens = estimateTokens(view.resultText)
     const afterTokens = estimateTokens(shaped)
     if (afterTokens >= beforeTokens) return undefined
-    rememberPending(view.callId, { kind: 'entry', view, beforeTokens, afterTokens, noteBytes: 0 })
-    return shaped
+    // 整形后仍可挂协商注记：模型看到的是整形文本，结论必须保住它里面的关键事实。
+    const negotiation = negotiationOf(view, shaped)
+    rememberPending(view.callId, { view, entry: { beforeTokens, afterTokens }, ...(negotiation === undefined ? {} : { negotiation }) })
+    return negotiation === undefined ? shaped : `${shaped}\n${negotiationNote()}`
   }
 
   const attachNote = (view: ToolResultView): string | undefined => {
     if (disposed || !enabled()) return undefined
-    if (!noteEligible(callOf(view), view.resultText, policy)) return undefined
-    rememberPending(view.callId, { kind: 'note', view, beforeTokens: 0, afterTokens: 0, noteBytes: utf8ByteLength(SHEAR_NOTE_TEMPLATE) })
-    return SHEAR_NOTE_TEMPLATE
+    const negotiation = negotiationOf(view, view.resultText)
+    if (negotiation === undefined) return undefined
+    rememberPending(view.callId, { view, negotiation })
+    return negotiationNote()
   }
 
   const port = createShearToolPort(ctx, { shapeEntry, attachNote }, logger)
@@ -314,6 +371,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       runEvents: [],
       consumedRuns: new Set(),
       runHoldsSeen: new Set(),
+      negotiationPending: [],
     }
     states.set(session, state)
     counts.sessions++
@@ -331,6 +389,41 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     return state
   }
 
+  /** 一条注记恰好结算一次：有回复则判定，无回复（用户轮/溢出）记 none。 */
+  const emitNegotiationReply = (state: SessionState, note: PendingNegotiation, replySeq: number, replyText?: string): void => {
+    const judged = replyText === undefined
+      ? { marker: 'none' as const, complete: false, verifyOk: false, missingCount: 0, conclusionChars: 0, depthRatio: 0 }
+      : judgeNegotiationReply(note.negotiatedText, replyText, note.resultBytes)
+    const data: ShearNegotiationReplyFactData = compactFact({
+      at: now(),
+      callId: note.callId,
+      resultSeq: note.resultSeq,
+      replySeq,
+      basis: note.basis,
+      ...judged,
+    })
+    emitCeFact(state.session, SHEAR_NEGOTIATION_REPLY_FACT_TYPE, data, logger)
+    counts.negotiationReplies++
+    if (data.marker === 'none') counts.negotiationNoReply++
+  }
+
+  /**
+   * 回复归属（N3 §3.1）：一条 assistant 消息只可能写一个标记行 → 判给**最新**待答注记；
+   * 同批（并行工具调用）其余注记记 no-reply（失败方向 = 保留）。
+   */
+  const resolveNegotiation = (state: SessionState, replySeq: number, replyText: string): void => {
+    if (state.negotiationPending.length === 0) return
+    const notes = state.negotiationPending.splice(0)
+    const latest = notes[notes.length - 1] as PendingNegotiation
+    for (const note of notes.slice(0, -1)) emitNegotiationReply(state, note, replySeq)
+    emitNegotiationReply(state, latest, replySeq, replyText)
+  }
+
+  /** 用户轮 / 队列溢出 → 全部记 no-reply（失败方向 = 保留）。 */
+  const flushNegotiation = (state: SessionState, replySeq: number): void => {
+    for (const note of state.negotiationPending.splice(0)) emitNegotiationReply(state, note, replySeq)
+  }
+
   const settlePending = (session: Session, event: SessionEvent): void => {
     if (event.type !== 'tool/result') return
     const callId = callIdOfResultData(event.data)
@@ -338,7 +431,8 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     const entry = pending.get(callId)
     if (entry === undefined) return
     pending.delete(callId)
-    if (entry.kind === 'entry') {
+    const state = stateOf(session)
+    if (entry.entry !== undefined) {
       const data: ShearAppliedFactData = compactFact({
         policyVersion: SHEAR_POLICY_VERSION,
         tier: 'T-entry',
@@ -347,28 +441,39 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
         resultSeq: event.seq,
         at: now(),
         category: toolCategory(entry.view.name),
-        beforeTokens: entry.beforeTokens,
-        afterTokens: entry.afterTokens,
-        savedTokens: entry.beforeTokens - entry.afterTokens,
+        beforeTokens: entry.entry.beforeTokens,
+        afterTokens: entry.entry.afterTokens,
+        savedTokens: entry.entry.beforeTokens - entry.entry.afterTokens,
         breakTokens: 0,
         tailNodes: 0,
       })
       emitCeFact(session, SHEAR_APPLIED_FACT_TYPE, data, logger)
-      stateOf(session).entryShaped.add(callId)
+      state.entryShaped.add(callId)
       counts.entryShaped++
-      return
     }
-    const decision: ShearDecisionFactData = compactFact({
-      policyVersion: SHEAR_POLICY_VERSION,
-      tier: 'T-note',
-      decision: 'note-attached',
-      reason: 'note-eligible',
-      callId,
+    if (entry.negotiation === undefined) return
+    const { selection, negotiatedText, noteBytes } = entry.negotiation
+    const resultBytes = utf8ByteLength(negotiatedText)
+    const note: ShearNegotiationNoteFactData = compactFact({
       at: now(),
-      noteBytes: entry.noteBytes,
+      callId,
+      name: entry.view.name,
+      resultSeq: event.seq,
+      basis: selection.basis,
+      reason: selection.reason,
+      resultBytes,
+      channel: selection.channel,
+      noteBytes,
+      templateVersion: SHEAR_CONCLUSION_VERSION,
     })
-    emitCeFact(session, SHEAR_DECISION_FACT_TYPE, decision, logger)
+    emitCeFact(session, SHEAR_NEGOTIATION_NOTE_FACT_TYPE, note, logger)
+    counts.negotiationNotes++
     counts.notesAttached++
+    state.negotiationPending.push({ callId, resultSeq: event.seq, negotiatedText, resultBytes, basis: selection.basis })
+    if (state.negotiationPending.length > NEGOTIATION_PENDING_LIMIT) {
+      const oldest = state.negotiationPending.shift() as PendingNegotiation
+      emitNegotiationReply(state, oldest, event.seq)
+    }
   }
 
   const executeOp = (state: SessionState, op: ShearOp, targetCallId: string, resultSeq: SessionSeq, text: string): void => {
@@ -458,6 +563,21 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       const key = opKeyOf(op)
       if (state.consumed.has(key)) continue
       if (op.kind === 'shape-entry') { state.consumed.add(key); continue }
+      // N3 影子模式：协商通道在飞时，旧 T-note 机械剪一律不执行（只记账不剪，零改史）。
+      if (op.kind === 'note-cut' && negotiateActive()) {
+        state.consumed.add(key)
+        const hold: ShearDecisionFactData = compactFact({
+          policyVersion: SHEAR_POLICY_VERSION,
+          tier: 'T-note',
+          decision: 'hold',
+          reason: 'negotiate-shadow',
+          callId: op.callId,
+          at: now(),
+        })
+        emitCeFact(state.session, SHEAR_DECISION_FACT_TYPE, hold, logger)
+        counts.holds++
+        continue
+      }
       const targetCallId = opTargetCallId(op)
       const resultSeq = state.resultSeqByCallId.get(targetCallId)
       if (resultSeq === undefined) { state.consumed.add(key); continue }
@@ -596,6 +716,8 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     const state = stateOf(session)
     settlePending(session, event)
     if (!ingest(state, event)) return
+    // N3：回复机会 = 注记之后的第一条 assistant 消息（同一条消息里模型既要答注记又要发起下一步）。
+    if (event.type === 'assistant/message') resolveNegotiation(state, event.seq, eventTextOf(event))
     processOps(state)
     processRuns(state)
   }
@@ -606,6 +728,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     if (session.header.origin === 'subagent') return
     const state = stateOf(session)
     if (state.seqs.has(payload.seq)) return
+    flushNegotiation(state, payload.seq)
     state.seqs.add(payload.seq)
     pushEvent(state, { kind: 'user-message', seq: payload.seq, time: payload.time, text: payload.text })
     pushRunEvent(state, { kind: 'user-message', seq: payload.seq, time: payload.time, text: payload.text })

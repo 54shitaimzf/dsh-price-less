@@ -42,12 +42,12 @@ R1–R4 把"机械可确定"的上下文管理做完了。剩下的最大一块�
 |---|---|---|
 | **N1 ✅ 已施工** | **工具身份通道与可剪集合**：平台侧收敛 `exec.arguments` / `result.meta` / `presentCall.kind` / `presentResult.card`；纯核分类器输出 `verdict` + `basis`（signature/name/command/none）；只读探针统计真实签名覆盖率（探针报告 = [N1 §9](N1-identity-and-eligible.md)） | gate 绿；探针产出覆盖率 / 判定 / basis 分布；结构断言（core 零 harness import） |
 | **N2 ✅ 已施工** | **结论契约与协商模板 v2**：结论 + 关键事实逐字 + 重取句柄；模板版本化 + 字节稳定；标记解析（`CUT-OK`/`CUT-HOLD`）——工单 [`N2-conclusion-contract.md`](N2-conclusion-contract.md)，探针报告 §10 | 纯核单测；模板字节稳定断言；解析失败 → 保留 |
-| **N3** | **影子模式（落地目标）**：挂注记 + 解析标记 + **只记账不剪**；产出配合率 / 保真率 / 深度分布——工单 [`N3-shadow-mode.md`](N3-shadow-mode.md)（**通道前置待拍板**） | 回放产出四张分布表；**零改史**（surface 字节不变断言） |
+| **N3** | ✅ **影子模式已施工**（2026-09-09）：挂 v2 注记 + 解析标记 + **只记账不剪**；产出配合率 / 保真率 / 深度分布——工单 [`N3-shadow-mode.md`](N3-shadow-mode.md)（通道 A+C；**待真机采样**） | 回放产出三张表 + 每 basis 晋升判定；**零改史**断言过（603 tests / 56 files） |
 | **N4** | **剪除执行**：整块替换（上一轮调用 + 结果 + 上一轮思考；本轮思考尽量一并剪）；配对与缓存断言 | 四触发次序不破；缓存断言进 CI |
 | **N5** | **三道闸门 + 误剪退避**：事实保真 / 深度 / 配对；误剪记账（复用 `cutMisfireDetected`）+ 超阈自动关协商 | 护栏不过必 hold；误剪率可回放 |
 | **N6** | **验收与账本快照**：`verify-n.mjs` + `ledger-history.md` §51+ 快照 + 正典同步 | 全链 verify + 快照 |
 
-**推进顺序**：N1 ✅ → **N2（下一步）** → N3（影子）→ 拿数据决定 N4 开关 → N4 → N5 → N6。
+**推进顺序**：N1 ✅ → N2 ✅ → **N3 ✅（待真机采样）** → 拿数据决定 N4 开关 → N4 → N5 → N6。
 
 **N1 探针（44 会话 / ≥2KB 2,160 条）**：cuttable **28.9%**；cuttable 的 basis = `name` 402 / `command` 223 / `signature` 0；候选集中于 `run_code` 402 + `bash`/`pwsh` 223。
 

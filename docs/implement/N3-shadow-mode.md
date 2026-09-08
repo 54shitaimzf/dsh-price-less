@@ -1,6 +1,6 @@
 # N3 · 影子模式（落地目标）
 
-> **状态**：**通道已定 = A+C**（2026-09-09 用户裁定），载体 = 预设 [`presets/price-less/`](../../presets/price-less/)（persona 段声明协议 + 短注记）；待真机验证配合率后进 N3b。
+> **状态**：**N3b ✅ 已施工**（2026-09-09）：协商纯核 `core/shear/negotiate.ts` + 域接线 + 两型 ignorable 事实 + 账本 fold + 设置卡三态 + 探针 `scripts/probe-n3.mjs`；默认 `shear.negotiate = off`，N3a 试验开 `shadow`。**待用户真机采样**（配合率底线 30%）。
 > **依赖**：N1 ✅（分类器）· N2 ✅（结论契约）· N2 §10 探针（通道配合率 0/134）。**总纲**：[`00-master.md`](00-master.md) §2/§3。
 > **正典**：[`docs/03 §2.1`](../03-shear.md)（协商语义）· [`docs/10 §1 H6`](../10-wiring.md)（挂点）· [`docs/07`](../07-metrics.md)（度量）。
 
@@ -17,11 +17,11 @@ N2 探针（44 会话）实测：
 | 事实 | 数值 |
 |---|---|
 | 注记后紧跟的 assistant 回复 | **134 条** |
-| 其中给出 `CUT-OK`/`CUT-HOLD` 标记 | **0 条（0.0%）** |
+| 其中给出 `CUT-OK` / `CUT-HOLD` 标记 | **0 条（0.0%）** |
 | 历史全部 assistant 回复含标记 | 1 / 4,974 |
 
 **根因**：注记贴在**工具结果内容**里，而 DSH 系统提示把工具输出中的指令标记为**不可信**
-（"untrusted plugin output"，明确要求忽略）。模型不违反该约束 → 协商通道拿不到任何样本。
+（untrusted plugin output，明确要求忽略）。模型不违反该约束 → 协商通道拿不到任何样本。
 **N3 的第一交付物因此不是影子模式，而是"通道激活"。**
 
 ### §2.1 通道裁定：A + C（2026-09-09）
@@ -67,62 +67,98 @@ N2 探针（44 会话）实测：
 那样本预设的系统提示词会凭空多出 ~25KB SDK 块；`native` 把工具 schema 放回 `tools` 数组，
 系统提示词只留每工具一句短指引（口径见 ledger §57/§58）。
 
-## §3 N3b 影子模式设计（只记账不剪）
+## §3 N3b 影子模式设计（只记账不剪）——已施工
 
-| 步 | 设计 |
-|---|---|
-| 挂点 | `tools/post-execute`（H6，已有 args/meta/kind/card/resultBytes） |
-| 选择 | `classifyToolResult(view)` → `cuttable`（任意 basis）挂注记；`never` 仅 **1% 确定性对照组**挂（只问不剪） |
-| 注记 | v2 模板（`negotiationNote()`）；≥ **2KB** 才挂（与候选下限一致） |
-| 记账（挂） | ignorable 事实 `shear-negotiation-note`：`{ at, callId, name, basis, reason, resultBytes, channel, noteBytes }` |
-| 解析 | 下一轮 `assistant/message` → `judgeConclusion(原文, 回复)` |
-| 记账（回） | ignorable 事实 `shear-negotiation-reply`：`{ at, callId, marker, complete, verifyOk, missingCount, conclusionChars, depthRatio }` |
-| 零改史 | 除追加注记外 surface 字节不变（断言）；不改任何既有节点 |
-| 失败方向 | 无回复 / 无标记 / 解析失败 / 保真不过 → 全部记 hold，不剪 |
+| 步 | 设计 | 落地 |
+|---|---|---|
+| 门控 | `shear.negotiate` = `off` / `shadow` / `live`，默认 `off` | `config.ts` + `client/field-model.ts`（设置卡「高级与调试」）；`off` = 零行为 |
+| 挂点 | `tools/post-execute`（H6，已有 args/meta/kind/card/resultBytes） | `domains/shear.ts` 的 `shapeEntry` / `attachNote` 两缝 |
+| 选择 | `classifyToolResult(view)` → `cuttable`（任意 basis）挂注记；`never` 仅 **1% 确定性对照组**挂（只问不剪） | `core/shear/negotiate.ts:selectNegotiation`；`too-small`（<2KB）不挂 |
+| 注记 | v2 一行模板（`conclusion.ts:negotiationNote()`，`SHEAR_CONCLUSION_VERSION = 2`） | 追加到结果内容尾部；`off` 时零追加 |
+| 记账（挂） | ignorable 事实 `shear-negotiation-note`：`{at,callId,name,resultSeq,basis,reason,resultBytes,channel,noteBytes,templateVersion}` | `domains/shear.ts:settlePending`（结果事件结算时补 resultSeq） |
+| 解析 | 注记之后**第一条** `assistant/message` → `judgeConclusion(被协商文本, 回复)` | `resolveNegotiation` |
+| 记账（回） | ignorable 事实 `shear-negotiation-reply`：`{at,callId,resultSeq,replySeq,basis,marker,complete,verifyOk,missingCount,conclusionChars,depthRatio}` | 每条注记恰好结算一次 |
+| 零改史 | 除追加注记外 surface 字节不变；协商通道在飞时**旧 T-note 机械剪被抑制**（hold/negotiate-shadow） | 回放用例断言零 `surfaceOp replace`、零 `shear-applied` |
+| 失败方向 | 无回复 / 无标记 / 解析失败 / 保真不过 → 全部记 none/hold，不剪 | marker = none 在 N4 等价 hold |
 
-**深度比** `depthRatio = 结论字符数 / 原文字节数`（目标 ≤ **1/10**，总纲 §2-3）。
+### §3.1 回复归属与结算（已定）
+
+一条 assistant 消息只能写**一个**标记行（协议规定在最后一行），而一轮可能有并行工具调用产生多条注记。
+结算规则（确定性、可回放）：
+
+1. 注记在**结果事件**到达时入队（此时才有 resultSeq）；
+2. 遇到 `assistant/message` → 标记判给队列里**最新**（resultSeq 最大）的一条，同批其余各记一条 marker = none；
+3. 遇到 `user/message` → 队列全部记 marker = none（用户打断了这一轮）；
+4. 队列超过 `NEGOTIATION_PENDING_LIMIT = 64` → 最老一条记 marker = none。
+
+**失败方向永远朝保留**：none 在 N4 等价 hold，绝不剪。
+
+### §3.2 与 T-entry 的叠加（已定）
+
+T-entry（cmd 长输出写时整形）与协商注记**不互斥**：整形后的文本才是模型实际看到的版本，
+所以 `shapeEntry` 在整形结果上再判一次选样，命中时把注记追加到整形文本尾部；
+保真校验的原文 = 整形后文本（模型看到什么，结论就得保住什么）。
+分类器仍看**原文**（副作用/截断/错误证据完整）。`live` 当前与 `shadow` 等价（真正动刀归 N4）。
 
 ## §4 度量（07 协议新增，可回放）
 
+`foldShearLedger` 新增 `negotiation` 段（`core/shear/negotiate.ts:foldNegotiation`）：
+
 | 字段 | 含义 |
 |---|---|
-| `negotiationNotes` | 挂出的注记数（按 basis 分组） |
-| `negotiationReplies` | 收到标记的回复数 |
-| `negotiationOkRate` / `negotiationHoldRate` / `negotiationNoReplyRate` | 配合率三档 |
-| `negotiationCompleteRate` | 三件套齐全率 |
-| `negotiationVerifyOkRate` | 保真通过率（事实齐全） |
-| `negotiationMedianDepth` | 深度比中位数（按 basis 分组） |
+| `notes` / `notesByBasis` / `controlNotes` | 挂出的注记数（按 basis / 对照组分组） |
+| `replies` / `ok` / `hold` / `noReply` | 已结算回复（每条注记恰好一条） |
+| `okRate` / `holdRate` / `noReplyRate` | 三档率，**分母 = notes** |
+| `complete` / `completeRate` | 三件套齐全数 / 齐全率（分母 = ok） |
+| `verifyOk` / `verifyOkRate` | 保真通过数 / 保真率（分母 = ok） |
+| `medianDepth` / `medianDepthByBasis` | 深度比中位数（结论字符数 / 被协商字节数；目标 ≤ 1/10） |
+
+`shearNoteAttached` 口径延续：= 历史 T-note 事实 + 协商注记事实（两代通道不重叠）。
 
 **晋升门槛（沿用 N1 §4.4）**：某 basis 组样本 ≥30 且 CUT-HOLD 率 <5% 且 保真率 ≥95% → 写入 N4 白名单。
 
-## §5 配置
+## §5 配置（已落地）
 
-新增 `shear.negotiate` 三态：`'off' | 'shadow' | 'live'`，**默认 `off`**（通道未定前零行为）；
-N3a 试验用 `shadow`；`live` 保留给 N4（真正动刀）。client 设置卡同步（`field-model.ts` + `config.ts` 两处同扩）。
+`shear.negotiate` 三态，默认 `off`；client 设置卡「高级与调试」同步（`field-model.ts` 与 `config.ts` 手工同步对）。
+**N3a 试验**：设置卡切到 `shadow`（或配置 `shear.negotiate: shadow`）后**重启**加载新构建，再用
+`price-less` 预设开新会话。
 
 ## §6 验收
 
-- `npm run gate` 绿 + `npm run typecheck:tests` 绿 + build 绿。
-- **零改史断言**：挂注记前后，除注记块外 surface 字节逐字节相同（回放用例进 CI）。
-- 账本可回放：`negotiation-*` 事实 → fold 出 §4 全部字段（同输入同账）。
-- N3a 报告：三通道配合率对照表 + 结论（进入 N3b / 停止 N4）。
-- 真机样本：每 basis ≥30 条（`command` / `name` 各一组）；不足则延长收集期。
+- `npm run gate` 绿 + `npm run typecheck:tests` 绿 + build 绿。**当前：603 tests / 56 files + assert `ok=true vacuous=[]`**。
+- **零改史断言**：shadow 下挂注记 + 收回复，零 `surfaceOp replace`、零 `shear-applied`（`tests/shear-domain.spec.ts` N3 组）。
+- 账本可回放：`negotiation-*` 事实 → fold 出 §4 全部字段（同输入同账；`tests/shear-negotiate.spec.ts`）。
+- N3a 报告：`node scripts/probe-n3.mjs` 输出三张表 + 每 basis 晋升判定。
+- 真机样本：**有注记的 basis** 各 ≥30 条。注意 `command` basis 在真机上大概率被 T-entry 拦下
+  （整形后体积小；分类器仍判 cuttable，但主要样本源是 `run_code` / `job_output` / `subagent`）；不足则延长收集期。
 
-## §7 尺寸预算
+## §7 尺寸（实际）
 
-**M**：`domains/shear-negotiate.ts`（新域，~180 行）+ `platform/tools.ts`（`additionalContexts` 若走 B，+30）+
-`config.ts`/`field-model.ts`（+20）+ `tests/shear-negotiate.spec.ts`（~180）+ `scripts/probe-n3.mjs`（~150）。
-超预算申报拆单（N3a / N3b 可分两单）。
+`core/shear/negotiate.ts` 242 行 · `domains/shear.ts` 协商部分 ~130 行 · `config.ts`/`field-model.ts` ~20 行 ·
+`tests/shear-negotiate.spec.ts` 11 例 · `tests/shear-domain.spec.ts` N3 组 8 例 · `scripts/probe-n3.mjs` ~205 行。
 
 ## §8 待拍板
 
-| # | 事项 | 建议 |
+| # | 事项 | 结论 |
 |---|---|---|
-| 1 | **通道选择（A / B / C）** | ✅ **A+C 已定**（预设 persona 段 + 短注记） |
-| 2 | A 的指令文案 | ✅ 已写入 `presets/price-less/agent.cordis.yml` |
-| 3 | 注记缩短 | ✅ 已落地（一行） |
-| 4 | `shear.negotiate` 默认值 | `off`（N3b 落地时开 `shadow`） |
-| 5 | 配合率底线 | 30%（低于则回退 B / 停止 N4） |
-| 6 | 呈现模式 + 措辞纪律 | ✅ **显式 native** + persona `## 输出措辞` 段（§2.3） |
+| 1 | 通道选择（A / B / C） | ✅ **A+C** |
+| 2 | A 的指令文案 | ✅ 预设 persona 段 |
+| 3 | 注记缩短 | ✅ v2 一行 |
+| 4 | `shear.negotiate` 默认值 | ✅ `off`（N3a 手动开 `shadow`） |
+| 5 | 配合率底线 | ✅ 30% |
+| 6 | 呈现模式 + 措辞纪律 | ✅ 显式 native + `## 输出措辞` |
+| 7 | 回复归属 / T-entry 叠加 / `live` 语义 | ✅ §3.1 / §3.2（`live` 暂等价 `shadow`） |
 
-**下一步**：用户用 `price-less` 预设开新会话 → N3a 观察配合率 → N3b 全量影子（需重启加载新构建）。
+## §9 N3a 基线探针（历史 44 会话，2026-09-09）
+
+`node scripts/probe-n3.mjs`（只读回放 `%TEMP%/ce-sessions`）：
+
+| 指标 | 数值 |
+|---|---|
+| tool/result / 新规则选样 | 5,032 / **633**（name 404 + command 229；对照组 8） |
+| 其中历史真挂了注记 | 68（旧 v1 通道） |
+| CUT-OK / CUT-HOLD / 无回复 | **0 / 0 / 633（100%）** |
+| 旧 v1 注记收到标记 | **0 / 68（0.0%）** |
+
+**结论**：历史数据仍是「工具内容内注记 = 不可信」的 0% 基线；新规则只是把候选面从 68 扩到 633。
+通道能否激活，必须用 `price-less` 预设 + `shadow` 的新会话重采。
