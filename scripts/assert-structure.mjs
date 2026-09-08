@@ -183,6 +183,13 @@ export const RULES = [
       [/\bMath\.random\(/, /\bDate\.now\(/, /\bnew Date\(/]
         .filter((re) => re.test(f.text))
         .map((re) => ({ message: `core/assemble must stay deterministic (no clock/random), matches ${re}` })) },
+  { id: 'D13', canon: 'docs/05 确定性优先 + docs/11 §9（压缩调用确定性）',
+    appliesTo: (p) => p.startsWith('src/core/compress/'),
+    check: (f) =>
+      // 压缩调用纯核 = 字节稳定渲染/校验（同输入同字节）：时钟/随机一律不许出现（P18 起进 CI）。
+      [/\bMath\.random\(/, /\bDate\.now\(/, /\bnew Date\(/]
+        .filter((re) => re.test(f.text))
+        .map((re) => ({ message: `core/compress must stay deterministic (no clock/random), matches ${re}` })) },
 ]
 
 /** CLI：文本（默认，按规则 id 排序 + fail 明细缩进两格）或 --json（schema 冻结）。 */

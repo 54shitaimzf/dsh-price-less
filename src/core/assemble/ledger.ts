@@ -1,9 +1,11 @@
 /**
  * 压缩族账本 fold（docs/07 §0.5 压缩族；docs/04 §7；P17a 度量先行）。
  * 纯函数：同输入同账；输入 = `context-economy/assemble-run` 事实（+ 后续 P19/P20/P20b 事实）。
- * 未实现项显式 0（口径先立不空转）：compressionCall* 归 P18、pressure* 归 P20a、
- * hardTruncateCount 归 P20b、extraSearchCalls 归 P21b。
+ * 未实现项显式 0（口径先立不空转）：pressure* 归 P20a、hardTruncateCount 归 P20b、
+ * extraSearchCalls 归 P21b。
  * P17c：`archiveTruncate` fold 路径打通（纯核截断 = `core/assemble/archive.ts`；生产者 = P19 档案区）。
+ * P18：`compressionCallCount`/`compressionCacheHitRate` fold 路径打通（事实 = `compress-run`，
+ * 纯核 = `core/compress/ledger.ts`；生产者 = P19/P20a）。
  *
  * 模块: core 压缩账本 fold（零 harness/platform import）
  * 平面: L0（确定性重放；无模型、无 IO）
@@ -11,6 +13,7 @@
  * 审查清单: 不 import harness/platform（S1）；无时钟随机（D12）；不写事实、不改史、不读盘。
  * 度量: 本文件即压缩族账本 fold（07 回放管道消费面）。
  */
+import { foldCompressCalls } from '../compress/ledger.ts'
 import type { LedgerFact } from '../ledger/types.ts'
 import type { AssembleLayer, HotTailDropCounts, HotTailSource, HotTailStopReason } from './types.ts'
 
@@ -61,6 +64,12 @@ export interface CompressionLedger {
   assembleDropped: number
   assembleClipped: number
   assembleTruncated: number
+  /** 压缩调用规模（P18 自持观测位；07 缺压缩 usage 字段，见 P18 工单 N7）。 */
+  compressInvocations: number
+  compressCacheHits: number
+  compressUsage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
+  compressParseFailures: number
+  compressSchemaFailures: number
 }
 
 export function emptyCompressionLedger(): CompressionLedger {
@@ -86,6 +95,11 @@ export function emptyCompressionLedger(): CompressionLedger {
     assembleDropped: 0,
     assembleClipped: 0,
     assembleTruncated: 0,
+    compressInvocations: 0,
+    compressCacheHits: 0,
+    compressUsage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    compressParseFailures: 0,
+    compressSchemaFailures: 0,
   }
 }
 
@@ -117,5 +131,14 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     const layer = data.layer
     if (layer === 'boundary' || layer === 'pressure') ledger.compressionLayer[layer]++
   }
+  // P18：调用口径由 compress-run 事实汇总（compressionLayer 仍只由 assemble-run 计数，防双计）。
+  const calls = foldCompressCalls(facts)
+  ledger.compressionCallCount = calls.compressionCallCount
+  ledger.compressionCacheHitRate = calls.compressionCacheHitRate
+  ledger.compressInvocations = calls.invocations
+  ledger.compressCacheHits = calls.cacheHits
+  ledger.compressUsage = calls.usage
+  ledger.compressParseFailures = calls.parseFailures
+  ledger.compressSchemaFailures = calls.schemaFailures
   return ledger
 }
