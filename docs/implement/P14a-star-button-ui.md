@@ -250,7 +250,7 @@
 | 计划 | 原表述 | 修正 |
 |---|---|---|
 | docs/10 §1 H11 | `conversation.view 星标按钮` | **改为 `conversation.input.right 星标按钮`**（若采用 header 则写 header actions）；P14a 完成时回写 docs/10 |
-| P14b | “星标 host 方法” | 本单冻结 `StarHostBridge`；P14b 应提供该 bridge 的真实实现，并可通过 custom Typert Remote contribution 暴露给 client |
+| P14b | “星标 host 方法” | 本单冻结 `StarHostBridge`；P14b 应提供该 bridge 的真实实现。**修正（P14b1 §0.1）：暴露面 = Connection 通用 RPC 通道 `/context-economy`（端点 `star.preview`/`star.apply`），否决 custom Typert Remote contribution**（依据：host SRC fallback 依赖编译后形参名 + client 强制 strict codec） |
 | P13 | `/optimize-prompt` 入口 | 已注册；P14b 只需传入 `manualOptimize`，不重复注册 |
 
 ## 9. 汇报模板（本单最后一步）

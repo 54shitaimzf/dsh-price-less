@@ -126,7 +126,7 @@ export const RULES = [
     // logger.ts 发射路径）——越界即红，保证上游合并后机制代码零改动的原子删除。
     // 能力探测 = 结构化常量 SESSION_LOG_INTENT（ea04b581a5），不再匹配 append.toString；
     // import/调用 emitFact 的路径同样锁死（事实发射只准经 logger.ts 的 emitCeFact 词汇表门）。
-    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts' && f.path !== 'src/domains/task-facts.ts'
+    (/IgnorableSessionEventMap|SESSION_LOG_INTENT|IgnorableChannel|setFactMirror|factModeStats|emitFact\(|from\s+['"][^'"]*ignorable-channel[^'"]*['"]/).test(f.text) && f.path !== 'src/platform/ignorable-channel.ts' && f.path !== 'src/platform/logger.ts' && f.path !== 'src/domains/judge-facts.ts' && f.path !== 'src/domains/task-facts.ts' && f.path !== 'src/domains/optimize-facts.ts'
       ? [{ message: 'ignorable-channel concepts must stay in the removable unit (platform/ignorable-channel.ts + logger.ts emit path, docs/12 §2)' }]
       : [] },
     { id: 'D4', canon: 'docs/09 §1/§2 + docs/11 §2 + docs/13 §3.6',
@@ -157,6 +157,11 @@ export const RULES = [
     /(tools\/execute|tools\/post-execute|PostToolDecision|ToolDispatchExecution|ToolExecutionResult|\bToolExecution\b|@deepseek-ai\/dsh-tools)/.test(f.text)
       && f.path !== 'src/platform/tools.ts'
       ? [{ message: 'tool event concepts must only appear in platform/tools.ts (H6 工具端口收口, docs/10 §1 H6)' }]
+      : [] },
+  { id: 'D9', canon: 'docs/10 §1 H11 + docs/11 §2 + docs/13 §3.11', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
+    /(ctx\.connection|connection\.rpc|ConnectionRpcResult|ConnectionRpcHandler|HostConnectionRpc|ClientConnectionRpc|@deepseek-ai\/dsh-client-connection)/.test(f.text)
+      && f.path !== 'src/platform/star-bridge.ts' && f.path !== 'src/index.ts'
+      ? [{ message: 'connection RPC bridge concepts must only appear in src/platform/star-bridge.ts (index.ts wiring allowed, docs/13 §3.11)' }]
       : [] },
 ]
 

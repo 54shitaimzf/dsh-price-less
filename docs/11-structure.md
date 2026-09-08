@@ -6,7 +6,7 @@
 > 事实源三链：① 插件开发规范（dsh-super-injector 插件开发指南 + 脚手架模板：
 > 四形态 / manifest / build 闭环 / 铁律）；② harness API 面（源码逐条核验，见 10 §1）；
 > ③ 现有资产 = client/ 设置壳（零改动保留）+ docs/00–09 设计契约。
-> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；R2 判别域进行中（P8/P9/P10/P11/P12/P13/P14a 已施工；P14b 待接真实 bridge），§9。
+> 状态：R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；R2 判别域进行中（P8/P9/P10/P11/P12/P13/P14a/P14b1 已施工；P14b2 待接真实 bridge），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -55,6 +55,7 @@ src/
 │  ├─ storage.ts     # H10 storageDomain 封装（四实体表声明、版本化读写、CAS）
 │  ├─ skills.ts      # H13 技能目录枚举 + watch（稳定前缀原料 + 引用守卫查表）
 │  ├─ logger.ts      # ctx.logger('context-economy') + ignorable 自定义事件发射
+│  ├─ star-bridge.ts # H11 星标 Connection RPC 桥端口（channel/端点/信封/错误码；P14b1）
 │  └─ diag-sink.ts   # 诊断落盘：ctx.logger.exporter() → 插件 logs/ JSONL（P1.1，agent 自审入口）
 ├─ core/             # 纯核（零 harness import：事件/会话类型本地重声明，结构性兼容）
 │  ├─ units.ts       # 分划单位状态机：task 段 fold、边界记录（01 §3.5 正典）
@@ -70,6 +71,8 @@ src/
 ├─ domains/          # 编排面（组合 core × platform，按开关装配）
 │  ├─ input.ts       # 判别域：自动断面服务（T0→L0→L1→对表→LLM→fail-lazy；三分类搭车）
 │  ├─ commands.ts    # 命令面：/task、/init、/optimize-prompt 注册与委托（10 §2）
+│  ├─ star.ts        # 星标断面 host 服务：输入栈装配 → 断面 → 预览态 → 确认后回填/产物（10 §4 时序 B；P14b1）
+│  ├─ optimize-facts.ts # optimize-run 两相事实声明合并 + fold（07 §0.5；P14b1）
 │  ├─ shear.ts       # 剪切域：时机调度（四档）+ run 冲刷 + 误剪反馈
 │  ├─ compaction.ts  # 压缩域：边界触发（H2）+ 压力触发（H3）+ 断路器 + 事务编排（H5）
 │  └─ restore.ts     # 恢复编排：启动回放（H9）→ KV/日志双源核对 → 降级清单（09 §4）

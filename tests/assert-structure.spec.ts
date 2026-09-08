@@ -96,6 +96,11 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D8', 'src/domains/a.ts', "ctx.on('tools/post-execute', (e, r, next) => next())\n")).not.toEqual(NO_ISSUES)
     expect(check('D8', 'src/platform/events.ts', "import type { ToolExecution } from '@deepseek-ai/dsh-tools'\n")).not.toEqual(NO_ISSUES)
   })
+  it('D9：connection RPC 桥概念越出 platform/star-bridge.ts 与 index.ts → issue（docs/10 §1 H11 + docs/13 §3.11）', () => {
+    expect(check('D9', 'src/domains/star.ts', "const connection = ctx.connection\n")).not.toEqual(NO_ISSUES)
+    expect(check('D9', 'src/platform/events.ts', "type X = ConnectionRpcResult<unknown>\n")).not.toEqual(NO_ISSUES)
+    expect(check('D9', 'src/platform/star-bridge.ts', "connection.rpc.handle('/context-economy', handler)\n")).toEqual(NO_ISSUES)
+  })
 })
 
 describe('正样本（干净文件 → 0 issue）', () => {
@@ -131,6 +136,7 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D3').check({ path: 'src/platform/logger.ts', text: "import { emitFact, factModeStats } from './ignorable-channel.ts'" }, new Map())).toEqual(NO_ISSUES)
     expect(check('D3', 'src/platform/events.ts', 'export function createEventPump()\n')).toEqual(NO_ISSUES)
     expect(rule('D3').check({ path: 'src/domains/judge-facts.ts', text: 'IgnorableSessionEventMap; IgnorableSessionEventMap' }, new Map())).toEqual(NO_ISSUES)
+    expect(rule('D3').check({ path: 'src/domains/optimize-facts.ts', text: 'IgnorableSessionEventMap' }, new Map())).toEqual(NO_ISSUES)
   })
   it('D4：storage 概念只许在 storage.ts 与 index.ts（docs/09 §1）', () => {
     expect(rule('D4').check({ path: 'src/platform/storage.ts', text: "defineDomain({ name: 'x' }); ctx.storageDomain" }, new Map())).toEqual(NO_ISSUES)
@@ -155,6 +161,12 @@ describe('正样本（干净文件 → 0 issue）', () => {
     expect(rule('D8').check({ path: 'src/platform/tools.ts', text: toolFile }, new Map())).toEqual(NO_ISSUES)
     expect(check('D8', 'src/platform/events.ts', "import type { ContentBlock } from '@deepseek-ai/dsh-llm'\n")).toEqual(NO_ISSUES)
   })
+  it('D9：connection RPC 桥概念只许在 platform/star-bridge.ts 与 index.ts 接线（docs/13 §3.11）', () => {
+    const bridgeFile = "connection.rpc.handle('/context-economy', handler)\nimport type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection/src/rpc.ts'"
+    expect(rule('D9').check({ path: 'src/platform/star-bridge.ts', text: bridgeFile }, new Map())).toEqual(NO_ISSUES)
+    expect(rule('D9').check({ path: 'src/index.ts', text: "ctx.inject(['sessions'], () => {})\nconst connection = bridgeCtx.get('connection')" }, new Map())).toEqual(NO_ISSUES)
+    expect(check('D9', 'src/platform/llm.ts', "export const x = 1\n")).toEqual(NO_ISSUES)
+  })
 })
 
 describe('真实树集成', () => {
@@ -167,7 +179,7 @@ describe('真实树集成', () => {
     expect(Object.fromEntries(Object.entries(result.rules).map(([id, r]) => [id, r.status]))).toEqual({
       M1: 'pass', M2: 'pass', M3: 'pass', M4: 'pass', M5: 'pass',
       S1: 'pass', S2: 'pass', S3: 'pass', S4: 'pass', S5: 'pass',
-      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass', D8: 'pass',
+      D1: 'pass', D2: 'pass', D3: 'pass', D4: 'pass', D5: 'pass', D6: 'pass', D7: 'pass', D8: 'pass', D9: 'pass',
     })
   })
   it('确定性：真实树 runRules 跑两遍 JSON.stringify 逐字节相等', () => {

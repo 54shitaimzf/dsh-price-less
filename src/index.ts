@@ -14,8 +14,11 @@ import type {} from '@deepseek-ai/dsh-storage-domain'
 import { openContextEconomyStorage, type ContextEconomyStorage } from './platform/storage.ts'
 import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.ts'
 import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
+import type { Session } from '@deepseek-ai/dsh-session'
 import { mountAutoDiscriminator } from './domains/input.ts'
 import { mountCommandFace } from './domains/commands.ts'
+import { mountStarHost, readSessionId, renderPreviewCommandText } from './domains/star.ts'
+import { registerStarBridge, type StarConnectionFace } from './platform/star-bridge.ts'
 
 export const name = 'dsh-price-less'
 const PROJECT_FRAME_TABLE = 'project_frame' as const
@@ -77,6 +80,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   let skillsCtx: Context | undefined
   let llmCtx: Context | undefined
   let stopCommands: (() => void) | undefined
+  let starHost: ReturnType<typeof mountStarHost> | undefined
+  let stopStarBridge: (() => Promise<void>) | undefined
 
   ctx.inject(['storageDomain'], (storageCtx) => {
     storageCtx.effect(() => {
@@ -89,6 +94,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
         stopSkillWatch?.()
         stopAuto?.()
         stopCommands?.()
+        starHost?.dispose()
+        await stopStarBridge?.()
         registerFactMirror(undefined)
         await storage?.close()
       }
@@ -115,6 +122,26 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
               logger: ceLogger(llmCtx),
             }).dispose
           })
+          ctx.inject(['sessions'], (sessionsCtx) => {
+            if (disposed) return
+            const sessions = sessionsCtx.get('sessions') as { get(id: string): Session | undefined } | undefined
+            const host = mountStarHost({
+              storage: opened,
+              getConfig,
+              logger: ceLogger(sessionsCtx),
+              workspace: process.cwd().replaceAll('\\', '/'),
+              skillsCtx,
+              llmCtx,
+              resolveSession: sessions === undefined ? undefined : (id) => sessions.get(id),
+            })
+            starHost = host
+            ctx.inject(['connection'], (bridgeCtx) => {
+              if (disposed) return
+              const connection = bridgeCtx.get('connection') as StarConnectionFace | undefined
+              if (connection === undefined) return
+              stopStarBridge = registerStarBridge(connection, host, ceLogger(bridgeCtx))
+            })
+          })
           ctx.inject(['commands'], (commandsCtx) => {
             if (disposed) return
             stopCommands = mountCommandFace({
@@ -125,6 +152,15 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
               workspace: process.cwd().replaceAll('\\', '/'),
               skillsCtx,
               llmCtx,
+              manualOptimize: async (session, rawInput) => {
+                const prompt = rawInput.trim()
+                if (starHost === undefined) return { kind: 'error', text: '断面服务不可用（sessions 服务缺失）' }
+                if (prompt === '') return { kind: 'error', text: '用法：/optimize-prompt <prompt>' }
+                const result = await starHost.preview({ sessionId: readSessionId(session), prompt })
+                return result.ok
+                  ? { kind: 'success', text: renderPreviewCommandText(result.value) }
+                  : { kind: 'error', text: `${result.code}：${result.message}` }
+              },
             }).dispose
           })
         })

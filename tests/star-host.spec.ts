@@ -1,0 +1,318 @@
+/**
+ * P14b1 星标 host 断面服务测试（docs/implement/P14b1-star-host-service.md §3.6）。
+ * 十二组：全量断面 / 门控 / 解析失败 / 非 stop / 无会话 / apply 回填+产物+两相事实 /
+ * 未知预览 / 幂等 / 版本递增 / fold / summarizeVerdict / pending 容量；另加 RPC 端口组。
+ * 全部 fake，零网络、零真模型、零 cordis 运行时。
+ */
+import { describe, expect, it } from 'vitest'
+import type { Session } from '@deepseek-ai/dsh-session'
+import { dossierStorageKey, sessionScopedTaskId, type DossierBody } from '../src/core/dossier.ts'
+import { createProjectFrame, projectFrameStorageKey, type SkillCatalogSnapshot } from '../src/core/prefix.ts'
+import { mountStarHost, readSessionId, renderPreviewCommandText, summarizeVerdict, STAR_VERDICT_SUMMARY_MAX_CHARS, type StarPreviewDto } from '../src/domains/star.ts'
+import { foldOptimizeRunFacts, OPTIMIZE_RUN_FACT_TYPE, previewRunFact, appliedRunFact, type OptimizeRunFactData } from '../src/domains/optimize-facts.ts'
+import { readJudgeTable } from '../src/domains/input.ts'
+import {
+  parseApplyPayload, parsePreviewPayload, registerStarBridge, STAR_BRIDGE_CHANNEL, STAR_BRIDGE_CODES,
+  STAR_PREVIEW_LIMIT, type StarConnectionFace, type StarRpcHandler,
+} from '../src/platform/star-bridge.ts'
+
+const logger = { info() {}, warn() {}, error() {} }
+const CATALOG: SkillCatalogSnapshot = { skills: [{ name: 'run-tests', description: '跑测试' }], complete: true }
+const PROMPT = '读取 src/a.ts 并运行 npm test'
+const FULL_OUTPUT = '[PRODUCT]\n' + PROMPT + '\n\n[VERDICTS]\nASPECT 构建\nFILE src/a.ts\nKEYWORD npm test\nKEEP 1\n'
+
+interface FakeRecord { version: number; body: unknown }
+
+function makeStorage(initial: Record<string, FakeRecord> = {}) {
+  const data = new Map<string, FakeRecord>(Object.entries(initial))
+  const puts: Array<{ table: string; key: string; body: unknown }> = []
+  return {
+    data,
+    puts,
+    getEntity(_table: string, key: string) { return data.get(key) },
+    async putEntity(table: string, key: string, body: unknown, _source: unknown, opts?: { baseVersion?: number }) {
+      const current = data.get(key)
+      const base = opts?.baseVersion ?? 0
+      if (base === 0 ? current !== undefined : current?.version !== base) throw new Error('CAS mismatch')
+      const record: FakeRecord = { version: current === undefined ? 1 : current.version + 1, body }
+      data.set(key, record)
+      puts.push({ table, key, body })
+      return record
+    },
+  }
+}
+
+function makeSession(events: unknown[] = [], id = 's1'): Session {
+  return { header: { id }, id, snapshotEvents: () => events } as unknown as Session
+}
+
+function makeLlm(output: string, calls: { count: number; prompts: string[] }, finishKind = 'stop') {
+  return {
+    llm: {
+      stream: async function* (options: { messages: Array<{ content: Array<{ text: string }> }> }) {
+        calls.count++
+        calls.prompts.push(options.messages[0]!.content[0]!.text)
+        yield { type: 'text-delta', index: 0, text: output }
+        yield { type: 'finish', reason: { kind: finishKind } }
+      },
+    } as never,
+  }
+}
+
+interface MountInput {
+  output?: string
+  sessionId?: string
+  session?: boolean
+  llm?: boolean
+  skills?: boolean
+  finishKind?: string
+  frame?: boolean
+  dossier?: { messages: DossierBody['messages']; annotations?: DossierBody['annotations'] }
+}
+
+function mount(input: MountInput = {}) {
+  const sessionId = input.sessionId ?? 's1'
+  const seed: Record<string, FakeRecord> = {}
+  if (input.dossier !== undefined) {
+    const taskId = sessionScopedTaskId(sessionId, 'task-1')
+    seed[dossierStorageKey(taskId)] = { version: 1, body: { taskId, messages: input.dossier.messages, annotations: input.dossier.annotations ?? {} } }
+  }
+  if (input.frame === true) seed[projectFrameStorageKey('ws')] = { version: 1, body: createProjectFrame('目标', ['方面'], CATALOG).body }
+  const storage = makeStorage(seed)
+  const facts: OptimizeRunFactData[] = []
+  const calls = { count: 0, prompts: [] as string[] }
+  const session = input.session === false ? undefined : makeSession([], sessionId)
+  const host = mountStarHost({
+    storage: storage as never,
+    getConfig: () => ({ discriminator: {} }) as never,
+    logger,
+    workspace: 'ws',
+    now: () => 5000,
+    skillsCtx: input.skills === false ? undefined : {
+      skills: { snapshot: async () => ({ skills: CATALOG.skills.map((s) => ({ ...s, invocation: { modelInvocable: true, userInvocable: true } })), complete: true }) },
+      logger: () => logger,
+    } as never,
+    llmCtx: input.llm === false ? undefined : makeLlm(input.output ?? FULL_OUTPUT, calls, input.finishKind ?? 'stop'),
+    resolveSession: session === undefined ? undefined : () => session,
+    emitFact: (_session: unknown, _type: string, data: unknown) => { facts.push(data as OptimizeRunFactData) },
+  })
+  return { host, storage, facts, calls, sessionId }
+}
+
+const okValue = <T>(result: { ok: boolean }): T => (result as { ok: true; value: T }).value
+const failCode = (result: { ok: boolean }): string => (result as { ok: false; code: string }).code
+
+describe('star host service', () => {
+  it('1. 全量断面：输入栈装配 + 双通道解析 + DTO 字段逐项', async () => {
+    const { host, storage, facts, calls } = mount({
+      frame: true,
+      dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }, { seq: 7, time: 2, text: 'more text here' }] },
+    })
+    const result = await host.preview({ sessionId: 's1', prompt: PROMPT })
+    expect(result.ok).toBe(true)
+    const dto = okValue<StarPreviewDto>(result)
+    expect(dto.previewId).toBe('s1#task-1#1#1')
+    expect(dto.originalPrompt).toBe(PROMPT)
+    expect(dto.product).toBe(PROMPT)
+    expect(dto.verdicts.map((v) => v.kind)).toEqual(['aspect', 'file', 'keyword', 'keep'])
+    expect(dto.verdicts[0]!.summary).toBe('方面：构建')
+    expect(dto.missingAuthority).toEqual([])
+    expect(dto.droppedLines).toBe(0)
+    expect(dto.ctxTokens).toBeGreaterThan(0)
+    expect(dto.short).toBe(false)
+    expect(calls.count).toBe(1)
+    expect(calls.prompts[0]).toContain('[稳定前缀]')
+    expect(calls.prompts[0]).toContain('目标')
+    expect(calls.prompts[0]).toContain('<msg seq="5">hello world</msg>')
+    expect(calls.prompts[0]).toContain('[候选权威段]')
+    expect(storage.puts).toHaveLength(0)
+    expect(facts).toHaveLength(1)
+    expect(facts[0]).toMatchObject({ phase: 'preview', previewId: 's1#task-1#1#1', verdictCount: 4, keptSpanCount: 1, missingAuthorityCount: 0, latencyMs: 0 })
+    expect(facts[0]!.llmUsage).toBeUndefined()
+    expect(renderPreviewCommandText(dto)).toContain('断面预览')
+    expect(readSessionId(makeSession([], 'sid-2'))).toBe('sid-2')
+  })
+
+  it('2. 门控：短卷宗 → short=true 且 product=null（只回填裁决）', async () => {
+    const { host, facts } = mount({
+      dossier: { messages: [{ seq: 5, time: 1, text: 'hi' }] },
+      output: '[PRODUCT]\n(空)\n\n[VERDICTS]\nCLASS 5 action\n',
+    })
+    const result = await host.preview({ sessionId: 's1', prompt: PROMPT })
+    const dto = okValue<StarPreviewDto>(result)
+    expect(dto.short).toBe(true)
+    expect(dto.product).toBeNull()
+    expect(dto.verdicts.map((v) => v.kind)).toEqual(['class'])
+    expect(facts[0]).toMatchObject({ short: true, productChars: 0, verdictCount: 1 })
+  })
+
+  it('3. 解析失败：乱码输出 → CE_STAR_PARSE_FAILED 且零 putEntity', async () => {
+    const { host, storage, facts } = mount({
+      dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] },
+      output: 'no markers at all',
+    })
+    const result = await host.preview({ sessionId: 's1', prompt: PROMPT })
+    expect(failCode(result)).toBe(STAR_BRIDGE_CODES.parseFailed)
+    expect(storage.puts).toHaveLength(0)
+    expect(facts).toHaveLength(1)
+    expect(facts[0]).toMatchObject({ phase: 'preview', errorCode: STAR_BRIDGE_CODES.parseFailed })
+    expect(host.stats().parseFailures).toBe(1)
+  })
+
+  it('4. 非 stop 结束 → CE_STAR_LLM_FAILED 且零 putEntity', async () => {
+    const { host, storage, facts } = mount({ finishKind: 'error', dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    const result = await host.preview({ sessionId: 's1', prompt: PROMPT })
+    expect(failCode(result)).toBe(STAR_BRIDGE_CODES.llmFailed)
+    expect(storage.puts).toHaveLength(0)
+    expect(facts[0]).toMatchObject({ phase: 'preview', errorCode: STAR_BRIDGE_CODES.llmFailed })
+    expect(host.stats().llmFailures).toBe(1)
+  })
+
+  it('5. 无 live session → CE_STAR_NO_SESSION 且未调用 LLM', async () => {
+    const { host, calls, storage } = mount({ session: false })
+    const result = await host.preview({ sessionId: 's1', prompt: PROMPT })
+    expect(failCode(result)).toBe(STAR_BRIDGE_CODES.noSession)
+    expect(calls.count).toBe(0)
+    expect(storage.puts).toHaveLength(0)
+  })
+
+  it('6. apply：卷宗回填 + 冲突计数 + 产物形状被 readJudgeTable 接受 + 两相事实', async () => {
+    const { host, storage, facts } = mount({
+      dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }, { seq: 7, time: 2, text: 'more text here' }], annotations: { '5': [{ class: 'pureQ', by: 'auto', at: 1 }] } },
+      output: '[PRODUCT]\n产品文本\n\n[VERDICTS]\nCLASS 5 action\nSHEAR 5..5 已吸收：结论\n',
+    })
+    const previewId = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+    const applied = await host.apply({ sessionId: 's1', previewId, editedProduct: '用户编辑后的产品' })
+    expect(applied.ok).toBe(true)
+    expect(okValue<{ text?: string }>(applied).text).toContain('回填 1 条，冲突 1 条')
+    const dossier = storage.data.get('dossier:s1:task-1')!.body as DossierBody
+    expect(dossier.annotations['5']).toEqual([{ class: 'action', by: 'backfill', at: 5000 }])
+    const artifact = storage.data.get('optimize_artifact:latest:ws')!.body as Record<string, unknown>
+    expect(artifact).toMatchObject({
+      product: '用户编辑后的产品', taskId: 's1:task-1', sessionId: 's1', previewId, appliedAt: 5000,
+      shear: [{ startSeq: 5, endSeq: 5, note: '结论' }], keptSpanIndexes: [],
+    })
+    expect(readJudgeTable(storage as never, 'ws')).toEqual({ version: 1, aspects: [], fileSignatures: [], keywords: [] })
+    expect(facts.map((f) => f.phase)).toEqual(['preview', 'applied'])
+    expect(facts[0]!.previewId).toBe(facts[1]!.previewId)
+    expect(facts[1]).toMatchObject({ backfillCount: 1, backfillConflicts: 1, shearPairs: 1 })
+    expect(facts[1]!.shearTokens).toBeGreaterThan(0)
+    expect(host.stats()).toMatchObject({ previews: 1, applies: 1, reapplies: 0, pending: 1 })
+  })
+
+  it('7. apply 未知 previewId / 跨会话 → CE_STAR_UNKNOWN_PREVIEW', async () => {
+    const { host } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    expect(failCode(await host.apply({ sessionId: 's1', previewId: 'nope', editedProduct: 'x' }))).toBe(STAR_BRIDGE_CODES.unknownPreview)
+    const previewId = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+    expect(failCode(await host.apply({ sessionId: 's2', previewId, editedProduct: 'x' }))).toBe(STAR_BRIDGE_CODES.unknownPreview)
+  })
+
+  it('8. apply 幂等：二次提交不写盘、不发事实，reapplies 计数', async () => {
+    const { host, storage, facts } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    const previewId = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+    await host.apply({ sessionId: 's1', previewId, editedProduct: 'x' })
+    const puts = storage.puts.length
+    const factCount = facts.length
+    const again = await host.apply({ sessionId: 's1', previewId, editedProduct: 'x' })
+    expect(again.ok).toBe(true)
+    expect(okValue<{ text?: string }>(again).text).toContain('重复提交')
+    expect(storage.puts).toHaveLength(puts)
+    expect(facts).toHaveLength(factCount)
+    expect(host.stats().reapplies).toBe(1)
+  })
+
+  it('9. 产物版本递增：第二次断面 apply 后 judgeTable.version 1 → 2', async () => {
+    const { host, storage } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    const first = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+    await host.apply({ sessionId: 's1', previewId: first, editedProduct: 'v1' })
+    const second = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+    await host.apply({ sessionId: 's1', previewId: second, editedProduct: 'v2' })
+    expect(readJudgeTable(storage as never, 'ws')!.version).toBe(2)
+    expect((storage.data.get('optimize_artifact:latest:ws')!.body as { product: string }).product).toBe('v2')
+  })
+
+  it('10. foldOptimizeRunFacts：preview×2（其一无 applied）→ 归并口径', () => {
+    const base = (previewId: string, at: number) => ({ previewId, taskId: 't', sessionId: 's', at })
+    const facts = [
+      previewRunFact(base('p1', 1), { short: false, ctxTokens: 100, llmUsage: { inputTokens: 10, outputTokens: 5 } }),
+      appliedRunFact(base('p1', 2), { backfillCount: 2, backfillConflicts: 1, shearPairs: 1, shearTokens: 30 }),
+      previewRunFact(base('p2', 3), { short: true, ctxTokens: 50, llmUsage: { inputTokens: 3, outputTokens: 1 } }),
+    ]
+    const ledger = foldOptimizeRunFacts(facts)
+    expect(ledger.optimizeCount).toBe(2)
+    expect(ledger.optimizePromptTokens).toMatchObject({ inputTokens: 13, outputTokens: 6 })
+    expect(ledger.verdictBackfill).toEqual({ count: 2, conflicts: 1 })
+    expect(ledger.shearAtStar).toEqual({ pairs: 1, tokens: 30 })
+    expect(Object.hasOwn(facts[2]!, 'backfillCount')).toBe(false)
+    expect(OPTIMIZE_RUN_FACT_TYPE).toBe('context-economy/optimize-run')
+  })
+
+  it('11. summarizeVerdict：八种 kind 行文 + 长度钳制', () => {
+    const views = [
+      summarizeVerdict({ kind: 'class', seq: 3, class: 'action' }),
+      summarizeVerdict({ kind: 'boundary', seq: 4 }),
+      summarizeVerdict({ kind: 'shear', startSeq: 5, endSeq: 6, note: '结论' }),
+      summarizeVerdict({ kind: 'skill', name: 'run-tests' }),
+      summarizeVerdict({ kind: 'keep', spanIndex: 2 }),
+      summarizeVerdict({ kind: 'aspect', text: '构建' }),
+      summarizeVerdict({ kind: 'file', signature: 'src/a.ts' }),
+      summarizeVerdict({ kind: 'keyword', keyword: 'npm test' }),
+    ]
+    expect(views.map((v) => v.kind)).toEqual(['class', 'boundary', 'shear', 'skill', 'keep', 'aspect', 'file', 'keyword'])
+    expect(views[0]!.summary).toBe('消息 #3 标注为 action')
+    expect(views[1]!.summary).toBe('消息 #4 为任务边界')
+    expect(views[2]!.summary).toBe('剪切 #5..#6：结论')
+    expect(views[4]!.summary).toBe('保留权威段 #2')
+    expect(views[7]!.summary).toBe('关键词：npm test')
+    const long = summarizeVerdict({ kind: 'aspect', text: 'x'.repeat(500) })
+    expect(long.summary.length).toBe(STAR_VERDICT_SUMMARY_MAX_CHARS)
+    expect(long.summary.endsWith('…')).toBe(true)
+  })
+
+  it('12. pending 容量：第 33 个预览淘汰最旧', async () => {
+    const { host } = mount({ dossier: { messages: [{ seq: 5, time: 1, text: 'hello world' }] } })
+    let firstId = ''
+    for (let i = 0; i < STAR_PREVIEW_LIMIT + 1; i++) {
+      const id = okValue<StarPreviewDto>(await host.preview({ sessionId: 's1', prompt: PROMPT })).previewId
+      if (i === 0) firstId = id
+    }
+    expect(host.stats().pending).toBe(STAR_PREVIEW_LIMIT)
+    expect(failCode(await host.apply({ sessionId: 's1', previewId: firstId, editedProduct: 'x' }))).toBe(STAR_BRIDGE_CODES.unknownPreview)
+    host.dispose()
+    expect(host.stats().pending).toBe(0)
+  })
+
+  it('13. RPC 端口：channel/端点常量、payload 校验、分派、未知端点、handler 抛错', async () => {
+    const seen: { channel?: string; removed: boolean } = { removed: false }
+    let handler: StarRpcHandler | undefined
+    const connection: StarConnectionFace = {
+      rpc: {
+        handle(channel, next) {
+          seen.channel = channel
+          handler = next
+          return async () => { seen.removed = true }
+        },
+      },
+    }
+    const stop = registerStarBridge(connection, {
+      preview: async (payload) => ({ ok: true, value: { echo: payload } }),
+      apply: async () => ({ ok: true, value: { text: 'ok' } }),
+    }, logger)
+    expect(seen.channel).toBe(STAR_BRIDGE_CHANNEL)
+    const signal = new AbortController().signal
+    expect(await handler!('star.preview', { sessionId: 's1', prompt: '' }, signal)).toEqual({ ok: true, value: { echo: { sessionId: 's1', prompt: '' } } })
+    expect(await handler!('star.preview', { sessionId: '' }, signal)).toMatchObject({ ok: false, error: { code: STAR_BRIDGE_CODES.badRequest, details: {} } })
+    expect(await handler!('star.nope', {}, signal)).toMatchObject({ ok: false, error: { code: STAR_BRIDGE_CODES.unknownEndpoint } })
+    registerStarBridge(connection, {
+      preview: async () => { throw new Error('boom') },
+      apply: async () => ({ ok: true, value: {} }),
+    }, logger)
+    expect(await handler!('star.preview', { sessionId: 's1', prompt: 'x' }, signal)).toMatchObject({ ok: false, error: { code: STAR_BRIDGE_CODES.internal } })
+    expect(parsePreviewPayload(null)).toBeUndefined()
+    expect(parsePreviewPayload({ sessionId: 's1', prompt: 1 })).toBeUndefined()
+    expect(parseApplyPayload({ sessionId: 's1', previewId: 'p', editedProduct: '' })).toEqual({ sessionId: 's1', previewId: 'p', editedProduct: '' })
+    expect(parseApplyPayload({ sessionId: 's1', previewId: 'p' })).toBeUndefined()
+    await stop()
+    expect(seen.removed).toBe(true)
+  })
+})

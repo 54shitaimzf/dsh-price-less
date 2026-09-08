@@ -326,8 +326,41 @@ link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 - client 注入：`['slots','settingsScope','remote','remote.session','connection']`
 - 已注册槽：`settings.plugin.item`（设置卡）、`conversation.input.right`（星标按钮）
 - 星标使用 `StarHostBridge` 接口（见 `docs/implement/P14a-star-button-ui.md` §2.3）；
-  P14b 只需替换 `createMockStarBridge()` 为真实 bridge，UI/类型不变。
+  P14b1 已交付 host 半边（§3.11）；P14b2 只需替换 `createMockStarBridge()` 为真实 bridge，UI/类型不变。
 - `docs/11 §5` 与 `docs/10 §1 H11` 已同步为 `conversation.input.right`。
+
+### 3.11 Connection 通用 RPC 通道（P14b1 使用；星标 host 桥）
+
+> P14b1 否决 P14a §8.2 的 Typert Remote 设想，改用官方 Connection 通道（依据见
+> `docs/implement/P14b1-star-host-service.md` §0.1）。核验源均在 `packages/client/connection/`。
+
+| 符号 | 定义处 | 用途 |
+|---|---|---|
+| `Context.connection: HostConnectionHandle`（Context merge） | `src/rpc-host.ts:52-57` | host 侧服务键（channel 注册 owner-scoped） |
+| `HostConnectionService.rpc` getter | `src/rpc-host.ts:79-86` | 取 `HostConnectionRpc` |
+| `HostConnectionRpc.handle(channel, handler)` | `src/rpc.ts:138-148` | 注册认证后的绝对 channel（trust + browser auth + prefix WebRoute） |
+| `ConnectionRpcHandler = (endpoint, payload, signal) => Promise<ConnectionRpcResult<unknown>>` | `src/rpc.ts:100-104` | handler 签名 |
+| `ConnectionRpcResult<T> = {ok:true,value} \| {ok:false,error:{code,message,details}}` | `src/rpc.ts:24-27` | 返回信封 |
+| channel/endpoint 文法 `^\/[A-Za-z0-9._~-]+$` / `^[A-Za-z0-9_$.-]+$` | `src/rpc.ts:32-33` | 命名约束 |
+| 专用 channel 先例测试 | `tests/node-half.host.spec.ts:272-319` | 注册/卸载语义 |
+
+**wire 契约（P14b1 冻结；P14b2 client 侧常量必须逐字相等）**：channel `'/context-economy'`；
+端点 `'star.preview'`（payload `{sessionId,prompt}`）与 `'star.apply'`（payload
+`{sessionId,previewId,editedProduct}`）；信封 = `ConnectionRpcResult`。错误码：
+`CE_STAR_BAD_REQUEST` / `CE_STAR_UNKNOWN_ENDPOINT` / `CE_STAR_NO_SESSION` /
+`CE_STAR_LLM_FAILED` / `CE_STAR_PARSE_FAILED` / `CE_STAR_UNKNOWN_PREVIEW` /
+`CE_STAR_STORAGE_FAILED` / `CE_STAR_INTERNAL` / `CE_STAR_UNAVAILABLE`（client 侧无连接服务）。
+
+**类型面策略**：`@deepseek-ai/dsh-client-connection` 根 d.ts 会级联
+`dsh-host-webserver`/`dsh-credentials`/`dsh-attachment`（插件未链接）。端口只从**源文件子路径**
+`@deepseek-ai/dsh-client-connection/src/rpc.ts` 做 type-only 导入（该文件仅依赖已链接的
+`dsh-brand`，零级联）；`ctx.get('connection')` 的最小结构面本地重声明，并在
+`src/platform/star-bridge.ts` 用类型级互赋断言锁定（`AssertAssignable`）。**不得**为此链接
+webserver/credentials/attachment。
+
+**否决路线留档**：Typert Remote 需 host SRC fallback（`packages/api/gateway/src/index.ts:266-290,644-670`，
+依赖装饰器 + 编译后形参名）+ client 强制 strict codec（`packages/api/gateway/src/client/index.ts:709-720`），
+且需新服务键与 zod 打进 client bundle；本插件不采用。
 
 ## 4. 会话日志兼容契约（本插件最关键的 4 条）
 
@@ -357,6 +390,9 @@ link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
 | `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent` | 已施工（P7） |
+| `src/platform/star-bridge.ts` | `ctx.get('connection')` 最小结构面、`connection.rpc.handle('/context-economy')`、`ConnectionRpcResult` 信封（§3.11） | 已施工（P14b1） |
+| `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物） | 已施工（P14b1） |
+| `src/domains/optimize-facts.ts` | `context-economy/optimize-run` 两相事实声明合并 + fold | 已施工（P14b1） |
 | `client/index.ts` | `ctx.slots.register`、`settingsScope.bind`、`remote.session`、`ctx.slots.inject('conversation.input.right')` | 已施工（P14a 增星标槽） |
 | `client/star/*` | `PropsRuntime<'conversation.input.right'>`、`InputActions.setDraft`、`useInput`、`StarHostBridge` | 已施工（P14a） |
 
