@@ -74,7 +74,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P12 | 自动断面服务（已施工 commit `6746c1b`；工单见 [P12-input.md](P12-input.md)） | R2 | `domains/input.ts`（T0→L0→L1→对表→LLM→fail-lazy 决策链，LLM 主路径渲染 task 内全量卷宗 [02 §2](../02-discriminator.md)；`discriminator.auto` boolean 门控（默认 false；观察模式已取消）） | P10,P3,P8,P9 | M |
 | P13 | 命令面 + init 项目帧（已施工；工单见 [P13-commands.md](P13-commands.md)） | R2 | `/task` 系列 + `/init` + `/optimize-prompt`（[10 §2](../10-wiring.md)）+ init 帧采集交互（用户确认，[02 §2](../02-discriminator.md)） | P8,P9,P11,P3,**P12**,**P5** | M |
 | P14a | 星标按钮 UI（槽 + 预览） | R2 | H11 `conversation.input.right` 槽注册 + 预览 diff 弹层（复用壳基建）+ 确认/编辑=终稿（mock host 方法契约） | P13 | M |
-| P14b1 | 星标 host 断面服务 + RPC 桥端口（计划稿 [P14b1-star-host-service.md](P14b1-star-host-service.md)） | R2 | `platform/star-bridge.ts`（Connection RPC 通道 `/context-economy` = P14a 桥接口的 host 实现；**否决 Typert Remote**，依据见工单 §0.1）+ `domains/star.ts`（装配输入栈 → H12 断面 → 双通道解析 → 预览态 → 确认后回填/优化产物落盘）+ `domains/optimize-facts.ts`（`optimize-run` 两相事实 + fold）；剪切清单本阶段只落盘记账；client 仍用 mock | P14a,P11,P13,P6,P3 | M |
+| P14b1 | 星标 host 断面服务 + RPC 桥端口（**已施工** [P14b1-star-host-service.md](P14b1-star-host-service.md)） | R2 | `platform/star-bridge.ts`（Connection RPC 通道 `/context-economy` = P14a 桥接口的 host 实现；**否决 Typert Remote**，依据见工单 §0.1）+ `domains/star.ts`（装配输入栈 → H12 断面 → 双通道解析 → 预览态 → 确认后回填/优化产物落盘）+ `domains/optimize-facts.ts`（`optimize-run` 两相事实 + fold）；剪切清单本阶段只落盘记账；client 仍用 mock | P14a,P11,P13,P6,P3 | M |
 | P14b2 | 星标真实桥 + 时序 B 端到端（计划稿 [P14b2-star-live-bridge.md](P14b2-star-live-bridge.md)） | R2 | client 真实 `StarHostBridge`（Connection RPC → P14b1 端口；常量两侧独立声明 + 契约测试）+ 预览→确认→回填端到端 + 隔离 home 冒烟 + R2 出门验收（07 快照 §32） | P14b1 | M |
 | P15a | 工具剪切纯核 | R3 | `core/shear/` 工具半边（ToolContextLifecycle 谓词 / T-note 协商 / T0-R 三硬规则；[03 §2](../03-shear.md)） | P2 | M |
 | P15b | 工具剪切调度 | R3 | `domains/shear.ts` 调度（四档时机 / 事件接线 / `cutTokensSaved` 入账走 P2 fold 扩展面） | P15a,P6,P7,P12,P2 | M |
@@ -116,7 +116,7 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > **P14b2**（client 真实桥 + 时序 B 端到端 + R2 出门）。传输选型 = **Connection 通用 RPC 通道**
 > （channel `/context-economy`），否决 P14a §8.2 的 Typert Remote 设想（依据见 P14b1 §0.1）。
 
-> R2 进行中（2026-09-07）：P8/P9/P10/P11/P12/P13 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；P12 自动断面服务 commit `6746c1b`；**P14a 星标按钮 UI 已施工（`node scripts/verify-p14a.mjs` PASS）**；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p12.mjs` 与 `node scripts/verify-p13.mjs` 输出 PASS；P10/P11 为纯核工单，其“src/index.ts 零改动”断言在后续接线后不再逐项复跑（各自历史提交点 PASS）。**下一未执行单元 = P14b1**（计划稿已立，见上方拆分说明）。
+> R2 进行中（2026-09-07）：P8/P9/P10/P11/P12/P13 已施工（P8 分划单位 + 稳定前缀 commit `fa8fdab` + 真机接线修正 `037b413`；P9 卷宗纯核 commit `78f33ad`；P10 判据与对表纯核 commit `e00fbd7` + 修正 `7d435b2`；P11 星标断面纯核 commit `9e5de9b` + 修正 `4a20d32`/`0b079b0`/`eb1d9b4`/`7595c43`；P12 自动断面服务 commit `6746c1b`；**P14a 星标按钮 UI 已施工（`node scripts/verify-p14a.mjs` PASS）**；**P14b1 星标 host 断面服务 + Connection RPC 桥端口已施工（commit `ebb5463`；`node scripts/verify-p14b1.mjs` PASS）**；`node scripts/verify-p8.mjs`、`node scripts/verify-p9.mjs`、`node scripts/verify-p12.mjs` 与 `node scripts/verify-p13.mjs` 输出 PASS；P10/P11 为纯核工单，其“src/index.ts 零改动”断言在后续接线后不再逐项复跑（各自历史提交点 PASS）。**下一未执行单元 = P14b2**（client 真实桥 + 时序 B 端到端 + R2 出门快照 §32；计划稿见上方拆分说明）。
 
 > P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
 > `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、
