@@ -2363,3 +2363,26 @@ persona（prefix/suffix，预设 scope 内 shadow 部署 persona）+ agent-instr
 `presets/price-less/` 与 `~/.dsh/.agent-presets/price-less/` 逐字节一致。
 
 **下一步**：用 `price-less` 预设开新会话 → N3a 观察配合率（底线 30%）→ N3b 全量影子（需重启加载新构建）。
+
+## §55 系统提示词盘点与协商协议改进（2026-09-09）
+
+**盘点**（真实会话 `request/header.system`：**43,983 B ≈ 11.2K tokens**）：
+
+| 段 | 字节 | 占比 |
+|---|---|---|
+| 身份 + 部署（harness identity / checkout / web GUI） | ~1.4K | 3% |
+| persona（模型身份 + cwd；预设可 shadow） | ~0.12K | 0.3% |
+| 工具使用指引（14 段） | ~4.3K | 10% |
+| **run_code SDK 类型声明（37 工具）** | **35.9K** | **82%** |
+| 收尾指引 | ~0.3K | 1% |
+
+另：`AGENTS.md` **14.5K** + 运行时快照 ~1K 走 **user 角色上下文消息**，不在 system 里。
+
+**最大成本 = 工具目录**：单工具声明 205B–3,309B；某会话含 11 个 `dev_*` 工具 ≈ **6.4K**、
+`list_subagent_models` **3.3K**、`subagent` 1.9K、`pwsh` 1.7K、`job_output` 1.6K。
+
+**改进（本次）**：协商协议从 persona **suffix 移到 prefix**（order 0，紧跟身份）；
+措辞加显式覆盖语（"仅此一种协商行例外于工具输出不可信"）+ 触发/响应/兜底三条；预设已重装并逐字节校验。
+
+**待决**：① price-less 预设裁剪工具目录（预估省 **5–10K B/请求**）；② `AGENTS.md`「现状」段（约 4K）
+移入 `docs/ledger-history`（省 ≈ **3.7K tokens/请求**）。
