@@ -2161,3 +2161,50 @@ client +9、spec ≈ +26、`verify-p20.mjs` +16。
 
 **R4 进行中**：P17（+P17c）/ P18 / P19（a+b）/ P20（a+b）/ P20c 完成；**下一未执行单元 = P21a 恢复编排**
 （H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。
+
+## §49 P21a 恢复编排（2026-09-09；commit `0386f14`）
+
+**工单**：`docs/implement/P21a-restore.md`（R4 第七单；依赖 P20a,P20b,P3）。
+**正典**：`docs/09 §4` 恢复契约 + `docs/10 §1` H9（种子不上 firehose → 自扫 `snapshotEvents()` 全史）。
+
+**交付**：
+- `core/restore/`（纯核，零 harness import / 零时钟随机 D17）：`plan.ts`（6 步恢复序 + 实体审计四态
+  missing/version-mismatch/corrupt/ok + 四表形状校验）· `rebuild.ts`（卷宗日志重放 + 双源等价）·
+  `ledger.ts`（三类事实 + 07 `restoreDegraded` fold）。
+- `platform/agent-step.ts` `onAgentSessionStart`（H9 收口；D16 断言锁定；apply 同步注册 + pending 缓冲防启动竞态）。
+- `domains/restore.ts`（恢复序编排；`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史）+
+  `domains/restore-facts.ts`（三类 ignorable 声明合并）。
+
+**恢复序（09 §4 + 本单补入第四实体）**：
+
+| # | 步 | 策略 | 损伤时 | 依据 |
+|---|---|---|---|---|
+| 1 | project_frame | 快照回退 | 最新合法快照 `rollbackEntity`；无 → 降级（重新 init） | 09 §4 |
+| 2 | dossier | 日志重放写回 | `rebuildDossiers`（段区间归属 + judge-recorded 标注）→ KV CAS 写回 | 09 §4 |
+| 3 | boundary_archive | 只降级 | 档案正文不在会话事实里，重建需再调模型 → 盘上字节不动 | 09 §4 |
+| 4 | optimize_artifact | 只读审计 | 降级（用户可重新星标） | 09 §2 第四实体（§4 漏列，本单补入） |
+| 5 | segment_state | 纯函数重算 | `foldSegmentState` 全史重放 | 09 §4 |
+| 6 | metrics_cache | 纯函数重算 | 事实重放计数 + `fact_mirror` ↔ 会话事实等价核对 | 09 §4 + 12 §3 |
+
+**计划修正（工单 §8 六项）**：① 09 §4 补入 `optimize_artifact`；② 策略分派落位（可重建/可回退/只降级）；
+③ 自扫入口 = `snapshotEvents()` 全史；④ `firstLiveSeq>0` 为触发条件 + 同会话幂等；
+⑤ 双源降级核对（镜像非空才判不等价，通道健康 = 镜像空 ≠ 降级）；⑥ P20c 对接——恢复只校验档案形状
+（含 `cutPointSeq/rangeEndSeq` 可选字段），**不重建**压力检查点链。事实族简写 `restore/*` 实际事件名 =
+`context-economy/restore-step|restore-degraded|restore-done`。
+
+**验收**：
+- `npm run gate` 绿（**532 用例 / 51 文件**；M1–M5 / S1–S5 / D1–**D17** 全 PASS，ok=true vacuous=[]）；
+  `typecheck:tests` 绿；build 绿（host + client）
+- `node scripts/verify-p21a.mjs` → `P21a VERIFY PASS (32 checks)`
+- 回归：verify-p20（35）/ verify-p19（27）/ verify-p18（45）/ verify-p17（54）/ verify-p16（30）/ verify-p15b（19）→ PASS
+- 扩 spec：restore-core 8 / restore-domain 10；assert 规则 +2（D16/D17）+ 零位快照同步
+
+**真机只读回放（纯回放，无写无网络）**：44 会话 / 可重放 41 / 含卷宗 41 / 重建消息 **190**、
+卷宗重放双跑漂移 **0**；live `restore-*` 事实 = **0**（恢复只在 `session-start` 触发，需重启加载新构建）。
+
+**尺寸申报**：src 净增 **870**（`core/restore` 400 / `domains/restore.ts` 368 / `restore-facts` 34 /
+端口接线键面 68），**超 M 预算**（≈2.2×；拆单方案 = P21a1 纯核 / P21a2 端口+域+接线，见工单 §6.5）；
+spec **422**、`verify-p21a.mjs` **424**。
+
+**R4 进行中**：P17（+P17c）/ P18 / P19（a+b）/ P20（a+b）/ P20c / P21a 完成；
+**下一未执行单元 = P21b 全链验收 + 可视化**（四触发次序验收 + 四道缓存断言进 CI；依赖 P21a）。

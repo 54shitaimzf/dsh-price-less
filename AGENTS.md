@@ -27,7 +27,7 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 检查点渲染 / 折叠区材料转写 / 地板 0.8×窗口；`domains/compaction.ts`：wire 锚定触发 → 选缝 → 检查点 + 保留区逐字 →
 缩水校验 → 档案 checkpoint → 事务，以及地板以上/溢出码紧急折叠 + `agent/request-error` retry；
 `platform/{agent-step,meter,llm}.ts` 端口扩面〔H3 收口 D14 扩面〕；`cordis.patch.yml` 覆写 compaction-basic `auto:false`；
-快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。**P20c 阀门修正**（用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针取主会话路由 `readSessionModel`；保险丝紧急折叠可越过断路器〔硬上限 +3〕；快照 §48）。`platform/`（十一文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
+快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。**P20c 阀门修正**（用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针取主会话路由 `readSessionModel`；保险丝紧急折叠可越过断路器〔硬上限 +3〕；快照 §48）。**P21a 恢复编排已施工**（`core/restore/` 纯核〔步序/实体审计/卷宗日志重放/双源等价/`restoreDegraded` fold〕+ `platform/agent-step.ts` H9 端口 `onAgentSessionStart`〔D16 收口；apply 同步注册 + pending 缓冲〕+ `domains/restore.ts` 恢复序〔`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史〕+ `domains/restore-facts.ts`：09 §4 顺序 = 项目帧快照回退 / 卷宗日志重放写回 / 边界档案与优化产物只降级 / 段状态机与度量缓存纯函数重算，三类 `restore-step|restore-degraded|restore-done` ignorable 事实；快照 §49）。`platform/`（十一文件）是唯一 harness 触点层。`context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。

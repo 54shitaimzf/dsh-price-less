@@ -89,7 +89,7 @@ flash 只需要照单干活——不需要理解全局，禁止发挥。
 | P20a | 压力路径（**已施工** commit `0810a83`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 上半：`core/compress/pressure.ts`（触发阈 = thresholdTokens 绝对设计值 + 0.4×domain fallback / 断路器 3 / 重试 2 / 检查点渲染 / 机制 A 续传 + 机制 B 折叠区材料转写）+ `domains/compaction.ts` 压力折叠（选缝 → 调用 → 缩水校验 → 档案 checkpoint → 事务 → `pressure-fired`/`compress-run`）+ `platform/meter.ts` `wireTokens`（`measure().totalTokens` = provider 锚 + 增量，04 §5）+ `ArchiveRecord.cutPointSeq/rangeEndSeq` | P19 | M（实测超线，见工单 §6） |
 | P20b | 保险丝（**已施工** commit `8952cfc`；工单 [P20-pressure-and-fuse.md](P20-pressure-and-fuse.md)；快照 §47） | R4 | 时序 C 下半：`core/compress/fuse.ts`（地板 0.8×窗口 + 武装谓词 + `hard-truncate` fold）+ `platform/agent-step.ts` `onAgentRequestError`（H3 收口，D14 扩面）+ `platform/llm.ts` `resolveContextWindow`/溢出码 + 紧急压力折叠（地板以上 / `CONTEXT_WINDOW_EXCEEDED` → retry）+ `cordis.patch.yml` compaction-basic `auto:false` | P19 | S（实测超线，见工单 §6） |
 | P20c | 压力阀门按窗口比例（**已施工** commit `d57eb7b`；工单 [P20c-pressure-valve-ratio.md](P20c-pressure-valve-ratio.md)；快照 §48） | R4 修正 | 用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针改取主会话路由（`readSessionModel`，修正 P20b 保险丝口径）；保险丝紧急折叠可越过断路器（硬上限 +3）；client 同步 | P20a,P20b | S（实测在预算内，见工单 §6） |
-| P21a | 恢复编排 | R4 | `domains/restore.ts`（H9 恢复序，[09 §4](../09-state.md)：KV 损毁→日志回放重建演练；`restore/*` 事实发射） | P20a,P20b,P3 | M |
+| P21a | 恢复编排（**已施工** commit `0386f14`；工单 [P21a-restore.md](P21a-restore.md)；快照 §49） | R4 | `core/restore/`（步序/审计/重放/账本）+ `platform/agent-step.ts` H9 端口 + `domains/restore.ts` 恢复序 + `domains/restore-facts.ts`（[09 §4](../09-state.md)：KV 损毁→日志回放重建；`restore-step`/`restore-degraded`/`restore-done` 事实） | P20a,P20b,P3 | M（实测超线，见工单 §6.5） |
 | P21b | 全链验收 + 可视化 | R4 | 四触发次序验收 + 四道缓存断言（[10 §6](../10-wiring.md)）进 CI；度量消息列表可视化（加分项，[11 §5](../11-structure.md)） | P21a | M |
 
 依赖主干（其余见各行"依赖"列）：
@@ -224,65 +224,18 @@ P18(P5,P9)                          └─ P20b(P19) ─┤
 > 尺寸：src 净增 **97**（config 13 / pressure 27 / compaction 57；估计 ≤150，**在预算内**）；client +9、spec +26、verify +16。
 > **下一未执行单元 = P21a 恢复编排**（H9 恢复序：KV 损毁 → 日志回放重建演练；依赖 P20a,P20b,P3）。
 
-> P13 审查补齐（2026-09-08）：taskId 跨会话唯一性按 P9/P10/P11 前置要求落地为
-> `sessionScopedTaskId(sid, taskId)`，P12/P13 卷宗键会话级限定；docs/00、docs/09、
-> docs/12 同步补齐命令面与四值 purpose 契约。
-> P2 修正边（2026-09-06 扩写）：P2 ─ P8 / P10 / P11 / P15b（行依赖列已同步；P5 原已依赖 P2）。
-> P3 修正边（2026-09-06 P3 工单）：P1/P2 ─ P3（行依赖列已同步；P13/P14b1/P19/P21a 补 P3）。
-> P13 修正边（2026-09-07 P12 工单计划）：P13 补 P12——复用 P12 交付的 `core/t0.ts` T0 解析，避免 T0 双发与 taskId 分叉。
-
-平台通道横切（[docs/12](../12-platform-capabilities.md) 正典）：ignorable 发射通道缺失时事实轨
-降级 KV 镜像——P2 事实源抽象 / P3 事实镜像表 / P8 段状态机 KV 双源 / P21b 可视化读事实源抽象，
-各工单编写时按 docs/12 展开。降级实现整体居于 `platform/ignorable-channel.ts`（D3 断言锁定
-单元边界，机制代码零感知），上游合并后按 docs/12 §2 清单原子删除。
-
-## 4. 里程碑验收（R 门，单工单之外）
-
-每个 R 段最后一单完成后，按 [11 §8](../11-structure.md) 出门门槛逐条核验，并执行：
-
-1. **账本快照**（AGENTS 硬规则）：改动前后各留一份 07 报表（回放管道产出），入
-   `docs/ledger-history.md` 追记（只增不改）；
-2. **缓存四断言**（[10 §6](../10-wiring.md)）：R2 起每次里程碑必跑；
-3. **结构断言**：`npm run assert` 全绿（core 零 import / 改史归口 / ignorable / UI 不变量）；
-4. **机制验收（无对照实验，2026-09 定）**：实验结论已固化进 docs/02–04 设计；R3/R4 以
-   机械断言 + 07 账本回放 + 真机冒烟验收，不组织臂对照 run。
-
-## 5. 工单模板（`P<NN>-<slug>.md` 统一骨架）
-
-```markdown
-# P<NN> <标题>（<映射 R 段>；依赖 P…；尺寸 S/M/L）
-> 设计正典：<docs 节号清单>；harness 符号清单：<类型/函数名@包名>
-
-## 1. 目标
-<一句话，可验收的动词句>
-
-## 2. 输入
-- 正典：<逐节引用与要点摘录（工单内自足，免执行者翻全文）>
-- 现有文件：<路径 + 相关导出>
-- harness 核验源：<符号 → packages/.../file.ts 定义处>（找不到即停工上报）
-
-## 3. 产出
-<逐文件：路径 / 导出面 / 契约要点（参数、语义、错误处理）>
-
-## 4. 实现要点
-<编号步骤；每步可独立验证；含度量记账先行步骤>
-
-## 5. 验收（全机械）
-- [ ] npm run typecheck && npm run typecheck:client && npm test
-- [ ] <新增 spec 文件与逐条断言描述>
-- [ ] npm run assert（如本阶段启用了新断言）
-- [ ] <其他命令级检查（grep 断言等）>
-
-## 6. 禁区与注意
-<本单特有风险；默认禁区见总纲 §2>
-
-## 7. 完成动作
-commit: `<type>(<scope>): <一行>`；账本快照：<是否需要>
-```
-
-## 6. 总纲自身的验收
-
-- [ ] §3 表 35 行（含 P1.1/P1.2/P5.1/P6.1 追记、P14b1/P14b2 拆分与 P14c–P14f 修正）与 [11 §8](../11-structure.md) R0–R4 内容逐行对得上（无漏项、无新增设计）；
-- [ ] 每行依赖列构成 DAG（无环）；
-- [ ] 尺寸全部 S/M（L 已注明拆分）；
-- [ ] 工单模板含 harness 符号核验位与停工上报条款。
+> P21a 施工记录（R4 第七单，2026-09-09）：恢复编排已施工（commit `0386f14`；工单 [P21a-restore.md](P21a-restore.md)；
+> 快照 §49；`node scripts/verify-p21a.mjs` PASS **32 checks**，gate **532 用例 / 51 文件**，结构断言 D1–**D17**）。
+> 交付 = `core/restore/`（`plan.ts` 恢复序 + 实体审计四态 + 四表形状校验 / `rebuild.ts` 卷宗日志重放 + 双源等价 /
+> `ledger.ts` 三类事实 + 07 `restoreDegraded` fold）+ `platform/agent-step.ts` `onAgentSessionStart`（H9 收口 D16；
+> apply 同步注册 + pending 缓冲防启动竞态）+ `domains/restore.ts`（`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史）+
+> `domains/restore-facts.ts`。
+> 计划修正（工单 §8 六项）：09 §4 补入第四实体 `optimize_artifact`（只读审计 + 降级）· 策略分派落位
+> （卷宗=重放写回 / 项目帧=快照回退 / 档案+产物=只降级 / 段状态机+度量=纯函数重算）· 自扫入口 = `snapshotEvents()` 全史 ·
+> 双源降级核对（`fact_mirror` 非空才判不等价）· P20c 对接（恢复只校验档案形状含 `cutPointSeq/rangeEndSeq` 可选字段，不重建）·
+> `restore/*` = 事实族简写，实际事件名 `context-economy/restore-step|restore-degraded|restore-done`。
+> 尺寸：src 净增 **870**（core/restore 400 / domain 368 / facts 34 / 端口接线键面 68），**超 M 预算**（拆单方案见工单 §6.5）；
+> spec **422**、verify **424**、assert +2（D16/D17）。
+> **诚实声明**：真机只读回放 44 会话 / 可重放 41 / 含卷宗 41 / 重建消息 190、双跑漂移 0；
+> live `restore-*` 事实 = **0**（需重启加载新构建；恢复只在 `session-start` 触发）。
+> **下一未执行单元 = P21b 全链验收 + 可视化**（四触发次序 + 四道缓存断言进 CI；依赖 P21a）。

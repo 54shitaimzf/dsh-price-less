@@ -6,7 +6,8 @@
 > 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；**H6 四档执行已由 P15b、run 冲刷已由 P16 接线于 `domains/shear.ts`**；**H15 盘上取真已由 P17b 接线于 `platform/files.ts`（装配域 `domains/assemble.ts`，压缩触发归 P19；P17c 补 HT 软门与丢弃归因）**；**P18 压缩调用纯核已施工**（`core/compress/` 两模式 prompt + 产物 schema 校验；H12 purpose `context-economy-compaction` 的**调用契约**已定，实际 `llm.stream` 调用归 P19/P20a）；**P19 已接线 H2**（`platform/agent-step.ts` 收口 + `domains/compaction.ts` 边界触发；`compaction/summary` + checkpoint 替换经 `platform/history.ts` `commitCheckpoint`；快照 [§46](ledger-history.md)）；
 **P20 已接线 H3**（`platform/agent-step.ts` `onAgentRequestError` + `domains/compaction.ts` 压力触发/溢出接管；
 > `cordis.patch.yml` 覆写 compaction-basic `auto:false`；快照 [§47](ledger-history.md)）；
-H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`；H9 仍为设计态（P21a），模块落位见 [11 §3](11-structure.md)）。
+**P21a 已接线 H9**（`platform/agent-step.ts` `onAgentSessionStart` 收口 + `domains/restore.ts` 恢复序；
+快照 [§49](ledger-history.md)）；H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`）。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -26,7 +27,7 @@ H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.rig
 | H6 | 剪切层挂点 | `tools/post-execute` accept `content` 覆盖 = T-entry 写时整形（落账前）；accept 追加 = T-note 贴注；surfaceOp replace = T-loop stub / T0-R 修复 / run 冲刷；task 大 replace = T-boundary 搭车；`tools/execute` 仅作信号/计量 around-wrapper | 工具自有 `finalizeContent` 属定义侧（仅自有工具）；P1.2 契约闭合核验见 [03 §2](../03-shear.md) 表后注；**P15b 已接线**：T-entry/T-note 贴注 = `platform/tools.ts` `createShearToolPort`（同步相），T-loop/T0/T0-R/T-note 剪除 = `domains/shear.ts` 经 H4 执行（异步相），快照 §39；**P16 已接线**：run 冲刷 = **多节点区间** replace → `user/message`（`source:{kind:'plugin',plugin:'context-economy',form:'notice'}`，官方 `compaction/summary`+checkpoint 同构；结论消息构造收拢于 `platform/history.ts` `buildNoticeUserMessage`），快照 §40/§41 |
 | H7 | 度量回放 | `step/start|end`、`assistant/message`（usage）、`request/header`、`tool/call|result`（原始 arguments + meta） | [07](07-metrics.md) 账本全部字段可从会话 JSONL 回放重算 |
 | H8 | 设置 | `ctx.settings.installSection(owner,'context-economy',Config,entry,hooks)`；写 = `mutate(ns,ops,expectedRevision)` revision-fence | 持久化归 settings-file（原子写 + 文件锁）；`settings/updated` 观察 |
-| H9 | 恢复 | `agent/session-start{source:'resume'|'startup'}` + Session 构造种子 | 种子**不上 firehose**（`firstLiveSeq` 定界）——重启重建需自扫或订阅时区分；恢复序 = [09 §4](09-state.md) |
+| H9 | 恢复 | `agent/session-start{source:'resume'|'startup'|'clear'|'compact'}` + Session 构造种子 | 种子**不上 firehose**（`firstLiveSeq` 定界）——重启重建 = **自扫** `snapshotEvents()` 全史；恢复序 = [09 §4](09-state.md)。**P21a 已接线**：收口 = `platform/agent-step.ts`（`onAgentSessionStart`，D16 断言锁定；apply 同步注册 + pending 缓冲防启动竞态）；域侧 = `domains/restore.ts`（`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史）；三类 ignorable 事实 `restore-step`/`restore-degraded`/`restore-done` |
 | H10 | 持久 KV | `ctx.storageDomain.open(defineDomain({name,version,tables}))` | durable 写 + `domain/changed`；backend 可换（json/sqlite） |
 | H11 | UI | client `ctx.slots.register({name:'settings.plugin.item'…},Card)`（设置卡壳已保留）；conversation.input.right 星标按钮；`ctx.remote.session.modelCatalog()` | 星标 → host 方法（时序 B；P14b1 落位 = Connection RPC 通道 `/context-economy`，端点 `star.preview`/`star.apply`，端口 `platform/star-bridge.ts`，见 [13 §3.11](13-harness-plugin-spec.md)）；模型路由目录 |
 | H12 | 辅助 LLM | `llm.stream({purpose})` | 判别 / 断面 / 压缩调用统一 purpose 标记（度量可区分 + 前缀对齐）；usage 回执入账。**宿主现仅 `'compaction'|'session-title'`**，插件自定义 purpose 经 `platform/llm.ts` 单点适配（[12 §1 C2](../12-platform-capabilities.md)），P5 已施工：`platform/llm.ts` `streamCeLlm` + usage 回执；**P18 已定压缩调用契约**（两模式 prompt + 产物 schema），调用接线归 P19/P20a |

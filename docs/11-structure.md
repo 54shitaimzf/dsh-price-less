@@ -10,7 +10,7 @@
 > 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；**P17c 修正**：HT 软门 + 档案区 15K 硬帽 + 追加式链两形态 + 计数修复
 > （快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**（快照 [§45](ledger-history.md)）；**P19 边界路径编排已施工**（`core/compress/{region,store}.ts` + `platform/{agent-step,meter}.ts` + `domains/compaction.ts` + `compression.*` 配置面；快照 [§46](ledger-history.md)）；**P20 压力路径 + 保险丝已施工**（`core/compress/{pressure,fuse}.ts` +
 > `domains/compaction.ts` 压力折叠/紧急折叠 + `platform/{agent-step,meter,llm}.ts` 端口扩面 + `cordis.patch.yml` auto:false；
-> 快照 [§47](ledger-history.md)）；**P20c 阀门修正**（压力阀门 = 0.35 × 主模型窗口 + 假定窗口/绝对安全网回退 + 主会话路由窗口探针；快照 [§48](ledger-history.md)）；下一单 = P21a 恢复编排）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
+> 快照 [§47](ledger-history.md)）；**P20c 阀门修正**（压力阀门 = 0.35 × 主模型窗口 + 假定窗口/绝对安全网回退 + 主会话路由窗口探针；快照 [§48](ledger-history.md)）；**P21a 恢复编排已施工**（`core/restore/` 纯核 + `platform/agent-step.ts` H9 端口 + `domains/restore.ts` 恢复序 + `domains/restore-facts.ts`；快照 [§49](ledger-history.md)）；下一单 = P21b 全链验收）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
 
 ## 0. 它解决什么问题（人话版）
 
@@ -84,8 +84,10 @@ src/
 │  ├─ shear.ts       # 剪切域（已施工：工具四档 P15b + run 冲刷/误剪反馈 P16）
 │  ├─ compaction.ts  # 压缩域：边界路径编排（H2 触发 → 调用 → 装配 → 缩水校验 → 档案 vN → 事务；P19b）
 │  │                 #   + 压力折叠（H3 wire 锚定触发 / 选缝 / 检查点 / 断路器；P20a）+ 保险丝紧急折叠与溢出接管（P20b）
-│  │                 #   恢复编排 = restore.ts（P21a）
-│  └─ restore.ts     # 恢复编排：启动回放（H9）→ KV/日志双源核对 → 降级清单（09 §4）
+│  │                 #   （恢复编排 = 独立文件 restore.ts，P21a）
+│  ├─ restore.ts     # 恢复编排（P21a）：H9 session-start → 09 §4 恢复序（项目帧快照回退 / 卷宗日志重放写回 /
+│  │                 #   档案与产物降级 / 段状态机与度量重算）→ restore-* 事实
+│  ├─ restore-facts.ts # 恢复三类 ignorable 事实声明合并（P21a）
 └─ client/           # 产品面（壳已保留，零结构改动）：Card/controller/components/field-model
 ```
 
@@ -183,6 +185,6 @@ workspace 隔离：按 cwd 分域，项目级实体键含 workspace 标识。
 - [ ] 改史调用只出现在 platform/history（grep 断言；surfaceOp + sourceEventSeqs 协议走查）；
 - [ ] 自定义会话事件全部 `ignorable:true`（类型级测试）；
 - [ ] 装配器确定性：同输入同装配字节（贪心停机 / 坐标重放回归）；
-- [ ] 恢复演练：KV 损毁 → 日志回放重建，`restore/degraded` 记账；
+- [x] 恢复演练：KV 损毁 → 日志回放重建，`restore-degraded` 记账（**P21a 施工**：`core/restore/` 纯核 + `domains/restore.ts`；verify-p21a 32 checks）；
 - [ ] 关闭任一层（shear/boundary/pressure）其余功能完整；
 - [ ] UI 壳不变量（field-model.spec：组壳 / 保留 spec / Config 一致性）。
