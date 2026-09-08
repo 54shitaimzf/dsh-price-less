@@ -18,7 +18,7 @@ ignorableChannelAvailable({ SESSION_LOG_INTENT: 1 })
 
 const WORKSPACE = 'w'
 const ARCHIVE_KEY = boundaryArchiveKey(WORKSPACE)
-const VALID_PRODUCT = JSON.stringify({ digest: { blocks: [{ type: 'plan', text: '目标' }], coords: [] }, hotTail: [{ unitId: 'c1' }] })
+const VALID_PRODUCT = JSON.stringify({ gist: '目标与方向', steps: [{ type: 'plan', text: '先做一', refs: [1] }], hotTail: [{ unitId: 'c1' }] })
 
 interface FakeEvent { type: string; seq: number; time: number; data: any; surfaceOp?: any; sourceEventSeqs?: unknown; ignorable?: true }
 
@@ -235,11 +235,24 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     expect(env.storage.entities.size).toBe(0)
   })
 
-  it('schema 失败（digest 坏形状）同样 fatal', async () => {
-    const env = makeEnv({ llm: fakeLlm([{ text: JSON.stringify({ digest: { blocks: 'bad', coords: [] } }) }]) })
+  it('F9：parse 失败有界重试——首次不永久封禁，重试可成功落刀', async () => {
+    const env = makeEnv({ llm: fakeLlm([{ text: 'not json' }, { text: VALID_PRODUCT }]) })
     await env.domain.onPreStep({ session: env.session as never, turn: 1 })
     expect(appendsOf(env.session, 'compaction/start')).toHaveLength(0)
-    expect(env.runs()[0]).toMatchObject({ outcome: 'schema', calls: 1 })
+    expect(env.runs()[0]).toMatchObject({ outcome: 'parse', calls: 1 })
+    // 第二次 pre-step：预算内可重试（原缺陷 = 一次坏输出永久封禁该 task）。
+    await env.domain.onPreStep({ session: env.session as never, turn: 2 })
+    expect(env.runs()[1]).toMatchObject({ outcome: 'ok', calls: 1 })
+    expect(env.domain.stats().compactions).toBe(1)
+  })
+
+  it('F9：重试超预算后才永久归档（防每步重复计费）', async () => {
+    const env = makeEnv({ llm: fakeLlm([{ text: 'not json' }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 1 })
+    await env.domain.onPreStep({ session: env.session as never, turn: 2 })
+    expect(env.llm.calls).toHaveLength(2)
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    expect(env.llm.calls).toHaveLength(2)
   })
 
   it('缩水失败：重试 1 次后放弃（不落刀，记 shrink + retry）', async () => {

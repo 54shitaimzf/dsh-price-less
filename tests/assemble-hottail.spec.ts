@@ -10,10 +10,8 @@ import {
   assembleArchive,
   foldAssembleInputs,
   gateHotTailDecls,
-  renderArchive,
-  renderDigest,
+  normalizeDigest,
   renderUnitList,
-  validateDigest,
   type AssemblePolicy,
   type AssembleUnit,
   type HotTailDecl,
@@ -45,7 +43,7 @@ describe('P17a 热尾：贪心停机与预算', () => {
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }, { unitId: 'b' }, { unitId: 'c' }], policy: policy({ hotTailTokens: 10 }) })
     expect(outcome.ok).toBe(true)
     if (!outcome.ok) return
-    expect(outcome.result.hotTail.selections.map((s) => s.unitId)).toEqual(['a'])
+    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['a'])
     expect(outcome.result.hotTail.stopReason).toBe('budget')
     expect(outcome.result.hotTail.source).toBe('model')
     expect(outcome.result.hotTail.declaredUnits).toBe(3)
@@ -55,7 +53,7 @@ describe('P17a 热尾：贪心停机与预算', () => {
     const units = [unit('a', 1, 'x'.repeat(6)), unit('b', 3, 'y'.repeat(6))]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }, { unitId: 'b' }], policy: policy({ hotTailTokens: 100 }) })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections.length).toBe(2)
+    expect(outcome.result.hotTail.entries.length).toBe(2)
     expect(outcome.result.hotTail.stopReason).toBe('list-end')
   })
 
@@ -63,7 +61,7 @@ describe('P17a 热尾：贪心停机与预算', () => {
     const units = [unit('big', 1, 'A'.repeat(100))]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'big' }], policy: policy({ hotTailTokens: 30 }) })
     if (!outcome.ok) throw new Error('expected ok')
-    const selection = outcome.result.hotTail.selections[0]!
+    const selection = outcome.result.hotTail.entries[0]!
     expect(selection.truncated).toBe(true)
     expect(selection.text.endsWith(HOT_TAIL_TRUNCATION_MARKER)).toBe(true)
     expect(selection.text.startsWith('A')).toBe(true)
@@ -75,7 +73,7 @@ describe('P17a 热尾：贪心停机与预算', () => {
     const units = [unit('pair', 1, 'call+result 完整对')]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'pair' }], policy: policy() })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections[0]!.text).toBe('call+result 完整对')
+    expect(outcome.result.hotTail.entries[0]!.text).toBe('call+result 完整对')
   })
 })
 
@@ -90,9 +88,9 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     if (!outcome.ok) throw new Error('expected ok')
     const plan = outcome.result.hotTail
     expect(plan.floorFilled).toBe(true)
-    expect(plan.selections.map((s) => [s.unitId, s.tier])).toEqual([['a', 'model'], ['v', 'floor'], ['e', 'floor']])
-    expect(plan.selections[1]!.text).toBe('307 tests passed')
-    expect(plan.selections[2]!.text).toBe('Error: boom\n[exit code: 1]')
+    expect(plan.entries.map((s) => [s.unitId, s.tier])).toEqual([['a', 'model'], ['v', 'floor'], ['e', 'floor']])
+    expect(plan.entries[1]!.text).toBe('307 tests passed')
+    expect(plan.entries[2]!.text).toBe('Error: boom\n[exit code: 1]')
   })
 
   it('run 类目已覆盖 → 不填地板', () => {
@@ -100,7 +98,7 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'run' }], policy: policy({ hotTailTokens: 200 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.floorFilled).toBe(false)
-    expect(outcome.result.hotTail.selections.length).toBe(1)
+    expect(outcome.result.hotTail.entries.length).toBe(1)
   })
 
   it('地板同单元 ID 去重（已选单元不再补）', () => {
@@ -110,8 +108,8 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     ]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'v' }], policy: policy({ hotTailTokens: 200 }) })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections.map((s) => s.unitId)).toEqual(['v', 'e'])
-    expect(outcome.result.hotTail.selections[0]!.tier).toBe('model')
+    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['v', 'e'])
+    expect(outcome.result.hotTail.entries[0]!.tier).toBe('model')
   })
 
   it('预算不足不填地板', () => {
@@ -119,7 +117,7 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: policy({ hotTailTokens: 20 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.floorFilled).toBe(false)
-    expect(outcome.result.hotTail.selections.length).toBe(1)
+    expect(outcome.result.hotTail.entries.length).toBe(1)
   })
 
   it('申报缺失 → 位置兜底反向累加（source = positional-fallback）', () => {
@@ -127,8 +125,9 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     const outcome = assembleArchive({ units, policy: policy({ hotTailTokens: 12 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.source).toBe('positional-fallback')
-    expect(outcome.result.hotTail.selections.map((s) => s.unitId)).toEqual(['b', 'c'])
-    expect(outcome.result.hotTail.selections.every((s) => s.tier === 'fallback')).toBe(true)
+    // F9：兜底按反向 transcript 序 push，条目序 = 装配序（不再按 seqStart 重排）。
+    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['c', 'b'])
+    expect(outcome.result.hotTail.entries.every((s) => s.tier === 'fallback')).toBe(true)
   })
 
   it('坐标全部无效 → 丢弃计数 + 位置兜底（不产生 fatal）', () => {
@@ -137,14 +136,15 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.dropped).toBe(2)
     expect(outcome.result.hotTail.source).toBe('positional-fallback')
-    expect(outcome.result.hotTail.selections.map((s) => s.unitId)).toEqual(['a', 'b'])
+    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['b', 'a'])
   })
 
-  it('装配序 = transcript 序（申报序只定取舍）', () => {
+  it('装配序 = 申报序（F9：▸n = 数组下标 + 1，摘要引用与指针同源）', () => {
     const units = [unit('a', 1, 'A'.repeat(6)), unit('b', 5, 'B'.repeat(6))]
     const outcome = assembleArchive({ units, hotTail: [{ unitId: 'b' }, { unitId: 'a' }], policy: policy() })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections.map((s) => s.unitId)).toEqual(['a', 'b'])
+    expect(outcome.result.hotTail.entries.map((s) => s.unitId)).toEqual(['b', 'a'])
+    expect(outcome.result.hotTail.entries.map((s) => s.rank)).toEqual([1, 2])
   })
 })
 
@@ -163,9 +163,9 @@ describe('P17a 热尾：通道 A 取真', () => {
       policy: policy(),
     })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections[0]!.source).toBe('file')
-    expect(outcome.result.hotTail.selections[0]!.text).toBe('l2\nl3')
-    expect(outcome.result.hotTail.selections[0]!.tokens).toBe(5)
+    expect(outcome.result.hotTail.entries[0]!.source).toBe('file')
+    expect(outcome.result.hotTail.entries[0]!.text).toBe('l2\nl3')
+    expect(outcome.result.hotTail.entries[0]!.tokens).toBe(5)
   })
 
   it('取真缺失 / 文件已删除 → 丢弃计数（不 fatal）', () => {
@@ -189,45 +189,82 @@ describe('P17a 热尾：通道 A 取真', () => {
   })
 })
 
-describe('P17a 事实层：digest schema 与渲染', () => {
-  it('渲染序 = 结论先行 wrap→plan→impl→verify + 类型标签，坐标层随后', () => {
-    const digest = {
-      blocks: [
-        { type: 'wrap' as const, text: '收尾' },
-        { type: 'plan' as const, text: '计划' },
-        { type: 'verify' as const, text: '验收' },
-      ],
-      coords: [{ path: 'a.ts', version: 3, lineRange: { start: 1, end: 2 } }, { path: 'b.ts', version: 1, symbol: 'fn' }],
-    }
-    expect(renderDigest(digest)).toBe('【结论】收尾\n\n【计划】计划\n\n【验证】验收\n\na.ts@v3:1-2\nb.ts@v1 fn')
-  })
-
-  it('schema 违例 = fatal（坏块型 / 坏坐标 / 坏版本）', () => {
-    expect(validateDigest({ blocks: [{ type: 'bogus', text: 'x' }], coords: [] })).toBeUndefined()
-    expect(validateDigest({ blocks: [], coords: [{ path: 'a.ts', version: 0 }] })).toBeUndefined()
-    expect(validateDigest({ blocks: [], coords: [{ path: 'a.ts', version: 1, lineRange: { start: 3, end: 1 } }] })).toBeUndefined()
-    expect(validateDigest({ blocks: [], coords: [] })).toEqual({ blocks: [], coords: [] })
-  })
-
-  it('digest schema 违例 → 装配 fatal；空输入 → no-units', () => {
-    const bad = assembleArchive({ units: [unit('a', 1, 'x')], digest: { blocks: [{ type: 'bogus' as never, text: 'x' }], coords: [] } })
-    expect(bad).toEqual({ ok: false, reason: 'digest-schema' })
-    expect(assembleArchive({ units: [] })).toEqual({ ok: false, reason: 'no-units' })
-  })
-
-  it('rendered = 摘要 + 热尾（transcript 序）；digestBytes 按 utf8 计', () => {
-    const units = [unit('a', 1, '材料')]
+describe('F9 事实层：摘要 schema 与渲染', () => {
+  it('渲染 = 【总述】+ 分步（带 ▸n 引用）+ 【热尾】（1 指针 : 1 内容）', () => {
+    const units = [unit('a', 1, '材料A'), unit('b', 5, '材料B')]
     const outcome = assembleArchive({
       units,
-      digest: { blocks: [{ type: 'plan', text: '目标' }], coords: [] },
+      digest: {
+        gist: '总目标与方向',
+        steps: [{ type: 'plan', text: '先做一', refs: [2] }, { type: 'verify', text: '再验二', refs: [1, 2] }],
+      },
+      hotTail: [{ unitId: 'a' }, { unitId: 'b' }],
+      policy: policy(),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.rendered).toBe(
+      '【总述】总目标与方向\n【计划】先做一 (▸2)\n【验证】再验二 (▸1,▸2)\n\n【热尾】\n▸1 [历史] 会话 1-2\n材料A\n▸2 [历史] 会话 5-6\n材料B',
+    )
+    expect(outcome.result.digestPlan.stepCount).toBe(2)
+    expect(outcome.result.digestPlan.refCount).toBe(2)
+    expect(outcome.result.digestPlan.refDrops).toBe(0)
+    expect(outcome.result.digestPlan.bytes).toBe(
+      new TextEncoder().encode('【总述】总目标与方向\n【计划】先做一 (▸2)\n【验证】再验二 (▸1,▸2)').length,
+    )
+  })
+
+  it('机械归一化：坏形状一律修复（未知 type→note / 坏 refs 丢弃 / 缺 gist 接受）', () => {
+    const n = normalizeDigest({
+      gist: 42,
+      steps: [
+        { type: 'bogus', text: 'x' },
+        { type: 'plan', text: 'ok', refs: [0, 1, '2', 2, 1.5, 'x'] },
+        { text: '   ' },
+        'not-an-object',
+      ],
+    })
+    expect(n.digest.gist).toBe('')
+    expect(n.digest.steps).toEqual([
+      { type: 'note', text: 'x', refs: [] },
+      { type: 'plan', text: 'ok', refs: [1, 2] },
+    ])
+    expect(n.stepDrops).toBe(2)
+    expect(n.refDrops).toBe(4)
+  })
+
+  it('摘要硬帽：超限从最后一条分步起整条丢弃（引用一起丢）', () => {
+    const outcome = assembleArchive({
+      units: [unit('a', 1, '材料')],
+      digest: {
+        gist: 'g',
+        steps: [
+          { type: 'plan', text: 'A'.repeat(60), refs: [1] },
+          { type: 'plan', text: 'B'.repeat(60), refs: [1] },
+        ],
+      },
+      hotTail: [{ unitId: 'a' }],
+      policy: policy({ digestMaxTokens: 10, density: flatDensity(1) }),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.digestPlan.stepCount).toBe(0)
+    expect(outcome.result.digestPlan.refDrops).toBe(2)
+  })
+
+  it('摘要事实泄漏只记账不拒单（factLeaks）', () => {
+    const outcome = assembleArchive({
+      units: [unit('a', 1, '材料')],
+      digest: { gist: '改 src/domains/compaction.ts', steps: [] },
       hotTail: [{ unitId: 'a' }],
       policy: policy(),
     })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.rendered).toBe('【计划】目标\n\n材料')
-    expect(renderArchive(outcome.result)).toBe(outcome.result.rendered)
-    expect(outcome.result.digestBytes).toBe(new TextEncoder().encode('【计划】目标').length)
-    expect(outcome.result.digestEntryCount).toBe(1)
+    expect(outcome.result.digestPlan.factLeaks).toBeGreaterThan(0)
+  })
+
+  it('空输入 → no-units；非对象摘要 = 空摘要（不 fatal）', () => {
+    expect(assembleArchive({ units: [] })).toEqual({ ok: false, reason: 'no-units' })
+    const ok = assembleArchive({ units: [unit('a', 1, 'x')], digest: 'nonsense' as never, policy: policy() })
+    expect(ok.ok).toBe(true)
   })
 
   it('同输入双跑 JSON 相等（字节稳定）', () => {
@@ -303,7 +340,7 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
     ] as unknown as readonly HotTailDecl[]
     const outcome = assembleArchive({ units: [unit('a', 1, 'A'.repeat(6))], hotTail: bad, policy: policy({ hotTailTokens: 100 }) })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections.map((selection) => selection.unitId)).toEqual(['a'])
+    expect(outcome.result.hotTail.entries.map((selection) => selection.unitId)).toEqual(['a'])
     expect(outcome.result.hotTail.dropReasons.badDecl).toBe(5)
     expect(outcome.result.hotTail.dropReasons.unknownUnit).toBe(1)
     expect(outcome.result.hotTail.dropped).toBe(6)
@@ -314,7 +351,7 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
     const outcome = assembleArchive({ units: [unit('a', 1, 'A'.repeat(6))], hotTail: [{ unitId: 'ghost' }], policy: policy({ hotTailTokens: 100 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.source).toBe('positional-fallback')
-    expect(outcome.result.hotTail.selections.map((selection) => selection.unitId)).toEqual(['a'])
+    expect(outcome.result.hotTail.entries.map((selection) => selection.unitId)).toEqual(['a'])
   })
 
   it('clipped：重映射出界裁剪计数（P17a 恒 0 缺陷修复）', () => {
@@ -328,8 +365,8 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
     })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.clipped).toBe(1)
-    expect(outcome.result.hotTail.selections[0]!.clipped).toBe(true)
-    expect(outcome.result.hotTail.selections[0]!.text).toBe('sliced')
+    expect(outcome.result.hotTail.entries[0]!.clipped).toBe(true)
+    expect(outcome.result.hotTail.entries[0]!.text).toBe('sliced')
   })
 
   it('dropReasons：未知版本 = remap 计数（坐标全无效 → 兜底）', () => {
@@ -349,7 +386,7 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
   it('位置兜底 token 按 policy.density 现算（不混用 fold 期默认密度）', () => {
     const outcome = assembleArchive({ units: [unit('a', 1, 'A'.repeat(10))], policy: policy({ density: flatDensity(2), hotTailTokens: 100 }) })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections[0]!.tokens).toBe(5)
+    expect(outcome.result.hotTail.entries[0]!.tokens).toBe(5)
   })
 })
 

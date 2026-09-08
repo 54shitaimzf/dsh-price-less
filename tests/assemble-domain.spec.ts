@@ -111,12 +111,12 @@ describe('P17b 装配域：双通道取真', () => {
       session: env.session as never,
       taskId: 'task-1',
       range: rangeOf(env.session),
-      digest: { blocks: [{ type: 'plan', text: '目标' }], coords: [] },
+      digest: { gist: '目标', steps: [] },
       hotTail: [{ unitId: 'c1', coord: { path: 'a.ts', version: 1, lineRange: { start: 1, end: 1 } } }],
     })
     expect(outcome.ok).toBe(true)
     if (!outcome.ok) return
-    const selection = outcome.result.hotTail.selections[0]!
+    const selection = outcome.result.hotTail.entries[0]!
     expect(selection.source).toBe('file')
     expect(selection.text).toBe('old\nextra')
     expect(selection.clipped).toBe(true)
@@ -132,8 +132,8 @@ describe('P17b 装配域：双通道取真', () => {
       session: env.session as never, taskId: 'task-1', range: rangeOf(env.session), hotTail: [{ unitId: 'c1' }],
     })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.hotTail.selections[0]!.source).toBe('span')
-    expect(outcome.result.hotTail.selections[0]!.text).toBe('307 tests passed')
+    expect(outcome.result.hotTail.entries[0]!.source).toBe('span')
+    expect(outcome.result.hotTail.entries[0]!.text).toBe('307 tests passed')
   })
 
   it('fs 缺失 = 通道 A 丢弃计数 + 兜底照常（不 fatal）', async () => {
@@ -147,7 +147,7 @@ describe('P17b 装配域：双通道取真', () => {
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.dropped).toBe(1)
     expect(outcome.result.hotTail.source).toBe('positional-fallback')
-    expect(outcome.result.hotTail.selections[0]!.source).toBe('span')
+    expect(outcome.result.hotTail.entries[0]!.source).toBe('span')
     expect(env.domain.stats().degraded).toBe(1)
   })
 
@@ -164,7 +164,7 @@ describe('P17b 装配域：双通道取真', () => {
     if (!outcome.ok) throw new Error('expected ok')
     expect(reads).toEqual([])
     expect(outcome.result.hotTail.dropReasons.badDecl).toBe(2)
-    expect(outcome.result.hotTail.selections.length).toBe(1)
+    expect(outcome.result.hotTail.entries.length).toBe(1)
   })
 
   it('priorChain 续传 + archiveTruncate 透传入事实（P17c）', async () => {
@@ -182,7 +182,7 @@ describe('P17b 装配域：双通道取真', () => {
     const fact = env.session.appends.find((entry) => entry.type === ASSEMBLE_RUN_FACT_TYPE)
     expect(fact!.data.archiveTruncateCount).toBe(2)
     expect(fact!.data.archiveTruncateTokens).toBe(700)
-    expect(fact!.data.dropReasons).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 })
+    expect(fact!.data.dropReasons).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 })
   })
 
   it('单元清单按范围过滤（供 P18 prompt 枚举）', () => {
@@ -216,17 +216,23 @@ describe('P17b 装配域：事实与失败语义', () => {
     expect(typeof fact!.data.at).toBe('number')
   })
 
-  it('digest schema 违例 = fatal 且不发事实（零重试）', async () => {
+  it('F9：摘要坏形状 = 机械修复（不 fatal、照常发事实）', async () => {
     const env = makeEnv()
     env.appendCall('c1', 'bash', { command: 'npm test' })
     env.appendResult('c1', '307 tests passed')
     const outcome = await env.domain.assemble({
       session: env.session as never, taskId: 'task-1', range: rangeOf(env.session),
+      // 旧 schema（blocks/coords）与未知块型：一律归一为空摘要，不再 fatal。
       digest: { blocks: [{ type: 'bogus' as never, text: 'x' }], coords: [] },
+      hotTail: [{ unitId: 'c1' }],
     })
-    expect(outcome).toEqual({ ok: false, reason: 'digest-schema' })
-    expect(env.session.appends.some((entry) => entry.type === ASSEMBLE_RUN_FACT_TYPE)).toBe(false)
-    expect(env.domain.stats().failures).toBe(1)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.digest).toEqual({ gist: '', steps: [] })
+    const fact = env.session.appends.find((entry) => entry.type === ASSEMBLE_RUN_FACT_TYPE)
+    expect(fact).toBeDefined()
+    expect(fact!.data.stepCount).toBe(0)
+    expect(env.domain.stats().failures).toBe(0)
   })
 
   it('dispose 后停止服务（不再装配、不发事实）', async () => {

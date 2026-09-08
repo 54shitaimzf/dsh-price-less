@@ -10,12 +10,12 @@
  * 审查清单: 不 import harness/platform（S1）；无时钟随机（D13）；不读盘、不写事实、不改史。
  * 度量: dropped{badDecl,unknownUnit} 入压缩调用事实；fatal 计数入账本自持位。
  */
-import { validateDigest } from '../assemble/assemble.ts'
+import { normalizeDigest } from '../assemble/assemble.ts'
 import { gateHotTailDecls } from '../assemble/gate.ts'
 import type { AssembleUnit, HotTailDropCounts } from '../assemble/types.ts'
 import type { CompressCheckpoint, CompressMode, CompressParseResult, CutPointDecl } from './types.ts'
 
-const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
+const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -125,10 +125,11 @@ export function parseCompressProduct(
     return { ok: true, product: { mode: 'pressure', checkpoint, cutPoint: cut.cutPoint }, dropped: { ...ZERO_DROPS } }
   }
 
-  const digest = validateDigest(root.digest)
-  if (digest === undefined) return { ok: false, reason: 'schema' }
+  // F9 宽松口径：摘要坏形状 = 机械修复（不 fatal）；只有非 JSON 对象才是硬失败（parse）。
+  // 产物形状 v2 = 顶层 {gist, steps, hotTail}；兼容旧 {digest:{...}} 形状（版本号已使缓存失效）。
+  const digestSource = root.gist !== undefined || root.steps !== undefined ? root : root.digest
+  const digest = normalizeDigest(digestSource).digest
   const rawDecls = root.hotTail
-  if (rawDecls !== undefined && !Array.isArray(rawDecls)) return { ok: false, reason: 'schema' }
   const gated = gateHotTailDecls(Array.isArray(rawDecls) ? rawDecls : [], units)
   let badDecl = 0
   let unknownUnit = 0

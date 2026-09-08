@@ -18,7 +18,7 @@ ignorableChannelAvailable({ SESSION_LOG_INTENT: 1 })
 
 const WORKSPACE = 'w'
 const ARCHIVE_KEY = boundaryArchiveKey(WORKSPACE)
-const VALID_PRODUCT = JSON.stringify({ digest: { blocks: [{ type: 'plan', text: '目标' }], coords: [] }, hotTail: [{ unitId: 'c1' }] })
+const VALID_PRODUCT = JSON.stringify({ gist: '目标与方向', steps: [{ type: 'plan', text: '先做一', refs: [1] }], hotTail: [{ unitId: 'c1' }] })
 const PRESSURE_PRODUCT = JSON.stringify({
   checkpoint: { progress: '已完成 A', currentState: 'B 已就绪', nextStep: '做 C', liveConstraints: ['不要改 D'] },
   cutPoint: { unitId: 'c2' },

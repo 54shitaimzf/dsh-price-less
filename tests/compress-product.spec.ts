@@ -23,14 +23,12 @@ const unit = (id: string, extra: Partial<AssembleUnit> = {}): AssembleUnit => ({
 })
 
 const boundaryJson = JSON.stringify({
-  digest: {
-    blocks: [
-      { type: 'plan', text: '目标' },
-      { type: 'impl', text: '路径' },
-    ],
-    coords: [{ path: 'src/a.ts', version: 2, lineRange: { start: 1, end: 3 } }],
-  },
-  hotTail: [{ unitId: 'a' }],
+  gist: '目标与方向',
+  steps: [
+    { type: 'plan', text: '先做一', refs: [1] },
+    { type: 'impl', text: '再做二' },
+  ],
+  hotTail: [{ unitId: 'a', coord: { path: 'src/a.ts', version: 2, lineRange: { start: 1, end: 3 } } }],
 })
 
 describe('P18 产物：机械抽取', () => {
@@ -43,17 +41,22 @@ describe('P18 产物：机械抽取', () => {
   })
 })
 
-describe('P18 产物：边界模式', () => {
-  it('合法产物 → ok（digest 块/坐标 + 热尾申报）', () => {
+describe('P18/F9 产物：边界模式（宽松修复 > 拒单）', () => {
+  it('合法产物 → ok（gist/steps/refs + 热尾申报）', () => {
     const result = parseCompressProduct(boundaryJson, 'boundary', [unit('a')])
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.product.mode).toBe('boundary')
     if (result.product.mode !== 'boundary') return
-    expect(result.product.digest.blocks).toHaveLength(2)
-    expect(result.product.digest.coords[0]?.version).toBe(2)
-    expect(result.product.hotTail).toEqual([{ unitId: 'a' }])
-    expect(result.dropped).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 })
+    expect(result.product.digest.gist).toBe('目标与方向')
+    expect(result.product.digest.steps).toEqual([
+      { type: 'plan', text: '先做一', refs: [1] },
+      { type: 'impl', text: '再做二', refs: [] },
+    ])
+    expect(result.product.hotTail).toEqual([
+      { unitId: 'a', coord: { path: 'src/a.ts', version: 2, lineRange: { start: 1, end: 3 } } },
+    ])
+    expect(result.dropped).toEqual({ badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 })
   })
 
   it('围栏 + 前后噪声仍可解析（格式噪声不杀死一次有效压缩）', () => {
@@ -61,24 +64,39 @@ describe('P18 产物：边界模式', () => {
     expect(parseCompressProduct(raw, 'boundary', [unit('a')]).ok).toBe(true)
   })
 
-  it('非 JSON = parse fatal；digest 坏形状 = schema fatal', () => {
+  it('非 JSON = parse fatal（唯一硬失败）；摘要坏形状一律机械修复', () => {
     expect(parseCompressProduct('这不是 JSON', 'boundary', [])).toEqual({ ok: false, reason: 'parse' })
-    expect(parseCompressProduct('{"digest":{"blocks":"x","coords":[]}}', 'boundary', [])).toEqual({ ok: false, reason: 'schema' })
-    expect(parseCompressProduct('{"digest":{"blocks":[],"coords":[{"path":"a","version":0}]}}', 'boundary', [])).toEqual({ ok: false, reason: 'schema' })
-    expect(parseCompressProduct('{"digest":{"blocks":[{"type":"other","text":"x"}],"coords":[]}}', 'boundary', [])).toEqual({ ok: false, reason: 'schema' })
+    // 旧 schema / 坏类型 / 缺字段：全部归一为空摘要，不再 fatal。
+    for (const raw of [
+      '{"digest":{"blocks":"x","coords":[]}}',
+      '{"digest":{"blocks":[],"coords":[{"path":"a","version":0}]}}',
+      '{"digest":{"blocks":[{"type":"other","text":"x"}],"coords":[]}}',
+      '{"gist":1,"steps":"x"}',
+      '{}',
+    ]) {
+      const result = parseCompressProduct(raw, 'boundary', [])
+      expect(result.ok).toBe(true)
+      if (!result.ok || result.product.mode !== 'boundary') return
+      expect(result.product.digest).toEqual({ gist: '', steps: [] })
+    }
   })
 
-  it('hotTail 缺失 = ok + 空申报（装配器回退位置法，不 fatal）', () => {
-    const raw = JSON.stringify({ digest: { blocks: [{ type: 'wrap', text: '结论' }], coords: [] } })
-    const result = parseCompressProduct(raw, 'boundary', [])
-    expect(result.ok).toBe(true)
-    if (!result.ok || result.product.mode !== 'boundary') return
-    expect(result.product.hotTail).toEqual([])
+  it('hotTail 缺失 / 非数组 = ok + 空申报（装配器回退位置法，不 fatal）', () => {
+    for (const raw of [
+      JSON.stringify({ gist: '结论', steps: [] }),
+      '{"gist":"结论","steps":[],"hotTail":"x"}',
+    ]) {
+      const result = parseCompressProduct(raw, 'boundary', [])
+      expect(result.ok).toBe(true)
+      if (!result.ok || result.product.mode !== 'boundary') return
+      expect(result.product.hotTail).toEqual([])
+    }
   })
 
   it('坏热尾申报只降级计数（HT 软门：badDecl / unknownUnit），好申报保留', () => {
     const raw = JSON.stringify({
-      digest: { blocks: [{ type: 'wrap', text: '结论' }], coords: [] },
+      gist: '结论',
+      steps: [],
       hotTail: [{ unitId: 'a' }, { unitId: 'ghost' }, { unitId: 'b', coord: null }, { coord: { path: 'x', version: 1 } }, 'junk'],
     })
     const result = parseCompressProduct(raw, 'boundary', [unit('a'), unit('b')])
@@ -87,7 +105,14 @@ describe('P18 产物：边界模式', () => {
     expect(result.product.hotTail).toEqual([{ unitId: 'a' }])
     expect(result.dropped.badDecl).toBe(3)
     expect(result.dropped.unknownUnit).toBe(1)
-    expect(parseCompressProduct('{"digest":{"blocks":[],"coords":[]},"hotTail":"x"}', 'boundary', [])).toEqual({ ok: false, reason: 'schema' })
+  })
+
+  it('fact 字段透传（逐字摘抄；子串校验归装配器）', () => {
+    const raw = JSON.stringify({ gist: 'g', steps: [], hotTail: [{ unitId: 'a', fact: 'verbatim' }] })
+    const result = parseCompressProduct(raw, 'boundary', [unit('a')])
+    expect(result.ok).toBe(true)
+    if (!result.ok || result.product.mode !== 'boundary') return
+    expect(result.product.hotTail).toEqual([{ unitId: 'a', fact: 'verbatim' }])
   })
 })
 

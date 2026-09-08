@@ -12,7 +12,7 @@
 import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
 /** 策略版本（阈值口径可复现；docs/03 §4 同哲学）。 */
-export const ASSEMBLE_POLICY_VERSION = 1
+export const ASSEMBLE_POLICY_VERSION = 2
 
 /** 1-based 闭区间行号（原生 read 信封口径）。 */
 export interface LineRange {
@@ -38,29 +38,28 @@ export interface HotTailDecl {
   readonly unitId: string
   /** 文件类单元可带文件坐标（通道 A）；省略 = 通道 B 取单元原文。 */
   readonly coord?: FileCoord
+  /**
+   * 逐字摘抄（可选；必须是该单元原文的子串——机械校验，防模型自造事实）。
+   * F9：事实载体。路径/版本走指针，命令/数值/引号内文本走此字段或单元原文。
+   */
+  readonly fact?: string
 }
 
-/** 类型化摘要信息块（plan/impl/verify/wrap；impl 用坐标指针不嵌代码）。 */
-export type DigestBlockType = 'plan' | 'impl' | 'verify' | 'wrap'
-export const DIGEST_BLOCK_ORDER: readonly DigestBlockType[] = ['plan', 'impl', 'verify', 'wrap']
+/** 分步类型（总述的落地过程；不是对总述按类拆分）。 */
+export type DigestStepType = 'plan' | 'impl' | 'verify' | 'decide' | 'note'
+export const DIGEST_STEP_TYPES: readonly DigestStepType[] = ['plan', 'impl', 'verify', 'decide', 'note']
 
-export interface DigestBlock {
-  readonly type: DigestBlockType
+/** 一条分步：text = 落地过程（按发生顺序）；refs = 热尾序号（1-based；模型零算术）。 */
+export interface DigestStep {
+  readonly type: DigestStepType
   readonly text: string
+  readonly refs: readonly number[]
 }
 
-/** 坐标层条目（事实层冻结时的文件/符号/行区间；后续漂移由重映射吸收）。 */
-export interface DigestCoord {
-  readonly path: string
-  readonly version: number
-  readonly lineRange?: LineRange
-  readonly symbol?: string
-}
-
-/** 一条边界档案的装配输入（P18 产出的已解析申报；本层只消费）。 */
+/** 边界摘要 v2（F9）：总述（零事实，只指涉总目标与改动方向）+ 分步（带引用）。 */
 export interface TaskDigest {
-  readonly blocks: readonly DigestBlock[]
-  readonly coords: readonly DigestCoord[]
+  readonly gist: string
+  readonly steps: readonly DigestStep[]
 }
 
 /** 档案条目种类：C = 压力检查点（未完成边界），D = 边界追加块（闭合）。 */
@@ -108,13 +107,17 @@ export interface AssembleUnit {
   readonly isError?: boolean
 }
 
-/** 热尾选中项（tier = 申报 / 地板；source = 盘上取真 / 账本取真）。 */
+/** 热尾选中项（tier = 申报 / 地板；source = 盘上取真 / 账本取真 / 仅摘抄）。 */
 export interface HotTailSelection {
   readonly unitId: string
+  /** 1-based 指针序号（渲染 `▸n`；= 申报序，地板项续号；摘要 refs 引用它）。 */
+  readonly rank: number
+  /** 指针行（机械渲染；`[文件] §1@vN:a-b` / `[历史] 会话 a-b` / `[摘抄] path`）。 */
+  readonly pointer: string
   readonly tier: 'model' | 'floor' | 'fallback'
   readonly seqStart: number
   readonly seqEnd: number
-  readonly source: 'file' | 'span'
+  readonly source: 'file' | 'span' | 'fact'
   readonly coord?: FileCoord
   readonly text: string
   readonly tokens: number
@@ -122,22 +125,29 @@ export interface HotTailSelection {
   readonly truncated?: boolean
   /** 重映射出界裁剪（clipped）标记。 */
   readonly clipped?: boolean
+  /** 仅指针（配额不足以放内容）：仍保留定位价值，计 pointerOnlyCount。 */
+  readonly pointerOnly?: boolean
 }
 
 export type HotTailStopReason = 'budget' | 'list-end'
 
 /** 丢弃归因（HT 软门 / 重映射 / 取真；总数 = HotTailPlan.dropped）。 */
-export type HotTailDropReason = 'badDecl' | 'unknownUnit' | 'remap' | 'fetch'
+export type HotTailDropReason = 'badDecl' | 'unknownUnit' | 'remap' | 'fetch' | 'dup' | 'factReject'
 export interface HotTailDropCounts {
   readonly badDecl: number
   readonly unknownUnit: number
   readonly remap: number
   readonly fetch: number
+  /** F9：同 unitId 重复申报（只留首次）。 */
+  readonly dup?: number
+  /** F9：fact 不是该单元原文子串（防自造事实）。 */
+  readonly factReject?: number
 }
 export type HotTailSource = 'model' | 'positional-fallback'
 
 export interface HotTailPlan {
-  readonly selections: readonly HotTailSelection[]
+  /** 装配序 = 申报序（F9：指针编号 = 数组下标 + 1；不再按 transcript 序重排）。 */
+  readonly entries: readonly HotTailSelection[]
   readonly stopReason: HotTailStopReason
   readonly source: HotTailSource
   readonly floorFilled: boolean
@@ -150,16 +160,33 @@ export interface HotTailPlan {
   /** 出界裁剪数。 */
   readonly clipped: number
   readonly truncated: number
+  /** 仅指针条目数（配额不足退化）。 */
+  readonly pointerOnly: number
   readonly tokens: number
   readonly budgetTokens: number
 }
 
-/** 装配产物（事实层 + 坐标层 + 热尾；注入与档案 vN 归 P19）。 */
+/** 摘要装配度量（F9：07 压缩族摘要面）。 */
+export interface DigestPlan {
+  /** 摘要（总述 + 分步）渲染字节数。 */
+  readonly bytes: number
+  readonly gistBytes: number
+  readonly stepCount: number
+  readonly stepTokens: number
+  /** 被 step 引用的热尾序号总数（去重后）。 */
+  readonly refCount: number
+  /** 越界/非法被丢弃的引用数。 */
+  readonly refDrops: number
+  /** 摘要中的事实泄漏命中数（机械扫描，只记账不拒单）。 */
+  readonly factLeaks: number
+  readonly tokens: number
+}
+
+/** 装配产物（总述 + 分步 + 热尾；注入与档案 vN 归 P19）。 */
 export interface AssembleResult {
   readonly layer: AssembleLayer
   readonly digest: TaskDigest
-  readonly digestBytes: number
-  readonly digestEntryCount: number
+  readonly digestPlan: DigestPlan
   readonly hotTail: HotTailPlan
   /** 本次产物的档案形态（priorChain 为空 = 单块；否则续传 + 追加）。 */
   readonly archiveForm: ArchiveForm
@@ -190,6 +217,22 @@ export interface AssemblePolicy {
   readonly maxFetchUnits: number
   /** 单单元超帽尾截断时保留的头部字符数下限（保证非空可读）。 */
   readonly minTruncatedChars: number
+  // —— F9 摘要契约 ——
+  /** 总述硬帽（字符；只指涉总目标与改动方向，零事实）。 */
+  readonly gistMaxChars: number
+  /** 单条分步硬帽（字符）。 */
+  readonly stepMaxChars: number
+  /** 单条分步引用上限（去重后）。 */
+  readonly maxStepRefs: number
+  /** 摘要硬帽（估算 token；超限机械尾截断）。 */
+  readonly digestMaxTokens: number
+  // —— F9 热尾预算 ——
+  /** 热尾 ≤ hotTailMaxShare × 区间估算（防缩水校验把整单打回）。 */
+  readonly hotTailMaxShare: number
+  /** 热尾下限占比（极小闭合段也留一点材料）。 */
+  readonly hotTailMinShare: number
+  /** 每条指针的开销（估算 token；从该条配额先扣）。 */
+  readonly pointerOverheadTokens: number
 }
 
 export const DEFAULT_ASSEMBLE_POLICY: AssemblePolicy = {
@@ -201,6 +244,13 @@ export const DEFAULT_ASSEMBLE_POLICY: AssemblePolicy = {
   floorErrorLines: 5,
   maxFetchUnits: 64,
   minTruncatedChars: 200,
+  gistMaxChars: 80,
+  stepMaxChars: 120,
+  maxStepRefs: 8,
+  digestMaxTokens: 1000,
+  hotTailMaxShare: 0.4,
+  hotTailMinShare: 0.05,
+  pointerOverheadTokens: 40,
 }
 
 /** 尾截断可见标记（中性叙述；热尾是缓存，标记只为可审计）。 */

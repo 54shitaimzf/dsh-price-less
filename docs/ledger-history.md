@@ -2598,4 +2598,41 @@ ROLE_OVERHEAD=4 + 递归块价（含 reasoning）+ **usage 锚定**（估算只�
 
 **口径同步**：docs/10 §1 H4（范围端点 = 当前表面节点）；本修复不改变任何预算常数。
 
+---
+
+## §63 F9b 产物 schema v2：总述 + 分步（带引用）+ 宽松修复（2026-09-09；提交 = 本账本同提交）
+
+**形状变更**（`COMPRESS_PROMPT_VERSION`/`COMPRESS_POLICY_VERSION`/`ASSEMBLE_POLICY_VERSION` 1→2）：
+
+```json
+{"gist":"≤80字零事实","steps":[{"type":"plan|impl|verify|decide|note","text":"≤120字","refs":[1,3]}],
+ "hotTail":[{"unitId":"...","coord":{...},"fact":"逐字摘抄（可选）"}]}
+```
+
+- **总** = gist：只指涉总目标与改动方向，零事实（机械扫描 `core/compress/fact-leak.ts` 分类
+  `path|version|quote|command|code|number`，只计数不拒单）。
+- **分** = steps：落地过程按发生顺序（不是对总述按类拆分）；`refs` = 热尾序号（数组下标 + 1，模型零算术）。
+- **热尾** = 1 指针 : 1 内容；编号 = 申报序；指针三形态 `[文件] path@vN:a-b` / `[历史] 会话 a-b` / `[摘抄] path`。
+  删除旧 `coords` 层与 `blocks` 四型（`DIGEST_BLOCK_ORDER`/`renderDigest` 退场）。
+- 渲染：`【总述】…` → `【计划】… (▸n)` → `【热尾】` + 逐条 `▸n <指针>` + 内容；摘要硬帽
+  `digestMaxTokens=1000`（超限从最后一条分步起整条丢弃，引用一起丢）。
+
+**宽松修复表（原 `digest` schema fatal 退场）**：未知 type → `note`；`gist`/steps 缺失/非串 → 空；
+坏 refs（0/非整数/重复/越界）→ 丢弃计数；`hotTail` 缺失/非数组 → 空申报；`fact` 非原文子串 → 丢弃计数。
+**唯一硬失败 = 非 JSON 对象（parse）**；`assembleArchive` 唯一 fatal = 续传链形态非法。
+`hotTail` 新增 `dup`（重复 unitId）与 `factReject` 归因。
+
+**重试语义（"检查没生效"修复）**：`domains/compaction.ts` 新增 `SCHEMA_RETRY_BUDGET=1`——
+`parse|schema` 失败不再一次永久封禁 task（原缺陷），超预算后才进 `attemptedTaskIds`（仍防每步重复计费）。
+
+**度量**：assemble-run / CompressionLedger 新增 `digestTokens/gistBytes/stepCount/stepTokens/refCount/refDrops/factLeaks/pointerOnlyCount/factRejects/dupDrops/hotTailPointers/archiveOverCap/pathBytesSaved/pathTableEntries`；
+`digestBytes` = 摘要头字节、`digestEntryCount` = stepCount（口径随迁）。
+
+**验收**：`npm run gate` = **632 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿。
+随迁测试：assemble-hottail（27 例，含归一化/硬帽/事实泄漏）、assemble-archive、assemble-domain、
+compress-product（宽松修复表）、compress-prompt（新 schema 段）；两处域夹具 `VALID_PRODUCT` 改 v2 形状。
+
+**未落地（续单）**：F9c 热尾事实载体（user/message 单元 + Zipf 分配 + 仅指针降级）、F9d 预算 10K/10K +
+存储 v1→v2 + 单调性守卫、F9e 路径压缩、F9f 死码清理 + 文档、F9g 回放验收。
+
 

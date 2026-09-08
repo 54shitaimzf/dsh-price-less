@@ -74,7 +74,7 @@ import { resolveJudgeModel } from './input.ts'
 import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
 import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
 
-const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
+const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 }
 
 /** F8b 标定对账（只观察、不改行为）：估算 promptTokens vs 真实 input+cacheRead，偏离 ±25% 即 warn。 */
 function warnTokenDrift(estimated: number | undefined, usage: CeLlmUsage | undefined, logger: CeLogger): void {
@@ -153,9 +153,13 @@ function firstUserSeq(events: readonly LedgerSessionEvent[]): number {
   return events[0]?.seq ?? 0
 }
 
-/** 已尝试过的 task（事实键，重放可判）：除 llm-unavailable 外一律不再尝试（防每步重复计费）。 */
-function attemptedTaskIds(facts: readonly LedgerFact[]): Set<string> {
+/** F9：解析/schema 失败的有界重试预算（防一次坏输出把 task 永久封禁；仍防每步重复计费）。 */
+export const SCHEMA_RETRY_BUDGET = 1
+
+/** 已尝试过的 task（事实键，重放可判）：除 llm-unavailable / 有界重试内的 parse|schema 外不再尝试。 */
+function attemptedTaskIds(facts: readonly LedgerFact[], schemaRetryBudget = SCHEMA_RETRY_BUDGET): Set<string> {
   const attempted = new Set<string>()
+  const transient = new Map<string, number>()
   for (const fact of facts) {
     if (fact.type !== COMPRESS_RUN_FACT_TYPE) continue
     const data = (fact.data ?? {}) as Partial<CompressRunFactData>
@@ -163,8 +167,14 @@ function attemptedTaskIds(facts: readonly LedgerFact[]): Set<string> {
     // 只有边界路径的尝试才算"该 task 已归档"；压力路径的 compress-run 不阻止 task 闭合归档。
     if (data.layer !== 'boundary') continue
     if (data.outcome === 'skipped' && data.reason === 'llm-unavailable') continue
+    // F9：解析/schema = 可重试的临时失败——有界重试后才永久归档（原缺陷 = 一次坏输出永久封禁）。
+    if (data.outcome === 'parse' || data.outcome === 'schema') {
+      transient.set(data.taskId, (transient.get(data.taskId) ?? 0) + 1)
+      continue
+    }
     attempted.add(data.taskId)
   }
+  for (const [taskId, count] of transient) if (count > schemaRetryBudget) attempted.add(taskId)
   return attempted
 }
 

@@ -27,22 +27,24 @@ export const COMPRESS_BOUNDARY_HEAD = [
   '本消息中 <闭合段原文> 是一段已经完成的工作；你的唯一职责是把它压成一份可供后续任务直接使用的档案。',
 ].join('\n')
 
-/** 边界硬规则（04 §2：类型化摘要 + 热尾申报；选坐标不造坐标）。 */
+/** 边界硬规则（04 §2 / F9：总述零事实 + 分步带引用 + 热尾承载全部事实）。 */
 export const COMPRESS_BOUNDARY_RULES = [
   '硬规则（逐条遵守）：',
   '1. 只压缩 <闭合段原文> 这一段。<已归档检查点> 是既有字节：原样续传，绝不重写、绝不并入新结构。',
   '2. 只输出一个 JSON 对象：无正文、无代码块围栏、无解释、无元注释。',
-  '3. 摘要分块 type 仅四种：plan（目标与计划）/ impl（实现路径）/ verify（验证结论）/ wrap（结论、决策、否弃、待办）；空块省略。',
-  '4. impl 只写坐标指针，禁止嵌入任何代码或原文；verify 的命令、数值、错误串逐字保留。',
-  '5. coords 的 path 与 version 只能从 <单元清单> 抄写（选坐标不造坐标）；行号用你见过的版本；不确定就省略 lineRange。',
-  '6. hotTail = 下一个任务开工真正要用的任务材料（文件与结论），按重要性降序申报；禁止任何预算计算——不要估算 token、不要凑数量，计量、裁剪、取真全部由 harness 机械完成。',
-  '7. hotTail 每项 = {"unitId":"<清单里的 ID>","coord":{"path":"...","version":N,"lineRange":{"start":a,"end":b}}}；coord 仅文件类单元可带，其余省略。',
-  '8. 路径、版本号、引号内文本、命令、数值逐字保留；不做同义改写。',
+  '3. gist = 总述：只写总目标与改动方向，≤80 字，**零事实**——不写路径、版本号、数字、命令、引号内文本。',
+  '4. steps = 总目标的落地过程，按发生顺序（不是按类别拆分）；type ∈ plan|impl|verify|decide|note；每条 ≤120 字；',
+  '   refs = 该步依赖的热尾条目序号（hotTail 数组下标 + 1；没有依赖就省略）；不要算预算、不要凑数量。',
+  '5. 所有事实（路径、版本、行号、命令、数值、错误串、引号内文本）一律放进 hotTail——那里逐字保真。',
+  '6. hotTail = 下一个任务开工真正要用的任务材料，按重要性降序申报；每项 = 1 条指针 : 1 条内容；禁止任何预算计算。',
+  '7. hotTail 每项 = {"unitId":"<清单 ID>","coord":{"path":"...","version":N,"lineRange":{"start":a,"end":b}},"fact":"逐字摘抄（可选）"}；',
+  '   coord 仅文件类单元可带；fact 必须是该单元原文的逐字子串（机器校验，不匹配即丢弃）。',
+  '8. coord 的 path 与 version 只能从 <单元清单> 抄写（选坐标不造坐标）；行号用你见过的版本；不确定就省略 lineRange。',
 ].join('\n')
 
 export const COMPRESS_BOUNDARY_OUTPUT = [
   '输出 JSON 形状（严格）：',
-  '{"digest":{"blocks":[{"type":"plan|impl|verify|wrap","text":"..."}],"coords":[{"path":"...","version":1,"lineRange":{"start":1,"end":10},"symbol":"可选"}]},"hotTail":[{"unitId":"...","coord":{"path":"...","version":1}}]}',
+  '{"gist":"...","steps":[{"type":"plan|impl|verify|decide|note","text":"...","refs":[1,3]}],"hotTail":[{"unitId":"...","coord":{"path":"...","version":1,"lineRange":{"start":1,"end":10}},"fact":"可选逐字摘抄"}]}',
 ].join('\n')
 
 /** 压力 persona（静态常量）。 */

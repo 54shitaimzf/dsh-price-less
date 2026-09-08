@@ -31,6 +31,23 @@ export interface AssembleRunFactData {
   readonly layer: AssembleLayer
   readonly digestBytes: number
   readonly digestEntryCount: number
+  // —— F9 摘要/热尾事实面（旧事实缺省 = 0） ——
+  readonly digestTokens?: number
+  readonly gistBytes?: number
+  readonly stepCount?: number
+  readonly stepTokens?: number
+  readonly refCount?: number
+  readonly refDrops?: number
+  readonly factLeaks?: number
+  readonly pointerOnlyCount?: number
+  readonly factRejects?: number
+  readonly dupDrops?: number
+  readonly hotTailPointers?: number
+  /** F9d/F9e（档案硬帽与路径压缩面；生产者逐步接入）。 */
+  readonly archiveOverCap?: boolean
+  readonly pathBytesSaved?: number
+  readonly pathTableEntries?: number
+  readonly rootKind?: string
   readonly hotTailTokens: number
   readonly hotTailDeclaredUnits: number
   readonly hotTailStopReason: HotTailStopReason
@@ -50,6 +67,21 @@ export interface AssembleRunFactData {
 export interface CompressionLedger {
   digestBytes: number
   digestEntryCount: number
+  /** F9 摘要/热尾事实面（assemble-run 源）。 */
+  digestTokens: number
+  gistBytes: number
+  stepCount: number
+  stepTokens: number
+  refCount: number
+  refDrops: number
+  factLeaks: number
+  pointerOnlyCount: number
+  factRejects: number
+  dupDrops: number
+  hotTailPointers: number
+  archiveOverCap: number
+  pathBytesSaved: number
+  pathTableEntries: number
   archiveTruncate: { count: number; tokens: number }
   compressionCallCount: number
   compressionCacheHitRate: number
@@ -98,6 +130,20 @@ export function emptyCompressionLedger(): CompressionLedger {
   return {
     digestBytes: 0,
     digestEntryCount: 0,
+    digestTokens: 0,
+    gistBytes: 0,
+    stepCount: 0,
+    stepTokens: 0,
+    refCount: 0,
+    refDrops: 0,
+    factLeaks: 0,
+    pointerOnlyCount: 0,
+    factRejects: 0,
+    dupDrops: 0,
+    hotTailPointers: 0,
+    archiveOverCap: 0,
+    pathBytesSaved: 0,
+    pathTableEntries: 0,
     archiveTruncate: { count: 0, tokens: 0 },
     compressionCallCount: 0,
     compressionCacheHitRate: 0,
@@ -151,6 +197,20 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     ledger.assembleRuns++
     ledger.digestBytes += numberField(data.digestBytes)
     ledger.digestEntryCount += numberField(data.digestEntryCount)
+    ledger.digestTokens += numberField(data.digestTokens)
+    ledger.gistBytes += numberField(data.gistBytes)
+    ledger.stepCount += numberField(data.stepCount)
+    ledger.stepTokens += numberField(data.stepTokens)
+    ledger.refCount += numberField(data.refCount)
+    ledger.refDrops += numberField(data.refDrops)
+    ledger.factLeaks += numberField(data.factLeaks)
+    ledger.pointerOnlyCount += numberField(data.pointerOnlyCount)
+    ledger.factRejects += numberField(data.factRejects)
+    ledger.dupDrops += numberField(data.dupDrops)
+    ledger.hotTailPointers += numberField(data.hotTailPointers)
+    if (data.archiveOverCap === true) ledger.archiveOverCap++
+    ledger.pathBytesSaved += numberField(data.pathBytesSaved)
+    ledger.pathTableEntries += numberField(data.pathTableEntries)
     ledger.hotTailTokens += numberField(data.hotTailTokens)
     ledger.hotTailDeclaredUnits += numberField(data.hotTailDeclaredUnits)
     ledger.assembleDropped += numberField(data.dropped)

@@ -18,9 +18,10 @@ import { toolCategory } from '../shear/tool.ts'
 import { archiveChainShape } from './archive.ts'
 import { foldFileChains, remapFileCoord, type FileChain, type FileOp } from './chain.ts'
 import { gateHotTailDecls } from './gate.ts'
+import { scanFactTexts } from '../compress/fact-leak.ts'
 import {
   DEFAULT_ASSEMBLE_POLICY,
-  DIGEST_BLOCK_ORDER,
+  DIGEST_STEP_TYPES,
   HOT_TAIL_TRUNCATION_MARKER,
   type ArchiveEntry,
   type AssembleLayer,
@@ -28,9 +29,9 @@ import {
   type AssemblePolicy,
   type AssembleResult,
   type AssembleUnit,
-  type DigestBlock,
-  type DigestBlockType,
-  type DigestCoord,
+  type DigestPlan,
+  type DigestStep,
+  type DigestStepType,
   type FileCoord,
   type HotTailDecl,
   type HotTailDropReason,
@@ -192,69 +193,120 @@ export function foldAssembleInputs(events: readonly LedgerSessionEvent[]): Assem
   return { units: withVersions, ops, chains }
 }
 
-/** 结构校验（三环 fatal 之一）：坏形状 = undefined（调用方 fail-lazy 保留）。 */
-export function validateDigest(value: unknown): TaskDigest | undefined {
+/** 机械归一化（F9 宽松口径）：坏形状一律修复为可渲染产物；只有非对象 = 空摘要。 */
+export function normalizeDigest(
+  value: unknown,
+  policy: AssemblePolicy = DEFAULT_ASSEMBLE_POLICY,
+): { digest: TaskDigest; refDrops: number; stepDrops: number } {
   const root = recordOf(value)
-  if (root === undefined) return undefined
-  const rawBlocks = root.blocks
-  const rawCoords = root.coords
-  if (!Array.isArray(rawBlocks) || !Array.isArray(rawCoords)) return undefined
-  const blocks: DigestBlock[] = []
-  for (const raw of rawBlocks) {
+  if (root === undefined) return { digest: { gist: '', steps: [] }, refDrops: 0, stepDrops: 0 }
+  const gist = typeof root.gist === 'string' ? root.gist.trim() : ''
+  const rawSteps = Array.isArray(root.steps) ? root.steps : []
+  const steps: DigestStep[] = []
+  let refDrops = 0
+  let stepDrops = 0
+  for (const raw of rawSteps) {
     const item = recordOf(raw)
-    if (item === undefined || typeof item.type !== 'string' || typeof item.text !== 'string') return undefined
-    if (!(DIGEST_BLOCK_ORDER as readonly string[]).includes(item.type)) return undefined
-    blocks.push({ type: item.type as DigestBlockType, text: item.text })
-  }
-  const coords: DigestCoord[] = []
-  for (const raw of rawCoords) {
-    const item = recordOf(raw)
-    if (item === undefined || typeof item.path !== 'string' || item.path === '') return undefined
-    if (typeof item.version !== 'number' || !Number.isInteger(item.version) || item.version < 1) return undefined
-    let lineRange: LineRange | undefined
-    if (item.lineRange !== undefined) {
-      const range = recordOf(item.lineRange)
-      if (range === undefined || typeof range.start !== 'number' || typeof range.end !== 'number') return undefined
-      if (!Number.isInteger(range.start) || !Number.isInteger(range.end) || range.start < 1 || range.end < range.start) return undefined
-      lineRange = { start: range.start, end: range.end }
+    if (item === undefined || typeof item.text !== 'string' || item.text.trim() === '') { stepDrops++; continue }
+    const type: DigestStepType = typeof item.type === 'string' && (DIGEST_STEP_TYPES as readonly string[]).includes(item.type)
+      ? (item.type as DigestStepType)
+      : 'note'
+    const refs: number[] = []
+    if (Array.isArray(item.refs)) {
+      for (const ref of item.refs) {
+        const n = typeof ref === 'number' ? ref : typeof ref === 'string' && /^\d+$/.test(ref) ? Number(ref) : Number.NaN
+        if (!Number.isInteger(n) || n < 1 || refs.includes(n)) { refDrops++; continue }
+        refs.push(n)
+      }
     }
-    if (item.symbol !== undefined && typeof item.symbol !== 'string') return undefined
-    coords.push({
-      path: item.path,
-      version: item.version,
-      ...(lineRange === undefined ? {} : { lineRange }),
-      ...(typeof item.symbol === 'string' ? { symbol: item.symbol } : {}),
-    })
+    const kept = refs.slice(0, Math.max(0, policy.maxStepRefs))
+    refDrops += refs.length - kept.length
+    steps.push({ type, text: item.text.trim(), refs: kept })
   }
-  return { blocks, coords }
+  return { digest: { gist, steps }, refDrops, stepDrops }
 }
 
-/** 渲染顺序（F5a：结论先行 = 总→分；与 schema 校验序 DIGEST_BLOCK_ORDER 解耦）。 */
-const DIGEST_RENDER_ORDER: readonly DigestBlockType[] = ['wrap', 'plan', 'impl', 'verify']
-/** 类型标签（F5a：渲染面显式标出块类型；产物 schema 与校验序不变）。 */
-const DIGEST_LABELS: Record<DigestBlockType, string> = {
-  plan: '【计划】', impl: '【实现】', verify: '【验证】', wrap: '【结论】',
+/** 分步类型标签（渲染面；schema 词汇与标签解耦）。 */
+const STEP_LABELS: Record<DigestStepType, string> = {
+  plan: '计划', impl: '实现', verify: '验证', decide: '决策', note: '备注',
+}
+const GIST_LABEL = '【总述】'
+const HOT_TAIL_LABEL = '【热尾】'
+const REF_PREFIX = '▸'
+const ELLIPSIS = '…'
+
+function truncateChars(text: string, max: number, marker: string): string {
+  if (max <= 0 || text.length <= max) return text
+  return text.slice(0, Math.max(1, max - marker.length)) + marker
 }
 
-/** 类型化摘要渲染（F5a：结论先行 + 类型标签；坐标层随后逐行；字节稳定）。 */
-export function renderDigest(digest: TaskDigest): string {
-  const parts: string[] = []
-  for (const type of DIGEST_RENDER_ORDER) {
-    for (const block of digest.blocks) {
-      if (block.type !== type) continue
-      const text = block.text.trim()
-      if (text !== '') parts.push(`${DIGEST_LABELS[type]}${text}`)
-    }
-  }
-  const coords = digest.coords.map((coord) => {
+type RawSelection = Omit<HotTailSelection, 'rank' | 'pointer' | 'pointerOnly'> & { readonly pointerOnly?: boolean }
+
+/** 指针行（机械渲染；F9：事实定位靠指针，路径相对化归 F9e）。 */
+export function pointerOf(selection: RawSelection): string {
+  const coord = selection.coord
+  if (coord !== undefined) {
     const range = coord.lineRange === undefined ? '' : `:${coord.lineRange.start}-${coord.lineRange.end}`
-    const symbol = coord.symbol === undefined ? '' : ` ${coord.symbol}`
-    return `${coord.path}@v${coord.version}${range}${symbol}`
+    return `[文件] ${coord.path}@v${coord.version}${range}`
+  }
+  if (selection.source === 'fact') return '[摘抄] （无坐标）'
+  return `[历史] 会话 ${selection.seqStart}-${selection.seqEnd}`
+}
+
+/**
+ * 产物渲染（F9：总述 → 分步（带 ▸n 引用）→ 热尾（1 指针 : 1 内容）；字节稳定）。
+ * 摘要硬帽：超限从**最后一条分步**起整条丢弃（机械；不重写）；引用只认 [1..entries.length]。
+ */
+export function renderProduct(
+  digest: TaskDigest,
+  entries: readonly HotTailSelection[],
+  policy: AssemblePolicy = DEFAULT_ASSEMBLE_POLICY,
+): { text: string; plan: DigestPlan } {
+  const gist = truncateChars(digest.gist, policy.gistMaxChars, ELLIPSIS)
+  const lines: string[] = []
+  const refsByStep: number[][] = []
+  let refDrops = 0
+  for (const step of digest.steps) {
+    const text = truncateChars(step.text, policy.stepMaxChars, ELLIPSIS)
+    const refs: number[] = []
+    for (const n of step.refs) {
+      if (!Number.isInteger(n) || n < 1 || n > entries.length) { refDrops++; continue }
+      refs.push(n)
+    }
+    lines.push(`【${STEP_LABELS[step.type]}】${text}`)
+    refsByStep.push(refs)
+  }
+  // 摘要硬帽：整条丢尾（引用随其分步一起丢）。
+  while (lines.length > 0 && estimateTokens(lines.join('\n'), policy.density) > policy.digestMaxTokens) {
+    const droppedRefs = refsByStep.pop() ?? []
+    refDrops += droppedRefs.length
+    lines.pop()
+  }
+  const renderedSteps = lines.map((line, index) => {
+    const refs = refsByStep[index] ?? []
+    return refs.length === 0 ? line : `${line} (${refs.map((n) => REF_PREFIX + n).join(',')})`
   })
-  const head = parts.join('\n\n')
-  const tail = coords.join('\n')
-  if (head === '') return tail
-  return tail === '' ? head : `${head}\n\n${tail}`
+  const head = [gist === '' ? '' : `${GIST_LABEL}${gist}`, ...renderedSteps].filter((part) => part !== '').join('\n')
+  const body = entries
+    .map((entry) => `${REF_PREFIX}${entry.rank} ${entry.pointer}${entry.text === '' ? '' : `\n${entry.text}`}`)
+    .join('\n')
+  const text = [head, entries.length === 0 ? '' : `${HOT_TAIL_LABEL}\n${body}`].filter((part) => part !== '').join('\n\n')
+  const referenced = new Set<number>()
+  for (const refs of refsByStep) for (const n of refs) referenced.add(n)
+  const scan = scanFactTexts([gist, ...digest.steps.slice(0, lines.length).map((step) => step.text)])
+  return {
+    text,
+    plan: {
+      bytes: new TextEncoder().encode(head).length,
+      gistBytes: new TextEncoder().encode(gist).length,
+      stepCount: lines.length,
+      stepTokens: estimateTokens(renderedSteps.join('\n'), policy.density),
+      refCount: referenced.size,
+      refDrops,
+      factLeaks: scan.total,
+      tokens: estimateTokens(text, policy.density),
+    },
+  }
 }
 
 /** 单元清单（压缩器输入尾部机械追加；ID·名称·路径版本·粗标体量，供模型选坐标）。 */
@@ -283,7 +335,7 @@ function resolveSelection(
   unit: AssembleUnit,
   input: AssembleInput,
   policy: AssemblePolicy,
-): { selection: HotTailSelection } | { dropped: 'remap' | 'fetch' } {
+): { selection: RawSelection } | { dropped: 'remap' | 'fetch' } {
   if (decl.coord === undefined) {
     return {
       selection: {
@@ -303,7 +355,24 @@ function resolveSelection(
   const remap = remapFileCoord(chain, coord, current)
   if (!remap.ok) return { dropped: 'remap' }
   const text = input.resolve?.[unit.id]
-  if (text === undefined) return { dropped: 'fetch' }
+  if (text === undefined) {
+    // 盘上取真缺失但模型给了逐字摘抄 → 降级为仅摘抄条目（事实不丢；仍可定位）。
+    if (decl.fact !== undefined && decl.fact !== '' && unit.text.includes(decl.fact)) {
+      return {
+        selection: {
+          unitId: unit.id,
+          tier: 'model',
+          seqStart: unit.seqStart,
+          seqEnd: unit.seqEnd,
+          source: 'fact',
+          coord,
+          text: decl.fact,
+          tokens: estimateTokens(decl.fact, policy.density),
+        },
+      }
+    }
+    return { dropped: 'fetch' }
+  }
   return {
     selection: {
       unitId: unit.id,
@@ -320,7 +389,8 @@ function resolveSelection(
 }
 
 /**
- * 装配（贪心停机 + 单单元尾截断 + 地板填充 + 位置兜底；装配序 = transcript 序）。
+ * 装配（贪心停机 + 单单元尾截断 + 地板填充 + 位置兜底；装配序 = 申报序）。
+ * F9：摘要 = 总述 + 分步（带 ▸n 引用）；热尾 = 1 指针 : 1 内容（事实载体）。
  */
 export function assembleArchive(input: AssembleInput): AssembleOutcome {
   const policy = input.policy ?? DEFAULT_ASSEMBLE_POLICY
@@ -329,20 +399,16 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   const prior = input.priorChain ?? []
   const priorShape = archiveChainShape(prior)
   if (priorShape.shape !== 'empty' && priorShape.shape !== 'prefix') return { ok: false, reason: 'digest-schema' }
-  let digest: TaskDigest | undefined
-  if (input.digest !== undefined) {
-    digest = validateDigest(input.digest)
-    if (digest === undefined) return { ok: false, reason: 'digest-schema' }
-  }
-  const empty: TaskDigest = { blocks: [], coords: [] }
-  const effective = digest ?? empty
-  if (units.length === 0 && effective.blocks.length === 0 && effective.coords.length === 0) return { ok: false, reason: 'no-units' }
+  // F9 宽松口径：摘要坏形状一律机械修复；唯一 fatal 仍是续传链形态（上面）。
+  const normalized = normalizeDigest(input.digest, policy)
+  const effective = normalized.digest
+  if (units.length === 0 && effective.gist === '' && effective.steps.length === 0) return { ok: false, reason: 'no-units' }
 
   const byId = new Map<string, AssembleUnit>()
   for (const unit of units) if (!byId.has(unit.id)) byId.set(unit.id, unit)
 
   const budget = policy.hotTailTokens
-  const selections: HotTailSelection[] = []
+  const selections: RawSelection[] = []
   const picked = new Set<string>()
   let used = 0
   let clipped = 0
@@ -350,7 +416,7 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   let stopReason: HotTailStopReason = 'list-end'
   let source: HotTailSource = 'model'
   let floorFilled = false
-  const dropReasons: Record<HotTailDropReason, number> = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0 }
+  const dropReasons: Record<HotTailDropReason, number> = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 }
   const rawDecls: readonly unknown[] = Array.isArray(input.hotTail) ? input.hotTail : []
   const gated = gateHotTailDecls(rawDecls, units)
   for (const reject of gated.rejected) {
@@ -359,7 +425,7 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   }
   const declared = gated.accepted
 
-  const push = (selection: HotTailSelection): void => {
+  const push = (selection: RawSelection): void => {
     selections.push(selection)
     picked.add(selection.unitId)
     used += selection.tokens
@@ -384,9 +450,19 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
     for (const decl of declared) {
       const unit = byId.get(decl.unitId)
       if (unit === undefined) { dropReasons.unknownUnit++; continue }
+      if (picked.has(decl.unitId)) { dropReasons.dup++; continue }
       const resolved = resolveSelection(decl, unit, input, policy)
       if ('dropped' in resolved) { dropReasons[resolved.dropped]++; continue }
-      const selection = resolved.selection
+      let selection = resolved.selection
+      // fact = 逐字摘抄；必须是该单元原文的子串（防自造事实），否则丢弃 + 计数。
+      if (decl.fact !== undefined && decl.fact !== '' && !selection.text.includes(decl.fact)) {
+        if (unit.text.includes(decl.fact)) {
+          const text = selection.text === '' ? decl.fact : `${selection.text}\n${decl.fact}`
+          selection = { ...selection, text, tokens: estimateTokens(text, policy.density) }
+        } else {
+          dropReasons.factReject++
+        }
+      }
       if (used + selection.tokens > budget) {
         if (selections.length === 0) {
           const remaining = budget - used
@@ -416,7 +492,7 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
           if (picked.has(unit.id) || !predicate(unit)) continue
           const text = pickVerbatimLines(unit.text, re, limit).join('\n')
           if (text === '') continue
-          const selection: HotTailSelection = {
+          const selection: RawSelection = {
             unitId: unit.id,
             tier: 'floor',
             seqStart: unit.seqStart,
@@ -436,18 +512,21 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
     }
   }
 
-  const ordered = selections.slice().sort((a, b) => a.seqStart - b.seqStart || a.unitId.localeCompare(b.unitId))
-  const digestText = renderDigest(effective)
-  const hotText = ordered.map((selection) => selection.text).join('\n\n')
-  const rendered = [...prior.map((entry) => entry.text), digestText, hotText].filter((part) => part !== '').join('\n\n')
-  const dropped = dropReasons.badDecl + dropReasons.unknownUnit + dropReasons.remap + dropReasons.fetch
+  // 装配序 = 申报序（F9：▸n = 数组下标 + 1，摘要引用与指针同源）。
+  const entries: HotTailSelection[] = selections.map((selection, index) => ({
+    ...selection,
+    rank: index + 1,
+    pointer: pointerOf(selection),
+    ...(selection.pointerOnly === true ? { pointerOnly: true } : {}),
+  }))
+  const product = renderProduct(effective, entries, policy)
+  const dropped = dropReasons.badDecl + dropReasons.unknownUnit + dropReasons.remap + dropReasons.fetch + dropReasons.dup + dropReasons.factReject
   const result: AssembleResult = {
     layer,
     digest: effective,
-    digestBytes: bytesOf(digestText),
-    digestEntryCount: effective.blocks.length + effective.coords.length,
+    digestPlan: { ...product.plan, refDrops: normalized.refDrops + product.plan.refDrops },
     hotTail: {
-      selections: ordered,
+      entries,
       stopReason,
       source,
       floorFilled,
@@ -456,17 +535,13 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
       dropReasons: { ...dropReasons },
       clipped,
       truncated,
+      pointerOnly: selections.filter((selection) => selection.pointerOnly === true).length,
       tokens: used,
       budgetTokens: budget,
     },
     archiveForm: { form: prior.length === 0 ? 'single' : 'chain', checkpointCount: prior.length },
     unitCount: units.length,
-    rendered,
+    rendered: [...prior.map((entry) => entry.text), product.text].filter((part) => part !== '').join('\n\n'),
   }
   return { ok: true, result }
-}
-
-/** 档案文本（事实层 + 热尾；P19 注入面）。 */
-export function renderArchive(result: AssembleResult): string {
-  return result.rendered
 }

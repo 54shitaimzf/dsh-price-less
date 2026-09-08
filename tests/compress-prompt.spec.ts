@@ -45,7 +45,7 @@ describe('P18 prompt：两模式组装', () => {
 
   it('两模式各自 schema 段落齐备', () => {
     const boundary = renderBoundaryPrompt({ regionText: 'r', units: [unit('a')] }).prompt
-    for (const marker of ['"digest"', '"blocks"', 'plan|impl|verify|wrap', '"hotTail"', '禁止任何预算计算']) {
+    for (const marker of ['"gist"', '"steps"', 'plan|impl|verify|decide|note', '"hotTail"', '禁止任何预算计算', '零事实']) {
       expect(boundary).toContain(marker)
     }
     const pressure = renderPressurePrompt({ regionText: 'r', units: [unit('a')] }).prompt
@@ -104,6 +104,6 @@ describe('P18 prompt：两模式组装', () => {
     expect(renderBoundaryPrompt(input).prompt).toBe(renderBoundaryPrompt(input).prompt)
     expect(renderPressurePrompt(input).prompt).toBe(renderPressurePrompt(input).prompt)
     expect(renderPriorChain([])).toBe('')
-    expect(COMPRESS_POLICY_VERSION).toBe(1)
+    expect(COMPRESS_POLICY_VERSION).toBe(2)
   })
 })

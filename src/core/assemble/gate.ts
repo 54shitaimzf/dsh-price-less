@@ -37,7 +37,9 @@ export function validateHotTailDecl(value: unknown): HotTailDecl | undefined {
   if (root === undefined) return undefined
   const unitId = root.unitId
   if (typeof unitId !== 'string' || unitId === '') return undefined
-  if (root.coord === undefined) return { unitId }
+  const fact = typeof root.fact === 'string' && root.fact.trim() !== '' ? root.fact : undefined
+  const withFact = fact === undefined ? {} : { fact }
+  if (root.coord === undefined) return { unitId, ...withFact }
   const coord = recordOf(root.coord)
   if (coord === undefined) return undefined
   const path = coord.path
@@ -49,7 +51,7 @@ export function validateHotTailDecl(value: unknown): HotTailDecl | undefined {
     if (range === undefined || !isPositiveInt(range.start) || !isPositiveInt(range.end) || range.end < range.start) return undefined
     lineRange = { start: range.start, end: range.end }
   }
-  return { unitId, coord: { path, version: coord.version, ...(lineRange === undefined ? {} : { lineRange }) } }
+  return { unitId, ...withFact, coord: { path, version: coord.version, ...(lineRange === undefined ? {} : { lineRange }) } }
 }
 
 /** 门禁（保持申报序）：形状非法 → bad-decl；ID 不在单元清单 → unknown-unit；其余接受。 */

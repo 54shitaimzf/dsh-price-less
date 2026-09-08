@@ -115,14 +115,14 @@ describe('P17c 装配：priorChain 续传 + 追加（04 §3 机制 A）', () => 
     const outcome = assembleArchive(base)
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.archiveForm).toEqual({ form: 'single', checkpointCount: 0 })
-    expect(outcome.result.rendered).toBe('A'.repeat(4))
+    expect(outcome.result.rendered).toBe('【热尾】\n▸1 [历史] 会话 1-2\n' + 'A'.repeat(4))
   })
 
   it('priorChain = [C…] → 续传旧块 + 追加新块（chain）', () => {
     const outcome = assembleArchive({ ...base, priorChain: [entry('checkpoint', 'C1'), entry('checkpoint', 'C2')] })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.archiveForm).toEqual({ form: 'chain', checkpointCount: 2 })
-    expect(outcome.result.rendered).toBe('C1\n\nC2\n\n' + 'A'.repeat(4))
+    expect(outcome.result.rendered).toBe('C1\n\nC2\n\n【热尾】\n▸1 [历史] 会话 1-2\n' + 'A'.repeat(4))
   })
 
   it('priorChain 非 empty|prefix（已闭合链 / D 在 C 前）= schema fatal', () => {
@@ -135,10 +135,10 @@ describe('P17c 装配：priorChain 续传 + 追加（04 §3 机制 A）', () => 
     const outcome = assembleArchive({
       ...base,
       priorChain: [entry('checkpoint', 'C1')],
-      digest: { blocks: [{ type: 'wrap', text: '结论' }], coords: [] },
+      digest: { gist: '结论', steps: [] },
     })
     if (!outcome.ok) throw new Error('expected ok')
-    expect(outcome.result.rendered).toBe('C1\n\n【结论】结论\n\n' + 'A'.repeat(4))
-    expect(outcome.result.digestBytes).toBe(Buffer.byteLength('【结论】结论', 'utf8'))
+    expect(outcome.result.rendered).toBe('C1\n\n【总述】结论\n\n【热尾】\n▸1 [历史] 会话 1-2\n' + 'A'.repeat(4))
+    expect(outcome.result.digestPlan.bytes).toBe(Buffer.byteLength('【总述】结论', 'utf8'))
   })
 })
