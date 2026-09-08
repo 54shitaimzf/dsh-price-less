@@ -71,19 +71,28 @@ function nodeBlock(event: LedgerSessionEvent): string | undefined {
   return undefined
 }
 
-/** 当前表面且落在区间内的节点（transcript 序）。 */
+/**
+ * 当前表面且落在区间内的节点（transcript 序）。
+ * `visible` = 权威表面节点 seq 集（harness `session.surface.nodes`）；缺省 = 本层按事件自折
+ * （纯核/测试路径）。真机必须传权威集：事件窗被截断时自折会复活已遮蔽节点（F9a）。
+ */
 export function surfaceEventsInRange(
   events: readonly LedgerSessionEvent[],
   range: RegionRange,
+  visible?: ReadonlySet<number>,
 ): LedgerSessionEvent[] {
-  const surface = new Set(foldSurfaceNodes(events))
+  const surface = visible ?? new Set(foldSurfaceNodes(events))
   return events.filter((event) => surface.has(event.seq) && event.seq >= range.startSeq && event.seq <= range.endSeq)
 }
 
 /** 区间正文转写（transcript 序；仅表面节点；同输入同字节）。 */
-export function renderRegionTranscript(events: readonly LedgerSessionEvent[], range: RegionRange): string {
+export function renderRegionTranscript(
+  events: readonly LedgerSessionEvent[],
+  range: RegionRange,
+  visible?: ReadonlySet<number>,
+): string {
   const blocks: string[] = []
-  for (const event of surfaceEventsInRange(events, range)) {
+  for (const event of surfaceEventsInRange(events, range, visible)) {
     const block = nodeBlock(event)
     if (block !== undefined) blocks.push(block)
   }

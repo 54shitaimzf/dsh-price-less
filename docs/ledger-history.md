@@ -2563,4 +2563,39 @@ ROLE_OVERHEAD=4 + 递归块价（含 reasoning）+ **usage 锚定**（估算只�
 
 **口径同步**：docs/04 §5（估计器两条改两桶 + 标定锚点 + 对账比）、docs/11 §2（新增 core/meter/ 行）、AGENTS.md 标定条。
 
+---
+
+## §62 F9a 区间权威化 + 配对平衡守卫：INVALID_RANGE 真机缺陷（2026-09-09；提交 = 本账本同提交）
+
+**触发**：真机压力路径整单失败——`compaction/start ce-compact-pressure-task-1-16819-20787` →
+`compaction/end error: INVALID_RANGE: invalid surface replace range 16819..20787` →
+`compress-run {layer:pressure, outcome:skipped, reason:txn}`（保留区 24 事件未折，会话继续膨胀）。
+
+**根因（两处，均为"已声明未生效"）**：
+1. **压力路径没有配对平衡前置**——边界路径有 `history.balanceRange`（domains/compaction.ts:296），
+   压力路径直接从自折表面取端点就进 replace；端点一旦不是当前表面节点 → `findSpan` 抛 INVALID_RANGE。
+2. **自折表面会复活已遮蔽节点**——`ledgerEventsOf` 把事件裁到最近 4000 条；replace 动作的
+   start/end 落在窗口外时 `foldSurfaceNodes` 静默跳过该 replace，被遮蔽节点重新变成"可见"，
+   于是范围选择取到 harness 表面里已不存在的 seq。**权威表面只能是 `session.surface.nodes`。**
+
+**修复（F9a）**：
+
+| 落点 | 内容 |
+|---|---|
+| platform/history.ts | `HistoryPort.surfaceNodes()`（只读 `session.surface.nodes` 副本）；`balanceRange` 对守卫抛错**吸收为 null**（表面损坏 = 不落刀，失败方向保留原文） |
+| domains/compaction.ts | 边界/压力两路径统一：端点取自 `surfaceNodes()` → `balanceRange` 收窄 → 收窄后区间用于 units 过滤 / 折叠材料 / 保留区 / 事务 / `rangeEndSeq`；缝越界（`cutSeq < replaceStart \|\| cutSeq > replaceEnd`）→ `skip('cutpoint')` |
+| core/compress/region.ts | `surfaceEventsInRange`/`renderRegionTranscript` 增可选 `visible`（权威表面集）；区间转写不再自折（真机传权威集，纯核/测试走缺省自折） |
+
+**测试夹具修正（本身也是"检查没生效"）**：旧压力夹具把 `tool/call` 当**表面节点**追加。
+真机形状（harness `core/agent-loop/tool-calls.ts`）= `tool/call` 为**非表面日志事件**，
+表面节点 = `assistant/message`（含 tool-call 块）+ `tool/result`；配对平衡只按这两类折。
+旧夹具编码了一个真实会话不可能出现的表面，故守卫一接入即全线报错——已改两处夹具为真机形状。
+
+**验收**：`npm run gate` = **629 tests / 57 files** + assert `ok=true vacuous=[]`；build 绿（host + client）。
+新增 3 例回归（tests/compaction-domain.spec.ts「F9a 压力区间守卫」）：表面损坏 → 干净 `skip(range)`
+零错误零半开事务；`rangeEndSeq` 越界（99）→ `skip(range)` 绝不进 replace；表面为空 → 零调用零改史。
+既有压力用例（含 `rangeEndSeq: 7`、`cutPointSeq: 5`）按真机形状重算。
+
+**口径同步**：docs/10 §1 H4（范围端点 = 当前表面节点）；本修复不改变任何预算常数。
+
 

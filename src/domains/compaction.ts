@@ -19,7 +19,6 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
 import { compactFact, factsFromSessionEvents } from '../core/ledger/facts.ts'
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
-import { foldSurfaceNodes } from '../core/ledger/surface.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
 import { DEFAULT_ASSEMBLE_POLICY, foldAssembleInputs, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
@@ -285,18 +284,21 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({ ...base, outcome: 'skipped' as const, reason, ...extra }), logger)
     }
 
-    // ① 区间落表面（尾必须排除下一段起点 = 新 task 首条消息 = 权威段）。
-    const surface = foldSurfaceNodes(events)
+    // ① 区间落表面（权威表面 = harness session.surface.nodes；尾必须排除下一段起点 = 新 task 首条消息）。
+    // F9a：范围端点必须取自权威表面——从原始事件自折在事件窗被截断时会复活已遮蔽节点，
+    // 选到非表面端点 → replace 抛 INVALID_RANGE（真机 2026-09-09）。
+    const history = createHistoryPort(session)
+    const surface = history.surfaceNodes()
     // 起点必须同时落在本段区间内：压缩产物节点（checkpoint，seq 高但语义属更早区间）不得被当起点，
     // 否则"多闭合段积压"（如恢复后 / 曾关开关）场景会取到新节点 → 区间反空 → 每步 rangeSkip 卡死。
     const start = surface.find((seq) => seq >= (segment.startSeq ?? 0) && seq < nextStartSeq)
     const end = start === undefined ? undefined : [...surface].reverse().find((seq) => seq >= start && seq < nextStartSeq)
     if (start === undefined || end === undefined) { counts.rangeSkips++; return }
-    const history = createHistoryPort(session)
     const balanced = history.balanceRange({ start: start as never, end: end as never })
     if (balanced === null) { counts.rangeSkips++; return }
     const range = { startSeq: Number(balanced.start), endSeq: Number(balanced.end) }
-    const regionText = renderRegionTranscript(events, range)
+    const visibleSeqs = new Set<number>(surface.map((seq) => Number(seq)))
+    const regionText = renderRegionTranscript(events, range, visibleSeqs)
     if (regionText === '') { counts.rangeSkips++; return }
     const units = deps.assemble.unitList(session, range)
 
@@ -568,25 +570,33 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (opts.emergency && depth >= PRESSURE_EMERGENCY_LIMIT) { fire('breaker', { chainDepth: depth, reason: 'emergency-cap' }); return stop(false) }
     if (!planTailConsumption({ priorChain, layer: 'pressure' }).ok) { fire('skip', { reason: 'chain-invalid', chainDepth: depth }); return stop(false) }
 
-    const surface = foldSurfaceNodes(events)
+    // 权威表面 + 配对平衡守卫（F9a）：端点必须同时是当前表面节点且不切工具对，
+    // 否则 replace 抛 INVALID_RANGE（真机 2026-09-09 压力路径整单 skipped 的根因）。
+    const history = createHistoryPort(session)
+    const surface = history.surfaceNodes()
     const taskEndSeq = surface.at(-1)
     if (taskEndSeq === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return stop(false) }
     const prev = priorChain.at(-1)
     const segmentStart = segment.startSeq ?? firstUserSeq(events)
     const foldStartSeq = prev?.cutPointSeq ?? segmentStart
-    const replaceStart = prev?.rangeEndSeq === undefined
+    const rawStart = prev?.rangeEndSeq === undefined
       ? surface.find((seq) => seq >= segmentStart)
       : surface.find((seq) => seq > (prev.rangeEndSeq as number))
-    if (replaceStart === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return stop(false) }
+    if (rawStart === undefined) { fire('skip', { reason: 'range', chainDepth: depth }); return stop(false) }
+    const balanced = history.balanceRange({ start: rawStart as never, end: taskEndSeq as never })
+    if (balanced === null) { fire('skip', { reason: 'range', chainDepth: depth }); return stop(false) }
+    const replaceStart = Number(balanced.start)
+    const replaceEnd = Number(balanced.end)
+    const visibleSeqs = new Set<number>(surface.map((seq) => Number(seq)))
 
     // 单元清单与折叠区同源（模型只从清单抄 unitId 选缝；被遮蔽原文在此重新可见 = 机制 B）。
     const material = events.filter(isPressureMaterial)
     const units = foldAssembleInputs(material).units
-      .filter((unit) => unit.seqStart >= foldStartSeq && unit.seqEnd <= taskEndSeq)
+      .filter((unit) => unit.seqStart >= foldStartSeq && unit.seqEnd <= replaceEnd)
     if (units.length === 0) { fire('skip', { reason: 'no-units', chainDepth: depth }); return stop(false) }
 
     const { assemble: assemblePolicy, compress: compressPolicy } = policiesOf(config)
-    const candidateText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: taskEndSeq })
+    const candidateText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: replaceEnd })
     const policyKey = `${assemblePolicy.hotTailTokens}/${assemblePolicy.archiveTokens}/${compressPolicy.density.cjk},${compressPolicy.density.other}`
     const key = compressSpanHash({
       promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION, layer: 'pressure',
@@ -662,8 +672,10 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       const cutUnit = units.find((unit) => unit.id === product.cutPoint.unitId)
       if (cutUnit === undefined) { fire('skip', { reason: 'cutpoint', chainDepth: depth }); return undefined }
       const cutSeq = cutUnit.seqStart
+      // 缝必须落在替换区间内：否则保留区会把区间外的原文重复带进产物（或区间内原文被截断丢失）。
+      if (cutSeq < replaceStart || cutSeq > replaceEnd) { fire('skip', { reason: 'cutpoint', chainDepth: depth }); return undefined }
       const foldText = renderFoldMaterialTranscript(events, { startSeq: foldStartSeq, endSeq: cutSeq - 1 })
-      const retainedText = renderRegionTranscript(events, { startSeq: cutSeq, endSeq: taskEndSeq })
+      const retainedText = renderRegionTranscript(events, { startSeq: cutSeq, endSeq: replaceEnd }, visibleSeqs)
       const checkpointText = renderCheckpoint(product.checkpoint)
       const rendered = composePressureArchive({ priorChain, checkpointText, retainedText })
       return {
@@ -707,7 +719,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const entries = await writeStore((body) => {
       const appended = appendArchiveEntry(body, {
         taskId: scopedTaskId, kind: 'checkpoint', text: chosen!.checkpointText, sessionId: sid,
-        layer: 'pressure', at: now(), cutPointSeq: chosen!.cutSeq, rangeEndSeq: taskEndSeq,
+        layer: 'pressure', at: now(), cutPointSeq: chosen!.cutSeq, rangeEndSeq: replaceEnd,
       }, assemblePolicy)
       return {
         body: chosen!.cacheHit
@@ -729,21 +741,20 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     }
 
     // 事务：open → prune（影子价）→ summary + checkpoint 替换 → close。
-    const history = createHistoryPort(session)
-    const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, replaceStart, taskEndSeq)
-      ?? estimateTokens(renderRegionTranscript(events, { startSeq: replaceStart, endSeq: taskEndSeq }), compressPolicy.density)
+    const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, replaceStart, replaceEnd)
+      ?? estimateTokens(renderRegionTranscript(events, { startSeq: replaceStart, endSeq: replaceEnd }, visibleSeqs), compressPolicy.density)
     const plan = planTxn({
-      txnId: `ce-compact-pressure-${segment.taskId}-${replaceStart}-${taskEndSeq}`,
-      layer: 'pressure', taskId: scopedTaskId, range: { start: replaceStart, end: taskEndSeq },
+      txnId: `ce-compact-pressure-${segment.taskId}-${replaceStart}-${replaceEnd}`,
+      layer: 'pressure', taskId: scopedTaskId, range: { start: replaceStart, end: replaceEnd },
       shadowedTokenCount: shadowPrice, replaceKind: 'checkpoint', turn,
     })
     const txn = runCompactionTxn(history, plan, (h) => {
-      h.recordPrune({ start: replaceStart as never, end: taskEndSeq as never, shadowedTokenCount: shadowPrice })
+      h.recordPrune({ start: replaceStart as never, end: replaceEnd as never, shadowedTokenCount: shadowPrice })
       h.commitCheckpoint({
         compactionId: plan.txnId,
         text: chosen!.rendered,
         summary: chosen!.checkpointText,
-        range: { start: replaceStart as never, end: taskEndSeq as never },
+        range: { start: replaceStart as never, end: replaceEnd as never },
         shadowedTokenCount: shadowPrice,
         provider: chosen!.cacheHit ? '' : chosen!.provider,
         model: chosen!.cacheHit ? '' : chosen!.model,

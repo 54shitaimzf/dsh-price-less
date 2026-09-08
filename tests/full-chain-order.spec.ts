@@ -156,9 +156,12 @@ const makePressureSession = (id = 'sp'): FakeSession => {
   const session = new FakeSession()
   ;(session.header as { id: string }).id = id
   session.append('user/message', { content: textBlock('做 A '.repeat(200)), source: { kind: 'user' } }, { surfaceOp: 'append' })
-  session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }, { surfaceOp: 'append' })
+  // 真机形状：tool/call 非表面日志事件；表面节点 = assistant/message + tool/result（F9a 配对守卫需要）。
+  session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }] } }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: textBlock('x'.repeat(2000)) }] } }, { surfaceOp: 'append' })
-  session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
+  session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }] } }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: textBlock('y'.repeat(50)) }] } }, { surfaceOp: 'append' })
   session.append('user/message', { content: textBlock('继续'), source: { kind: 'user' } }, { surfaceOp: 'append' })
   session.append('request/header', { header: { config: { provider: 'p', model: 'm' } } })

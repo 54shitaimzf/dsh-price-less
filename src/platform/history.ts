@@ -145,6 +145,12 @@ export interface HistoryPort {
   assertNoActiveCompaction(): void
   findActiveCompaction(): ActiveCompaction | undefined
   balanceRange(range: SurfaceRange): SurfaceRange | null
+  /**
+   * 当前表面节点 seq 序（权威表面 = harness `session.surface.nodes`；只读副本）。
+   * 压缩范围选择**必须**以此为真源——从原始事件自折在事件窗被截断时会复活已遮蔽节点，
+   * 选到非表面端点 → replace 抛 INVALID_RANGE（2026-09-09 真机缺陷 F9a）。
+   */
+  surfaceNodes(): readonly SessionSeq[]
   pairBalancedBefore(seq: SessionSeq): boolean
   pairBalancedAfter(seq: SessionSeq): boolean
 }
@@ -290,8 +296,13 @@ export function createHistoryPort(
     if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return null
     let s = startIdx
     let e = endIdx
-    while (s <= e && !balanceChecker.before(session, nodes[s]!)) s++
-    while (e >= s && !balanceChecker.after(session, nodes[e]!)) e--
+    try {
+      while (s <= e && !balanceChecker.before(session, nodes[s]!)) s++
+      while (e >= s && !balanceChecker.after(session, nodes[e]!)) e--
+    } catch {
+      // 表面损坏 / 配对守卫不可用 = 不落刀（失败方向 = 保留原文；调用侧按 range skip 记账，绝不半开）。
+      return null
+    }
     if (s > e) return null
     return { start: nodes[s]!, end: nodes[e]! }
   }
@@ -305,6 +316,7 @@ export function createHistoryPort(
     assertNoActiveCompaction,
     findActiveCompaction: () => scanActiveCompaction(session),
     balanceRange,
+    surfaceNodes: () => session.surface.nodes.slice(),
     pairBalancedBefore: (seq) => balanceChecker.before(session, seq),
     pairBalancedAfter: (seq) => balanceChecker.after(session, seq),
   }

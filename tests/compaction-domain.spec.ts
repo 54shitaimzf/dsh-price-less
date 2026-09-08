@@ -322,9 +322,13 @@ function makePressureSession(id = 'sp'): FakeSession {
   const session = new FakeSession()
   ;(session.header as { id: string }).id = id
   session.append('user/message', { content: [textBlock('做 A '.repeat(200))], source: { kind: 'user' } }, { surfaceOp: 'append' })
-  session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }, { surfaceOp: 'append' })
+  // 真机形状：tool/call 是**非表面**日志事件（surfaceOp 省略）；表面节点 = assistant/message + tool/result。
+  // 配对平衡守卫按此折（tool/call 不参与配对计数）；F9a 前压力路径不查配对，故旧夹具用错形状也过。
+  session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }] } }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: [textBlock('x'.repeat(2000))] }] } }, { surfaceOp: 'append' })
-  session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
+  session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }] } }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [textBlock('y'.repeat(50))] }] } }, { surfaceOp: 'append' })
   session.append('user/message', { content: [textBlock('继续')], source: { kind: 'user' } }, { surfaceOp: 'append' })
   // 主会话路由（readSessionModel 倒序扫描；非表面事件，不影响表面序）——P20c 窗口探针输入。
@@ -342,18 +346,18 @@ describe('P20a 压力路径：触发与全路径', () => {
     expect(env.llm.calls[0]).toMatchObject({ purpose: 'context-economy-compaction', temperature: 0 })
     const fires = firesOf(env.session)
     expect(fires).toHaveLength(1)
-    expect(fires[0]).toMatchObject({ outcome: 'fired', chainDepth: 0, wireTokens: 120000, thresholdTokens: 43750, pressureRatio: 0.35, cutPointSeq: 3 })
+    expect(fires[0]).toMatchObject({ outcome: 'fired', chainDepth: 0, wireTokens: 120000, thresholdTokens: 43750, pressureRatio: 0.35, cutPointSeq: 5 })
     expect(env.runs()).toHaveLength(1)
-    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', calls: 1, cutPointSeq: 3, carried: 0, archiveEntries: 1 })
+    expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', calls: 1, cutPointSeq: 5, carried: 0, archiveEntries: 1 })
     const record = env.storage.entities.get(`boundary_archive:${ARCHIVE_KEY}`)!
     const body = record.body as { entries: Array<Record<string, unknown>> }
     expect(body.entries).toHaveLength(1)
-    expect(body.entries[0]).toMatchObject({ taskId: 'sp:task-1', kind: 'checkpoint', cutPointSeq: 3, rangeEndSeq: 5, layer: 'pressure' })
+    expect(body.entries[0]).toMatchObject({ taskId: 'sp:task-1', kind: 'checkpoint', cutPointSeq: 5, rangeEndSeq: 7, layer: 'pressure' })
     expect(String(body.entries[0]!.text)).toContain('进度：')
     const landed = env.session.events.find((event) => event.type === 'user/message' && event.surfaceOp && event.surfaceOp.op === 'replace')!
     const text = (landed.data as { content: Array<{ text: string }> }).content[0]!.text
     expect(text).toContain('进度：')
-    expect(text).toContain('[3] tool/call read c2')
+    expect(text).toContain('[6] tool/result c2')
     expect(text).toContain('y'.repeat(50))
     expect(appendsOf(env.session, 'compaction/summary')[0]!.data).toMatchObject({ shadowedTokenCount: 4242 })
     expect(env.domain.stats()).toMatchObject({ compactions: 1 })
@@ -398,11 +402,13 @@ describe('P20a 压力路径：触发与全路径', () => {
     const session = new FakeSession()
     ;(session.header as { id: string }).id = 'sp'
     session.append('user/message', { content: [textBlock('做 A')], source: { kind: 'user' } }, { surfaceOp: 'append' })
-    session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }, { surfaceOp: 'append' })
+    session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }] } }, { surfaceOp: 'append' })
+    session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' })
     session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: [textBlock('x'.repeat(2000))] }] } }, { surfaceOp: 'append' })
-    // 模拟上一次压力折叠：replace [0..2] → 检查点节点（plugin:compact）
-    session.append('user/message', { content: [textBlock('C1')], source: { kind: 'plugin', plugin: 'compact' } }, { surfaceOp: { op: 'replace', start: 0, end: 2 }, sourceEventSeqs: [0, 1, 2] })
-    session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
+    // 模拟上一次压力折叠：replace [0..3] → 检查点节点（plugin:compact）
+    session.append('user/message', { content: [textBlock('C1')], source: { kind: 'plugin', plugin: 'compact' } }, { surfaceOp: { op: 'replace', start: 0, end: 3 }, sourceEventSeqs: [0, 1, 2, 3] })
+    session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }] } }, { surfaceOp: 'append' })
+    session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' })
     session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [textBlock('y'.repeat(50))] }] } }, { surfaceOp: 'append' })
     session.append('user/message', { content: [textBlock('继续')], source: { kind: 'user' } }, { surfaceOp: 'append' })
     const storage = new FakeStorage()
@@ -509,6 +515,63 @@ describe('P20b 保险丝：地板以上自动折叠 + 溢出接管', () => {
     const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, config, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
     expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })).toBe('pass')
     expect(env.llm.calls).toHaveLength(0)
+  })
+})
+
+describe('F9a 压力区间守卫（INVALID_RANGE 回归，2026-09-09 真机缺陷）', () => {
+  it('表面损坏（配对守卫抛错）→ 干净 skip(range)，不抛错不半开事务', async () => {
+    const session = makePressureSession()
+    // 真机缺陷模型：事件窗被截断时从原始事件自折会复活已遮蔽节点，选到非表面端点 → INVALID_RANGE。
+    // 这里直接构造权威表面损坏（tool/result 失去配对的 assistant/message）：守卫抛错必须被吸收成 skip。
+    session.nodes = session.nodes.filter((seq) => seq !== 4)
+    const env = makeEnv({ session, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: session as never, turn: 3 })
+    expect(env.domain.stats().errors).toBe(0)
+    expect(env.llm.calls).toHaveLength(0)
+    expect(firesOf(session)[0]).toMatchObject({ outcome: 'skip', reason: 'range' })
+    expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
+    expect(env.runs()).toHaveLength(0)
+  })
+
+  it('权威表面 = 真源：端点必落在 session.surface.nodes（越界即 skip，不抛 INVALID_RANGE）', async () => {
+    const session = makePressureSession()
+    const storage = new FakeStorage()
+    storage.entities.set(`boundary_archive:${ARCHIVE_KEY}`, {
+      version: 1,
+      body: {
+        schemaVersion: 1, workspace: WORKSPACE,
+        entries: [{ taskId: 'sp:task-1', kind: 'checkpoint', text: 'C1', sessionId: 'sp', layer: 'pressure', at: 1, cutPointSeq: 1, rangeEndSeq: 99 }],
+        cache: {},
+      },
+    })
+    const env = makeEnv({ session, storage, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: session as never, turn: 3 })
+    expect(env.domain.stats().errors).toBe(0)
+    // rangeEndSeq=99 不在表面 → rawStart 找不到 > 99 的节点 → skip(range)，绝不把 99 送进 replace。
+    expect(firesOf(session)[0]).toMatchObject({ outcome: 'skip', reason: 'range' })
+    expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
+  })
+
+  it('尾部未配对（悬挂 tool-call）→ 配对平衡收窄替换区间，不把未配对节点折进去', async () => {
+    const session = makePressureSession()
+    session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c3', name: 'read', arguments: '{"file_path":"c.ts"}' }] } }, { surfaceOp: 'append' })
+    const dangling = session.nodes.at(-1)!
+    const env = makeEnv({ session, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: session as never, turn: 3 })
+    expect(env.domain.stats().errors).toBe(0)
+    const entry = (env.storage.entities.get(`boundary_archive:${ARCHIVE_KEY}`)!.body as { entries: Array<{ rangeEndSeq?: number }> }).entries[0]!
+    expect(entry.rangeEndSeq).not.toBe(dangling)
+    expect(entry.rangeEndSeq).toBeLessThan(dangling)
+  })
+
+  it('表面为空 → skip(range)，零调用零改史', async () => {
+    const session = makePressureSession()
+    session.nodes = []
+    const env = makeEnv({ session, wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: session as never, turn: 3 })
+    expect(env.llm.calls).toHaveLength(0)
+    expect(firesOf(session)[0]).toMatchObject({ outcome: 'skip', reason: 'range' })
+    expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
   })
 })
 
