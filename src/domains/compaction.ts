@@ -278,7 +278,9 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
 
     // ① 区间落表面（尾必须排除下一段起点 = 新 task 首条消息 = 权威段）。
     const surface = foldSurfaceNodes(events)
-    const start = surface.find((seq) => seq >= (segment.startSeq ?? 0))
+    // 起点必须同时落在本段区间内：压缩产物节点（checkpoint，seq 高但语义属更早区间）不得被当起点，
+    // 否则"多闭合段积压"（如恢复后 / 曾关开关）场景会取到新节点 → 区间反空 → 每步 rangeSkip 卡死。
+    const start = surface.find((seq) => seq >= (segment.startSeq ?? 0) && seq < nextStartSeq)
     const end = start === undefined ? undefined : [...surface].reverse().find((seq) => seq >= start && seq < nextStartSeq)
     if (start === undefined || end === undefined) { counts.rangeSkips++; return }
     const history = createHistoryPort(session)

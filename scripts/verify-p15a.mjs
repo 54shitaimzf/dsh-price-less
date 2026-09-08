@@ -49,7 +49,9 @@ check('core/shear 零 harness/platform import',
   sources.every((text) => !/from\s+['"](?:@deepseek-ai\/|cordis|[^'"]*platform)/.test(text)))
 
 // —— ③ 接线白名单（P15b 起允许；白名单外引用 = 违规） ——
-const ALLOWED_WIRING = new Set(['src/index.ts', 'src/domains/shear.ts', 'src/domains/shear-facts.ts'])
+// P21b 全链验收发现本表陈旧：P19/P20 起 domains/compaction.ts 合法消费 core/shear 事实
+// （T-boundary 搭车会计 + toolCategory），白名单同步收编（04 §1 / 03 §2）。
+const ALLOWED_WIRING = new Set(['src/index.ts', 'src/domains/shear.ts', 'src/domains/shear-facts.ts', 'src/domains/compaction.ts'])
 const walkTs = (dir, out = []) => {
   for (const name of fs.readdirSync(dir).sort()) {
     const abs = path.join(dir, name)
@@ -60,7 +62,7 @@ const walkTs = (dir, out = []) => {
 }
 const wired = walkTs(path.join(ROOT, 'src')).filter((p) => !p.startsWith('src/core/shear/') && fs.readFileSync(path.join(ROOT, p), 'utf8').includes('core/shear'))
 const wiredIllegal = wired.filter((p) => !ALLOWED_WIRING.has(p))
-check('接线白名单（仅 index.ts + domains/shear*.ts 可引用 core/shear）', wiredIllegal.length === 0, wiredIllegal.join(','))
+check('接线白名单（index.ts + domains/shear*.ts + domains/compaction.ts 可引用 core/shear）', wiredIllegal.length === 0, wiredIllegal.join(','))
 
 // —— ④ 确定性双跑 + 输入不 mutate ——
 const readText = ['1: const a = 1', '2: export const x = 2', '3: const b = 3'].join('\n')
