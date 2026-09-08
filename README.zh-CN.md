@@ -137,7 +137,7 @@ dev_inject_plugin /path/to/dsh-price-less
 | `discriminator.provider` | string | 未设置 | 辅助模型 provider；与 `model` 同时设置时覆盖内置预设 |
 | `discriminator.model` | string | 未设置 | 辅助模型；与 `provider` 同时设置时覆盖内置预设 |
 
-> schema 未给 `provider` / `model` 声明默认值。留空时，辅助调用（自动识别、`/init`）回落到内置预设 `deepseek-official` / `deepseek-v4-flash-vision-exp`；两项**都**填写时以配置为准。开启 `discriminator.auto` 或使用 `/init` 可能会调用辅助模型，产生 API 费用，并可能把相关提示词内容发送给所配置的服务商。
+> schema 未给 `provider` / `model` 声明默认值。留空时，辅助调用（自动识别、`/init`、星标断面）优先**跟随当前会话模型**（最近一次请求的 provider/model），无请求记录时回落内置默认 `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910`；两项**都**填写时以配置为准。开启 `discriminator.auto` 或使用 `/init` 可能会调用辅助模型，产生 API 费用，并可能把相关提示词内容发送给所配置的服务商。
 
 ## 命令
 

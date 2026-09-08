@@ -24,7 +24,7 @@ import type { LedgerFact } from '../core/ledger/types.ts'
 import { parseT0Command } from '../core/t0.ts'
 import { streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
-import type { EventPump, CeDomainEvents, CeLogger } from '../platform/events.ts'
+import { readSessionModel, type EventPump, type CeDomainEvents, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import type { Config as ConfigShape } from '../config.ts'
 import type { Context } from '@deepseek-ai/cordis'
@@ -37,7 +37,8 @@ import {
   type JudgeErrorFactData,
 } from './judge-facts.ts'
 
-const DEFAULT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp' }
+// 默认判别模型 = 当前主对话模型（2026-09-08 定；可在设置卡覆盖，缺省时优先跟随会话当前模型）。
+const DEFAULT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' }
 const FACT_BUCKET_LIMIT = 2000
 const DEFAULT_CACHE_LIMIT = 1024
 
@@ -56,10 +57,14 @@ export interface AutoDiscriminator {
   stats(): { queued: number; processed: number; facts: number; records: JudgeRecord[]; ledger: ReturnType<typeof foldJudgeLedger> }
 }
 
-export function resolveJudgeModel(config: ConfigShape): { provider: string; model: string } {
+export function resolveJudgeModel(
+  config: ConfigShape,
+  sessionModel?: { provider: string; model: string },
+): { provider: string; model: string } {
   const provider = config.discriminator?.provider?.trim()
   const model = config.discriminator?.model?.trim()
   if (provider && model) return { provider, model }
+  if (sessionModel !== undefined) return sessionModel
   return { ...DEFAULT_MODEL }
 }
 
@@ -169,7 +174,7 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       return
     }
 
-    const { provider, model } = resolveJudgeModel(getConfig())
+    const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
     const fingerprint = freezeJudgeConfig({ provider, model, auto: true })
     const cacheKey = judgeL1CacheKey({ sessionId: sid, seq, text, configFingerprint: fingerprint })
     const cached = l1Cache.get(cacheKey)

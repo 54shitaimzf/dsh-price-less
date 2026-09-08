@@ -137,7 +137,7 @@ Configuration is currently grouped under `discriminator`.
 | `discriminator.provider` | string | unset | Auxiliary LLM provider; when set together with `model`, overrides the built-in preset |
 | `discriminator.model` | string | unset | Auxiliary LLM model; when set together with `provider`, overrides the built-in preset |
 
-> The schema declares no default for `provider`/`model`. Left empty, auxiliary calls (intent detection, `/init`) fall back to the built-in preset `deepseek-official` / `deepseek-v4-flash-vision-exp`; setting **both** values overrides it. Enabling `discriminator.auto` or using `/init` may invoke the auxiliary LLM. This can incur API costs and may send relevant prompt content to the configured provider.
+> The schema declares no default for `provider`/`model`. Left empty, auxiliary calls (intent detection, `/init`, star section) first **follow the current session model** (provider/model of the latest request), falling back to the built-in default `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910` when the session has no request yet; setting **both** values overrides it. Enabling `discriminator.auto` or using `/init` may invoke the auxiliary LLM. This can incur API costs and may send relevant prompt content to the configured provider.
 
 ## Commands
 

@@ -133,7 +133,7 @@ function ModelRouteSelector(props: {
       {showManual ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <CeText value={providerText} placeholder="服务商（如 deepseek-official）" disabled={disabled} onChange={(t) => onEdit('discriminator.provider', t)} />
-          <CeText value={modelText} placeholder="模型（如 deepseek-v4-flash-vision-exp）" disabled={disabled} onChange={(t) => onEdit('discriminator.model', t)} />
+          <CeText value={modelText} placeholder="模型（如 deepseek-v4.1-flash-expires-on-0910）" disabled={disabled} onChange={(t) => onEdit('discriminator.model', t)} />
           <button
             type="button"
             disabled={disabled}

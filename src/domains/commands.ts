@@ -16,12 +16,13 @@ import { streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
-import type { CeLogger } from '../platform/events.ts'
+import { readSessionModel, type CeLogger } from '../platform/events.ts'
 import type { Config as ConfigShape } from '../config.ts'
 import { clampInitGoal, parseInitOutput, renderInitPrompt } from '../core/init.ts'
 import { buildTaskBoundaryData } from './task-facts.ts'
 
-const DEFAULT_INIT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp' }
+// 默认辅助模型 = 当前主对话模型（2026-09-08 定；设置卡可覆盖，缺省时优先跟随会话当前模型）。
+const DEFAULT_INIT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' }
 const PENDING_INIT_LIMIT = 32
 
 export interface CommandFaceDeps {
@@ -48,10 +49,14 @@ interface PendingInit {
   time: number
 }
 
-export function resolveInitModel(config: ConfigShape): { provider: string; model: string } {
+export function resolveInitModel(
+  config: ConfigShape,
+  sessionModel?: { provider: string; model: string },
+): { provider: string; model: string } {
   const provider = config.discriminator?.provider?.trim()
   const model = config.discriminator?.model?.trim()
   if (provider && model) return { provider, model }
+  if (sessionModel !== undefined) return sessionModel
   return { ...DEFAULT_INIT_MODEL }
 }
 
@@ -201,7 +206,7 @@ export function mountCommandFace(
       return { kind: 'error', text: '项目帧已存在；修订经星标/设置，不在本命令范围' }
     }
     if (deps.llmCtx === undefined) return { kind: 'error', text: 'LLM 服务不可用，无法初始化项目帧' }
-    const { provider, model } = resolveInitModel(getConfig())
+    const { provider, model } = resolveInitModel(getConfig(), readSessionModel(session))
     const rendered = renderInitPrompt(goal)
     let llmText = ''
     const options: CeGenerateOptions = {

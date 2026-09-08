@@ -9,6 +9,7 @@ import {
   foldJudgeLedger,
   type JudgeRecord,
 } from '../src/core/judge.ts'
+import { readSessionModel } from '../src/platform/events.ts'
 import {
   resolveJudgeModel,
   mountAutoDiscriminator,
@@ -87,9 +88,22 @@ describe('parseT0Command', () => {
 })
 
 describe('resolveJudgeModel', () => {
-  it('缺省使用预设；配置覆盖生效', () => {
-    expect(resolveJudgeModel(cfg(true))).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp' })
-    expect(resolveJudgeModel(cfg(true, 'p', 'm'))).toEqual({ provider: 'p', model: 'm' })
+  it('缺省使用内置默认；配置覆盖优先；会话模型次之', () => {
+    expect(resolveJudgeModel(cfg(true))).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' })
+    expect(resolveJudgeModel(cfg(true), { provider: 'sess-p', model: 'sess-m' })).toEqual({ provider: 'sess-p', model: 'sess-m' })
+    expect(resolveJudgeModel(cfg(true, 'p', 'm'), { provider: 'sess-p', model: 'sess-m' })).toEqual({ provider: 'p', model: 'm' })
+  })
+  it('readSessionModel：取最近一次 request/header 的 provider/model；无记录 → undefined', () => {
+    const sessionOf = (events: unknown[]) => ({ header: { id: 's1' }, snapshotEvents: () => events }) as never
+    const withHeader = sessionOf([
+      { type: 'request/header', seq: 0, time: 1, data: { header: { config: { provider: 'p1', model: 'm1' } } } },
+      { type: 'assistant/message', seq: 1, time: 2, data: {} },
+      { type: 'request/header', seq: 2, time: 3, data: { header: { config: { provider: 'p2', model: 'm2' } } } },
+    ])
+    expect(readSessionModel(withHeader)).toEqual({ provider: 'p2', model: 'm2' })
+    expect(readSessionModel(sessionOf([]))).toBeUndefined()
+    expect(readSessionModel(sessionOf([{ type: 'request/header', seq: 0, time: 1, data: {} }]))).toBeUndefined()
+    expect(readSessionModel({ header: { id: 's1' } } as never)).toBeUndefined()
   })
 })
 

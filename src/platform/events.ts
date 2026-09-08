@@ -44,6 +44,26 @@ export const METRICS_FACE_TYPES: ReadonlySet<SessionEventType> = new Set<Session
   'tool/result',
 ])
 
+/**
+ * 会话当前模型（最近一次 `request/header` 的 config.provider/model；判别/断面辅助调用的默认跟随）。
+ * 倒序扫描到首个 header 即返回；无请求记录 → undefined（调用侧回落静态默认）。
+ */
+export function readSessionModel(session: Session): { provider: string; model: string } | undefined {
+  const snapshot = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents
+  if (snapshot === undefined) return undefined
+  const events = snapshot.call(session)
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]!
+    if (event.type !== 'request/header') continue
+    const config = (event.data as unknown as { header?: { config?: { provider?: unknown; model?: unknown } } }).header?.config
+    if (typeof config?.provider === 'string' && typeof config.model === 'string') {
+      return { provider: config.provider, model: config.model }
+    }
+    return undefined
+  }
+  return undefined
+}
+
 /** user/message 文本（text blocks 拼接 trim）；空文本 → null（02 §2「文本非空」条件）。 */
 function userMessageText(data: UserMessage): string | null {
   const text = data.content

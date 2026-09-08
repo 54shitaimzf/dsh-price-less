@@ -286,7 +286,8 @@ export function splitRouteKey(key: string): { provider: string; model: string } 
  * 模板态保留：这是"模型列表"交互的常驻底座，重设计时按需增删。
  */
 export const MODEL_PRESET_ROUTES: EconomySelectOption[] = [
-  { value: routeKey('deepseek-official', 'deepseek-v4-flash-vision-exp'), label: 'deepseek-official：deepseek-v4-flash-vision-exp', group: '内置预设', tone: 'business', pitch: '官方 API 直连：判别口径与实验批次一致（推荐默认）。' },
+  { value: routeKey('deepseek-official', 'deepseek-v4.1-flash-expires-on-0910'), label: 'deepseek-official：deepseek-v4.1-flash-expires-on-0910', group: '内置预设', tone: 'business', pitch: '官方 API 直连：与主对话同模型（2026-09 默认）。' },
+  { value: routeKey('deepseek-official', 'deepseek-v4-flash-vision-exp'), label: 'deepseek-official：deepseek-v4-flash-vision-exp', group: '内置预设', tone: 'business', pitch: '官方 API 直连：判别口径与实验批次一致（低成本）。' },
   { value: routeKey('deepseek-official', 'deepseek-v4-flash'), label: 'deepseek-official：deepseek-v4-flash', group: '内置预设', tone: 'business', pitch: '官方 API 直连：同价文本档（无图像输入）。' },
 ]
 

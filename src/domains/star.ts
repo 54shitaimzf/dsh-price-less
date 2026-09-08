@@ -25,7 +25,7 @@ import { streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platfor
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
-import type { CeLogger } from '../platform/events.ts'
+import { readSessionModel, type CeLogger } from '../platform/events.ts'
 import { STAR_BRIDGE_CODES, STAR_PREVIEW_LIMIT, type StarBridgeOutcome } from '../platform/star-bridge.ts'
 import type { Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
@@ -171,7 +171,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     let errorCode: string | undefined
     if (deps.llmCtx === undefined) errorCode = STAR_BRIDGE_CODES.llmFailed
     else {
-      const { provider, model } = resolveJudgeModel(getConfig())
+      const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
       const startedAt = now()
       const options: CeGenerateOptions = {
         provider, model, purpose: 'context-economy-optimize', temperature: 0,
