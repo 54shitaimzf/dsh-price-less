@@ -205,8 +205,8 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   T-entry/T-note 判据归 P15a/P15b，端口内不内置剪切规则。
 - **P15b 已接线**：`createShearToolPort(ctx, hooks, logger)` 把执行视图收敛成 `ToolResultView`
   （callId/name/resultText/isError/hasNonText/origin），只挂 `tools/post-execute`；`parent !== undefined`
-  （run_code 子分发）与 `origin === 'subagent'` 直接委托 `next()`；含非 text 块不整形。T-loop/T0/T0-R
-  与 T-note 剪除走 H4（`domains/shear.ts`），快照 §39。
+  （run_code 子分发）与 `origin === 'subagent'` 直接委托 `next()`；含非 text 块不整形。T0/T0-R
+  与 T-note 剪除走 H4（`domains/shear.ts`），快照 §39（**T-loop 已退役，账本 §72**）。
 
 ### 3.10 客户端接口（client 半边）
 

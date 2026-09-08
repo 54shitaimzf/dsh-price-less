@@ -1,6 +1,6 @@
 /**
  * 工具剪切纯核：谓词、四档准入与确定性 fold（docs/03 §2/§2.1/§2.2/§2.3；P15a）。
- * 纯函数：三级回退、T-entry 整形、T-loop stub、T-note 协商、T0 超越、T0-R 修复。
+ * 纯函数：T-entry 整形、T0 超越、T0-R 修复（T-note 协商与 T-loop 思考后截断均已退役）。
  * core 零 harness/platform import；不抛错，失败一律默认保留（协商不成不动刀，零重试）。
  * 平面: L0（无模型/IO/状态）｜回退链步数: 3（自带策略 → 类别启发式 → 通用体积年龄规则）
  * 审查清单: 不 import harness/platform（S1）；不写 KV/日志/事实；不改史（执行归 P15b）；
@@ -213,22 +213,9 @@ export function admitEntry(call: ShearToolCall, resultText: string, args?: unkno
   return { decision: 'cut', reason: 'entry-shaped', op: { kind: 'shape-entry', callId: call.callId, content: shaped } }
 }
 
-export function buildLoopStub(conclusion: string): string {
-  return `（工具结果已剪除；结论：${conclusion}）`
-}
-
 /** T0 stub（纯痕迹；盘上在场 = 写即新真相，路径逐字保留，零转写）。 */
 export function buildSupersededStub(path: string): string {
   return `（已剪除：${path} 的旧读取——该文件此后已被写入，盘上内容为准。）`
-}
-
-/** T-loop：cmd 类 + 当次结论极短 → stub 占位替换（保配对）；read 类排除。 */
-export function admitLoop(call: ShearToolCall, conclusion: string, policy: ShearPolicy = DEFAULT_SHEAR_POLICY): Admission {
-  if (toolCategory(call.name) !== 'cmd') return { decision: 'keep', reason: 'loop-category' }
-  const text = conclusion.trim()
-  if (text.length === 0) return { decision: 'keep', reason: 'loop-empty-conclusion' }
-  if (text.length > policy.loopMaxConclusionChars) return { decision: 'keep', reason: 'loop-conclusion-too-long' }
-  return { decision: 'cut', reason: 'loop-admitted', op: { kind: 'stub-replace', callId: call.callId, stub: buildLoopStub(text) } }
 }
 
 /** 配对纪律：op 指向的调用必须有对应结果（孤儿调用 → 拒绝该 op）。 */
@@ -250,9 +237,7 @@ export function isBoundaryRideCandidate(record: ShearDecisionRecord): boolean {
 
 /** fold 可选项（P15b 接线缝；全部可选，缺省 = P15a 行为逐字节一致）。 */
 export interface FoldToolShearOptions {
-  /** 已在落账前整形的调用（T-entry）：跳过 T-loop，防双重剪。 */
-  readonly entryShaped?: ReadonlySet<string>
-  /** 工具自声明生命周期（三级回退第一级）；缺省 = 类别启发式。 */
+  /** 生命周期谓词覆盖（三级回退第一级）；缺省 = 内置类别启发式。 */
   readonly lifecycles?: Readonly<Record<string, ToolContextLifecycle>>
 }
 
@@ -268,18 +253,15 @@ interface ReadState {
 
 /**
  * 单遍确定性 fold：事件保序、输入不 mutate、无时钟/随机。
- * T-entry 在结果到达时整形；T-note/T-loop 在紧随的叙述消息处裁决；
- * T0/T0-R 在同路径写到达时裁决（streak 原位刷新；异质操作冻结摘抄 → 后续编辑退普通 T0）。
+ * T-entry 在结果到达时整形；T0/T0-R 在同路径写到达时裁决
+ * （streak 原位刷新；异质操作冻结摘抄 → 后续编辑退普通 T0）。
  */
 export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy = DEFAULT_SHEAR_POLICY, options: FoldToolShearOptions = {}): ShearPlan {
   const ops: ShearOp[] = []
   const decisions: ShearDecisionRecord[] = []
   const callsById = new Map<string, ShearToolCall>()
-  const resultsById = new Map<string, { readonly text: string }>()
   const readsByPath = new Map<string, ReadState[]>()
-  const entryShaped = new Set<string>()
   let streakPath: string | undefined
-  let lastResultId: string | undefined
   const record = (tier: ShearDecisionRecord['tier'], decision: ShearDecision, reason: string, callId?: string): void => {
     decisions.push(callId === undefined ? { tier, decision, reason } : { tier, decision, reason, callId })
   }
@@ -296,13 +278,10 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
     if (event.kind === 'user-message') {
       freezeRepaired()
       streakPath = undefined
-      lastResultId = undefined
       continue
     }
     if (event.kind === 'tool-result') {
       const result = event.result
-      resultsById.set(result.callId, { text: result.text })
-      lastResultId = result.callId
       const call = callsById.get(result.callId)
       if (call === undefined) continue
       const path = pathOfCall(call)
@@ -315,7 +294,6 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
       const shaped = shapeEntryContent(call, result.text)
       if (shaped !== undefined) {
         ops.push({ kind: 'shape-entry', callId: call.callId, content: shaped })
-        entryShaped.add(call.callId)
         record('T-entry', 'cut', 'entry-shaped', call.callId)
       } else if (looksLikeListing(call, result.text)) {
         // W1：列表跳过可观测（keep 相由 domains/shear.ts 发射 shear-decision 事实）。
@@ -324,22 +302,14 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
       continue
     }
     if (event.kind === 'assistant-message') {
-      const result = lastResultId === undefined ? undefined : resultsById.get(lastResultId)
-      const call = lastResultId === undefined ? undefined : callsById.get(lastResultId)
-      if (call !== undefined && result !== undefined && !entryShaped.has(call.callId) && options.entryShaped?.has(call.callId) !== true) {
-        const admission = admitLoop(call, event.text, policy)
-        record('T-loop', admission.decision, admission.reason, call.callId)
-        if (admission.op !== undefined) ops.push(admission.op)
-      }
-      // docs/03 §2.2：streak 只被异质操作（其他文件）或用户轮打断——assistant 叙述不算打断
+      // T-loop（工具思考后截断）已退役（账本 §72）：叙述消息不再触发任何落刀。
+      // streak 只被异质操作（其他文件）或用户轮打断——assistant 叙述不算打断
       // （真实事件序 = assistant(含 tool-call) → tool/call → tool/result，若在此重置 streak，
       //  T0-R 永远不可达）。
-      lastResultId = undefined
       continue
     }
     const call = event.call
     callsById.set(call.callId, call)
-    lastResultId = undefined
     const path = pathOfCall(call)
     if (toolCategory(call.name) === 'read' && path !== undefined) {
       const states = readsByPath.get(path) ?? []

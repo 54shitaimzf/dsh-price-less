@@ -1,6 +1,6 @@
 /**
  * P15a 工具剪切纯核测试（docs/implement/archive/P15a-shear-tool-core.md §5；docs/03 §7 协议级断言）。
- * 九组：谓词与三级回退 / T-entry / T-loop / T-note / T0 / T0-R / 配对与边界搭车 / 确定性 / P15b 接线缝。
+ * 八组：谓词与三级回退 / T-entry / T-note / T0 / T0-R / 配对与边界搭车 / 确定性 / P15b 接线缝。
  * 纯核测试：零 cordis 运行时、零 IO、零模型。
  */
 import { describe, expect, it } from 'vitest'
@@ -9,9 +9,7 @@ import {
   DEFAULT_SHEAR_POLICY,
   SHEAR_POLICY_VERSION,
   admitEntry,
-  admitLoop,
   assertPairing,
-  buildLoopStub,
   buildSupersededStub,
   foldToolShear,
   genericCutEligible,
@@ -75,8 +73,8 @@ describe('P15a §1 谓词与三级回退', () => {
     expect(pathOfCall(read)).toBeUndefined()
   })
   it('策略初值集中且版本化（docs/03 §8）', () => {
-    expect(SHEAR_POLICY_VERSION).toBe(2)
-    expect(DEFAULT_SHEAR_POLICY).toEqual({ version: 2, loopMaxConclusionChars: 120, t0rMaxSegments: 4, t0rMaxIndent: 1 })
+    expect(SHEAR_POLICY_VERSION).toBe(3)
+    expect(DEFAULT_SHEAR_POLICY).toEqual({ version: 3, t0rMaxSegments: 4, t0rMaxIndent: 1 })
   })
 })
 
@@ -124,17 +122,6 @@ describe('W1 列表识别（目录列表不整形）', () => {
     const plan = foldToolShear(events)
     expect(plan.ops).toHaveLength(0)
     expect(plan.decisions).toContainEqual({ tier: 'T-entry', decision: 'keep', reason: 'entry-skip-listing', callId: 'c1' })
-  })
-})
-
-describe('P15a §3 T-loop 占位替换', () => {
-  it('cmd + 极短结论 → stub 占位（保配对）；read 类排除；结论过长 → 不动刀', () => {
-    const cmd = { seq: 1, time: 0, callId: 'c1', name: 'bash', argsText: '{}' }
-    expect(admitLoop(cmd, '退出码 0').op?.kind).toBe('stub-replace')
-    expect(buildLoopStub('退出码 0')).toContain('退出码 0')
-    expect(admitLoop({ ...cmd, name: 'read' }, '短').reason).toBe('loop-category')
-    expect(admitLoop(cmd, 'x'.repeat(200)).reason).toBe('loop-conclusion-too-long')
-    expect(admitLoop(cmd, '   ').reason).toBe('loop-empty-conclusion')
   })
 })
 
@@ -233,11 +220,6 @@ describe('P15b 接线缝（纯核可选参数与模板）', () => {
   })
   it('buildSupersededStub 逐字含路径（零转写）', () => {
     expect(buildSupersededStub('src/index.ts')).toContain('src/index.ts')
-  })
-  it('entryShaped 选项：已整形调用跳过 T-loop（防双重剪）', () => {
-    const events: ShearEvent[] = [call(1, 10, 'b1', 'bash', { command: 'npm test' }), result(2, 11, 'b1', 'a\nb\nc\nd\ne'), assistant(3, 12, '测试全绿。')]
-    expect(foldToolShear(events).ops.map((op) => op.kind)).toEqual(['stub-replace'])
-    expect(foldToolShear(events, DEFAULT_SHEAR_POLICY, { entryShaped: new Set(['b1']) }).ops).toHaveLength(0)
   })
   it('lifecycles 选项：工具自声明 supersededBy 可覆盖类别启发式', () => {
     const events: ShearEvent[] = [readCall, readResult, call(3, 20, 'w1', 'write', { file_path: 'src/index.ts', content: 'x' })]

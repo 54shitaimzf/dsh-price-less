@@ -1,6 +1,6 @@
 /**
  * P15b 剪切调度域单测（工单 §5/§6）——fake ctx + fake pump + FakeSession，零 cordis 运行时。
- * 覆盖：T-entry/T-loop/T0/T0-R 端到端、门槛 G1–G9 各 ≥1、失败默认保留与零重试、
+ * 覆盖：T-entry/T0/T0-R 端到端、门槛 G1–G9 各 ≥1、失败默认保留与零重试、
  * 回填基线不执行历史 op、确定性双跑同账。事件序与真实会话一致（assistant(含 tool-call) → tool/call → tool/result）。
  */
 import { describe, expect, it } from 'vitest'
@@ -168,19 +168,7 @@ describe('P15b 同步相：T-entry 整形与 T-note 贴注', () => {
   })
 })
 
-describe('P15b 异步相：四档执行与门槛', () => {
-  it('T-loop：cmd 结果 + 极短结论 → stub 占位替换（保配对）', () => {
-    const env = makeEnv()
-    env.appendUser('跑测试')
-    env.appendAssistant([toolCallBlock('c1', 'bash', { command: 'npm test' })])
-    env.appendCall('c1', 'bash', { command: 'npm test' })
-    env.appendResult('c1', MID)
-    env.appendAssistant([textBlock('测试全绿。')])
-    const replaced = env.replacements()
-    expect(replaced).toHaveLength(1)
-    const message = (replaced[0]!.data as { message: { content: Array<{ content: Array<{ text: string }> }> } }).message
-    expect(message.content[0]!.content[0]!.text).toContain('结论：测试全绿。')
-  })
+describe('P15b 异步相：机械档执行与门槛', () => {
   it('T0：读后写（写成功）→ 旧读剪为纯痕迹 stub', () => {
     const env = makeEnv()
     env.appendUser('改文件')

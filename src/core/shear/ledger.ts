@@ -14,7 +14,7 @@ import type { LedgerFact, LedgerSessionEvent } from '../ledger/types.ts'
 import { estimateTokens, extractTextFromToolResult } from '../ledger/fold.ts'
 import { foldSurfaceNodes } from '../ledger/surface.ts'
 import { DEFAULT_SHEAR_POLICY, type ShearEvent, type ShearPolicy, type ShearToolCategory } from './types.ts'
-import { foldToolShear, pathOfCall, toolCategory, type FoldToolShearOptions } from './tool.ts'
+import { foldToolShear, pathOfCall, toolCategory } from './tool.ts'
 import { DEFAULT_RUN_POLICY, foldRunShear, RUN_CLASS_FACT_TYPE, type RunEvent, type RunPolicy } from './run.ts'
 
 export const SHEAR_APPLIED_FACT_TYPE = 'context-economy/shear-applied' // ignorable
@@ -23,8 +23,8 @@ export const SHEAR_ERROR_FACT_TYPE = 'context-economy/shear-error' // ignorable
 /** 星标剪切清单事实（P16；星标 = 用户明确动作 = 吸收证明，清单来自断面行记录）。 */
 export const SHEAR_RUN_PLAN_FACT_TYPE = 'context-economy/shear-run-plan' // ignorable
 
-export type ShearAppliedKind = 'shape-entry' | 'stub-replace' | 'note-cut' | 't0-supersede' | 't0r-repair' | 'run-flush' | 't-boundary'
-export type ShearAppliedTier = 'T-entry' | 'T-loop' | 'T-note' | 'T0' | 'T0-R' | 'run' | 'T-boundary'
+export type ShearAppliedKind = 'shape-entry' | 'note-cut' | 't0-supersede' | 't0r-repair' | 'run-flush' | 't-boundary'
+export type ShearAppliedTier = 'T-entry' | 'T-note' | 'T0' | 'T0-R' | 'run' | 'T-boundary'
 
 /** 每次落刀一条（cut 相；失败不落此事实，落 shear-error）。 */
 export interface ShearAppliedFactData {
@@ -184,7 +184,6 @@ export function foldShearLedger(
     return typeof op !== 'object' || op === null
   })
   const applied = appliedFacts(facts)
-  const entryShaped = new Set(applied.filter((fact) => fact.kind === 'shape-entry').map((fact) => fact.callId))
 
   const shearEvents: ShearEvent[] = []
   for (const event of original) {
@@ -200,8 +199,7 @@ export function foldShearLedger(
     }
   }
 
-  const options: FoldToolShearOptions = { entryShaped }
-  const plan = foldToolShear(shearEvents, policy, options)
+  const plan = foldToolShear(shearEvents, policy)
   for (const decision of plan.decisions) {
     ledger.shearDecision[decision.decision]++
     if (decision.decision === 'keep' && decision.reason === 'entry-skip-listing') ledger.entrySkipListing++

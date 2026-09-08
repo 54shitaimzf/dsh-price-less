@@ -5,8 +5,8 @@
  * 审查清单: 不 import harness/platform（S1）；不写 KV/日志/事实；不改史（执行归 P15b）。
  */
 
-/** 时机四档（档 = 时机，时机即经济学；docs/03 §2 表）。 */
-export type ShearTier = 'T-entry' | 'T-loop' | 'T-note' | 'T-boundary'
+/** 时机档（档 = 时机，时机即经济学；docs/03 §2 表）。 */
+export type ShearTier = 'T-entry' | 'T-note' | 'T-boundary'
 /** 裁决族：四档时机 + T0/T0-R 两条机械规则（docs/03 §2.2）。 */
 export type ShearDecisionTier = ShearTier | 'T0' | 'T0-R'
 /** 准入裁决：cut = 落 op；hold = 保留原文待边界搭车；keep = 不动刀。 */
@@ -35,7 +35,7 @@ export type ShearEvent =
   | { readonly kind: 'assistant-message'; readonly seq: number; readonly time: number; readonly text: string }
   | { readonly kind: 'user-message'; readonly seq: number; readonly time: number; readonly text: string }
 
-/** 工具自声明生命周期谓词（docs/03 §2）；未声明工具三级回退：自带 → 类别启发式 → 通用体积年龄。 */
+/** 生命周期谓词（内置启发式，不依赖工具自声明；docs/03 §2）。 */
 export interface ToolContextLifecycle {
   referenceKeys(call: ShearToolCall): readonly string[]
   rederiveCost(call: ShearToolCall): RederiveCost
@@ -47,10 +47,9 @@ export interface ShearRepairSegment {
   readonly endLine: number
   readonly lines: readonly string[]
 }
-/** 三档产物（T-entry 整形 / T-loop stub / T0 整剪 / T0-R 修复）；T-note 协商已退役（账本 §71）。 */
+/** 产物（T-entry 整形 / T0 整剪 / T0-R 修复）；T-note 协商（§71）与 T-loop 思考后截断（§72）均已退役。 */
 export type ShearOp =
   | { readonly kind: 'shape-entry'; readonly callId: string; readonly content: string }
-  | { readonly kind: 'stub-replace'; readonly callId: string; readonly stub: string }
   | { readonly kind: 't0-supersede'; readonly callId: string; readonly writeCallId: string; readonly path: string }
   | {
       readonly kind: 't0r-repair'
@@ -77,16 +76,14 @@ export interface ShearPlan {
 /** 策略阈值（docs/03 §8 初值；单位：字符 / 缩进级（2 空格 = 1 级））。 */
 export interface ShearPolicy {
   readonly version: number
-  readonly loopMaxConclusionChars: number
   readonly t0rMaxSegments: number
   readonly t0rMaxIndent: number
 }
 
-/** v2：T-note 协商退役，`noteMinBytes` 随之删除（账本 §71）。 */
-export const SHEAR_POLICY_VERSION = 2
+/** v3：T-loop 思考后截断退役，`loopMaxConclusionChars` 随之删除（账本 §72）。 */
+export const SHEAR_POLICY_VERSION = 3
 export const DEFAULT_SHEAR_POLICY: ShearPolicy = {
   version: SHEAR_POLICY_VERSION,
-  loopMaxConclusionChars: 120,
   t0rMaxSegments: 4,
   t0rMaxIndent: 1,
 }

@@ -37,7 +37,7 @@ const events: LedgerSessionEvent[] = [
 
 const applied: ShearAppliedFactData[] = [
   { policyVersion: 1, tier: 'T-entry', kind: 'shape-entry', callId: 'c0', resultSeq: 2, at: 20, category: 'cmd', beforeTokens: 200, afterTokens: 100, savedTokens: 100, breakTokens: 0, tailNodes: 0 },
-  { policyVersion: 1, tier: 'T-loop', kind: 'stub-replace', callId: 'c1', resultSeq: 9, at: 21, category: 'cmd', beforeTokens: 5100, afterTokens: 100, savedTokens: 5000, breakTokens: 300, tailNodes: 3 },
+  { policyVersion: 1, tier: 'T0', kind: 't0-supersede', callId: 'c1', resultSeq: 9, at: 21, path: 'src/foo.ts', category: 'cmd', beforeTokens: 5100, afterTokens: 100, savedTokens: 5000, breakTokens: 300, tailNodes: 3 },
   { policyVersion: 1, tier: 'T0-R', kind: 't0r-repair', callId: 'r1', resultSeq: 3, at: 22, path: 'src/index.ts', version: 1, category: 'read', beforeTokens: 60, afterTokens: 50, savedTokens: 10, breakTokens: 40, tailNodes: 9, segments: 2, windowLines: 5, repairCoverage: 0.4 },
 ]
 const facts: LedgerFact[] = [

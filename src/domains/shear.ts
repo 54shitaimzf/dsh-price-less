@@ -100,7 +100,6 @@ interface SessionState {
   readonly holdsSeen: Set<string>
   /** W1：已记过 entry-skip-listing 的 callId（事实去重）。 */
   readonly skipsSeen: Set<string>
-  readonly entryShaped: Set<string>
   readonly nameByCallId: Map<string, string>
   readonly resultSeqByCallId: Map<string, SessionSeq>
   readonly resultTextByCallId: Map<string, string>
@@ -149,7 +148,6 @@ function opKeyOf(op: ShearOp): string {
 function opTierOf(op: ShearOp): ShearAppliedTier {
   switch (op.kind) {
     case 'shape-entry': return 'T-entry'
-    case 'stub-replace': return 'T-loop'
     case 't0-supersede': return 'T0'
     case 't0r-repair': return 'T0-R'
   }
@@ -161,7 +159,6 @@ function opTargetCallId(op: ShearOp): string {
 
 function replacementTextOf(op: ShearOp): string {
   switch (op.kind) {
-    case 'stub-replace': return op.stub
     case 't0-supersede': return buildSupersededStub(op.path)
     case 't0r-repair': return op.envelope
     default: return ''
@@ -297,7 +294,6 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       consumed: new Set(),
       holdsSeen: new Set(),
       skipsSeen: new Set(),
-      entryShaped: new Set(),
       nameByCallId: new Map(),
       resultSeqByCallId: new Map(),
       resultTextByCallId: new Map(),
@@ -312,7 +308,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     // 剪点必须贴近尾部，历史中部不回剪（docs/03 §1）。
     const snapshot = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents?.() ?? []
     for (const event of snapshot) ingest(state, event)
-    const plan = foldToolShear(state.events, policy, { entryShaped: state.entryShaped })
+    const plan = foldToolShear(state.events, policy)
     for (const op of plan.ops) state.consumed.add(opKeyOf(op))
     for (const decision of plan.decisions) if (decision.decision === 'hold') state.holdsSeen.add(`${decision.tier}|${decision.callId ?? ''}`)
     // 回填基线（run 半边）：既有 op 全部记为已消费（历史中部不回剪）；积压 run 保持可剪（证明后到即剪）。
@@ -346,7 +342,6 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
         tailNodes: 0,
       })
       emitCeFact(session, SHEAR_APPLIED_FACT_TYPE, data, logger)
-      state.entryShaped.add(callId)
       counts.entryShaped++
     }
   }
@@ -417,7 +412,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
   }
 
   const processOps = (state: SessionState): void => {
-    const plan = foldToolShear(state.events, policy, { entryShaped: state.entryShaped })
+    const plan = foldToolShear(state.events, policy)
     for (const decision of plan.decisions) {
       // W1：列表跳过（keep 相）——只记一条事实，不改史。
       if (decision.decision === 'keep' && decision.reason === 'entry-skip-listing') {

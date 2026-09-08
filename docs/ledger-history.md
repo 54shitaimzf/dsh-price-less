@@ -2880,3 +2880,30 @@ build 绿（host + client）。`src/`、`client/` 全量 grep 已无 `negotiate`
 
 **已知陈旧（不在 gate）**：`scripts/verify-p15a.mjs`（断言策略 1/8192）、`scripts/verify-p15b.mjs`（断言 `SHEAR_NOTE_TEMPLATE`）
 随本次删除失效；与既有 `verify-p17/p19.mjs` 同列待清理。
+
+---
+
+## §72 T-loop 退役：工具思考后截断整体移除（2026-09-09；提交 = 本账本同提交）
+
+**用户裁定**：工具自声明无价值（插件不是这个判断的权威）——把「工具思考后截断」这条路径直接清理，
+**我们只做工具输出结果的处理**（写时整形 T-entry + 机械超越修复 T0/T0-R）。
+
+**退役依据**：T-loop = 思考后占位（模型消费完结果后 stub 替换），准入依赖「判断模型是否已消费该结果」；
+插件既不是该判断的权威，任何「等后续轮次再剪」又都会改史 → 缓存前缀断裂（与 §71 同一条纪律）。
+
+**删除面**：
+
+| 面 | 内容 |
+|---|---|
+| 纯核 | `tool.ts` `admitLoop` / `buildLoopStub` / `FoldToolShearOptions.entryShaped`；`foldToolShear` 叙述消息分支改为 no-op（streak 语义保留） |
+| 类型 | `ShearOp.stub-replace`；`ShearTier` / `ShearAppliedTier` 的 `T-loop`；`ShearPolicy.loopMaxConclusionChars` |
+| 域/账本 | `domains/shear.ts` `opTierOf`/`replacementTextOf` 的 `stub-replace` 分支、`state.entryShaped` 集合；`ledger.ts` `ShearAppliedKind` 的 `stub-replace` |
+| 测试 | `shear-tool` T-loop 组与 `entryShaped` 用例、`shear-domain` T-loop e2e、`shear-ledger` T-loop 样本（改 T0） |
+| 文档 | `docs/03` §1/§2 表 + 新增退役注 + §8、`docs/10` H6、`docs/13` §3.9、`docs/implement/{00-master,TODO}.md` |
+
+**保留**：T-entry 写时整形 / T0 超越 / T0-R 读件修复 / run 冲刷 / T-boundary 搭车；
+`ToolContextLifecycle` 注入缝（默认不启用，仅测试覆盖）与 `DEFAULT_LIFECYCLE` 内置谓词。
+
+**版本**：`SHEAR_POLICY_VERSION` 2 → 3（策略面删除 `loopMaxConclusionChars`）。
+
+**验收**：`npm run gate` = **609 tests / 57 files** + assert `ok=true vacuous=[]`；`npm run typecheck:tests` 绿；build 绿。
