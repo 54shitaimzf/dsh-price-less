@@ -5,6 +5,7 @@
 export * from './types.ts'
 export * from './chain.ts'
 export * from './gate.ts'
+export * from './locatable.ts'
 export * from './paths.ts'
 export * from './archive.ts'
 export * from './assemble.ts'

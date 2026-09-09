@@ -70,7 +70,8 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
   × 主模型上下文窗口；窗口缺失 → 假定窗口 `domainTokens=125K`（2026-09 实测峰值 233K 标定）
   → 绝对安全网 `thresholdTokens=100K`；`retainTokens=10K`（边界热尾）；**F9 双预算**：
   档案区 `archiveCapTokens=10K`（**只计总分**；与热尾分列）；产物（F10 契约 v3）= 总述（≤80 字零事实）
-  + 分步（≤120 字/条，**零指针**）+ 热尾（头指档案 vN + `▸n` 逐字内容，事实载体；**错误信息不进**）——
+  + 分步（≤120 字/条，**零指针**）+ 热尾（头指档案 vN + `▸n` 逐字内容，事实载体；**错误信息不进**；
+**v4**：仅当内容不能自证位置时加 `相对路径@vN:lines` 定位标注，`pointerOverheadTokens` 只对这类条目计费）——
   档案落盘正文 = 仅总分，热尾每次压缩直接抛弃（档案不因事实漂移失效）；热尾配额 Zipf `1/i` + 份额帽
   `hotTailMaxShare=0.4`（防缩水打回）；估计器 = **两桶密度**
   （CJK 1.5 / 其余 2.9 字符/token；结构模型对齐 DSH `token-meter/estimate.ts`，`core/meter/estimate.ts`）；不变量 `retain < thresholdTokens`、`0 < pressureRatio < 0.8`。**触发器语义**：task 边界

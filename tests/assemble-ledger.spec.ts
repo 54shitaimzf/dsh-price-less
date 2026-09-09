@@ -69,6 +69,36 @@ describe('P17a 压缩族账本', () => {
     expect(ledger.archiveTruncate).toEqual({ count: 2, tokens: 700 })
   })
 
+  it('extraSearchCalls：压缩事件后窗口内重发已见调用（未传 events = 0）', () => {
+    const events = [
+      { type: 'tool/call', seq: 1, time: 1, data: { name: 'read', arguments: '{"file_path":"a.ts"}' } },
+      { type: 'tool/call', seq: 2, time: 2, data: { name: 'read', arguments: '{"file_path":"b.ts"}' } },
+      { type: 'tool/call', seq: 4, time: 4, data: { name: 'read', arguments: '{"file_path":"a.ts"}' } },
+      { type: 'tool/call', seq: 5, time: 5, data: { name: 'read', arguments: '{"file_path":"c.ts"}' } },
+    ]
+    const facts = [fact({ at: 1, layer: 'boundary' }, 3)]
+    expect(foldCompressionLedger(facts).extraSearchCalls).toBe(0)
+    expect(foldCompressionLedger(facts, events).extraSearchCalls).toBe(1)
+  })
+
+  it('extraSearchCalls：跳过的压缩不算边界（没丢内容就没有重新找）', () => {
+    const events = [
+      { type: 'tool/call', seq: 1, time: 1, data: { name: 'read', arguments: '{"file_path":"a.ts"}' } },
+      { type: 'tool/call', seq: 4, time: 4, data: { name: 'read', arguments: '{"file_path":"a.ts"}' } },
+    ]
+    const facts = [{ type: 'context-economy/compress-run', seq: 3, time: 3, data: { outcome: 'skipped', layer: 'boundary' } }]
+    expect(foldCompressionLedger(facts, events).extraSearchCalls).toBe(0)
+  })
+
+  it('hotTailLocated / hotTailUnlocated 由事实汇总（缺省 0 向后兼容）', () => {
+    const ledger = foldCompressionLedger([
+      fact({ at: 1, layer: 'boundary', hotTailLocated: 2, hotTailUnlocated: 1 }),
+      fact({ at: 2, layer: 'boundary' }, 2),
+    ])
+    expect(ledger.hotTailLocated).toBe(2)
+    expect(ledger.hotTailUnlocated).toBe(1)
+  })
+
   it('同输入同账（双跑相等）', () => {
     const facts = [fact({ at: 1, layer: 'boundary', digestBytes: 7 }), fact({ at: 2, layer: 'boundary', digestBytes: 9 }, 2)]
     expect(JSON.stringify(foldCompressionLedger(facts))).toBe(JSON.stringify(foldCompressionLedger(facts)))

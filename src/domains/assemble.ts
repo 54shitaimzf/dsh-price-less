@@ -263,6 +263,8 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       hotTailStopReason: result.hotTail.stopReason,
       hotTailSource: result.hotTail.source,
       hotTailFloorFilled: result.hotTail.floorFilled,
+      hotTailLocated: result.hotTail.located,
+      hotTailUnlocated: result.hotTail.unlocated,
       unitCount: result.unitCount,
       dropped: result.hotTail.dropped,
       dropReasons: result.hotTail.dropReasons,

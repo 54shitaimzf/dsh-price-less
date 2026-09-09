@@ -46,8 +46,8 @@ describe('路径：归一化 / 相对化', () => {
   })
 })
 
-describe('F10 产物：零文件路径 + 热尾指向档案', () => {
-  it('渲染不含文件路径 / 短 ID 表；热尾头指向档案 vN；档案正文仅总分', () => {
+describe('F10/v4 产物：总分零路径 + 热尾按需定位标注', () => {
+  it('总分零路径；热尾条目按需带定位标注；档案正文仅总分', () => {
     const units = [
       unit('a', 1, 'A1', { path: 'D:/proj/src/a.ts', version: 2 }),
       unit('b', 5, 'B1', { path: 'D:/proj/src/b.ts', version: 1 }),
@@ -72,14 +72,70 @@ describe('F10 产物：零文件路径 + 热尾指向档案', () => {
     if (!outcome.ok) throw new Error('expected ok')
     const text = outcome.result.rendered
     expect(text).toContain('【热尾｜档案 v1】')
-    expect(text).toContain('▸1 l1\nl2')
+    // v4：内容不自证位置（'l1'/'b1' 无搜索键）→ 渲染相对路径定位标注。
+    expect(text).toContain('▸1 [src/a.ts@v1:1-2] l1\nl2')
+    expect(text).toContain('▸2 [src/b.ts@v1] b1')
     expect(text).not.toContain('[文件]')
-    expect(text).not.toContain('src/a.ts')
     expect(text).not.toContain('【路径】')
+    // 总分仍零路径（定位只进热尾条目）。
     expect(outcome.result.digestText).toBe('【总述】改边界装配\n【实现】落 F10 契约')
+    expect(outcome.result.digestText).not.toContain('src/')
+    expect(outcome.result.hotTail.located).toBe(2)
+    expect(outcome.result.hotTail.unlocated).toBe(0)
     expect(outcome.result.hotTail.archiveRef).toBe('v1')
     expect(outcome.result.root).toBe(ROOT)
     expect(outcome.result.rootKind).toBe('session')
+  })
+
+  it('内容自带搜索键 → 不渲染定位标注（省 token）', () => {
+    const units = [unit('a', 1, 'A1', { path: 'D:/proj/src/a.ts', version: 1 })]
+    const chains = foldFileChains([{ seq: 1, path: 'D:/proj/src/a.ts', kind: 'write', content: 'x' }])
+    const outcome = assembleArchive({
+      units,
+      chains,
+      root: ROOT,
+      hotTail: [{ unitId: 'a', coord: { path: 'D:/proj/src/a.ts', version: 1 } }],
+      resolve: { a: 'export function pressureRatio() { return 0.35 }' },
+      policy: policy(),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.rendered).toContain('▸1 export function pressureRatio()')
+    expect(outcome.result.rendered).not.toContain('src/a.ts')
+    expect(outcome.result.hotTail.located).toBe(0)
+    expect(outcome.result.hotTail.unlocated).toBe(0)
+  })
+
+  it('无坐标（历史 span）→ 无从标注，计入 unlocated', () => {
+    const units = [unit('a', 1, 'plain text')]
+    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: policy() })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.rendered).toContain('▸1 plain text')
+    expect(outcome.result.hotTail.located).toBe(0)
+    expect(outcome.result.hotTail.unlocated).toBe(1)
+  })
+
+  it('v4：预留只对需要定位标注的条目计费（span 条目不吃预留）', () => {
+    const text = '必'.repeat(30)
+    const units = [unit('a', 1, text, { path: 'D:/proj/src/a.ts', version: 1 })]
+    const chains = foldFileChains([{ seq: 1, path: 'D:/proj/src/a.ts', kind: 'write', content: text }])
+    const p = policy({ hotTailTokens: 50, pointerOverheadTokens: 40, minTruncatedChars: 5 })
+    const located = assembleArchive({
+      units,
+      chains,
+      root: ROOT,
+      hotTail: [{ unitId: 'a', coord: { path: 'D:/proj/src/a.ts', version: 1 } }],
+      resolve: { a: text },
+      policy: p,
+    })
+    if (!located.ok) throw new Error('expected ok')
+    // 内容不自证位置 → 吃 40 预留 → 50 − 40 = 10 < 30 → 丢弃
+    expect(located.result.hotTail.entries).toHaveLength(0)
+    expect(located.result.hotTail.quotaDrops).toBe(1)
+    const span = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: p })
+    if (!span.ok) throw new Error('expected ok')
+    // 无坐标 → 无从标注 → 不吃预留 → 50 全额 → 30 放得下
+    expect(span.result.hotTail.entries).toHaveLength(1)
+    expect(span.result.hotTail.unlocated).toBe(1)
   })
 
   it('renderUnitList 按 root 相对化（省输入 token）', () => {

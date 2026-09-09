@@ -62,13 +62,16 @@ task 内万一长过头（判别器失灵连续误判、用户贴入超大内容
    （自报数字不可信；算术链烧全价思考且常错）。
 4. **模型永不被要求知道自己没见过的事**：坐标以"它见过的版本"申报，一切漂移由机械重映射吸收。
 
-**装配流程（F10 契约 v3）**：压缩器（输入 = 闭合段全量逐字节——必然调用，热尾申报搭车零调用增量）单次输出
+**装配流程（F10 契约 v3 + v4 定位标注）**：压缩器（输入 = 闭合段全量逐字节——必然调用，热尾申报搭车零调用增量）单次输出
 ①`gist` 总述（≤80 字，**零事实**——只指涉总目标与改动方向）
 + ②`steps` 分步（≤120 字/条，按落地发生顺序；`type ∈ plan|impl|verify|decide|note`；**零指针**——
 模型即使夹带 `refs` 也被机械剥离）
 + ③`hotTail` 申报（边界压缩器**专属**；每项 = 1 条逐字内容，**事实全部在此**；**错误信息除外**）。
-机械组装：`【总述】` → `【分步】`（零指针）→ `【热尾｜档案 vN】` + 逐条 `▸n <逐字内容>`
+机械组装：`【总述】` → `【分步】`（零指针）→ `【热尾｜档案 vN】` + 逐条 `▸n [定位标注] <逐字内容>`
 （装配序 = 申报序，字节稳定）→ 新 task 的 user message 前注入。
+**v4 定位标注**：只有通道 A（文件坐标）条目、且内容**不能自证位置**（`core/assemble/locatable.ts`
+判负：无路径/引号/数字/版本/可辨识标识符）时才渲染 `相对路径@vN:lines`——模型因此总能直达文件；
+内容自带搜索键者不标注（省 token），历史 span 条目无坐标可标（计入 `hotTailUnlocated`）。
 **热尾头指向档案 vN**（本 task 边界档案版本 = 续传链长 + 1；F10：总分里的文件/历史指针退役）。
 摘要零事实由 `core/compress/fact-leak.ts` 机械扫描（path/version/quote/command/code/number），
 只计数不拒单；产物 schema v3 = `{gist, steps, hotTail}`（`refs` 退役）。
@@ -91,8 +94,8 @@ task 内万一长过头（判别器失灵连续误判、用户贴入超大内容
   prompt 明令按重要性降序申报、**禁止任何预算计算**。
 - 热尾预算 = `min(hotTailTokens=10K, max(minShare×区间, maxShare×区间 − 摘要估算))`
   （`hotTailMaxShare=0.4` / `hotTailMinShare=0.05`）——**份额帽 = 防产物 ≥ 区间被缩水校验打回**。
-  配额按 **Zipf `w_i = 1/i`** 分配（重要者多分，未用配额 carry-over），每条先扣
-  `pointerOverheadTokens`；配额放不下最小内容 → **丢弃**（`quotaDrops`；F10：热尾无内容 =
+  配额按 **Zipf `w_i = 1/i`** 分配（重要者多分，未用配额 carry-over），**需要定位标注的条目**先扣
+  `pointerOverheadTokens`（v4：自证位置者不吃这份预留）；配额放不下最小内容 → **丢弃**（`quotaDrops`；F10：热尾无内容 =
   无定位价值，不再产空指针条目）；单条超配额 → 尾截断 + 可见标记；重复 `unitId` 只留首次
   （`dup`）；tool_call/result 对永不拆分。
 - **地板填充**：模型申报装填停机后，若 run 结果类目未被覆盖且预算有余 → 地板补最近验证尾
@@ -202,8 +205,9 @@ token 数 + 回合生成量 + 仅新增消息的校准估计——每步被新 u
   信任，比原文更危险），截断是纯机械边界动作，被截条目仍可从档案快照回溯（[09 §5](09-state.md)）；
   写入前过**单调追加守卫**（`archiveChainMonotone`：幸存条目逐条字节恒等 + 恰好追加一条，
   允许最老整条截断），违规 = 拒写并保留旧档。
-- **路径面（F10 收口）**：产物内零文件路径（短 ID 表退役）；`root` 仅用于压缩器输入尾部的
-  `renderUnitList` 相对化（省 prompt token），随档案条目保存以跨会话重放。
+- **路径面（F10 收口 + v4 定位标注）**：**总分内零文件路径**（短 ID 表退役）；热尾条目按需带
+  `相对路径@vN:lines` 定位标注（仅内容不能自证位置者；`root` 相对化，`pointerOverheadTokens` 预留）；
+  `root` 同时用于压缩器输入尾部 `renderUnitList` 相对化（省 prompt token），随档案条目保存以跨会话重放。
 - 档案落盘走 [09 §2](09-state.md) 版本协议（原子写 + source + 快照回滚），
   跨会话复用不重算（内容寻址缓存：span 哈希命中即复用）。
 
@@ -213,7 +217,8 @@ token 数 + 回合生成量 + 仅新增消息的校准估计——每步被新 u
   `task-digest-cache-hit` / `task-deferred{reason}` / `pressure-fired` / `hard-truncate`。
 - 度量（定义见 [07](07-metrics.md)）：`compoundedVolume` · `reDiscoveryTokens` ·
   `digestBytes` / `digestEntryCount` · `archiveTruncate{count,tokens}` · `compressionCallCount` / `compressionCacheHitRate` ·
-  `extraSearchCalls` · `hotTailTokens` / `hotTailDeclaredUnits` / `hotTailStopReason` /
+  `extraSearchCalls`（压缩后窗口内重发已见调用）· `hotTailTokens` / `hotTailDeclaredUnits` /
+`hotTailLocated` / `hotTailUnlocated` / `hotTailStopReason` /
   `hotTailSource{model|positional-fallback}` / `hotTailFloorFilled` · `pressureFireCount` /
   `pressureChainDepth` / `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` ·
   `hardTruncateCount`。

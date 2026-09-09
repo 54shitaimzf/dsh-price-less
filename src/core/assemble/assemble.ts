@@ -18,6 +18,7 @@ import { toolCategory } from '../shear/tool.ts'
 import { archiveChainShape } from './archive.ts'
 import { foldFileChains, remapFileCoord, type FileChain, type FileOp } from './chain.ts'
 import { gateHotTailDecls } from './gate.ts'
+import { scanLocatable } from './locatable.ts'
 import { relativePath, type RootKind } from './paths.ts'
 import { messageTextOf } from '../compress/region.ts'
 import { scanFactTexts } from '../compress/fact-leak.ts'
@@ -289,7 +290,10 @@ export function renderProduct(
   }
   const digestText = [gist === '' ? '' : `${GIST_LABEL}${gist}`, ...lines].filter((part) => part !== '').join('\n')
   const body = entries
-    .map((entry) => `${REF_PREFIX}${entry.rank}${entry.text === '' ? '' : ` ${entry.text}`}`)
+    .map(
+      (entry) =>
+        `${REF_PREFIX}${entry.rank}${entry.locator === undefined ? '' : ` [${entry.locator}]`}${entry.text === '' ? '' : ` ${entry.text}`}`,
+    )
     .join('\n')
   const text = [digestText, entries.length === 0 ? '' : `【热尾｜档案 ${archiveRef}】\n${body}`]
     .filter((part) => part !== '')
@@ -329,6 +333,22 @@ export function pickVerbatimLines(text: string, re: RegExp, limit: number): stri
   return lines.slice(Math.max(0, lines.length - limit))
 }
 
+/** 定位标注渲染（v4）：相对路径 + 版本 + 行区间（单行省略右端）。 */
+function locatorOf(coord: FileCoord, root: string | undefined): string {
+  const range =
+    coord.lineRange === undefined
+      ? ''
+      : coord.lineRange.start === coord.lineRange.end
+        ? `:${coord.lineRange.start}`
+        : `:${coord.lineRange.start}-${coord.lineRange.end}`
+  return `${relativePath(coord.path, root)}@v${coord.version}${range}`
+}
+
+/** v4：内容自带搜索键则不标注；否则需要定位标注。 */
+function locatorIfNeeded(text: string, coord: FileCoord, root: string | undefined): string | undefined {
+  return scanLocatable(text).locatable ? undefined : locatorOf(coord, root)
+}
+
 function resolveSelection(
   decl: HotTailDecl,
   unit: AssembleUnit,
@@ -357,6 +377,7 @@ function resolveSelection(
   if (text === undefined) {
     // 盘上取真缺失但模型给了逐字摘抄 → 降级为仅摘抄条目（事实不丢；仍可定位）。
     if (decl.fact !== undefined && decl.fact !== '' && unit.text.includes(decl.fact)) {
+      const locator = locatorIfNeeded(decl.fact, coord, input.root)
       return {
         selection: {
           unitId: unit.id,
@@ -365,6 +386,7 @@ function resolveSelection(
           seqEnd: unit.seqEnd,
           source: 'fact',
           coord,
+          ...(locator === undefined ? {} : { locator }),
           text: decl.fact,
           tokens: estimateTokens(decl.fact, policy.density),
         },
@@ -372,6 +394,7 @@ function resolveSelection(
     }
     return { dropped: 'fetch' }
   }
+  const locator = locatorIfNeeded(text, coord, input.root)
   return {
     selection: {
       unitId: unit.id,
@@ -380,6 +403,7 @@ function resolveSelection(
       seqEnd: unit.seqEnd,
       source: 'file',
       coord,
+      ...(locator === undefined ? {} : { locator }),
       text,
       tokens: estimateTokens(text, policy.density),
       ...(remap.clipped ? { clipped: true } : {}),
@@ -481,7 +505,9 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
     }
     // 第二趟：Zipf 权重分配（w_i = 1/i，重要者多分），未用配额向后 carry-over；
     // 配额不足以放最小内容 → 丢弃（F10：热尾无内容 = 无定位价值；计 quotaDrops）。
-    const overhead = policy.pointerOverheadTokens * candidates.length
+    // v4：预留只对**需要定位标注**的条目计费（内容自证位置者不吃这份预算）。
+    const locatorCount = candidates.filter((candidate) => candidate.locator !== undefined).length
+    const overhead = policy.pointerOverheadTokens * locatorCount
     const allocatable = Math.max(0, budget - overhead)
     const weights = candidates.map((_, index) => 1 / (index + 1))
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
@@ -540,6 +566,8 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   // 装配序 = 申报序（F10：▸n = 数组下标 + 1；档案引用 = 本 task 边界档案版本）。
   const archiveRef = archiveRefOf(prior.length)
   const entries: HotTailSelection[] = selections.map((selection, index) => ({ ...selection, rank: index + 1 }))
+  const located = entries.filter((entry) => entry.locator !== undefined).length
+  const unlocated = entries.filter((entry) => entry.locator === undefined && !scanLocatable(entry.text).locatable).length
   const product = renderProduct(effective, entries, policy, archiveRef)
   const dropped = dropReasons.badDecl + dropReasons.unknownUnit + dropReasons.remap + dropReasons.fetch
     + dropReasons.dup + dropReasons.factReject + dropReasons.error
@@ -559,6 +587,8 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
       truncated,
       quotaDrops,
       archiveRef,
+      located,
+      unlocated,
       tokens: used,
       budgetTokens: budget,
     },

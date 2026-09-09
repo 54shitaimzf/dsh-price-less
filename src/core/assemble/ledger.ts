@@ -1,7 +1,8 @@
 /**
  * 压缩族账本 fold（docs/07 §0.5 压缩族；docs/04 §7；P17a 度量先行）。
  * 纯函数：同输入同账；输入 = `context-economy/assemble-run` 事实（+ 后续 P19/P20/P20b 事实）。
- * 未实现项显式 0（口径先立不空转）：extraSearchCalls 归 P21b。
+ * ①③ 落地：extraSearchCalls（压缩后窗口内重发已见调用）由 events 回放；hotTailLocated/
+ * hotTailUnlocated 由 assemble-run 事实汇总。
  * P20b：hardTruncateCount 由 hard-truncate 事实 fold（纯核 = core/compress/fuse.ts）。
  * P20a：pressure* 四字段由 pressure-fired 事实 fold（纯核 = core/compress/pressure.ts）；
  * compressionLayer.pressure 由 compress-run（layer=pressure ∧ outcome=ok）计数——
@@ -17,10 +18,10 @@
  * 审查清单: 不 import harness/platform（S1）；无时钟随机（D12）；不写事实、不改史、不读盘。
  * 度量: 本文件即压缩族账本 fold（07 回放管道消费面）。
  */
-import { foldCompressCalls } from '../compress/ledger.ts'
+import { COMPRESS_RUN_FACT_TYPE, foldCompressCalls } from '../compress/ledger.ts'
 import { foldPressureFires } from '../compress/pressure.ts'
 import { foldHardTruncates } from '../compress/fuse.ts'
-import type { LedgerFact } from '../ledger/types.ts'
+import type { LedgerFact, LedgerSessionEvent } from '../ledger/types.ts'
 import type { AssembleLayer, HotTailDropCounts, HotTailSource, HotTailStopReason } from './types.ts'
 
 export const ASSEMBLE_RUN_FACT_TYPE = 'context-economy/assemble-run' // ignorable
@@ -54,6 +55,9 @@ export interface AssembleRunFactData {
   readonly hotTailStopReason: HotTailStopReason
   readonly hotTailSource: HotTailSource
   readonly hotTailFloorFilled: boolean
+  /** v4：带定位标注的条目数 / 不自证位置且无坐标的条目数。 */
+  readonly hotTailLocated?: number
+  readonly hotTailUnlocated?: number
   readonly unitCount: number
   readonly dropped: number
   /** 丢弃归因（P17c；缺省 = 旧事实无归因）。 */
@@ -92,6 +96,9 @@ export interface CompressionLedger {
   hotTailStopReason: { budget: number; 'list-end': number }
   hotTailSource: { model: number; 'positional-fallback': number }
   hotTailFloorFilled: number
+  /** v4：热尾定位标注审计（assemble-run 源）。 */
+  hotTailLocated: number
+  hotTailUnlocated: number
   pressureFireCount: number
   pressureTriggerWireTokens: number
   pressureChainDepth: number
@@ -152,6 +159,8 @@ export function emptyCompressionLedger(): CompressionLedger {
     hotTailStopReason: { budget: 0, 'list-end': 0 },
     hotTailSource: { model: 0, 'positional-fallback': 0 },
     hotTailFloorFilled: 0,
+    hotTailLocated: 0,
+    hotTailUnlocated: 0,
     pressureFireCount: 0,
     pressureTriggerWireTokens: 0,
     pressureChainDepth: 0,
@@ -187,8 +196,83 @@ function numberField(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+/** 额外搜索窗口（压缩事件之后看多少次工具调用；docs/07 `extraSearchCalls`）。 */
+export const EXTRA_SEARCH_WINDOW = 30
+
+/** 工具调用签名（同名同参 = 同一次调用；tool/call 与 run_code 内层 dispatch 都认）。 */
+function callSignatureOf(event: LedgerSessionEvent): string | undefined {
+  const data = (event.data ?? {}) as Record<string, unknown>
+  const name = typeof data.name === 'string' ? data.name : undefined
+  if (name === undefined) return undefined
+  const args = data.arguments
+  if (typeof args === 'string') return `${name}\u0000${args}`
+  if (typeof args === 'object' && args !== null) {
+    try {
+      return `${name}\u0000${JSON.stringify(args)}`
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+/**
+ * `extraSearchCalls`（docs/07 压缩族）：压缩事件后 `EXTRA_SEARCH_WINDOW` 次工具调用里，
+ * 签名在压缩前已出现过的调用数——"丢了内容 → 重新找"的直接读数（归因诊断，不入质量判定）。
+ * 边界取装配/成功压缩两类事实；窗口重叠按首个边界归并（不重复计）。
+ */
+export function countExtraSearchCalls(
+  facts: readonly LedgerFact[],
+  events: readonly LedgerSessionEvent[],
+): number {
+  const boundaries: number[] = []
+  for (const fact of facts) {
+    if (typeof fact.seq !== 'number') continue
+    if (fact.type === ASSEMBLE_RUN_FACT_TYPE) {
+      boundaries.push(fact.seq)
+      continue
+    }
+    if (fact.type !== COMPRESS_RUN_FACT_TYPE) continue
+    const data = (fact.data ?? {}) as Record<string, unknown>
+    if (data.outcome === 'ok') boundaries.push(fact.seq)
+  }
+  if (boundaries.length === 0) return 0
+  boundaries.sort((a, b) => a - b)
+  const calls: Array<{ seq: number; signature: string }> = []
+  for (const event of events) {
+    if (event.type !== 'tool/call' && event.type !== 'tool/code-dispatch-start') continue
+    if (typeof event.seq !== 'number') continue
+    const signature = callSignatureOf(event)
+    if (signature === undefined) continue
+    calls.push({ seq: event.seq, signature })
+  }
+  if (calls.length === 0) return 0
+  const firstAt = new Map<string, number>()
+  for (let i = 0; i < calls.length; i++) {
+    const signature = (calls[i] as { signature: string }).signature
+    if (!firstAt.has(signature)) firstAt.set(signature, i)
+  }
+  let total = 0
+  let coveredUntil = -1
+  for (const boundary of boundaries) {
+    const start = calls.findIndex((call) => call.seq > boundary)
+    if (start < 0 || start <= coveredUntil) continue
+    const end = Math.min(calls.length, start + EXTRA_SEARCH_WINDOW)
+    for (let i = start; i < end; i++) {
+      const signature = (calls[i] as { signature: string }).signature
+      const first = firstAt.get(signature)
+      if (first !== undefined && first < start) total++
+    }
+    coveredUntil = end - 1
+  }
+  return total
+}
+
 /** 压缩族账本（事实序回放；坏载荷跳过，绝不抛错）。 */
-export function foldCompressionLedger(facts: readonly LedgerFact[]): CompressionLedger {
+export function foldCompressionLedger(
+  facts: readonly LedgerFact[],
+  events: readonly LedgerSessionEvent[] = [],
+): CompressionLedger {
   const ledger = emptyCompressionLedger()
   for (const fact of facts) {
     if (fact.type !== ASSEMBLE_RUN_FACT_TYPE) continue
@@ -220,6 +304,8 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
     const source = data.hotTailSource
     if (source === 'model' || source === 'positional-fallback') ledger.hotTailSource[source]++
     if (data.hotTailFloorFilled === true) ledger.hotTailFloorFilled++
+    ledger.hotTailLocated += numberField(data.hotTailLocated)
+    ledger.hotTailUnlocated += numberField(data.hotTailUnlocated)
     const layer = data.layer
     if (layer === 'boundary' || layer === 'pressure') ledger.compressionLayer[layer]++
   }
@@ -261,5 +347,7 @@ export function foldCompressionLedger(facts: readonly LedgerFact[]): Compression
   ledger.hardTruncateCount = fuse.hardTruncateCount
   ledger.fuseArmedFolds = fuse.fuseArmedFolds
   ledger.overflowTakeovers = fuse.overflowTakeovers
+  // ①：压缩后窗口内重发已见调用（无 events = 0，旧调用方零改动）。
+  ledger.extraSearchCalls = countExtraSearchCalls(facts, events)
   return ledger
 }

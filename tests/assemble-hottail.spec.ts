@@ -130,8 +130,9 @@ describe('P17a 热尾：地板填充与位置兜底', () => {
   })
 
   it('预算不足不填地板', () => {
+    // v4：span 条目不吃定位预留，预算必须真的不够（10 < 20）才丢弃。
     const units = [unit('a', 1, 'X'.repeat(20)), unit('v', 5, '5 tests passed')]
-    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: policy({ hotTailTokens: 20 }) })
+    const outcome = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: policy({ hotTailTokens: 10 }) })
     if (!outcome.ok) throw new Error('expected ok')
     expect(outcome.result.hotTail.floorFilled).toBe(false)
     expect(outcome.result.hotTail.entries.length).toBe(0)

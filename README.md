@@ -71,7 +71,7 @@ flowchart LR
 |---|---|---|---|
 | 1. Write-time shaping | **before** a tool result is booked | process logs only (≥120 lines and ≥16 KiB) | failures, listings, data queries stay verbatim |
 | 2. Exchange-pair shear | while a task is running | reads superseded by a later write, declaration reads, finished question/verify runs | conclusions land as a notice — the original is not lost |
-| 3. Compaction | task closes, or the main-model window hits 35% | folds old content into "archive (digest) + hot tail (recent verbatim facts)" | errors never enter the hot tail; the archive stores digests, not pointers |
+| 3. Compaction | task closes, or the main-model window hits 35% | folds old content into "archive (digest) + hot tail (recent verbatim facts)" | errors never enter the hot tail; the archive stores digests; a hot-tail entry gets a "path@version:lines" locator only when its content cannot locate itself |
 | 4. Restore | session restart / resume | replays dossier and archive, recomputes state with pure functions | no model calls, no history edits, degrade only — never invent |
 
 Three rules hold across all four layers:
@@ -152,6 +152,7 @@ Every item below is landed in code and recorded in the ledger; the diagram annot
 | F11 | Listing commands (`Get-ChildItem` / `ls` / `dir` …) are never sheared | §70 |
 | F12 | Shadow mode is zero-byte: it records facts and never writes notes into content | §70 |
 | F13 | Discriminator v4: a task is sustained improvement on the same work object / similar goal; sub-tasks do not split it | §70 |
+| F14 | Hot-tail locator on demand (path added only when the content cannot locate itself) plus locatability / extra-search ledger | §79 |
 | P14c / P14d | Discriminator-chain slimming; star-section product contract (verbatim key facts + bold rewrite, no labels, second click only re-opens) | §33 / §35–§37 |
 | P17c | Assembler HT soft gate + discard attribution | §44 |
 | P20c | Pressure valve = `pressureRatio` (0.35) × main-model window; no window → 125K → safety net 100K | §48 |

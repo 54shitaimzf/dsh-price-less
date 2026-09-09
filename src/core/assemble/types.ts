@@ -11,8 +11,12 @@
  */
 import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
-/** 策略版本（阈值口径可复现；docs/03 §4 同哲学）。v3 = F10：总分零指针 + 热尾指向档案。 */
-export const ASSEMBLE_POLICY_VERSION = 3
+/**
+ * 策略版本（阈值口径可复现；docs/03 §4 同哲学）。
+ * v3 = F10：总分零指针 + 热尾指向档案。
+ * v4 = ①③：热尾条目按需定位标注（内容不能自证位置时）+ 可定位性审计字段。
+ */
+export const ASSEMBLE_POLICY_VERSION = 4
 
 /** 1-based 闭区间行号（原生 read 信封口径）。 */
 export interface LineRange {
@@ -121,6 +125,11 @@ export interface HotTailSelection {
   readonly seqEnd: number
   readonly source: 'file' | 'span' | 'fact'
   readonly coord?: FileCoord
+  /**
+   * 定位标注（v4：仅当内容不能自证位置时渲染 `path@vN:lines`；通道 A 有坐标才有）。
+   * 有坐标且内容自带搜索键 → 不渲染（省 token）；无坐标（历史 span）→ 无从标注。
+   */
+  readonly locator?: string
   readonly text: string
   readonly tokens: number
   /** 单单元超帽尾截断（可见标记已并入 text）。 */
@@ -166,6 +175,10 @@ export interface HotTailPlan {
   readonly quotaDrops: number
   /** 热尾指向的档案引用（渲染进热尾头；F10：`vN` = 本 task 边界档案版本）。 */
   readonly archiveRef: string
+  /** v4：带定位标注的条目数（预留预算的实际使用者）。 */
+  readonly located: number
+  /** v4：既不自证位置、又无坐标可标注的条目数（可能诱发 grep 的条目，账本观测位）。 */
+  readonly unlocated: number
   readonly tokens: number
   readonly budgetTokens: number
 }
@@ -232,7 +245,7 @@ export interface AssemblePolicy {
   readonly hotTailMaxShare: number
   /** 热尾下限占比（极小闭合段也留一点材料）。 */
   readonly hotTailMinShare: number
-  /** 每条指针的开销（估算 token；从该条配额先扣）。 */
+  /** 每条**需要定位标注**的条目开销（估算 token；只对 locator 非空的条目先扣；v4）。 */
   readonly pointerOverheadTokens: number
 }
 

@@ -3117,5 +3117,36 @@ cargo 源码帧、python traceback 回显、maven `Tests run:` 汇总）。
 
 **验收**：`npm run assert` = `ok=true vacuous=[]`；`git check-ignore` 确认两份文件不再被忽略、其余 archive/ 文件仍被忽略。
 
+---
+
+## §79 F14：热尾按需定位标注 + 可定位性审计 + extraSearchCalls 落地（2026-09-09；提交 = 本账本同提交）
+
+**触发**：用户问「需不需要路径指针，还是模型用 grep 就会自己找了？」。先做真机回放，再按 **②度量 → ③可定位 → ①预算** 落地。
+
+**回放证据**（`D:/tmp/sess` 全语料解码会话，取 `tool/code-dispatch-start` 内层调用；签名 = 工具名 + 参数）：
+
+| 会话 | 内层调用 | 原生压缩 | 全会话同签名重发 | 压缩后 30 次窗口「重发压缩前已见调用」 | 同尺寸对照窗 |
+|---|---|---|---|---|---|
+| `cur5` | 6,114 | 26 | 4.0% | **11.4%**（89/780） | 5.5% |
+| `cur` | 5,803 | 25 | 4.0% | **11.7%**（87/744） | 1.8% |
+
+重发按工具分布（`cur5`）：`read` **71（80%）** / `glob` 16（18%） / `grep` **2（2%）**——模型丢的是**内容**，不是**位置**；它拿着 `file_path` 直接重读，几乎不 grep 定位。全会话 `read` 重读率 170/1513 = 11.2%、`glob` 29/98 = 29.6%、`grep` 11/1030 = 1.1%。
+全语料 `assemble-run` 仅 **1 次**（`typst-7d73` = `scan_45`，同一会话），且是 **v1 旧契约**（产物 18,240 字符、散文体、明写「读取与核对坐标：… docs/07-metrics.md」）：折叠后 25 次调用仅 2 次重发，其中 `seq 254` 直接 `read docs/07-metrics.md`——**v1 带路径，模型确实按路径直达、零 grep，但仍然重读**（v1 给的是事实摘要，不是文件全文）。**F10 的零路径产物从未真实交付**（live `assemble-run` = 0）。
+
+**用户裁定（三项，按此序落地）**：② 接上预留度量；③ 可定位性判定；① 处理 `pointerOverheadTokens` 预留（它与「加不加路径」是同一决策的两半）。
+
+**契约 v4（`ASSEMBLE_POLICY_VERSION` 3 → 4）**：
+
+- **② `extraSearchCalls`**（`core/assemble/ledger.ts`）：`foldCompressionLedger(facts, events?)` 新增可选 events；边界 = `assemble-run` + `compress-run{outcome:ok}`（**跳过/失败不算**——没丢内容就没有重新找）；窗口 = `EXTRA_SEARCH_WINDOW=30` 次工具调用（`tool/call` + `tool/code-dispatch-start` 都认），统计签名在窗口起点前已出现过的调用数；窗口重叠按首个边界归并。不传 events = 0（旧调用方零改动）。
+- **③ `core/assemble/locatable.ts`（新）**：`scanLocatable(text)` 判内容能否**自证位置**（path / quote / number / version / 可辨识标识符——普通英文词与中文散文判负）。**只判定、不删改、不拒单**（事实保真优先；与 `fact-leak` 分工：那是泄漏告警，这是可搜索性）。
+- **①+③ 渲染**：通道 A 条目**仅当内容不能自证位置**时渲染 `▸n [相对路径@vN:lines] <逐字内容>`；`pointerOverheadTokens`（40）**只对这类条目**从配额先扣（自证位置者不吃预留）；无坐标的 span 条目无从标注。**总分仍零路径**，档案落盘仍仅总分（`digestText` 不变）。
+- **新账本位**：`hotTailLocated`（带标注条目数）/ `hotTailUnlocated`（既不自证位置又无坐标的条目数）→ `AssembleRunFactData` + `CompressionLedger` + `docs/07 §0.5/§1`。
+
+**验收**：`npm run gate` 绿（typecheck + typecheck:client + test **618 tests / 58 files** + assert `ok=true vacuous=[]`）；`npm run typecheck:tests` 绿；build 绿（host + client）；`lib` 冒烟 = `policyVersion 4` / `scanLocatable('pressureRatio')` 命中 ident / 散文判负 / 产物 `▸1 [src/a.ts@v1:1-2] …` 且 `located=1` / `extraSearchCalls=1`。新增用例：`tests/locatable.spec.ts`（新文件 3 例）+ `tests/assemble-paths.spec.ts`（+3 例）+ `tests/assemble-ledger.spec.ts`（+3 例）。
+
+**文档同步**：`docs/04 §2/§6/§7`、`docs/07 §0.5/§1`、`docs/00 §6/§10`、`AGENTS.md`、`docs/implement/TODO.md`（F14 行）、`README{,.zh-CN}.md`（四层表 ③ 行 + 修正表 F14）。
+
+**待补**：热尾真正交付后读 `extraSearchCalls` / `hotTailUnlocated`——若「重发 + 不可定位」双高，再议把标注扩到全部通道 A 条目（当前 = 按需，省 token）。
+
 
 

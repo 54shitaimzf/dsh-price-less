@@ -19,7 +19,7 @@
 | 判别 | `segmentsPerSession` · `taskSwitchRate` · `judgeCount` · `judgeErrorRate` · `judgeCacheHitRate` · `judgeLatencyMs` · `judgeLLMUsage` · `judgeCtxTokens`（卷宗体积）· `judgeVerdictDist{action|pureQ|verifyQ}` · `l0CaptureRate` · `tableHitRate`（对表命中）· `judgeEffort{requested,sent}`（推理档，缺省=跟随） |
 | 断面（星标） | `optimizePromptTokens{in,out}`（含 reasoning，usage 分列）· `verdictBackfill{count,conflicts}` · `shearAtStar{pairs,tokens}` · `metaStrippedLines`（元注释剥离）· `optimizeEffort{requested,sent}` · `previewCacheHits`（结果复用命中，零调用）· `explorationAvoided`（星标后探索类调用配对 Δ）· `rerunAfterCut` |
 | 剪切 | `cutEvents{kind}` · `cutTokensSaved` · `cutBreakCost` · `cutMisfireDetected` · `questionBacklogDepth` · `toolPruneByClass` · `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）· `tableRepair{Count,Tokens}` · `repairCoverage` · `rereadAfterRepair` |
-| 压缩 | `digestBytes` · `digestEntryCount` · `digestTokens` · `gistBytes` · `stepCount` · `stepTokens` · `factLeaks` · `quotaDrops` · `errorDrops` · `factRejects` · `dupDrops` · `hotTailPointers` · `fetchCapped` · `archiveOverCap` · `archiveTruncate{count,tokens}` · `compressionCallCount` · `compressionCacheHitRate` · `extraSearchCalls` · `hotTailTokens` · `hotTailDeclaredUnits` · `hotTailStopReason{budget|list-end}` · `hotTailSource{model|positional-fallback}` · `hotTailFloorFilled` · `pressureFireCount` · `pressureTriggerWireTokens` · `pressureChainDepth` · `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` · `hardTruncateCount` |
+| 压缩 | `digestBytes` · `digestEntryCount` · `digestTokens` · `gistBytes` · `stepCount` · `stepTokens` · `factLeaks` · `quotaDrops` · `errorDrops` · `factRejects` · `dupDrops` · `hotTailPointers` · `hotTailLocated` · `hotTailUnlocated` · `fetchCapped` · `archiveOverCap` · `archiveTruncate{count,tokens}` · `compressionCallCount` · `compressionCacheHitRate` · `extraSearchCalls` · `hotTailTokens` · `hotTailDeclaredUnits` · `hotTailStopReason{budget|list-end}` · `hotTailSource{model|positional-fallback}` · `hotTailFloorFilled` · `pressureFireCount` · `pressureTriggerWireTokens` · `pressureChainDepth` · `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` · `hardTruncateCount` |
 | 缓存/守卫 | `cacheReadTokens`（标准 usage 路径 + 别名兜底）· `cacheHitInputTokens{cold|hot}` · `prefixRebuildCount` · `prefixRebuildTokens` · `prefixRebuildCause{shear|compaction|note|skill|frame}` · `violationRate` · `restoreDegraded` |
 
 全部字段可从会话 JSONL 回放计算（`sourceEventSeqs` 溯源 + `compaction/prune` 影子价），
@@ -41,6 +41,12 @@
   非原文子串被丢弃数（自造事实信号）；`dupDrops` = 重复 unitId 去重数；`hotTailPointers` = 热尾条数。
 - **F9 档案面**：`archiveOverCap` = 最新单条自身超帽次数；`fetchCapped` = 申报洪泛被 maxFetchUnits
   截断的坐标数。（`refCount/refDrops/pathBytesSaved/pathTableEntries` 随 F10 契约 v3 退役。）
+- **v4 定位面**：`hotTailLocated` = 带定位标注（`路径@vN:lines`）的热尾条目数——`pointerOverheadTokens`
+  预留的实际使用者；`hotTailUnlocated` = 既不自证位置、又无坐标可标注的条目数——**可能诱发 grep 的条目**
+  （热尾内容够不够用的直接读数，配 `extraSearchCalls` 判「要不要给路径」）。
+- `extraSearchCalls`（压缩族）：压缩事件（装配 / 成功压缩）之后 `EXTRA_SEARCH_WINDOW=30` 次工具调用里，
+  签名（工具名 + 参数）在压缩前已出现过的调用数——「丢了内容 → 重新找」的读数。跳过/失败压缩不算边界
+  （没丢内容就没有重新找）；窗口重叠按首个边界归并。**归因诊断，不入质量判定**（[08](08-experiment.md)）。
 - `pressureChainDepth` / `pressureBreakerTrips`：压力链长与断路器——背stop 健康度。
 - `prefixRebuildCause`：前缀断裂的归因枚举——缓存纪律的账面。
 
