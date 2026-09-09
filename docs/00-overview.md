@@ -128,7 +128,7 @@ dsh-price-less —— 全自动上下文管理工具
 > 「让消费模型顺手写一行标记」。**N1 身份通道保留**（`core/shear/classify.ts`，候选普查仍可用）。
 > **替代方向（用户裁定）**：剪点必须**写时确定性**（结果入账前定死 = T-entry，断裂成本 0）；
 > 行为信号（等后续轮次再判断）不可用——会在前缀缓存后再改史。详见 [03 §2/§2.1](03-shear.md)。
-> 历史工单 [implement/N2-conclusion-contract.md](implement/N2-conclusion-contract.md) / [N3-shadow-mode.md](implement/N3-shadow-mode.md)（只读）。
+> 历史工单 N2/N3 已封存于 `implement/archive/`（遗留登记 [legacy.md](legacy.md) §9）。
 
 | 条目 | 内容 | 重启条件 |
 |---|---|---|

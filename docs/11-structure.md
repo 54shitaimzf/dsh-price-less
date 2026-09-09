@@ -182,8 +182,8 @@ workspace 隔离（F3）：按**会话 `header.cwd`** 分域（缺失回落进�
 | **N 系列（已退役）** | **协商剪除（语义层）**：N1 身份通道 ✅ 保留（`core/shear/classify.ts`）；**N2/N3/N4/N5 协商线整体退役**（真机 0/770 配合率；账本 §71）。后续语义剪除方向 = **写时确定性**（不得依赖模型回应，不得等行为信号——都会改史/断缓存），见 [03 §2.1](03-shear.md) | — |
 
 施工分解：R0–R4 细化为 P0–P21b 工单（flash 级自主执行粒度，验收全机械），**已封存**至
-[implement/archive/00-master.md](implement/archive/00-master.md)（历史只读）；新设计见
-[implement/00-master.md](implement/00-master.md)（N 系列）。
+[implement/archive/00-master.md](implement/archive/00-master.md)（历史只读）；N 系列总纲与
+N2/N3 工单已随协商线退役封存于 `implement/archive/`（遗留登记 [legacy.md](legacy.md) §9）。
 
 ## 9. 结构验收（进 CI）
 

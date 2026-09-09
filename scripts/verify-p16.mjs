@@ -150,9 +150,9 @@ const ledgerFacts = [
   { type: 'context-economy/shear-applied', seq: 6, time: 6, data: { policyVersion: 1, tier: 'run', kind: 'run-flush', callId: '', resultSeq: 2, at: 6, category: 'other', beforeTokens: 100, afterTokens: 30, savedTokens: 70, breakTokens: 5, tailNodes: 1, startSeq: 1, endSeq: 2, runPairs: 1, runClass: 'pureQ', conclusionTier: 'mechanical-quote' } },
 ]
 const ledger = foldShearLedger(ledgerEvents, ledgerFacts)
-check('账本 fold：cutEvents.question / cutTokensSaved / cutMisfireDetected / thinkingCutTokens',
+check('账本 fold：cutEvents.question / cutTokensSaved / cutMisfireDetected',
   ledger.cutEvents.question === 1 && ledger.cutEvents.tool === 0 && ledger.cutTokensSaved === 70
-  && ledger.cutMisfireDetected === 1 && ledger.thinkingCutTokens === 0)
+  && ledger.cutMisfireDetected === 1)
 const backlogLedger = foldShearLedger(ledgerEvents.slice(0, 2), [ledgerFacts[0]])
 check('账本 fold：questionBacklogDepth 计量', backlogLedger.questionBacklogDepth === 1 && backlogLedger.cutEvents.question === 0)
 

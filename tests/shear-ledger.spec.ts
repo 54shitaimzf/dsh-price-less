@@ -43,8 +43,7 @@ const applied: ShearAppliedFactData[] = [
 ]
 const facts: LedgerFact[] = [
   ...applied.map((data) => ({ type: SHEAR_APPLIED_FACT_TYPE, seq: data.resultSeq, time: data.at, data })),
-  { type: SHEAR_DECISION_FACT_TYPE, time: 23, data: { policyVersion: 1, tier: 'T-note', decision: 'note-attached', reason: 'note-eligible', callId: 'c1', at: 23, noteBytes: 120 } },
-  { type: SHEAR_DECISION_FACT_TYPE, time: 24, data: { policyVersion: 1, tier: 'T-note', decision: 'hold', reason: 'note-hold', callId: 'c9', at: 24 } },
+  { type: SHEAR_DECISION_FACT_TYPE, time: 24, data: { policyVersion: 1, tier: 'T0', decision: 'hold', reason: 't0-hold', callId: 'c9', at: 24 } },
 ]
 
 describe('foldShearLedger（剪切族账本）', () => {
@@ -55,7 +54,6 @@ describe('foldShearLedger（剪切族账本）', () => {
     expect(ledger.cutBreakCost).toBe(0 + 300 + 40)
     expect(ledger.toolPruneByClass.cmd).toBe(2)
     expect(ledger.toolPruneByClass.read).toBe(1)
-    expect(ledger.shearNoteAttached).toBe(1)
   })
 
   it('tableRepair / repairCoverage 取自 t0r 事实', () => {
@@ -81,7 +79,6 @@ describe('foldShearLedger（剪切族账本）', () => {
     const ledger = foldShearLedger(events, facts)
     expect(ledger.cutMisfireDetected).toBe(0)
     expect(ledger.questionBacklogDepth).toBe(0)
-    expect(ledger.thinkingCutTokens).toBe(0)
   })
 
   it('确定性双跑逐字节一致 + 输入不被 mutate', () => {
@@ -119,7 +116,7 @@ describe('表面 fold 与尾部计价', () => {
   })
 })
 
-// —— P16 对话半边：cutEvents{question} / questionBacklogDepth / cutMisfireDetected / thinkingCutTokens ——
+// —— P16 对话半边：cutEvents{question} / questionBacklogDepth / cutMisfireDetected ——
 const runEvents: LedgerSessionEvent[] = [
   { type: 'user/message', seq: 1, time: 1, surfaceOp: 'append', data: { content: [{ type: 'text', text: '为什么要用 src/core/shear/run.ts？' }] } },
   { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append', data: { message: { content: [{ type: 'text', text: '因为它纯核。' }] } } },
@@ -146,7 +143,6 @@ describe('foldShearLedger · P16 对话半边', () => {
     expect(ledger.cutTokensSaved).toBe(70)
     expect(ledger.cutBreakCost).toBe(5)
     expect(ledger.shearDecision.cut).toBe(1)
-    expect(ledger.thinkingCutTokens).toBe(0)
   })
 
   it('吸收证明未到 → questionBacklogDepth 计数、零落刀', () => {

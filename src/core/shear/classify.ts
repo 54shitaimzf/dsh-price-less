@@ -2,7 +2,7 @@
  * N1 工具结果可剪分类器（docs/implement/N1-identity-and-eligible.md §4；docs/03 §2 内容闸门）。
  * 两阶段收敛：① 身份（DSH 工具签名 kind/card，硬证据）→ ② 结果形态（副作用/截断/错误/语料四类否决）。
  * 输出带证据等级 basis：signature（工具自声明）> name（工具名白名单）> command（命令串拆段）> none（兜底）。
- * 影子模式用宽阈值（任意 basis 挂注记），剪除执行用严阈值（起步仅 signature），见工单 §4.4。
+ * N 系列协商线（N2 结论契约 / N3 影子模式）已退役（docs/legacy.md §9）；本分类器只服务写时确定性剪除的候选普查。
  *
  * 模块: core 纯核（零 harness/platform import；判定全在纯函数内）
  * 平面: L0（确定性规则：正则 + 表驱动；无模型、无 IO、无时钟、无随机）

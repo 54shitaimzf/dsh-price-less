@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 安装 dsh-price-less 预设到用户预设根（docs/implement/N3-shadow-mode.md §2.1 通道 A+C）。
+ * 安装 dsh-price-less 预设到用户预设根（presets/price-less/；N3 协商通道已退役，docs/legacy.md §9）。
  * 只写 `$DSH_HOME/.agent-presets/<name>/`（用户可控目录），不动其它任何路径；幂等覆盖。
  * 用法：node scripts/install-preset.mjs [--name price-less] [--dry-run]
  */
@@ -35,4 +35,4 @@ if (argv.includes('--dry-run')) {
 fs.mkdirSync(path.dirname(dst), { recursive: true })
 fs.cpSync(src, dst, { recursive: true, force: true })
 console.log(`install-preset: ${name} -> ${dst}`)
-console.log('新开会话时在预设选择器里选「价格低耗（协商剪除）」；已在跑的会话不受影响。')
+console.log('新开会话时在预设选择器里选「价格低耗」；已在跑的会话不受影响。')

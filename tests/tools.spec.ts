@@ -1,7 +1,7 @@
 /**
  * H6 工具端口（P7 工单 §3.2）：七组全部 fake——手写 ctx（记录监听器 + 可触发），
  * 验证注册/卸载/计量与 execute/post-execute 的短路/委托契约（决策点 1/2）。
- * 零 cordis 运行时 import；T-entry/T-note 语义不在此（归 P15a/P15b）。
+ * 零 cordis 运行时 import；T-entry 语义不在此（归 P15a/P15b）。
  */
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
@@ -12,7 +12,7 @@ import type {
   ToolExecutionResult,
   ToolExecutionToken,
 } from '@deepseek-ai/dsh-tools'
-import { appendContent, createShearToolPort, createToolPort, replaceContent, type ToolResultView } from '../src/platform/tools.ts'
+import { createShearToolPort, createToolPort, replaceContent, type ToolResultView } from '../src/platform/tools.ts'
 
 type Listener = (...args: any[]) => unknown
 
@@ -138,22 +138,13 @@ describe('tools 端口（P7）', () => {
     expect(port.stats().listenerErrors).toBe(1)
   })
 
-  it('6. 决策构造器：replace 覆盖、append 追加；输出不共享输入引用', () => {
+  it('6. 决策构造器：replace 覆盖；输出不共享输入引用', () => {
     const input = [text('a'), text('b')]
     const replaced = replaceContent(input)
     expect(replaced).toEqual({ kind: 'accept', content: [text('a'), text('b')] })
     expect(acceptContent(replaced)).not.toBe(input)
     input[0] = text('mutated')
     expect(acceptContent(replaced)).toEqual([text('a'), text('b')])
-
-    const result = fakeResult([text('x'), text('y')])
-    const appended = appendContent(result, [text('z')])
-    expect(appended).toEqual({ kind: 'accept', content: [text('x'), text('y'), text('z')] })
-    const out = acceptContent(appended)
-    expect(out).not.toBe(result.content)
-    expect(result.content).toEqual([text('x'), text('y')])
-    out[0] = text('mutated')
-    expect(result.content).toEqual([text('x'), text('y')])
   })
 
   it('8. createShearToolPort：签名只经 getTools 注入；缺省 = 无签名通道', async () => {

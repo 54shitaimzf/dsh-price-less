@@ -106,7 +106,7 @@
   <text class="box-file" x="1005" y="644" text-anchor="middle">ledger/*</text>
 
   <rect x="55" y="684" width="500" height="52" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text class="box-sub" x="305" y="715" text-anchor="middle" fill="#475569">剪切（R3）—— 工具结果瘦身 · 成对裁剪 · T-note</text>
+  <text class="box-sub" x="305" y="715" text-anchor="middle" fill="#475569">剪切（R3）—— 工具结果瘦身 · 成对裁剪</text>
 
   <rect x="575" y="684" width="510" height="52" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
   <text class="box-sub" x="830" y="715" text-anchor="middle" fill="#475569">压缩（R4）—— 历史压缩 · 双模式 · 热尾装配</text>
@@ -133,7 +133,7 @@
 
   <rect x="571" y="856" width="180" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
   <text class="box-label" x="661" y="888" text-anchor="middle">history · tools</text>
-  <text class="box-sub" x="661" y="910" text-anchor="middle">surfaceOp replace · T-note</text>
+  <text class="box-sub" x="661" y="910" text-anchor="middle">surfaceOp replace · run 冲刷</text>
   <text class="box-sub" x="661" y="927" text-anchor="middle">配对平衡守卫</text>
 
   <rect x="761" y="856" width="160" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>

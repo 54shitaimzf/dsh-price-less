@@ -1,13 +1,13 @@
 /**
  * 工具剪切纯核：谓词、四档准入与确定性 fold（docs/03 §2/§2.1/§2.2/§2.3；P15a）。
  * 纯函数：T-entry 整形（W2 保守准入：仅过程日志；失败与数据查询原文保留）、T0 超越、T0-R 修复
- *（T-note 协商与 T-loop 思考后截断均已退役）。
+ *（T-note 协商与 T-loop 思考后截断已退役，docs/legacy.md §9/§10）。
  * 判据全内置（类别启发式 + 体积/年龄规则）——无工具自声明注入缝。
- * core 零 harness/platform import；不抛错，失败一律默认保留（协商不成不动刀，零重试）。
+ * core 零 harness/platform import；不抛错，失败一律默认保留（零重试）。
  * 平面: L0（无模型/IO/状态）｜回退链步数: 2（类别启发式 → 通用体积年龄规则）
  * 审查清单: 不 import harness/platform（S1）；不写 KV/日志/事实；不改史（执行归 P15b）；
  *           内容零转写（只保原文行 + 中性省略/结论），不带插件内部标签（带外原则）。
- * 度量: shearDecision{cut|hold|keep} / toolPruneByClass / shearNoteAttached（入账归 P15b）。
+ * 度量: shearDecision{cut|hold|keep} / toolPruneByClass（入账归 P15b）。
  */
 import {
   DEFAULT_SHEAR_POLICY,
@@ -314,7 +314,7 @@ export function foldToolShear(events: readonly ShearEvent[], policy: ShearPolicy
       continue
     }
     if (event.kind === 'assistant-message') {
-      // T-loop（工具思考后截断）已退役（账本 §72）：叙述消息不再触发任何落刀。
+      // T-loop（工具思考后截断）已退役（docs/legacy.md §10）：叙述消息不再触发任何落刀。
       // streak 只被异质操作（其他文件）或用户轮打断——assistant 叙述不算打断
       // （真实事件序 = assistant(含 tool-call) → tool/call → tool/result，若在此重置 streak，
       //  T0-R 永远不可达）。

@@ -201,12 +201,12 @@ harness 内包规范见 `packages/AGENTS.md:5`（函数插件必须具名导出
   `tools/post-execute` accept `content` 覆盖/追加。
 - 当前插件：已施工（P7）——`src/platform/tools.ts` `createToolPort(ctx, hooks, logger)`
   （execute 仅信号/计量恒 `return next()`；post-execute 返回决策短路、hook 异常委托 next）
-  + 决策构造器 `replaceContent`（T-entry 写时整形）/ `appendContent`（T-note 贴注）；
-  T-entry/T-note 判据归 P15a/P15b，端口内不内置剪切规则。
+  + 决策构造器 `replaceContent`（T-entry 写时整形）；
+  T-entry 判据归 P15a/P15b，端口内不内置剪切规则。
 - **P15b 已接线**：`createShearToolPort(ctx, hooks, logger)` 把执行视图收敛成 `ToolResultView`
   （callId/name/resultText/isError/hasNonText/origin），只挂 `tools/post-execute`；`parent !== undefined`
   （run_code 子分发）与 `origin === 'subagent'` 直接委托 `next()`；含非 text 块不整形。T0/T0-R
-  与 T-note 剪除走 H4（`domains/shear.ts`），快照 §39（**T-loop 已退役，账本 §72**）。
+  剪除走 H4（`domains/shear.ts`），快照 §39（**T-loop 已退役，账本 §72**）。
 
 ### 3.10 客户端接口（client 半边）
 
@@ -422,7 +422,7 @@ webserver/credentials/attachment。
 | `src/platform/storage.ts` | `ctx.storageDomain.open` / `defineDomain` / `domainTable` | 已施工（P3） |
 | `src/platform/skills.ts` | `ctx.skills` 快照 / `get` / `skills/change`（H13） | 已施工（P4） |
 | `src/platform/history.ts` | `Session.append(surfaceOp replace)`、`compaction/*`、配对平衡守卫 | 已施工（P6） |
-| `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`/`appendContent`、`createShearToolPort`（P15b 视图适配） | 已施工（P7 / P15b） |
+| `src/platform/tools.ts` | `ctx.on('tools/execute')`、`ctx.on('tools/post-execute')`、`createToolPort`、`replaceContent`、`createShearToolPort`（P15b 视图适配） | 已施工（P7 / P15b） |
 | `src/platform/star-bridge.ts` | `ctx.get('connection')` 最小结构面、`connection.rpc.handle('/context-economy')`、`ConnectionRpcResult` 信封（§3.11） | 已施工（P14b1） |
 | `src/platform/files.ts` | `ctx.get('fs')`、`FileSystem.resolve/stat/readText`、`FsTarget`（§3.12） | 已施工（P17b） |
 | `src/domains/star.ts` | 星标 host 断面服务（`streamCeLlm` + `parseOptimizeOutput` + 卷宗回填 + 优化产物）；P14c：极短短路 + 上下文读会话事件 + DTO `historyCount` | 已施工（P14b1 / P14c） |

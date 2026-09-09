@@ -1,8 +1,28 @@
 # legacy · 退役设计存档
 
-> 本文件收录**已退役的设计**——每节三行交代：是什么 / 为何退役 / 后继在哪。
-> 全文在 git 历史（各节标注原文件路径）；账本历史见 [ledger-history.md](ledger-history.md)。
-> 本文件不在文档编号序与阅读顺序内；新设计文档集（00–11）不含以下任何内容。
+> 本文件是**唯一的遗留登记**——所有已退役设计、特性、工单、脚本与实验框架在此各占一节：
+> 是什么 / 为何退役 / 后继在哪 / 全文在哪。
+> 已封存正文（只读）在 `docs/implement/archive/`（`.gitignore` 排除，本地保全；git 历史仍可追溯）
+> 与 `experiments/evalground/`（见其 SEALED.md）；账本历史见 [ledger-history.md](ledger-history.md)。
+> 本文件不在文档编号序与阅读顺序内；现行设计文档集（00–13）不含以下任何内容。
+
+## 0. 退役清单速查
+
+| # | 退役项 | 裁定/依据 | 代码/脚本去向 | 文档去向 |
+|---|---|---|---|---|
+| 1 | 锚定段与四节产品 | 知识图谱初级形态 | — | §1（git 历史 docs/04-prompt-domain.md） |
+| 2 | P 公共前缀包（隐藏层） | 随锚定段失去对端 | — | §2（docs/01 §4 / docs/12 §6 旧版） |
+| 3 | 意图映射表 + 三级意图树 | 出口退役后无消费者 | — | §3（git 历史 docs/15 §1） |
+| 4 | L3 三类知识存储 | 违背「相信用户决策」 | — | §4（git 历史 docs/09-state-store.md） |
+| 5 | 编排管道 | 依赖 §2，移入路线图 | — | §5（git 历史 docs/13-orchestrator.md） |
+| 6 | 渲染转发提案 | 评估结论为否 | — | §6（git 历史 docs/14-render-forward.md） |
+| 7 | embedding 选型与内嵌运行时 | 成本远超收益 | `EmbeddingPort` 空壳保留为回退链第 4 级 | §7（git 历史 docs/11-embedding.md） |
+| 8 | 页式/快照/补丁链/CAS 文件工具 | DSH 原生工具已覆盖 | — | §8（git 历史 docs/15 §2–§5） |
+| 9 | **N 系列协商剪除**（N2 结论契约 / N3 影子模式 / T-note 注记 / CUT-OK·CUT-HOLD 协议 / `shear.negotiate`） | 真机 44 会话 633 选样 68 注记 → CUT-OK 0 / CUT-HOLD 0 / 无回复 100%；叠加 N2 探针 0/134（账本 §71） | 已删除：`core/shear/{negotiate,conclusion}.ts`、两型 `shear-negotiation-*` 事实、`appendContent`、`shearNoteAttached`/`thinkingCutTokens` 字段；N1 分类器保留 | §9；工单封存 `implement/archive/{00-master-N-series,N2-conclusion-contract,N3-shadow-mode}.md` |
+| 10 | **T-loop 工具思考后截断** | 插件不是「模型是否已消费结果」的权威；等后续轮次再剪必改史断缓存（账本 §72） | 已删除：`ShearOp.stub-replace`、`T-loop` 档、`loopMaxConclusionChars`（策略 v2→v3） | §10 |
+| 11 | **W2 方向② 形态解析器**（测试/编译器输出形态匹配） | 实测 ≤0.44%、宽目录零增量、旧口径 90–99% 误报（账本 §74） | 未施工（仅评估探针，已删） | §11；评估记录 `implement/archive/W2c-output-shape.md` |
+| 12 | **R1–R4 工单与验收脚本** | 已封存为历史记录 | 工单在 `implement/archive/`；失效脚本在 `scripts/archive/` | §12 |
+| 13 | **实验框架 evalground** | 依赖清退前生产 lib，随残留清空中断 | 封存只读（`runs/`/`datasets/` 保全） | §13；`experiments/evalground/SEALED.md` |
 
 ## 1. 锚定段与四节产品（模板缓存 / 锚定预算）
 
@@ -80,7 +100,61 @@
   深度冻结原则收编入缓存纪律（[06 §5](06-cache.md)）；快照补丁链的重映射思想存活于
   边界装配双通道（[04 §2](04-compactor.md)，按需对原生 read meta 做行偏移重映射）。
 
+## 9. N 系列「协商剪除」（语义层）——整体退役
+
+- **是什么**：让消费工具结果的主模型顺手回一行标记（`CUT-OK`/`CUT-HOLD`）自证「已吸收」，插件据此
+  剪除该轮调用 + 结果 + 思考。设计面 = N2 结论契约（结论 + 关键事实逐字 + 重取句柄，
+  `SHEAR_NOTE_TEMPLATE` v1）、N3 影子模式（挂注记、只记账不剪）、N4 剪除执行、N5 三道闸门、N6 验收；
+  配置 `shear.negotiate` 三态；两型 `context-economy/shear-negotiation-*` 事实；T-note 时机档。
+- **为何退役（2026-09-09 用户裁定，账本 §71）**：真机只读回放 44 会话 / 5,032 条 tool/result →
+  选样 633、实际挂出注记 68，**CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**；叠加 N2 探针 0/134 ≈ 770 条
+  样本零配合。结论：模型在干活时不会回应工具输出里的协议——语义剪除不能依赖模型回应。
+- **后继**：**写时确定性剪除**（剪点必须在结果入账前定死 = T-entry，断裂成本 0；禁模型回应依赖、
+  禁行为信号——都会改史断缓存，[03 §2](03-shear.md)、账本 §73）。N1 身份通道保留
+  （`core/shear/classify.ts`，候选普查）。reasoning（思考）剪除为独立在研方向，见 [03 §2.1](03-shear.md)。
+- **随附清理**：`core/shear/{negotiate,conclusion}.ts`、`shear.negotiate` 配置、`shear-negotiation-*` 事实、
+  `T-note` 档、`CUT-OK`/`CUT-HOLD` 标记协议、预设 persona 协议段、`platform/tools.ts` `appendContent`
+  （T-note 追加能力）、账本 `shearNoteAttached`/`thinkingCutTokens`、域 stats `notesAttached` 字段、
+  `scripts/probe-n2.mjs`、`scripts/verify-p15{a,b}.mjs`。
+- **全文**：`implement/archive/{00-master-N-series,N2-conclusion-contract,N3-shadow-mode}.md`（只读，本地保全）；
+  git 历史 `docs/implement/{00-master,N2-conclusion-contract,N3-shadow-mode}.md`。
+
+## 10. T-loop（工具思考后截断）
+
+- **是什么**：模型消费完工具结果后，把该轮叙述/思考占位替换（stub）以省 token 的时机档。
+- **为何退役（用户裁定，账本 §72）**：依赖「判断模型是否已消费结果」，而插件不是这个判断的权威；
+  任何「等后续轮次再剪」都会在结果入前缀缓存之后改史 → 缓存断裂。插件只做工具输出结果的处理。
+- **后继**：写时整形（T-entry）+ 机械超越/修复（T0/T0-R）；代码面 `ShearOp.stub-replace`、
+  `T-loop` 档、`ShearPolicy.loopMaxConclusionChars` 已删除（`SHEAR_POLICY_VERSION` 2→3）。
+
+## 11. W2 方向② 形态解析器（测试/编译器输出解析）
+
+- **是什么**：为更多测试运行器/编译器输出（vitest/jest/pytest/cargo/go/tsc/包管理器…）做形态识别与
+  严格 drop-list 剪除，以扩大 T-entry 写时整形覆盖。
+- **为何关闭（用户裁定 2026-09-09，账本 §74）**：73 工具形态调研后实测——严格 drop-list 仅覆盖
+  模型可见工具结果池的 **0.14%–0.29%**；宽 20+ 家族目录与仅 vitest 结果一致；语料上限 **0.44%**；
+  唯一可安全丢的噪声类 = 测试运行器逐条 `✓` 行。旧口径的 18.9%/20.9% 是 90–99% 文件转储误报。
+- **后继**：无（关闭）。评估记录 `implement/archive/W2c-output-shape.md`（只读）；W2 剩余方向 ① 结论型/
+  事实型准入分层、③ 同结果内确定性去重见 [TODO.md](implement/TODO.md) §3。
+
+## 12. R1–R4 工单与验收脚本封存
+
+- **是什么**：R1–R4（P0–P21b）施工工单与其逐单验收脚本（`scripts/verify-p*.mjs`）。
+- **为何封存**：R1–R4 已完成，工单转只读历史；其中 P15a/P15b 的验收面包含 T-note/T-loop 符号，
+  随 §9/§10 退役而失效。
+- **后继**：活机制的正典在 docs/00–13；活的验收脚本留在 `scripts/`（`verify-p16` run 冲刷、
+  `verify-f9*` 压缩产物、`probe-n1` N1 分类器、`assert-structure` 结构断言）。失效脚本移入
+  `scripts/archive/`（见其 README）；工单全文在 `implement/archive/`（含 R 总纲 `00-master.md`）。
+
+## 13. 实验框架 evalground（封存）
+
+- **是什么**：四旋钮对照实验平台（`experiments/evalground/`，臂表/任务集/评分卡/run 证据）。
+- **为何封存（2026-09-06）**：平台直接 import 生产编译 lib，插件清退回模板态后依赖中断，
+  `ground:assert`/`ground:verify`/`run-*`/`rejudge` 全部不可用。
+- **后继**：`docs/08-experiment.md` 保留为历史方法学（不再是施工门禁）；实验结论已固化进 docs/02–04
+  设计与常数；解封条件见 `experiments/evalground/SEALED.md`。`runs/`/`datasets/` 只读保全。
+
 ---
 
-**退役裁定登记**：以上八节 + 历史快照迁档 + 文档全量重写的完整裁定记录 =
-[ledger-history.md](ledger-history.md) §29.20。
+**退役裁定登记**：以上各节 + 历史快照迁档 + 文档全量重写的完整裁定记录 =
+[ledger-history.md](ledger-history.md) §29.20；N 系列/T-loop/W2c 裁定见账本 §71/§72/§74。

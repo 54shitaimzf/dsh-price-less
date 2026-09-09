@@ -120,7 +120,8 @@ try {
 check('CI 用例实跑：cache-invariants + full-chain-order 全过（gate 内）', vitestOk, vitestDetail)
 
 // ⑦ R4 出门门槛汇总（子进程跑既有 verify）
-const VERIFIES = ['verify-p15a', 'verify-p15b', 'verify-p16', 'verify-p17', 'verify-p18', 'verify-p19', 'verify-p20', 'verify-p21a']
+// P15a/P15b 的验收面含已退役的 T-note/T-loop 符号，随账本 §71/§72 封存至 scripts/archive/（docs/legacy.md §12）。
+const VERIFIES = ['verify-p16', 'verify-p17', 'verify-p18', 'verify-p19', 'verify-p20', 'verify-p21a']
 const verifyResults = []
 for (const name of VERIFIES) {
   try {
@@ -131,7 +132,7 @@ for (const name of VERIFIES) {
     verifyResults.push([name, false, stdout.split('\n').filter(Boolean).at(-1) ?? 'exit'])
   }
 }
-check('R4 出门门槛：P15a–P21a 全部 verify 脚本 PASS（' + VERIFIES.length + ' 个）',
+check('R4 出门门槛：P16–P21a 全部 verify 脚本 PASS（' + VERIFIES.length + ' 个；P15a/P15b 已封存）',
   verifyResults.every(([, ok]) => ok), verifyResults.filter(([, ok]) => !ok).map(([name]) => name).join(','))
 for (const [name, ok, detail] of verifyResults) console.log('  · ' + name + ' → ' + (ok ? 'PASS ' : 'FAIL ') + detail)
 

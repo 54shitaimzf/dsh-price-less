@@ -44,7 +44,7 @@
 > 且任何「等后续轮次再剪」都会改史 → 缓存前缀断裂。**我们只做工具输出结果的处理**
 > （写时整形 + 机械超越修复），不做思考后截断。代码面：`ShearOp.stub-replace`、
 > `ShearTier`/`ShearAppliedTier` 的 `T-loop`、`ShearPolicy.loopMaxConclusionChars`
-> 全部删除（`SHEAR_POLICY_VERSION` 2→3）。
+> 全部删除（`SHEAR_POLICY_VERSION` 2→3）；遗留登记 [legacy.md §10](legacy.md)。
 
 > **W2 保守准入（用户裁定 2026-09-09，账本 §73）**：真机回放发现 T-entry「保头 2 尾 2」对**数据查询类**
 > 命令是净损失——`git status` 的 fatal 被切片、`git log | Measure-Object` 的答案（提交数/标签）连同
@@ -57,16 +57,17 @@
 > 因此 T-entry 的落账前整形走 `tools/post-execute` accept `content` 覆盖（自有工具仍走
 > 定义侧 `finalizeContent`）。**时机经济学与准入动作不变**，仅修正实现缝。
 
-### 2.1 T-note 注记协商（**已退役**，账本 §71）
+### 2.1 T-note 注记协商（**已退役**）
 
-- **退役裁定（用户，2026-09-09）**：协商线整体移除——`shear.negotiate` 配置、`core/shear/{negotiate,conclusion}.ts`、
-  两型 `shear-negotiation-*` 事实、账本协商段、T-note 档与 `CUT-OK`/`CUT-HOLD` 标记协议、预设 persona 协议段全部删除。
-- **依据（真机实测，只读回放）**：44 个会话 / 5,032 条 tool/result，选样 633 条、实际挂出注记 68 条，
-  **CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**；叠加 N2 探针 0/134 → 约 770 条真机样本零配合。
-- **保留的教训**：语义剪除不能依赖「让消费模型顺手写一行标记」——模型在干活时不会回应工具输出里的协议。
-  替代方向必须是**写时确定性**（剪点必须在结果入账前定死，见 §2 T-entry；任何「等后续行为再剪」都会改史 → 缓存前缀断裂）。
-- **思考剪除前提**（仍适用于其他档）：reasoning 回放范围确认后剥离后续 assistant 消息的思考；
-  若回合内回放依赖 reasoning，思考剪除推迟至回合闭合，调用对剪除照常（两段分离，账本分开记）。
+> 协商线整体退役（用户裁定 2026-09-09，账本 §71；遗留登记 [legacy.md §9](legacy.md)）：
+> `shear.negotiate` 配置、`core/shear/{negotiate,conclusion}.ts`、两型 `shear-negotiation-*` 事实、
+> T-note 档与 `CUT-OK`/`CUT-HOLD` 标记协议、预设 persona 协议段全部删除。真机实测 44 会话 /
+> 633 选样 / 68 注记 → **CUT-OK 0 / CUT-HOLD 0 / 无回复 100%**（叠加 N2 探针 0/134）。
+> 教训：语义剪除不能依赖「让消费模型顺手写一行标记」——模型在干活时不会回应工具输出里的协议；
+> 替代方向必须是**写时确定性**（剪点必须在结果入账前定死，见 §2 T-entry）。
+
+**思考剪除（独立在研方向）**：reasoning 回放范围确认后剥离后续 assistant 消息的思考；
+若回合内回放依赖 reasoning，思考剪除推迟至回合闭合，调用对剪除照常（两段分离，账本分开记）。
 
 ### 2.2 T0 超越与 T0-R 读件修复
 
@@ -138,7 +139,7 @@
 
 **上下文是模型的唯一记忆。** 任何剪除的落位内容必须承载依据，三选一：
 
-- **语义在场**：摘要/结论进历史（T-note 结论、run 结论句、机械摘句）；
+- **语义在场**：摘要/结论进历史（run 结论句、机械摘句）；
 - **盘上在场**：坐标可机械取回原文（热尾文件读、T0 旧读——写即新真相，盘上是权威）；
 - 否则**不许剪**。
 
@@ -158,8 +159,7 @@
 - 事件（log-only）：`shear-applied {kind, policyVersion}` 随每次剪除；
 - 度量（定义见 [07](07-metrics.md)）：`cutEvents{kind: question|tool}` · `cutTokensSaved` ·
   `cutBreakCost` · `cutMisfireDetected`（重问/重读检出）· `questionBacklogDepth` ·
-  `toolPruneByClass` · `shearNoteAttached`（仅历史 `note-attached` 事实回放）·
-  `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）· `thinkingCutTokens` · `rerunAfterCut` ·
+  `toolPruneByClass` · `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）· `rerunAfterCut` ·
   `tableRepair{Count,Tokens}` · `repairCoverage` · `rereadAfterRepair`。全部可从会话日志回放
   （stub 的 `sourceEventSeqs` 溯源 + prune 影子价）。
 

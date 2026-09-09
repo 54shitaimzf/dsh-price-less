@@ -33,7 +33,7 @@ harness checkout 的本地实现（上游共识形态，待合并），插件经
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
-（历史记录，只读）；**新设计 = N 系列「协商剪除」（语义层）**，总纲 `docs/implement/00-master.md`
+（历史记录，只读）；**N 系列「协商剪除」（语义层）已整体退役**（账本 §71；遗留登记 `docs/legacy.md` §9），原总纲与 N2/N3 工单封存于 `docs/implement/archive/`
 （**N1 ✅ 身份通道**〔`core/shear/classify.ts` + `platform/tools.ts` 描述符 + `scripts/probe-n1.mjs`；探针报告 N1 §9〕→ **N2 ✅ 结论契约**（探针：工具内容内注记配合率 **0/134** → 通道待激活）→ **N3 影子模式（已退役，账本 §71）**（历史：`core/shear/negotiate.ts` 纯核 + 两型 ignorable 事实 + `shear.negotiate` 三态 + 通道 A+C）；**2026-09-09 真机复盘修复 F1–F5**（H6 端口 `ctx.tools` 未 inject 空转 → F1 修；边界压缩加 60s 判词屏障 F2；诊断日志去重 F4；档案渲染结论先行+标签 F5a；**F3 工作区隔离已落地**（`domains/workspace.ts` 唯一键源 = 会话 `header.cwd`；快照 §70）/ F5b 路径相对化已由 **F9e** 落地〔每档案条目带 root + 相对化 + 短 ID 表〕；
 快照 §60）→ **F9 压缩产物重构**（F9a 区间权威 + F9b schema v2 + F9c 热尾事实载体 + F9d 双预算/存储 v2/
 单调守卫 + F9e 路径压缩；快照 §62–§66）→ **F10 契约 v3**（总分零指针 + 热尾指向档案 + 档案只存总分 +

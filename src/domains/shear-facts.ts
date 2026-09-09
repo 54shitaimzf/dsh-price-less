@@ -1,6 +1,6 @@
 /**
  * 剪切事实载荷与声明合并（P15b/P16；docs/03 §3/§6 / docs/07 §0.5 / docs/12 §2 编译闸）。
- * 四类 log-only 事实：shear-applied（每次落刀）/ shear-decision（hold / note-attached）/
+ * 四类 log-only 事实：shear-applied（每次落刀）/ shear-decision（hold）/
  * shear-error（执行失败，零重试）/ shear-run-plan（星标剪切清单 = 吸收证明 + 结论来源，P16）。
  * 只做可序列化载荷与去 undefined 构造；不发射事实、不 import 运行期 harness。
  *

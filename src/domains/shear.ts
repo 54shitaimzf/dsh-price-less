@@ -1,8 +1,8 @@
 /**
  * P15b 工具剪切调度域（docs/03 §2/§2.1/§2.2；docs/10 §1 H4/H6；docs/11 §2 domains/shear.ts 行）。
- * 两相接线：同步相 = 工具结果落账前挂点（T-entry 整形 / T-note 贴注）；异步相 = pump 事件
+ * 两相接线：同步相 = 工具结果落账前挂点（T-entry 整形）；异步相 = pump 事件
  * （重折 foldToolShear → 门槛 → H4 surfaceOp replace + 影子计价 → 事实发射）。
- * 失败语义：协商不成不动刀、写未成功不剪、老读件不剪、抛错遏制 + 零重试（失败默认保留）。
+ * 失败语义：写未成功不剪、老读件不剪、抛错遏制 + 零重试（失败默认保留）。
  *
  * 模块: domains 剪切调度（core 纯核 + platform 端口编排）
  * 平面: L0/L1（机械时机 + 纯核判据；零模型参与）
@@ -72,7 +72,6 @@ export interface ShearDomainDeps {
 export interface ShearDomainStats {
   sessions: number
   entryShaped: number
-  notesAttached: number
   cuts: number
   holds: number
   errors: number
@@ -171,7 +170,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
   const runPolicy = deps.runPolicy ?? DEFAULT_RUN_POLICY
   const states = new WeakMap<Session, SessionState>()
   const pending = new Map<string, PendingEntry>()
-  const counts = { sessions: 0, entryShaped: 0, notesAttached: 0, cuts: 0, holds: 0, errors: 0, runsCut: 0, runsHeld: 0 }
+  const counts = { sessions: 0, entryShaped: 0, cuts: 0, holds: 0, errors: 0, runsCut: 0, runsHeld: 0 }
   let disposed = false
 
   const enabled = (): boolean => getConfig().shear?.enabled !== false

@@ -188,7 +188,7 @@ describe('P15a §6 配对与边界搭车', () => {
     expect(assertPairing({ kind: 't0-supersede', callId: 'ghost', writeCallId: 'w1', path: 'src/index.ts' }, events)).toBe(false)
   })
   it('hold = T-boundary 搭车候选；cut/keep 不是', () => {
-    expect(isBoundaryRideCandidate({ tier: 'T-note', decision: 'hold', reason: 'note-hold' })).toBe(true)
+    expect(isBoundaryRideCandidate({ tier: 'T-entry', decision: 'hold', reason: 'entry-hold' })).toBe(true)
     expect(isBoundaryRideCandidate({ tier: 'T0', decision: 'cut', reason: 't0-supersede' })).toBe(false)
   })
 })

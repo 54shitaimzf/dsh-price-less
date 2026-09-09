@@ -5,8 +5,8 @@
  * `return next()`，见决策点 1——execute 返回值会被 harness 按 `value` 重新渲染
  * content，content-only 修改会丢，所以 T-entry 内容整形必须挂 `tools/post-execute`，
  * 见 docs/13 §3.9）；`tools/post-execute` 监听器返回 `PostToolDecision` 即短路
- * （覆盖 = T-entry 写时整形；追加 = 端口通用能力，当前无消费者，由 replaceContent/appendContent
- * 构造）；T-entry/T-note 的业务判据归 P15a/P15b，本单不内置任何剪切规则。
+ * （覆盖 = T-entry 写时整形，由 `replaceContent` 构造）；业务判据归 P15a/P15b，
+ * 本单不内置任何剪切规则（T-note 追加能力随协商线退役，docs/legacy.md §9）。
  * P15b 增 `createShearToolPort`：把 harness 执行视图收敛成 `ToolResultView`（domains 零
  * harness 类型，D8 归口不变），只挂 post-execute，子分发/subagent 直接委托 next()。
  * N1 描述符扩面：`ToolResultView` 增 args/meta/kind/card/resultBytes——kind/card 取
@@ -34,7 +34,7 @@ import type {
   ToolExecutionResult,
 } from '@deepseek-ai/dsh-tools'
 
-/** 端口 hooks：本单只转发；裁决逻辑（T-entry/T-note 判据）归 P15a/P15b。 */
+/** 端口 hooks：本单只转发；裁决逻辑（T-entry 判据）归 P15a/P15b。 */
 export interface ToolPortHooks {
   /** tools/execute around-wrapper：仅信号/计量；返回值被忽略。 */
   onExecute?: (exec: ToolDispatchExecution) => void
@@ -60,11 +60,6 @@ export interface ToolPort {
 /** T-entry 写时整形：覆盖 content 的 accept 决策（输出新数组，不引用输入）。 */
 export function replaceContent(content: ContentBlock[]): PostToolDecision {
   return { kind: 'accept', content: [...content] }
-}
-
-/** T-note 贴注：在既有 content 后追加的 accept 决策（输出新组合数组，不动原块）。 */
-export function appendContent(result: Readonly<ToolExecutionResult>, extra: ContentBlock[]): PostToolDecision {
-  return { kind: 'accept', content: [...result.content, ...extra] }
 }
 
 /**
@@ -219,7 +214,7 @@ function toToolResultView(
 }
 
 /**
- * P15b 剪切工具端口：只挂 `tools/post-execute`（T-entry 覆盖 / T-note 追加）。
+ * P15b 剪切工具端口：只挂 `tools/post-execute`（T-entry 覆盖）。
  * 子分发（`parent !== undefined`，run_code 内）与 subagent 会话直接委托 next()；
  * 含非 text 块时不整形；异常由 createToolPort 遏制为 warn + next()（失败默认保留）。
  */

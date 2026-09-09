@@ -2,7 +2,7 @@
  * 剪切账本 fold（docs/07 §0.5 剪切族；docs/03 §6；P15b 工具半边 + P16 对话半边）。
  * 纯函数：同输入同账；输入 = 原始事件序（append 语义）+ context-economy/shear-* 事实。
  * `shearDecision` 来自重跑 foldToolShear + foldRunShear（本会怎么判）；`cut*`/`tableRepair` 来自已发射事实（实际落刀）——分列不混算。
- * P16：`cutEvents.question` / `questionBacklogDepth` / `cutMisfireDetected` 由重折 run 状态机得出；`thinkingCutTokens` 显式 0（N5）。
+ * P16：`cutEvents.question` / `questionBacklogDepth` / `cutMisfireDetected` 由重折 run 状态机得出。
  *
  * 模块: core 剪切账本 fold（零 harness/platform import）
  * 平面: L0（确定性重放；无模型、无 IO）
@@ -23,8 +23,8 @@ export const SHEAR_ERROR_FACT_TYPE = 'context-economy/shear-error' // ignorable
 /** 星标剪切清单事实（P16；星标 = 用户明确动作 = 吸收证明，清单来自断面行记录）。 */
 export const SHEAR_RUN_PLAN_FACT_TYPE = 'context-economy/shear-run-plan' // ignorable
 
-export type ShearAppliedKind = 'shape-entry' | 'note-cut' | 't0-supersede' | 't0r-repair' | 'run-flush' | 't-boundary'
-export type ShearAppliedTier = 'T-entry' | 'T-note' | 'T0' | 'T0-R' | 'run' | 'T-boundary'
+export type ShearAppliedKind = 'shape-entry' | 't0-supersede' | 't0r-repair' | 'run-flush' | 't-boundary'
+export type ShearAppliedTier = 'T-entry' | 'T0' | 'T0-R' | 'run' | 'T-boundary'
 
 /** 每次落刀一条（cut 相；失败不落此事实，落 shear-error）。 */
 export interface ShearAppliedFactData {
@@ -62,17 +62,16 @@ export interface ShearRunPlanFactData {
   readonly classes?: readonly { readonly anchorSeq: number; readonly class: string }[]
 }
 
-/** hold / note-attached 相（keep 不发射，由重算 fold 得出）。 */
+/** hold 相（keep 不发射，由重算 fold 得出）；note-attached 随协商线退役（docs/legacy.md §9）。 */
 export interface ShearDecisionFactData {
   readonly policyVersion: number
   readonly tier: ShearAppliedTier
-  readonly decision: 'hold' | 'note-attached' | 'keep'
+  readonly decision: 'hold' | 'keep'
   readonly reason: string
   readonly callId?: string
   /** 对话 run 半边（tier = 'run'）的裁决键：<startSeq>..<endSeq>。 */
   readonly runKey?: string
   readonly at: number
-  readonly noteBytes?: number
 }
 
 /** 执行失败（零重试；op 键已消费）。 */
@@ -91,12 +90,9 @@ export interface ShearLedger {
   cutMisfireDetected: number
   questionBacklogDepth: number
   toolPruneByClass: Record<ShearToolCategory, number>
-  /** 挂出的注记数 = 历史 T-note 事实 + N3 协商注记事实（两代通道不重叠）。 */
-  shearNoteAttached: number
   shearDecision: { cut: number; hold: number; keep: number }
   /** W1 列表跳过 T-entry 整形数（keep 相；reason = entry-skip-listing）。 */
   entrySkipListing: number
-  thinkingCutTokens: number
   tableRepair: { count: number; tokens: number }
   repairCoverage: number
   rereadAfterRepair: number
@@ -111,10 +107,8 @@ function emptyLedger(): ShearLedger {
     cutMisfireDetected: 0,
     questionBacklogDepth: 0,
     toolPruneByClass: { read: 0, write: 0, search: 0, cmd: 0, other: 0 },
-    shearNoteAttached: 0,
     shearDecision: { cut: 0, hold: 0, keep: 0 },
     entrySkipListing: 0,
-    thinkingCutTokens: 0,
     tableRepair: { count: 0, tokens: 0 },
     repairCoverage: 0,
     rereadAfterRepair: 0,
@@ -248,12 +242,6 @@ export function foldShearLedger(
   }
   ledger.repairCoverage = windowLines === 0 ? 0 : repairLines / windowLines
 
-  for (const fact of facts) {
-    if (fact.type !== SHEAR_DECISION_FACT_TYPE) continue
-    const data = fact.data as ShearDecisionFactData
-    if (data.decision === 'note-attached') ledger.shearNoteAttached++
-  }
-
   // —— P16 对话半边：重折 run 状态机（分类读 judge-recorded 事实，清单读 shear-run-plan 事实） ——
   const runEvents: RunEvent[] = []
   for (const event of original) {
@@ -317,10 +305,9 @@ export function formatShearLedger(ledger: ShearLedger): string {
   lines.push(`  cutTokensSaved: ${ledger.cutTokensSaved}`)
   lines.push(`  cutBreakCost: ${ledger.cutBreakCost}`)
   lines.push(`  toolPruneByClass: read=${ledger.toolPruneByClass.read} write=${ledger.toolPruneByClass.write} search=${ledger.toolPruneByClass.search} cmd=${ledger.toolPruneByClass.cmd} other=${ledger.toolPruneByClass.other}`)
-  lines.push(`  shearNoteAttached: ${ledger.shearNoteAttached}`)
   lines.push(`  shearDecision: cut=${ledger.shearDecision.cut} hold=${ledger.shearDecision.hold} keep=${ledger.shearDecision.keep} (entrySkipListing=${ledger.entrySkipListing})`)
   lines.push(`  tableRepair: count=${ledger.tableRepair.count} tokens=${ledger.tableRepair.tokens} coverage=${ledger.repairCoverage}`)
   lines.push(`  rereadAfterRepair: ${ledger.rereadAfterRepair} / rerunAfterCut: ${ledger.rerunAfterCut}`)
-  lines.push(`  cutMisfireDetected: ${ledger.cutMisfireDetected} / questionBacklogDepth: ${ledger.questionBacklogDepth} / thinkingCutTokens: ${ledger.thinkingCutTokens}`)
+  lines.push(`  cutMisfireDetected: ${ledger.cutMisfireDetected} / questionBacklogDepth: ${ledger.questionBacklogDepth}`)
   return lines.join('\n')
 }

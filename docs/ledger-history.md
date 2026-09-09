@@ -3004,3 +3004,36 @@ cargo 源码帧、python traceback 回显、maven `Tests run:` 汇总）。
 **后续**：W2 余下方向 ①（结论型 vs 事实型准入分层，F11 是一步）与 ③（同结果内确定性去重）仍待立项；
 主杠杆仍是 T0/T0-R 与边界/压力压缩。
 
+---
+
+## §75 退役特性封存与清理（2026-09-09；提交 = 本账本同提交）
+
+**目的（用户指令）**：把现有代码与文档清理干净，退役特性统一标注封存并摘出到遗留文档。
+
+**统一登记**：`docs/legacy.md` 扩为**唯一遗留登记**——新增 §0 退役清单速查（13 项）+ §9 N 系列协商剪除
++ §10 T-loop + §11 W2-② 形态解析器 + §12 R1–R4 工单/验收脚本 + §13 evalground；§1–§8（早期设计退役）原文保留。
+
+**代码清理（行为等价，纯删死面）**：
+- `ShearTier` 去 `T-note`；`ShearAppliedKind` 去 `note-cut`；`ShearAppliedTier` 去 `T-note`；
+  `ShearDecisionFactData.decision` 去 `note-attached` + `noteBytes`；账本去 `shearNoteAttached` / `thinkingCutTokens`；
+  域 stats 去 `notesAttached`（从未自增）。
+- `platform/tools.ts` 删 `appendContent`（T-note 追加能力，无消费者）；注释同步。
+- 纯核/域/端口/测试注释与用例去 T-note/T-loop/N3 影子模式措辞（保留 T0/T0-R/run 结论等活机制）。
+
+**文档封存（只读历史，`archive/` 由 .gitignore 排除，本地保全；git 历史可追溯）**：
+`docs/implement/{00-master,N2-conclusion-contract,N3-shadow-mode}.md` → `docs/implement/archive/`
+（N 总纲改名 `00-master-N-series.md`）；N1 工单保留（分类器在用），头部改指遗留登记。
+
+**脚本封存**：`scripts/{probe-n2,verify-p15a,verify-p15b}.mjs` → `scripts/archive/`（+ README 说明失效原因与相对路径已断）；
+`scripts/verify-p16.mjs` 去 `thinkingCutTokens` 断言；`scripts/verify-p21b.mjs` 子验清单去 P15a/P15b（§73 遗留的「陈旧脚本」项就此关闭）。
+
+**正典口径同步**：docs/00/03/04/07/10/11/13 + 两张架构 SVG 去除 T-note/T-loop 表述；docs/03 §2.1 压缩为
+退役说明 + 「思考剪除（独立在研方向）」保留；docs/07 剪切族删两个退役字段。
+
+**用户配置**：`~/.dsh/settings.yaml` 的陈旧键 `context-economy.shear.negotiate: shadow` 删除（schema 已无此键，本就忽略）。
+
+**验收**：`npm run gate` 绿（typecheck + typecheck:client + 57 files / **609 tests** + assert `ok=true vacuous=[]`）；
+`npm run typecheck:tests` 绿；`bash scripts/build.sh`（DSH_CHECKOUT）host+client 构建通过。
+
+**未动**：`docs/ledger-history.md` 正文（只增）；活机制代码路径；`experiments/evalground/` 证据。
+

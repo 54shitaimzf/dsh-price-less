@@ -5,8 +5,8 @@
  * 审查清单: 不 import harness/platform（S1）；不写 KV/日志/事实；不改史（执行归 P15b）。
  */
 
-/** 时机档（档 = 时机，时机即经济学；docs/03 §2 表）。 */
-export type ShearTier = 'T-entry' | 'T-note' | 'T-boundary'
+/** 时机档（档 = 时机，时机即经济学；docs/03 §2 表）。T-note 已退役（docs/legacy.md §9）。 */
+export type ShearTier = 'T-entry' | 'T-boundary'
 /** 裁决族：四档时机 + T0/T0-R 两条机械规则（docs/03 §2.2）。 */
 export type ShearDecisionTier = ShearTier | 'T0' | 'T0-R'
 /** 准入裁决：cut = 落 op；hold = 保留原文待边界搭车；keep = 不动刀。 */
@@ -40,7 +40,7 @@ export interface ShearRepairSegment {
   readonly endLine: number
   readonly lines: readonly string[]
 }
-/** 产物（T-entry 整形 / T0 整剪 / T0-R 修复）；T-note 协商（§71）与 T-loop 思考后截断（§72）均已退役。 */
+/** 产物（T-entry 整形 / T0 整剪 / T0-R 修复）；T-note 协商与 T-loop 思考后截断已退役（docs/legacy.md §9/§10）。 */
 export type ShearOp =
   | { readonly kind: 'shape-entry'; readonly callId: string; readonly content: string }
   | { readonly kind: 't0-supersede'; readonly callId: string; readonly writeCallId: string; readonly path: string }
