@@ -1,184 +1,252 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1140" height="1210" viewBox="0 0 1140 1210" role="img" aria-labelledby="title desc">
-  <title id="title">dsh-price-less 架构图</title>
-  <desc id="desc">分层架构：顶部为用户与 DSH 宿主，向下依次为插件 domains 编排面、core 纯核、platform 适配层（唯一 harness 触点），底部为数据与事实。实线 = 已实现；虚线 = 计划中（P14a/b 提示词优化器、R3 剪切、R4 压缩）。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1630" viewBox="0 0 1240 1630" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-price-less — 架构图</title>
+  <desc id="desc">DeepSeek Harness 上下文管理插件 · R1–R4 全部已实现（含 F1–F13 / P14c·d / P17c / P20c 真机修正）· docs/11-structure.md</desc>
 
   <defs>
     <marker id="arrow" markerWidth="12" markerHeight="9" refX="0" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0,0 L12,4.5 L0,9 Z" fill="#475569"/>
     </marker>
-    <marker id="arrowPlanned" markerWidth="12" markerHeight="9" refX="0" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L12,4.5 L0,9 Z" fill="#94a3b8"/>
-    </marker>
   </defs>
 
   <style>
     .title { font: 700 26px system-ui, 'Segoe UI', sans-serif; fill: #0f172a; }
-    .subtitle { font: 400 14px system-ui, 'Segoe UI', sans-serif; fill: #64748b; }
+    .subtitle { font: 400 13px system-ui, 'Segoe UI', sans-serif; fill: #64748b; }
     .band-label { font: 700 12.5px system-ui, 'Segoe UI', sans-serif; fill: #64748b; letter-spacing: 0.08em; }
-    .box-label { font: 700 14px system-ui, 'Segoe UI', sans-serif; fill: #0f172a; }
-    .box-sub { font: 400 11px system-ui, 'Segoe UI', sans-serif; fill: #475569; }
-    .box-file { font: 400 10.5px system-ui, 'Segoe UI', sans-serif; font-style: italic; fill: #64748b; }
-    .flow-note { font: 400 11px system-ui, 'Segoe UI', sans-serif; font-style: italic; fill: #64748b; }
-    .footer { font: 400 12px system-ui, 'Segoe UI', sans-serif; fill: #64748b; }
-    .legend-text { font: 400 12.5px system-ui, 'Segoe UI', sans-serif; fill: #334155; }
+    .box-label { font: 700 13.5px system-ui, 'Segoe UI', sans-serif; fill: #0f172a; }
+    .box-sub { font: 400 10.5px system-ui, 'Segoe UI', sans-serif; fill: #475569; }
+    .box-file { font: 400 10px system-ui, 'Segoe UI', sans-serif; font-style: italic; fill: #64748b; }
+    .flow-note { font: 400 10.5px system-ui, 'Segoe UI', sans-serif; font-style: italic; fill: #64748b; }
+    .footer { font: 400 11px system-ui, 'Segoe UI', sans-serif; fill: #64748b; }
+    .legend-text { font: 400 12px system-ui, 'Segoe UI', sans-serif; fill: #334155; }
+    .discipline { font: 600 11px system-ui, 'Segoe UI', sans-serif; fill: #7c2d12; }
   </style>
 
-  <!-- ======================= TITLE + LEGEND ======================= -->
   <text class="title" x="40" y="42">dsh-price-less — 架构图</text>
-  <text class="subtitle" x="40" y="66">DeepSeek Harness 上下文管理插件 · 已实现 vs 计划中（docs/11-structure.md）</text>
+  <text class="subtitle" x="40" y="66">DeepSeek Harness 上下文管理插件 · R1–R4 全部已实现（含 F1–F13 / P14c·d / P17c / P20c 真机修正）· docs/11-structure.md</text>
+  <rect x="694" y="33" width="22" height="13" rx="3" fill="#dbeafe" stroke="#2563eb"/>
+  <text class="legend-text" x="722" y="44">已实现（R1–R4）</text>
+  <rect x="896" y="33" width="22" height="13" rx="3" fill="#fffbeb" stroke="#f59e0b" stroke-dasharray="4 2"/>
+  <text class="legend-text" x="924" y="44">待验证（B / R 系列）</text>
 
-  <rect x="690" y="33" width="22" height="13" rx="3" fill="#dbeafe" stroke="#2563eb"/>
-  <text class="legend-text" x="718" y="44">已实现（P0–P13）</text>
-  <rect x="870" y="33" width="22" height="13" rx="3" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="4 2"/>
-  <text class="legend-text" x="898" y="44">计划中（P14a/b · R3 · R4）</text>
+  <rect x="40" y="92" width="1160" height="152" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text class="band-label" x="58" y="116" text-anchor="start">用户 / DEEPSEEK HARNESS 宿主</text>
+  <rect x="40" y="260" width="1160" height="280" rx="14" fill="#faf5ff" stroke="#ede9fe"/>
+  <text class="band-label" x="1182" y="284" text-anchor="end">DOMAINS</text>
+    <text class="box-file" x="56" y="300" text-anchor="start">工作区隔离：档案/前缀键唯一键源 = 会话 header.cwd（F3）</text>
 
-  <!-- ======================= BAND 1 · USER / HOST ======================= -->
-  <rect x="40" y="90" width="1060" height="170" rx="14" fill="#f8fafc" stroke="#e2e8f0"/>
-  <text class="band-label" x="58" y="116">用户 / DEEPSEEK HARNESS 宿主</text>
+    <text class="box-file" x="1184" y="300" text-anchor="end">src/domains/ · 编排面（决定做什么）</text>
 
-  <rect x="70" y="132" width="300" height="86" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
-  <text class="box-label" x="220" y="166" text-anchor="middle">用户</text>
-  <text class="box-sub" x="220" y="190" text-anchor="middle">斜杠命令 · 消息</text>
+  <rect x="40" y="556" width="1160" height="512" rx="14" fill="#f0fdfa" stroke="#ccfbf1"/>
+  <text class="band-label" x="1182" y="580" text-anchor="end">CORE</text>
+    <text class="box-file" x="1184" y="596" text-anchor="end">src/core/ · 纯核（零 harness import，决定怎么算）</text>
 
-  <rect x="410" y="132" width="300" height="86" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
-  <text class="box-label" x="560" y="166" text-anchor="middle">DSH 会话</text>
-  <text class="box-sub" x="560" y="190" text-anchor="middle">user/message · session/event 事件流（H1）</text>
+  <rect x="40" y="1084" width="1160" height="232" rx="14" fill="#f0fdf4" stroke="#dcfce7"/>
+  <text class="band-label" x="1182" y="1108" text-anchor="end">PLATFORM</text>
+    <text class="box-file" x="1184" y="1124" text-anchor="end">src/platform/ · 唯一 harness 触点（H1–H15）</text>
 
-  <rect x="750" y="132" width="300" height="86" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
-  <text class="box-label" x="900" y="164" text-anchor="middle">客户端 UI</text>
-  <text class="box-sub" x="900" y="186" text-anchor="middle">设置卡 · 星标按钮壳</text>
-  <text class="box-file" x="900" y="206" text-anchor="middle">field-model.ts（H8 / H11）</text>
+  <rect x="40" y="1332" width="1160" height="120" rx="14" fill="#fffbeb" stroke="#fde68a"/>
+  <text class="band-label" x="58" y="1356" text-anchor="start">数据 / 事实</text>
+  <rect x="40" y="1468" width="1160" height="118" rx="14" fill="#fff7ed" stroke="#fed7aa"/>
+  <text class="band-label" x="58" y="1492" text-anchor="start">待验证（已登记 TODO §3）</text>
 
-  <!-- ======================= BAND 2 · DOMAINS ======================= -->
-  <rect x="40" y="296" width="1060" height="184" rx="14" fill="#faf5ff" stroke="#ede9fe"/>
-  <text class="band-label" x="1082" y="312" text-anchor="end">DOMAINS</text>
-  <text class="box-file" x="1082" y="328" text-anchor="end">src/domains/ · 编排面</text>
+  <rect x="56" y="132" width="362" height="96" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text class="box-label" x="237.0" y="175.5" text-anchor="middle">用户</text>
+  <text class="box-sub" x="237.0" y="192.5" text-anchor="middle">斜杠命令 · 消息</text>
+  <rect x="438" y="132" width="362" height="96" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text class="box-label" x="619.0" y="167.0" text-anchor="middle">DSH 会话</text>
+  <text class="box-sub" x="619.0" y="184.0" text-anchor="middle">user/message · session/event 事件流</text>
+  <text class="box-file" x="619.0" y="201.0" text-anchor="middle">H1</text>
+  <rect x="820" y="132" width="362" height="96" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text class="box-label" x="1001.0" y="167.0" text-anchor="middle">客户端 UI</text>
+  <text class="box-sub" x="1001.0" y="184.0" text-anchor="middle">设置卡 · 星标按钮</text>
+  <text class="box-file" x="1001.0" y="201.0" text-anchor="middle">field-model.ts（H8 / H11）</text>
+  <rect x="56" y="316" width="362" height="96" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text class="box-label" x="237.0" y="351.0" text-anchor="middle">命令面</text>
+  <text class="box-sub" x="237.0" y="368.0" text-anchor="middle">/task · /init · /optimize-prompt</text>
+  <text class="box-file" x="237.0" y="385.0" text-anchor="middle">domains/commands.ts</text>
+  <rect x="438" y="316" width="362" height="96" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text class="box-label" x="619.0" y="342.5" text-anchor="middle">自动识别</text>
+  <text class="box-sub" x="619.0" y="359.5" text-anchor="middle">你的指令 → 关键词规则 → 比对过往 → 轻量模型</text>
+  <text class="box-sub" x="619.0" y="376.5" text-anchor="middle">默认关：discriminator.auto</text>
+  <text class="box-file" x="619.0" y="393.5" text-anchor="middle">domains/input.ts</text>
+  <rect x="820" y="316" width="362" height="96" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text class="box-label" x="1001.0" y="342.5" text-anchor="middle">提示词优化 · 星标</text>
+  <text class="box-sub" x="1001.0" y="359.5" text-anchor="middle">预览 → 确认 → 回填</text>
+  <text class="box-sub" x="1001.0" y="376.5" text-anchor="middle">同 prompt 二次点击只展开（P14d）</text>
+  <text class="box-file" x="1001.0" y="393.5" text-anchor="middle">domains/star.ts</text>
+  <rect x="56" y="428" width="362" height="96" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text class="box-label" x="237.0" y="454.5" text-anchor="middle">剪切编排</text>
+  <text class="box-sub" x="237.0" y="471.5" text-anchor="middle">T0 超越 · T0-R 修复 · run 冲刷</text>
+  <text class="box-sub" x="237.0" y="488.5" text-anchor="middle">结论落位为通知消息</text>
+  <text class="box-file" x="237.0" y="505.5" text-anchor="middle">domains/shear.ts</text>
+  <rect x="438" y="428" width="362" height="96" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text class="box-label" x="619.0" y="454.5" text-anchor="middle">压缩编排</text>
+  <text class="box-sub" x="619.0" y="471.5" text-anchor="middle">闭合发现 → 单次调用 → 缩水校验 → 事务替换</text>
+  <text class="box-sub" x="619.0" y="488.5" text-anchor="middle">边界 + 压力两条路径</text>
+  <text class="box-file" x="619.0" y="505.5" text-anchor="middle">domains/compaction.ts</text>
+  <rect x="820" y="428" width="362" height="96" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text class="box-label" x="1001.0" y="454.5" text-anchor="middle">恢复编排</text>
+  <text class="box-sub" x="1001.0" y="471.5" text-anchor="middle">会话启动重建 · 同会话幂等</text>
+  <text class="box-sub" x="1001.0" y="488.5" text-anchor="middle">零模型调用 · 零改史</text>
+  <text class="box-file" x="1001.0" y="505.5" text-anchor="middle">domains/restore.ts（P21a）</text>
+  <rect x="56" y="612" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="191.0" y="643.0" text-anchor="middle">大任务边界</text>
+  <text class="box-sub" x="191.0" y="660.0" text-anchor="middle">意图轴分段 · 闭合 = 稳定点</text>
+  <text class="box-file" x="191.0" y="677.0" text-anchor="middle">units.ts · t0.ts</text>
+  <rect x="342" y="612" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="477.0" y="643.0" text-anchor="middle">任务资料夹</text>
+  <text class="box-sub" x="477.0" y="660.0" text-anchor="middle">append-only 卷宗 vN</text>
+  <text class="box-file" x="477.0" y="677.0" text-anchor="middle">dossier.ts</text>
+  <rect x="628" y="612" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="763.0" y="634.5" text-anchor="middle">识别判据</text>
+  <text class="box-sub" x="763.0" y="651.5" text-anchor="middle">关键词规则 → 轻量模型兜底</text>
+  <text class="box-sub" x="763.0" y="668.5" text-anchor="middle">判别器 v4：同一工作对象持续改进（F13）</text>
+  <text class="box-file" x="763.0" y="685.5" text-anchor="middle">judge.ts</text>
+  <rect x="914" y="612" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="1049.0" y="643.0" text-anchor="middle">项目档案 · 前缀</text>
+  <text class="box-sub" x="1049.0" y="660.0" text-anchor="middle">/init 采集 · 稳定前缀原料</text>
+  <text class="box-file" x="1049.0" y="677.0" text-anchor="middle">init.ts · prefix.ts</text>
+  <rect x="56" y="712" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="191.0" y="734.5" text-anchor="middle">T-entry 写时整形</text>
+  <text class="box-sub" x="191.0" y="751.5" text-anchor="middle">只碰过程日志（≥120 行且 ≥16 KiB）</text>
+  <text class="box-sub" x="191.0" y="768.5" text-anchor="middle">失败 · 列表 · 数据查询一律原文（W2）</text>
+  <text class="box-file" x="191.0" y="785.5" text-anchor="middle">shear/tool.ts</text>
+  <rect x="342" y="712" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="477.0" y="743.0" text-anchor="middle">T0 被写超越</text>
+  <text class="box-sub" x="477.0" y="760.0" text-anchor="middle">旧读被后续写入覆盖即剪</text>
+  <text class="box-file" x="477.0" y="777.0" text-anchor="middle">shear/index.ts</text>
+  <rect x="628" y="712" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="763.0" y="743.0" text-anchor="middle">T0-R 声明表修复</text>
+  <text class="box-sub" x="763.0" y="760.0" text-anchor="middle">只修声明读件，不改内容</text>
+  <text class="box-file" x="763.0" y="777.0" text-anchor="middle">shear/t0r.ts</text>
+  <rect x="914" y="712" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="1049.0" y="734.5" text-anchor="middle">run 冲刷</text>
+  <text class="box-sub" x="1049.0" y="751.5" text-anchor="middle">结束的追问/验证整段折叠</text>
+  <text class="box-sub" x="1049.0" y="768.5" text-anchor="middle">结论三档 · 吸收证明</text>
+  <text class="box-file" x="1049.0" y="785.5" text-anchor="middle">shear/run.ts</text>
+  <rect x="56" y="812" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="191.0" y="843.0" text-anchor="middle">区间转写</text>
+  <text class="box-sub" x="191.0" y="860.0" text-anchor="middle">权威区间 → 缩水校验 → 替换</text>
+  <text class="box-file" x="191.0" y="877.0" text-anchor="middle">compress/region.ts</text>
+  <rect x="342" y="812" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="477.0" y="834.5" text-anchor="middle">档案区</text>
+  <text class="box-sub" x="477.0" y="851.5" text-anchor="middle">只追加 · 10K 硬帽（只计总分）</text>
+  <text class="box-sub" x="477.0" y="868.5" text-anchor="middle">内容寻址缓存（F9d / F10）</text>
+  <text class="box-file" x="477.0" y="885.5" text-anchor="middle">compress/store.ts</text>
+  <rect x="628" y="812" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="763.0" y="834.5" text-anchor="middle">压力阀门</text>
+  <text class="box-sub" x="763.0" y="851.5" text-anchor="middle">0.35 × 主模型上下文窗口</text>
+  <text class="box-sub" x="763.0" y="868.5" text-anchor="middle">缺窗口 → 125K → 安全网 100K（P20c）</text>
+  <text class="box-file" x="763.0" y="885.5" text-anchor="middle">compress/pressure.ts</text>
+  <rect x="914" y="812" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="1049.0" y="834.5" text-anchor="middle">保险丝</text>
+  <text class="box-sub" x="1049.0" y="851.5" text-anchor="middle">地板 0.8×窗口 · 断路器 3</text>
+  <text class="box-sub" x="1049.0" y="868.5" text-anchor="middle">溢出码紧急折叠</text>
+  <text class="box-file" x="1049.0" y="885.5" text-anchor="middle">compress/fuse.ts</text>
+  <rect x="56" y="912" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="191.0" y="934.5" text-anchor="middle">产物契约 v3</text>
+  <text class="box-sub" x="191.0" y="951.5" text-anchor="middle">总述 ≤80 字 + 分步 ≤120 字（零指针）</text>
+  <text class="box-sub" x="191.0" y="968.5" text-anchor="middle">热尾头指档案 · 错误不进热尾（F10）</text>
+  <text class="box-file" x="191.0" y="985.5" text-anchor="middle">compress/product.ts</text>
+  <rect x="342" y="912" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="477.0" y="934.5" text-anchor="middle">边界装配</text>
+  <text class="box-sub" x="477.0" y="951.5" text-anchor="middle">双通道坐标 · 版本补丁链重映射</text>
+  <text class="box-sub" x="477.0" y="968.5" text-anchor="middle">盘上取真 · HT 软门（P17c）</text>
+  <text class="box-file" x="477.0" y="985.5" text-anchor="middle">assemble/</text>
+  <rect x="628" y="912" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="763.0" y="934.5" text-anchor="middle">恢复重建</text>
+  <text class="box-sub" x="763.0" y="951.5" text-anchor="middle">步序 · 实体审计 · 双源等价</text>
+  <text class="box-sub" x="763.0" y="968.5" text-anchor="middle">只降级，不臆造</text>
+  <text class="box-file" x="763.0" y="985.5" text-anchor="middle">restore/</text>
+  <rect x="914" y="912" width="270" height="88" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
+  <text class="box-label" x="1049.0" y="934.5" text-anchor="middle">账本 · 估计器</text>
+  <text class="box-sub" x="1049.0" y="951.5" text-anchor="middle">指标 fold 可回放 · 两桶密度</text>
+  <text class="box-sub" x="1049.0" y="968.5" text-anchor="middle">CJK 1.5 / 其余 2.9 字符/token（F8a）</text>
+  <text class="box-file" x="1049.0" y="985.5" text-anchor="middle">ledger/* · meter/</text>
+  <rect x="56" y="1134" width="178" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="145.0" y="1159.0" text-anchor="middle">events.ts</text>
+  <text class="box-sub" x="145.0" y="1176.0" text-anchor="middle">H1 事件流 → 旁路队列</text>
+  <text class="box-sub" x="145.0" y="1193.0" text-anchor="middle">永不阻塞 append</text>
+  <rect x="246" y="1124" width="178" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="335.0" y="1149.0" text-anchor="middle">agent-step.ts</text>
+  <text class="box-sub" x="335.0" y="1166.0" text-anchor="middle">H2/H3/H9 边界准入</text>
+  <text class="box-sub" x="335.0" y="1183.0" text-anchor="middle">压力触发 · 恢复收口</text>
+  <rect x="436" y="1124" width="178" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="525.0" y="1149.0" text-anchor="middle">history.ts</text>
+  <text class="box-sub" x="525.0" y="1166.0" text-anchor="middle">H4/H5 改史唯一通道</text>
+  <text class="box-sub" x="525.0" y="1183.0" text-anchor="middle">压缩事务 · 配对守卫</text>
+  <rect x="626" y="1124" width="178" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="715.0" y="1149.0" text-anchor="middle">tools.ts</text>
+  <text class="box-sub" x="715.0" y="1166.0" text-anchor="middle">H6 剪切挂点</text>
+  <text class="box-sub" x="715.0" y="1183.0" text-anchor="middle">内容覆盖 · 信号计量</text>
+  <rect x="816" y="1124" width="178" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="905.0" y="1149.0" text-anchor="middle">meter.ts</text>
+  <text class="box-sub" x="905.0" y="1166.0" text-anchor="middle">H7 度量回放</text>
+  <text class="box-sub" x="905.0" y="1183.0" text-anchor="middle">账本字段可重算</text>
+  <rect x="1006" y="1124" width="178" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="1095.0" y="1149.0" text-anchor="middle">storage.ts</text>
+  <text class="box-sub" x="1095.0" y="1166.0" text-anchor="middle">H10 持久 KV</text>
+  <text class="box-sub" x="1095.0" y="1183.0" text-anchor="middle">版本化读写 · CAS</text>
+  <rect x="56" y="1222" width="216" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="164.0" y="1247.0" text-anchor="middle">llm.ts</text>
+  <text class="box-sub" x="164.0" y="1264.0" text-anchor="middle">H12 辅助调用</text>
+  <text class="box-sub" x="164.0" y="1281.0" text-anchor="middle">purpose 路由 · usage 回执</text>
+  <rect x="284" y="1212" width="216" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="392.0" y="1237.0" text-anchor="middle">skills.ts</text>
+  <text class="box-sub" x="392.0" y="1254.0" text-anchor="middle">H13 技能目录</text>
+  <text class="box-sub" x="392.0" y="1271.0" text-anchor="middle">引用守卫查表</text>
+  <rect x="512" y="1212" width="216" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="620.0" y="1237.0" text-anchor="middle">files.ts</text>
+  <text class="box-sub" x="620.0" y="1254.0" text-anchor="middle">H15 盘上取真</text>
+  <text class="box-sub" x="620.0" y="1271.0" text-anchor="middle">版本补丁链重映射</text>
+  <rect x="740" y="1212" width="216" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="848.0" y="1237.0" text-anchor="middle">star-bridge.ts</text>
+  <text class="box-sub" x="848.0" y="1254.0" text-anchor="middle">H11 星标 RPC 桥</text>
+  <text class="box-sub" x="848.0" y="1271.0" text-anchor="middle">star.preview / apply</text>
+  <rect x="968" y="1212" width="216" height="76" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text class="box-label" x="1076.0" y="1237.0" text-anchor="middle">logger · diag-sink</text>
+  <text class="box-sub" x="1076.0" y="1254.0" text-anchor="middle">H14 ignorable 事实</text>
+  <text class="box-sub" x="1076.0" y="1271.0" text-anchor="middle">JSONL · 2 MiB 滚动</text>
+  <rect x="56" y="1368" width="362" height="68" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text class="box-label" x="237.0" y="1389.0" text-anchor="middle">持久 KV — storageDomain（H10）</text>
+  <text class="box-sub" x="237.0" y="1406.0" text-anchor="middle">任务资料夹 · 项目档案 · 边界档案 · 优化产物</text>
+  <text class="box-sub" x="237.0" y="1423.0" text-anchor="middle">按会话工作区隔离</text>
+  <rect x="438" y="1368" width="362" height="68" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text class="box-label" x="619.0" y="1389.0" text-anchor="middle">会话事实 — ignorable JSONL</text>
+  <text class="box-sub" x="619.0" y="1406.0" text-anchor="middle">context-economy/*：task-boundary · judge-* · shear-*</text>
+  <text class="box-sub" x="619.0" y="1423.0" text-anchor="middle">compress-run · restore-*</text>
+  <rect x="820" y="1368" width="362" height="68" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+  <text class="box-label" x="1001.0" y="1389.0" text-anchor="middle">诊断日志</text>
+  <text class="box-sub" x="1001.0" y="1406.0" text-anchor="middle">logs/context-economy.log · 2 MiB 滚动</text>
+  <text class="box-sub" x="1001.0" y="1423.0" text-anchor="middle">供 agent 自审 Read/grep</text>
+  <rect x="56" y="1504" width="556" height="76" rx="9" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text class="box-label" x="334.0" y="1520.5" text-anchor="middle">B 系列 · 分支-合并上下文</text>
+  <text class="box-sub" x="334.0" y="1537.5" text-anchor="middle">checkout/merge 拿空间换效率 · 先验并行面 5.5%</text>
+  <text class="box-sub" x="334.0" y="1554.5" text-anchor="middle">M0 门槛：可隔离活上下文 ≥30%，断裂成本 &lt; 节省 20%</text>
+  <text class="box-file" x="334.0" y="1571.5" text-anchor="middle">docs/implement/TODO.md §3</text>
+  <rect x="628" y="1504" width="556" height="76" rx="9" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text class="box-label" x="906.0" y="1520.5" text-anchor="middle">R 系列 · 思考回放剪除</text>
+  <text class="box-sub" x="906.0" y="1537.5" text-anchor="middle">复利 76.5× / 104.5× · 轮边界全剪可省 1.5%</text>
+  <text class="box-sub" x="906.0" y="1554.5" text-anchor="middle">出门门槛：协议探针 + 网关 re-encode + 行为 A/B</text>
+  <text class="box-file" x="906.0" y="1571.5" text-anchor="middle">docs/implement/TODO.md §3</text>
 
-  <rect x="56" y="340" width="270" height="100" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text class="box-label" x="191" y="372" text-anchor="middle">命令面</text>
-  <text class="box-sub" x="191" y="394" text-anchor="middle">/task · /init · /optimize-prompt</text>
-  <text class="box-file" x="191" y="424" text-anchor="middle">domains/commands.ts</text>
+  <rect x="56" y="1012" width="1128" height="40" rx="9" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text class="discipline" x="620" y="1037" text-anchor="middle">纪律：剪点必须在结果入账前定死（T-entry）· 禁行为信号 · 失败方向 = 保留 · 带外原则（内部标志不进模型视野）· 字节可复现</text>
 
-  <rect x="366" y="340" width="360" height="100" rx="9" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
-  <text class="box-label" x="546" y="369" text-anchor="middle">自动识别</text>
-  <text class="box-sub" x="546" y="391" text-anchor="middle">你的指令 → 关键词规则 → 比对过往 → 轻量模型</text>
-  <text class="box-sub" x="546" y="407" text-anchor="middle">开关：discriminator.auto（默认关）</text>
-  <text class="box-file" x="546" y="429" text-anchor="middle">domains/input.ts</text>
-
-  <rect x="765" y="340" width="270" height="100" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text class="box-label" x="900" y="372" text-anchor="middle" fill="#475569">提示词优化器 · 星标</text>
-  <text class="box-sub" x="900" y="394" text-anchor="middle">预览 → 确认 → 回填</text>
-  <text class="box-file" x="900" y="424" text-anchor="middle">入口已注册 · 流程 = P14a/b</text>
-
-  <!-- ======================= BAND 3 · CORE ======================= -->
-  <rect x="40" y="516" width="1060" height="260" rx="14" fill="#f0fdfa" stroke="#ccfbf1"/>
-  <text class="band-label" x="1082" y="532" text-anchor="end">CORE</text>
-  <text class="box-file" x="1082" y="548" text-anchor="end">src/core/ · 零 harness import</text>
-
-  <rect x="55" y="560" width="160" height="100" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text class="box-label" x="135" y="592" text-anchor="middle">大任务边界</text>
-  <text class="box-sub" x="135" y="614" text-anchor="middle">任务分段 · 边界记录</text>
-  <text class="box-file" x="135" y="644" text-anchor="middle">units.ts · t0.ts</text>
-
-  <rect x="229" y="560" width="160" height="100" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text class="box-label" x="309" y="592" text-anchor="middle">任务资料夹</text>
-  <text class="box-sub" x="309" y="614" text-anchor="middle">append-only 消息</text>
-  <text class="box-file" x="309" y="644" text-anchor="middle">dossier.ts</text>
-
-  <rect x="403" y="560" width="160" height="100" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text class="box-label" x="483" y="592" text-anchor="middle">识别判据</text>
-  <text class="box-sub" x="483" y="614" text-anchor="middle">关键词规则 · 轻量模型兜底</text>
-  <text class="box-file" x="483" y="644" text-anchor="middle">judge.ts</text>
-
-  <rect x="577" y="560" width="160" height="100" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text class="box-label" x="657" y="592" text-anchor="middle">提示词优化</text>
-  <text class="box-sub" x="657" y="614" text-anchor="middle">星标输入 · 四道自动检查</text>
-  <text class="box-file" x="657" y="644" text-anchor="middle">optimize.ts</text>
-
-  <rect x="751" y="560" width="160" height="100" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text class="box-label" x="831" y="592" text-anchor="middle">项目档案 · 前缀</text>
-  <text class="box-sub" x="831" y="614" text-anchor="middle">init 采集 · 稳定前缀</text>
-  <text class="box-file" x="831" y="644" text-anchor="middle">init.ts · prefix.ts</text>
-
-  <rect x="925" y="560" width="160" height="100" rx="9" fill="#ccfbf1" stroke="#0d9488" stroke-width="1.5"/>
-  <text class="box-label" x="1005" y="592" text-anchor="middle">账本</text>
-  <text class="box-sub" x="1005" y="614" text-anchor="middle">指标统计 · 可回放</text>
-  <text class="box-file" x="1005" y="644" text-anchor="middle">ledger/*</text>
-
-  <rect x="55" y="684" width="500" height="52" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text class="box-sub" x="305" y="715" text-anchor="middle" fill="#475569">剪切（R3）—— 工具结果瘦身 · 成对裁剪</text>
-
-  <rect x="575" y="684" width="510" height="52" rx="9" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 4"/>
-  <text class="box-sub" x="830" y="715" text-anchor="middle" fill="#475569">压缩（R4）—— 历史压缩 · 双模式 · 热尾装配</text>
-
-  <!-- ======================= BAND 4 · PLATFORM ======================= -->
-  <rect x="40" y="812" width="1060" height="184" rx="14" fill="#f0fdf4" stroke="#dcfce7"/>
-  <text class="band-label" x="1082" y="828" text-anchor="end">PLATFORM</text>
-  <text class="box-file" x="1082" y="844" text-anchor="end">src/platform/ · 唯一 harness 触点（H1–H13）</text>
-
-  <rect x="49" y="856" width="160" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text class="box-label" x="129" y="888" text-anchor="middle">events.ts</text>
-  <text class="box-sub" x="129" y="910" text-anchor="middle">H1 事件流 · 异步队列</text>
-  <text class="box-sub" x="129" y="927" text-anchor="middle">永不阻塞 append</text>
-
-  <rect x="219" y="856" width="172" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text class="box-label" x="305" y="888" text-anchor="middle">logger · diag-sink</text>
-  <text class="box-sub" x="305" y="910" text-anchor="middle">ignorable 事实 · JSONL</text>
-  <text class="box-sub" x="305" y="927" text-anchor="middle">2 MiB 滚动日志</text>
-
-  <rect x="401" y="856" width="160" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text class="box-label" x="481" y="888" text-anchor="middle">storage.ts</text>
-  <text class="box-sub" x="481" y="910" text-anchor="middle">KV · CAS · 四实体</text>
-  <text class="box-sub" x="481" y="927" text-anchor="middle">版本化读写</text>
-
-  <rect x="571" y="856" width="180" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text class="box-label" x="661" y="888" text-anchor="middle">history · tools</text>
-  <text class="box-sub" x="661" y="910" text-anchor="middle">surfaceOp replace · run 冲刷</text>
-  <text class="box-sub" x="661" y="927" text-anchor="middle">配对平衡守卫</text>
-
-  <rect x="761" y="856" width="160" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text class="box-label" x="841" y="888" text-anchor="middle">llm.ts</text>
-  <text class="box-sub" x="841" y="910" text-anchor="middle">辅助调用 · purpose 路由</text>
-  <text class="box-sub" x="841" y="927" text-anchor="middle">路由 → discriminator 配置</text>
-
-  <rect x="931" y="856" width="160" height="100" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
-  <text class="box-label" x="1011" y="888" text-anchor="middle">skills.ts</text>
-  <text class="box-sub" x="1011" y="910" text-anchor="middle">技能目录 + watch</text>
-  <text class="box-sub" x="1011" y="927" text-anchor="middle">前缀原料 · 引用守卫</text>
-
-  <!-- ======================= BAND 5 · DATA ======================= -->
-  <rect x="40" y="1032" width="1060" height="120" rx="14" fill="#fffbeb" stroke="#fde68a"/>
-  <text class="band-label" x="58" y="1058">数据 / 事实</text>
-
-  <rect x="49" y="1080" width="336" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
-  <text class="box-label" x="217" y="1104" text-anchor="middle" font-size="13">持久 KV — storageDomain（H10）</text>
-  <text class="box-sub" x="217" y="1125" text-anchor="middle">任务资料夹 · 项目档案 · 边界档案 · 优化产物</text>
-
-  <rect x="399" y="1080" width="342" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
-  <text class="box-label" x="570" y="1104" text-anchor="middle" font-size="13">会话事实 — ignorable JSONL</text>
-  <text class="box-sub" x="570" y="1125" text-anchor="middle">context-economy/*：task-boundary · judge-*</text>
-
-  <rect x="755" y="1080" width="336" height="56" rx="9" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
-  <text class="box-label" x="923" y="1104" text-anchor="middle" font-size="13">诊断日志</text>
-  <text class="box-sub" x="923" y="1125" text-anchor="middle">logs/context-economy.log · 2 MiB 滚动</text>
-
-  <!-- ======================= ARROWS (orthogonal polylines) ======================= -->
   <g fill="none" stroke="#475569" stroke-width="2">
-    <path d="M220,218 V328" marker-end="url(#arrow)"/>
-    <path d="M560,218 V328" marker-end="url(#arrow)"/>
-    <path d="M145,440 V548" marker-end="url(#arrow)"/>
-    <path d="M483,440 V548" marker-end="url(#arrow)"/>
-    <path d="M570,776 V800" stroke-width="2.5" marker-end="url(#arrow)"/>
-    <path d="M570,996 V1020" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path d="M237,228 V308" marker-end="url(#arrow)"/>
+    <path d="M619,228 V308" marker-end="url(#arrow)"/>
+    <path d="M1001,228 V308" marker-end="url(#arrow)"/>
+    <path d="M237,524 V604" marker-end="url(#arrow)"/>
+    <path d="M1001,524 V604" marker-end="url(#arrow)"/>
+    <path d="M620,1052 V1076" marker-end="url(#arrow)"/>
+    <path d="M620,1298 V1328" marker-end="url(#arrow)"/>
   </g>
-  <path d="M900,218 V328" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowPlanned)"/>
-  <path d="M900,440 V492 H657 V548" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowPlanned)"/>
 
-  <text class="flow-note" x="540" y="272" text-anchor="end">H1 事件流 → 旁路队列（platform/events）</text>
-  <text class="flow-note" x="916" y="272">星标点击 · P14b（H11）</text>
-  <text class="flow-note" x="582" y="793">core + domains 仅经 platform 触达 harness 状态</text>
-  <text class="flow-note" x="582" y="1013">持久化 · 发射事实 · 落日志</text>
+  <text class="flow-note" x="566" y="272" text-anchor="end">H1 事件流 → 旁路队列</text>
+  <text class="flow-note" x="1009" y="272" text-anchor="start">星标点击（H11）</text>
+  <text class="flow-note" x="612" y="1078" text-anchor="end">core + domains 仅经 platform 触达 harness</text>
+  <text class="flow-note" x="628" y="1326" text-anchor="start">持久化 · 发射事实 · 落日志</text>
 
-  <!-- ======================= FOOTER ======================= -->
-  <text class="footer" x="40" y="1186">实线 = 已实现（P0–P13）。虚线 = 计划中：P14a/b 提示词优化器 · R3 剪切（工具结果瘦身）· R4 压缩（历史压缩）。H* = harness 挂点（docs/10-wiring.md）。</text>
+  <text class="footer" x="40" y="1606">实线 = 已实现（R1–R4，含 F1–F13 / P14c·d / P17c / P20c 真机修正）。虚线 = 待验证方向。H* = harness 挂点（docs/10-wiring.md）。已退役设计（N 系列协商剪除 · T-loop）见 docs/legacy.md。</text>
 </svg>

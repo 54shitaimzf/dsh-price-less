@@ -22,9 +22,12 @@
 ## Table of Contents
 
 - [About The Project](#about-the-project)
+- [How It Works](#how-it-works)
 - [Current Status](#current-status)
 - [Features](#features)
 - [Architecture](#architecture)
+  - [Layers at a Glance](#layers-at-a-glance)
+  - [Key Mechanisms & Field Fixes](#key-mechanisms--field-fixes)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Source Installation](#source-installation)
@@ -51,6 +54,34 @@ Long AI-coding sessions get expensive — and drift. `dsh-price-less` is an unof
 - **Compaction**: folds closed tasks into a versioned archive with a hot tail, a 35%-of-window pressure path, and an overflow fuse
 - **Log-only & replayable**: every plugin action leaves a replayable fact log; on any failure it changes nothing — your content is never lost
 
+## How It Works
+
+One sentence: **you just say what you are working on; the plugin keeps the context lean, and never touches anything it isn't sure about.**
+
+Four defence layers fire in order, from earliest to latest:
+
+```mermaid
+flowchart LR
+    A["1. Write-time shaping<br/>before a tool result is booked"] --> B["2. Exchange-pair shear<br/>while a task is running"]
+    B --> C["3. Compaction<br/>task closed / window at 35%"]
+    C --> D["4. Restore<br/>on session restart"]
+```
+
+| Layer | When it fires | What it touches | What it never touches |
+|---|---|---|---|
+| 1. Write-time shaping | **before** a tool result is booked | process logs only (≥120 lines and ≥16 KiB) | failures, listings, data queries stay verbatim |
+| 2. Exchange-pair shear | while a task is running | reads superseded by a later write, declaration reads, finished question/verify runs | conclusions land as a notice — the original is not lost |
+| 3. Compaction | task closes, or the main-model window hits 35% | folds old content into "archive (digest) + hot tail (recent verbatim facts)" | errors never enter the hot tail; the archive stores digests, not pointers |
+| 4. Restore | session restart / resume | replays dossier and archive, recomputes state with pure functions | no model calls, no history edits, degrade only — never invent |
+
+Three rules hold across all four layers:
+
+- **Failure means keep**: if the criteria don't hold, parsing fails, or a call times out — no cut, no replace, no backfill.
+- **Cut points are fixed before a result is booked**: no dependence on model replies, no behavioural signals (they break the cache and cost more).
+- **Out-of-band**: plugin-internal flags never enter the model's view; the model only sees the tidied content.
+
+> To see what each action cost, read `logs/context-economy.log`; for the historical account, see [`docs/ledger-history.md`](docs/ledger-history.md).
+
 ## Current Status
 
 | Area | Status |
@@ -68,19 +99,30 @@ Long AI-coding sessions get expensive — and drift. `dsh-price-less` is an unof
 
 - **Task boundaries**: `/task`, `/task close`, `/task` — split continuous work into clearly bounded tasks
 - **Project brief**: `/init` proposal → your confirmation → persisted as project brief v1 (`project_frame`)
-- **Intent detection**: your explicit instruction first, then zero-cost keyword rules, then past verdicts, and only then a light model — anything unresolved stays untouched (fail-lazy)
+- **Intent detection**: explicit instruction → zero-cost keyword rules → past verdicts → light-model fallback; anything unresolved stays untouched (fail-lazy)
 - **Prompt optimizer + star button**: `/optimize-prompt` and the star button share one section; output = verbatim key facts plus a rewritten execution package, previewed before it is applied
-- **Tool shear**: T-entry write-time shaping (process logs only — ≥120 lines and ≥16 KiB; failures, listings and data queries stay verbatim), T0 superseded reads, T0-R declaration-table repair, and run flush for finished question/verification runs
-- **Compaction**: task-boundary folding into a versioned archive + hot tail; 35%-of-window pressure path; overflow fuse; restore ordering on session start
+- **Tool shear**: write-time shaping (process logs only), superseded reads, declaration-table repair, and run flush for finished question/verification runs
+- **Compaction**: task-boundary folding into a versioned archive + hot tail; 35%-of-window pressure path; overflow fuse; restore on session start
 - **Workspace isolation**: archive/prefix keys are scoped by the session workspace (`header.cwd`)
-- **Replayable facts**: all `context-economy/*` events are log-only and `ignorable`
-- **Graceful degradation**: if the harness lacks the ignorable channel, facts fall back to KV mirroring — still recorded, just stored elsewhere
+- **Log-only & replayable**: all `context-economy/*` events are log-only and `ignorable`; if the channel is missing, facts degrade to a KV mirror
 
 ## Architecture
 
 ![Architecture](docs/architecture.png)
 
-The diagram shows the implemented architecture with color-coded layers. How to read it in one line: you and the harness sit on top; `domains/` decides what to do, `core/` does the computing, `platform/` does the connecting — the bottom band is what gets recorded.
+> Source = [`docs/architecture.svg`](docs/architecture.svg) (Chinese version [`architecture.zh-CN.svg`](docs/architecture.zh-CN.svg)). Solid = implemented; dashed = pending validation. Each box is annotated with the field-fix ids that shaped it.
+
+### Layers at a Glance
+
+Top to bottom is the data flow; bottom to top is the "who obeys whom" constraint:
+
+| Layer | Plain language | Canonical term | Rule |
+|---|---|---|---|
+| Top | you and the harness | host | the event stream enters the plugin from the session |
+| `domains/` | decides **what to do** | orchestration | commands, intent detection, shear/compaction/restore wiring |
+| `core/` | decides **how to compute** | pure kernel | **zero harness imports**, computation only, unit-testable |
+| `platform/` | decides **how to connect** | adapter | the only harness touchpoint (H1–H15); swapping hosts touches this layer only |
+| Bottom | what is left behind | data / facts | durable KV + session facts + diagnostics, all replayable |
 
 ```text
 src/
@@ -93,6 +135,28 @@ src/
 client/         # settings card and star-button UI
 docs/           # design canon and work orders
 ```
+
+### Key Mechanisms & Field Fixes
+
+Every item below is landed in code and recorded in the ledger; the diagram annotates them next to the mechanism they belong to:
+
+| Fix | What it is | Ledger |
+|---|---|---|
+| F1 | The tools port must go through `ctx.inject(['tools'])`; otherwise shear idles entirely | §60 |
+| F2 | A 60 s verdict barrier before boundary compaction, so a new task doesn't start carrying the old task's context | §60 |
+| F3 | Workspace isolation: archive/prefix keys are keyed by the session `header.cwd` | §70 |
+| F4 / F5a | Diagnostics-log dedup; archive rendering leads with the conclusion plus type labels | §60 |
+| F8a / F8b | Estimator aligned with DSH `token-meter`; two-bucket density (CJK 1.5 / other 2.9 chars per token) | §61 |
+| F9a–F9g | Authoritative-surface ranges, product schema v2, hot-tail fact carrier, dual budget 10K/10K, relative paths | §62–§68 |
+| F10 | Contract v3: digest has zero pointers, hot tail points at the archive, archive stores digests only, errors excluded | §69 |
+| F11 | Listing commands (`Get-ChildItem` / `ls` / `dir` …) are never sheared | §70 |
+| F12 | Shadow mode is zero-byte: it records facts and never writes notes into content | §70 |
+| F13 | Discriminator v4: a task is sustained improvement on the same work object / similar goal; sub-tasks do not split it | §70 |
+| P14c / P14d | Discriminator-chain slimming; star-section product contract (verbatim key facts + bold rewrite, no labels, second click only re-opens) | §33 / §35–§37 |
+| P17c | Assembler HT soft gate + discard attribution | §44 |
+| P20c | Pressure valve = `pressureRatio` (0.35) × main-model window; no window → 125K → safety net 100K | §48 |
+| W2 | T-entry admission tightened to a process-log allowlist; failures / listings / data queries stay verbatim | §73 |
+| N series / T-loop | Negotiation shear and post-tool reasoning truncation **retired** (0 hits in the field / cache breakage) | §71 / §72 |
 
 ## Getting Started
 
@@ -135,11 +199,35 @@ Planned distribution forms (not available yet):
 /optimize-prompt
 ```
 
+- `/init` is only a proposal; `/init confirm` persists the brief. Cancel any time with `/init cancel`.
+- `/task` opens a new task; later messages are classified as continuation or new task by intent detection (when enabled); `/task close` marks the end, which is what triggers boundary compaction.
+- `/optimize-prompt` or the star button opens a preview first: it applies only after you confirm, and your edited version is final.
+- Any step can fail without changing anything — the worst case is that nothing happened.
+
 ## Configuration
 
-Configuration is grouped under `shear`, `compression` and `discriminator`.
+Configuration is grouped under `shear` (tool shear), `compression` (compaction) and `discriminator` (intent detection / auxiliary model). Use the GUI settings card, or write `~/.dsh/settings.yaml` directly:
 
-| Key | Type | Schema default | Description |
+```yaml
+context-economy:
+  shear:
+    enabled: true
+  compression:
+    boundary: true
+    pressure: true
+    pressureRatio: 0.35      # pressure valve = ratio × main-model context window
+    domainTokens: 125000     # assumed window when the main model declares none
+    retainTokens: 10000      # hot-tail budget
+    thresholdTokens: 100000  # absolute safety net
+    archiveCapTokens: 10000  # archive hard cap (digest only)
+  discriminator:
+    auto: false              # intent detection is off by default
+    # provider: deepseek-official
+    # model: deepseek-v4.1-flash-expires-on-0910
+    # reasoningEffort: high
+```
+
+| Key | Type | Default | Description |
 |---|---|---|---|
 | `shear.enabled` | boolean | `true` | Tool-shear master switch |
 | `compression.boundary` | boolean | `true` | Task-boundary compaction |
@@ -153,7 +241,7 @@ Configuration is grouped under `shear`, `compression` and `discriminator`.
 | `discriminator.provider` / `model` | string | unset | Auxiliary LLM route; set both to override, empty = follow the session model |
 | `discriminator.reasoningEffort` | string | unset | Auxiliary reasoning effort; unset = follow the model default |
 
-> The schema declares no default for `provider`/`model`. Left empty, auxiliary calls (intent detection, `/init`, star section, boundary compression) first **follow the current session model** (provider/model of the latest request), falling back to the built-in default `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910` when the session has no request yet; setting **both** values overrides it. Enabling `discriminator.auto` or using `/init`, the star button, or boundary compression may invoke the auxiliary LLM. This can incur API costs and may send relevant prompt content to the configured provider.
+> The schema declares no default for `provider`/`model`. Left empty, auxiliary calls (intent detection, `/init`, star section, boundary compaction) first **follow the current session model** (provider/model of the latest request), falling back to the built-in default `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910` when the session has no request yet; setting **both** values overrides it. Enabling `discriminator.auto` or using `/init`, the star button, or boundary compaction may invoke the auxiliary LLM. This can incur API costs and may send relevant prompt content to the configured provider.
 
 ## Commands
 
@@ -223,7 +311,7 @@ The design canon is maintained under [`docs/`](docs/):
 - **Not published**: the package is still marked `private` and there is no official npm/tarball release.
 - **A rebuilt `lib/` needs a DSH restart**: mechanisms load on the next restart.
 - **Intent detection is opt-in**: `discriminator.auto` defaults to `false` to avoid unexpected auxiliary LLM costs.
-- **Auxiliary LLM calls may cost money**: enabling intent detection, using `/init`, the star button, or boundary compression can send content to the configured provider.
+- **Auxiliary LLM calls may cost money**: enabling intent detection, using `/init`, the star button, or boundary compaction can send content to the configured provider.
 - **Ignorable-channel dependency**: if the host harness does not include the local ignorable channel, plugin facts are mirrored to KV instead of being written as session events. Replay and observability may be reduced until the upstream channel is merged.
 - **Archive docs are local-only**: `docs/implement/archive/` is gitignored; the full text stays in git history.
 - **Local checkout required**: building currently requires a local DeepSeek Harness source checkout and `dev_inject_plugin`.
