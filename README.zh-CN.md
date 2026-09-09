@@ -41,32 +41,38 @@
 
 ## 项目介绍
 
-AI 编程会话越长越贵，也越容易跑偏。`dsh-price-less` 是非官方的 DeepSeek Harness **上下文管家**：它替你记住“现在在干嘛”，自动整理送进模型的上下文——该留的留下，该删的删掉，拿不准的不动，让每个 token 都花在刀刃上。
+AI 编程会话越长越贵，也越容易跑偏。`dsh-price-less` 是非官方的 DeepSeek Harness **上下文管家**：它替你记住“现在在干嘛”，把送进模型的上下文整理得更瘦，拿不准的绝不动刀——让每个 token 都花在刀刃上。
 
 - **显式大任务（task）**：`/task` 一句话告诉插件现在在干嘛；开新任务、收尾旧任务，始终由你拍板
 - **项目档案（project frame）**：`/init` 一问一答生成项目背景卡，模型始终带着“这是个什么项目”干活
 - **自动识别**：判断每条消息是延续当前大任务，还是开了新的大任务——先关键词规则，拿不准才请轻量模型
-- **提示词优化器**：`/optimize-prompt` 手动整理当前提示词，未来与星标按钮共用同一入口
+- **星标按钮 / 提示词优化器**：一键把当前意图整理成确定化的执行包，先给你预览、确认后才生效
+- **工具剪切**：写时整形工具输出、剪掉被后续写入超越的旧读、冲刷已经结束的追问/验证 run
+- **压缩器**：把闭合的 task 折叠进带热尾的版本化档案，另有 35% 窗口压力路径与防溢出保险丝
 - **只记账、可回放**：插件每个动作都留下可回放的事实日志；任何失败都“不动刀”，绝不弄丢你的内容
 
 ## 当前状态
 
 | 区域 | 状态 |
 |---|---|
-| R1 平台底座（事件、存储、日志、模型调用） | 已完成 |
-| R2 识别与优化核心（P8–P13） | 已完成 |
-| P14a/P14b 提示词优化器与星标按钮 | 尚未接线 |
-| R3 剪切（工具结果瘦身）/ R4 压缩（历史压缩） | 计划中 |
+| R1 平台底座（事件、存储、技能目录、模型调用、历史改写、工具） | 已完成 |
+| R2 识别与优化核心（P8–P14d：大任务边界、项目档案、自动识别、提示词优化器、星标按钮） | 已完成 |
+| R3 剪切（写时整形、T0/T0-R、run 冲刷） | 已完成 |
+| R4 压缩（边界装配、热尾、压力路径、保险丝、恢复编排） | 已完成 |
+| 新构建生效 | 需要重启 DSH 加载重新构建的 `lib/` |
 | npm / tarball 发布 | 尚未发布 |
 
-> **重要**：自动识别默认**关闭**，需要显式设置 `discriminator.auto = true` 才会启用。`/optimize-prompt` 命令已注册，但完整提示词优化流程要等 P14b 后才可用。
+> **重要**：自动识别默认**关闭**，需要显式设置 `discriminator.auto = true` 才会启用。工具剪切（`shear.enabled`）与两条压缩路径默认开启。所有事实只记账；任何失败都不改动内容。
 
 ## 核心特性
 
 - **大任务边界**：`/task`、`/task close`、`/task` 查看状态——把连续的工作切成一段段边界清晰的大任务
 - **项目档案**：`/init` 提案 → 你确认 → 写入项目档案 v1（`project_frame`）
 - **自动识别**：先看你的显式指令，再跑零成本关键词规则，然后比对过往判定，最后才请轻量模型——任何一步拿不准就保持原样（fail-lazy）
-- **提示词优化器**：`/optimize-prompt` 入口，后续与星标按钮共用
+- **提示词优化器 + 星标按钮**：`/optimize-prompt` 与星标按钮共用同一断面；产物 = 关键事实逐字保留 + 大胆重写，先预览后生效
+- **工具剪切**：T-entry 写时整形（只处理过程日志——≥120 行且 ≥16 KiB；失败、列表、数据查询一律原文保留）、T0 被写超越的旧读、T0-R 声明表读件修复、以及结束的追问/验证 run 冲刷
+- **压缩器**：task 边界折叠进版本化档案 + 热尾；35% 窗口压力路径；防溢出保险丝；会话启动时的恢复编排
+- **工作区隔离**：档案/前缀键按会话工作区（`header.cwd`）隔离
 - **事实可回放**：`context-economy/*` 事件全部只记账（log-only）、不打扰会话（ignorable）
 - **优雅降级**：harness 缺少 ignorable 通道时自动降级为 KV 事实镜像——事实照样留底，只是换了存放处
 
@@ -74,7 +80,7 @@ AI 编程会话越长越贵，也越容易跑偏。`dsh-price-less` 是非官方
 
 ![架构](docs/architecture.zh-CN.png)
 
-上图是当前实现架构的彩色分层图，已实现的模块用实线/彩色标注，计划中的模块用虚线标注。一句话读图：顶层是你和 harness；domains 决定“做什么”，core 负责“怎么算”，platform 负责“怎么连”，最底层是留下来的三类数据。
+上图是当前实现架构的彩色分层图。一句话读图：顶层是你和 harness；domains 决定“做什么”，core 负责“怎么算”，platform 负责“怎么连”，最底层是留下来的数据。
 
 ```text
 src/
@@ -125,19 +131,29 @@ dev_inject_plugin /path/to/dsh-price-less
 /task 设计命令面
 /task
 /task close
+
+/optimize-prompt
 ```
 
 ## 配置
 
-当前配置集中在 `discriminator` 命名空间。
+配置分为 `shear`、`compression`、`discriminator` 三组。
 
 | 配置 | 类型 | schema 默认值 | 说明 |
 |---|---|---|---|
+| `shear.enabled` | boolean | `true` | 工具剪切总开关 |
+| `compression.boundary` | boolean | `true` | task 边界压缩 |
+| `compression.pressure` | boolean | `true` | 压力路径压缩 |
+| `compression.pressureRatio` | number | `0.35` | 压力阀门 = 比例 × 主模型上下文窗口 |
+| `compression.domainTokens` | number | `125000` | 主模型未声明窗口时的假定窗口 |
+| `compression.retainTokens` | number | `10000` | 热尾预算 |
+| `compression.thresholdTokens` | number | `100000` | 末位绝对安全网 |
+| `compression.archiveCapTokens` | number | `10000` | 档案区硬帽（只计总分） |
 | `discriminator.auto` | boolean | `false` | 自动识别总开关 |
-| `discriminator.provider` | string | 未设置 | 辅助模型 provider；与 `model` 同时设置时覆盖内置预设 |
-| `discriminator.model` | string | 未设置 | 辅助模型；与 `provider` 同时设置时覆盖内置预设 |
+| `discriminator.provider` / `model` | string | 未设置 | 辅助模型路由；两项都设置时覆盖，留空则跟随会话模型 |
+| `discriminator.reasoningEffort` | string | 未设置 | 辅助调用推理档；未设置 = 跟随模型默认 |
 
-> schema 未给 `provider` / `model` 声明默认值。留空时，辅助调用（自动识别、`/init`、星标断面）优先**跟随当前会话模型**（最近一次请求的 provider/model），无请求记录时回落内置默认 `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910`；两项**都**填写时以配置为准。开启 `discriminator.auto` 或使用 `/init` 可能会调用辅助模型，产生 API 费用，并可能把相关提示词内容发送给所配置的服务商。
+> schema 未给 `provider` / `model` 声明默认值。留空时，辅助调用（自动识别、`/init`、星标断面、边界压缩）优先**跟随当前会话模型**（最近一次请求的 provider/model），无请求记录时回落内置默认 `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910`；两项**都**填写时以配置为准。开启 `discriminator.auto` 或使用 `/init`、星标按钮、边界压缩可能会调用辅助模型，产生 API 费用，并可能把相关提示词内容发送给所配置的服务商。
 
 ## 命令
 
@@ -150,7 +166,7 @@ dev_inject_plugin /path/to/dsh-price-less
 | `/init confirm` | 确认并写入项目档案 v1（`project_frame`） |
 | `/init cancel` | 取消当前提案 |
 | `/init` | 查看当前项目档案 |
-| `/optimize-prompt` | 提示词优化器入口；完整流程待 P14b |
+| `/optimize-prompt` | 命令形态的提示词优化器入口（星标按钮是主界面） |
 
 ## 会话事实
 
@@ -159,9 +175,13 @@ dev_inject_plugin /path/to/dsh-price-less
 | 事件 | 含义 |
 |---|---|
 | `context-economy/task-boundary` | 大任务边界事实（开了 / 关了哪个任务） |
-| `context-economy/judge-recorded` | 一次自动识别的完整记录 |
-| `context-economy/judge-error` | 一次识别失败的记录 |
-| `context-economy/judge-verdict` | 识别结论：是不是新大任务 |
+| `context-economy/judge-recorded` / `judge-error` / `judge-verdict` | 自动识别记录与结论 |
+| `context-economy/optimize-run` | 星标断面全账 |
+| `context-economy/shear-applied` / `shear-decision` / `shear-error` / `shear-run-plan` | 剪切落刀、裁决、失败、星标剪切清单 |
+| `context-economy/assemble-run` | 边界装配账 |
+| `context-economy/compress-run` | 压缩调用账 |
+| `context-economy/pressure-fired` / `hard-truncate` | 压力触发 / 防溢出保险丝 |
+| `context-economy/restore-step` / `restore-degraded` / `restore-done` | 会话启动恢复编排 |
 
 ## 文档
 
@@ -175,33 +195,38 @@ dev_inject_plugin /path/to/dsh-price-less
 - [05 · 宪法](docs/05-constitution.md)
 - [06 · 缓存](docs/06-cache.md)
 - [07 · 度量](docs/07-metrics.md)
+- [08 · 实验协议（已封存）](docs/08-experiment.md)
 - [09 · 状态](docs/09-state.md)
 - [10 · 挂点](docs/10-wiring.md)
 - [11 · 工程结构](docs/11-structure.md)
 - [12 · 平台能力](docs/12-platform-capabilities.md)
 - [13 · DSH 插件规范](docs/13-harness-plugin-spec.md)
-- [施工总纲](docs/implement/archive/00-master.md)
+- [legacy · 退役设计存档](docs/legacy.md)
+- [TODO · 待验证方向](docs/implement/TODO.md)
+- [ledger-history · 账本快照存档](docs/ledger-history.md)
+
+> `docs/implement/archive/`（R1–R4 工单与退役特性文档）为**本地只读**：由 `.gitignore` 排除，全文保留在 git 历史中。
 
 ## 路线图
 
 | 阶段 | 范围 | 状态 |
 |---|---|---|
 | R1 | 平台底座：事件、存储、技能目录、模型调用、历史改写、工具 | 已完成 |
-| R2 | 识别域：大任务边界、项目档案、自动识别与提示词优化 | P8–P13 已完成；P14 待接入 |
-| R3 | 剪切：工具结果瘦身 | 计划中 |
-| R4 | 压缩：历史压缩 | 计划中 |
-
-详细工单见 [docs/implement/archive/00-master.md](docs/implement/archive/00-master.md)。
+| R2 | 识别与优化：大任务边界、项目档案、自动识别、提示词优化器、星标按钮 | 已完成 |
+| R3 | 剪切：工具结果瘦身、被超越旧读、run 冲刷 | 已完成 |
+| R4 | 压缩：边界装配、压力路径、保险丝、恢复编排 | 已完成 |
+| B 系列 | 分支-合并上下文（checkout/merge）——空间换效率 | 待验证 —— [TODO §3](docs/implement/TODO.md) |
+| R 系列 | 思考回放剪除 | 待验证 —— [TODO §3](docs/implement/TODO.md) |
 
 ## 已知限制
 
 - **尚未发布**：`package.json` 仍标记为 `private`，暂无官方 npm/tarball 发布。
+- **重新构建后需重启**：机制在下次重启时加载新的 `lib/`。
 - **自动识别默认关闭**：`discriminator.auto` 默认为 `false`，避免产生非预期的辅助模型费用。
-- **提示词优化器不完整**：`/optimize-prompt` 目前只是入口，完整星标流程依赖 P14b。
-- **R3/R4 尚未实现**：剪切（工具结果瘦身）与压缩（历史压缩）仍在设计/计划阶段。
-- **需要本地 checkout**：当前构建需要本地 DeepSeek Harness 源码仓库和 `dev_inject_plugin`。
+- **辅助模型调用可能产生费用**：开启自动识别、使用 `/init`、星标按钮或边界压缩，都可能把内容发送给所配置的服务商。
 - **依赖 ignorable 通道**：如果宿主 harness 未包含本地 ignorable 通道，插件事实会降级到 KV 镜像，而不是写入会话事件；在上游通道合并前，回放和可观测性可能受限。
-- **模型调用**：开启自动识别或使用 `/init` 可能将内容发送给所配置的辅助模型，并产生费用。
+- **档案文档仅本地**：`docs/implement/archive/` 被 `.gitignore` 排除，全文保留在 git 历史中。
+- **需要本地 checkout**：当前构建需要本地 DeepSeek Harness 源码仓库和 `dev_inject_plugin`。
 - **非隶属关系**：本项目与 DeepSeek 无隶属关系。
 
 ## 贡献

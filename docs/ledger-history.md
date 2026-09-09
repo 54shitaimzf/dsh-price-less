@@ -3037,3 +3037,38 @@ cargo 源码帧、python traceback 回显、maven `Tests run:` 汇总）。
 
 **未动**：`docs/ledger-history.md` 正文（只增）；活机制代码路径；`experiments/evalground/` 证据。
 
+---
+
+## §76 两个待验证方向的调研与登记（2026-09-09；提交 = 本账本同提交）
+
+**背景**：用户提出「剪除历史思考」与「分支-合并上下文（checkout/merge）」两个方向。本轮只做调研与登记，**零机制代码改动**；两项均列 `docs/implement/TODO.md` §3 待验证。
+
+**一、思考回放剪除（R 系列）——成本模型与三方案实测**
+
+- 口径：会话 JSONL 逐请求重放「请求前缀里的 reasoning token」（token-请求 = 复利量，docs/07 §4）；单价 = `datasets/model-pricing.json` `deepseek-v4-flash-offpeak`（$0.22 输入 / $0.007 缓存读 / $0.66 输出每 1M）。
+- 复利：cur5 思考文本 2,953,088 token → 226,002,753 token-请求 = **76.5×**；arch-big 2,523,865 → 263,832,117 = **104.5×**。
+- 账单基线：cur5 = $8.01（input $1.10 + cacheRead $4.22 + output $2.68，3,029 请求）；思考回放 = **$1.26–1.58（15.7%–19.8%）**——估计器口径 $1.58，按 provider `reasoningTokens`（2,345,996）与回放前缀比修正后约 $1.26–1.40；插件两桶估计器相对 provider 高估 13.4%–26%（表面前缀 689.7M vs provider prompt 608.2M）。
+- 三方案（42 会话 / 6,429 请求 / 435 轮，offpeak）：
+
+| 方案 | cur5（$8.01） | arch-big（$8.85） | 语料（$14.46） |
+|---|---|---|---|
+| 零断裂（适配器不回传已完成回合 reasoning） | +$1.56（19.5%） | +$1.83（20.7%） | +$2.25（15.6%） |
+| 插件渐进剪（H2+H4，保留带工具调用的最新块） | +$0.57（7.1%） | +$1.29（14.6%） | +$0.01（0.1%） |
+| 轮边界一次性全剪 | +$0.07（0.9%） | +$0.84（9.5%） | −$0.22（−1.5%） |
+
+- 回本公式：N* = (尾巴/块) × (输入价/缓存价 − 1) = 1.95–2.21 × 30.4 ≈ **59–67 次回放**；语料实测平均 66.6 次 → 渐进剪正好压线；轮边界收益窗口仅下一轮（14.8 请求/轮）→ 净亏。轮边界单次断裂尾巴 ≈ 整轮（cur5 平均 33.7K token），渐进剪 ≈ 一个工具结果（1.7K）。
+- 协议硬约束：正在等工具结果的 assistant 消息必须保留 `reasoning_content`（`packages/llm/llm-deepseek/src/serialize.ts:233`；网关靠该文本哈希恢复 thinking signature），只能剪已完成回合。行为 A/B 未做 → 不施工。
+- 脚本（只读，在 `D:\tmp\fmt\`）：`reason-cost4.mjs`（三方案/语料）、`reason-turn.mjs`（轮边界）、`reason-verify.mjs`（复利核对）。
+
+**二、分支-合并上下文（B 系列）——harness 改动三档**
+
+- 档 1（**零 harness 改动**）：`subagent-fork-in-process` 已提供「父会话最后一个 turn/end 之前的完整前缀」种子；`SessionHeader.parentSession`/`isSeeded`/`session/end-seed` 提供血缘；子会话独立日志与缓存前缀；输出经 H6 `tools/post-execute` 整形成合并产物（append，零断裂）；分支图 = 插件 KV。
+- 档 2（**3–5 文件加法式**）：选择性种子——现契约 `ContinuableCreateSpec.seed` 要求「从 seq 0 连续、平衡、过 invariant」（`packages/subagent/subagent/src/types.ts:237-243`；`packages/core/session/src/invariant.ts:60`），故子会话必背父全量前缀；放宽为「任意合法合成种子」需改 `subagent/types.ts` + `subagent-fork-in-process` + `subagent-in-process-driver` + session 契约文档/测试。
+- 档 3（**不建议**）：同会话多分支 / 跨会话检出 / 事件级合并——`seq === 数组下标`、surface 单列表、`surfaceOp replace` 只引用本会话 seq、无多 head；要动 `core/session`（types/surface/index/invariant/seq-ranges）+ `core/agent-loop` + `compaction` + `client` + 存储格式版本。
+- 先验数据（42 会话）：单步多工具调用（天然并行面）**5.5%**（arch-big 13.3%、cur5 0%）；subagent 委派 **5 / 6,631** 工具调用 → 自然可分支面小，M0 未跑前不立项。
+- 经济学要点：fork 继承全量前缀 → 不选择性种子时只省父会话，子会话照背全上下文；N 并行子会话 = N 份父上下文成本。
+
+**文档口径同步**：`docs/implement/TODO.md` §3 新增 B/R 两行 + 变更记录；`docs/00-overview.md` §11 路线图新增两行；`docs/legacy.md` §5 编排管道加复评指针；`README.md` / `README.zh-CN.md` 现状/特性/配置/命令/事实/路线图/限制全量对齐当前实现（R1–R4 已完成）。
+
+**验收**：`npm run assert` = `ok=true vacuous=[]`（零机制代码改动）。
+
