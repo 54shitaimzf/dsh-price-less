@@ -293,7 +293,7 @@ The design canon is maintained under [`docs/`](docs/):
 - [TODO · Pending directions](docs/implement/TODO.md)
 - [ledger-history · Snapshot archive](docs/ledger-history.md)
 
-> `docs/implement/archive/` (R1–R4 work orders and retired-feature docs) is **local-only**: it is excluded by `.gitignore`, and the full text remains in git history.
+> Inside `docs/implement/archive/`, the R1–R4 work orders and the remaining retired docs are **local-only** (excluded by `.gitignore`; the full text remains in git history). Two research records are tracked: the [W2c output-shape evaluation](docs/implement/archive/W2c-output-shape.md) and the [N-series master](docs/implement/archive/00-master-N-series.md).
 
 ## Roadmap
 
@@ -313,7 +313,7 @@ The design canon is maintained under [`docs/`](docs/):
 - **Intent detection is opt-in**: `discriminator.auto` defaults to `false` to avoid unexpected auxiliary LLM costs.
 - **Auxiliary LLM calls may cost money**: enabling intent detection, using `/init`, the star button, or boundary compaction can send content to the configured provider.
 - **Ignorable-channel dependency**: if the host harness does not include the local ignorable channel, plugin facts are mirrored to KV instead of being written as session events. Replay and observability may be reduced until the upstream channel is merged.
-- **Archive docs are local-only**: `docs/implement/archive/` is gitignored; the full text stays in git history.
+- **Archive docs are mostly local-only**: `docs/implement/archive/` is gitignored by default (the full text stays in git history); only `W2c-output-shape.md` and `00-master-N-series.md` are tracked.
 - **Local checkout required**: building currently requires a local DeepSeek Harness source checkout and `dev_inject_plugin`.
 - **Non-affiliation**: this project is not affiliated with DeepSeek.
 

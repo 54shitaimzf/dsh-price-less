@@ -293,7 +293,7 @@ context-economy:
 - [TODO · 待验证方向](docs/implement/TODO.md)
 - [ledger-history · 账本快照存档](docs/ledger-history.md)
 
-> `docs/implement/archive/`（R1–R4 工单与退役特性文档）为**本地只读**：由 `.gitignore` 排除，全文保留在 git 历史中。
+> `docs/implement/archive/` 里的 R1–R4 工单与其余退役文档为**本地只读**（`.gitignore` 排除，全文保留在 git 历史）；其中两份研究记录已入库：[W2c 形态解析评估](docs/implement/archive/W2c-output-shape.md) 与 [N 系列总纲](docs/implement/archive/00-master-N-series.md)。
 
 ## 路线图
 
@@ -313,7 +313,7 @@ context-economy:
 - **自动识别默认关闭**：`discriminator.auto` 默认为 `false`，避免产生非预期的辅助模型费用。
 - **辅助模型调用可能产生费用**：开启自动识别、使用 `/init`、星标按钮或边界压缩，都可能把内容发送给所配置的服务商。
 - **依赖 ignorable 通道**：如果宿主 harness 未包含本地 ignorable 通道，插件事实会降级到 KV 镜像，而不是写入会话事件；在上游通道合并前，回放和可观测性可能受限。
-- **档案文档仅本地**：`docs/implement/archive/` 被 `.gitignore` 排除，全文保留在 git 历史中。
+- **档案文档多为本地**：`docs/implement/archive/` 默认被 `.gitignore` 排除（全文保留在 git 历史）；仅 `W2c-output-shape.md` 与 `00-master-N-series.md` 两份研究记录入库。
 - **需要本地 checkout**：当前构建需要本地 DeepSeek Harness 源码仓库和 `dev_inject_plugin`。
 - **非隶属关系**：本项目与 DeepSeek 无隶属关系。
 

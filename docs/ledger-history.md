@@ -3097,4 +3097,25 @@ cargo 源码帧、python traceback 回显、maven `Tests run:` 汇总）。
 
 **验收**：纯文档/图源改动，零机制代码；`npm run assert` = `ok=true vacuous=[]`；PNG 目视核对（双语各一次）无裁切、无错字。
 
+---
+
+## §78 两份历史研究记录入库（2026-09-09；提交 = 本账本同提交）
+
+**触发**：用户质询「`W2c-output-shape.md`（73 工具调研逐工具明细）与改名后的 `00-master-N-series.md` 是真的吗？请提交」。
+核查 = **两份都真实存在**（本地 `docs/implement/archive/`，281 行 / 101 行），此前因 `.gitignore` 的 `archive/` 规则只在本地、GitHub 上不可见，用户无法自行核对。
+
+**入库范围（只这两份，其余 archive/ 仍本地只读）**：
+
+| 文件 | 内容 | 状态 |
+|---|---|---|
+| `docs/implement/archive/W2c-output-shape.md` | W2 方向② 形态解析器评估：73 工具确认 / 7 UNCONFIRMED、严格 drop-list 设计、重算节约 0.14%–0.29%（上限 0.44%）、旧口径 90–99% 误报审计 | 已关闭（账本 §74），入库为只读评估记录 |
+| `docs/implement/archive/00-master-N-series.md` | N 系列「协商剪除」施工总纲（N1–N6 单元表 + 出门门槛） | 已退役（账本 §71），入库为只读历史 |
+
+**做法**：`.gitignore` 增例外块（`!docs/implement/archive/` → `docs/implement/archive/*` → 两条 `!` 白名单），其余归档仍不入库；
+两份文件的相对链接按新位置修正（N 总纲 `TODO.md`→`../`、`docs/0X`→`../../`、`N1`→`../`；W2c 探针引用标注「已随方向关闭删除」）。
+**口径同步**：`README.md` / `README.zh-CN.md`（档案说明 + 已知限制）、`docs/legacy.md` §0 表行 9/11 + §9/§11 全文指针。
+
+**验收**：`npm run assert` = `ok=true vacuous=[]`；`git check-ignore` 确认两份文件不再被忽略、其余 archive/ 文件仍被忽略。
+
+
 

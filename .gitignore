@@ -13,6 +13,12 @@ reports/
 .zcode/
 archive/
 
+# 例外：两份历史研究记录入库（其余 archive/ 仍本地只读，全文在 git 历史）
+!docs/implement/archive/
+docs/implement/archive/*
+!docs/implement/archive/00-master-N-series.md
+!docs/implement/archive/W2c-output-shape.md
+
 # 已废弃的本地 embedding（granite-97m 曾误入历史，2026-09 已从历史与工作区移除）
 models/
 

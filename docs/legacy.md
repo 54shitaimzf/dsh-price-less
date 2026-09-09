@@ -18,9 +18,9 @@
 | 6 | 渲染转发提案 | 评估结论为否 | — | §6（git 历史 docs/14-render-forward.md） |
 | 7 | embedding 选型与内嵌运行时 | 成本远超收益 | `EmbeddingPort` 空壳保留为回退链第 4 级 | §7（git 历史 docs/11-embedding.md） |
 | 8 | 页式/快照/补丁链/CAS 文件工具 | DSH 原生工具已覆盖 | — | §8（git 历史 docs/15 §2–§5） |
-| 9 | **N 系列协商剪除**（N2 结论契约 / N3 影子模式 / T-note 注记 / CUT-OK·CUT-HOLD 协议 / `shear.negotiate`） | 真机 44 会话 633 选样 68 注记 → CUT-OK 0 / CUT-HOLD 0 / 无回复 100%；叠加 N2 探针 0/134（账本 §71） | 已删除：`core/shear/{negotiate,conclusion}.ts`、两型 `shear-negotiation-*` 事实、`appendContent`、`shearNoteAttached`/`thinkingCutTokens` 字段；N1 分类器保留 | §9；工单封存 `implement/archive/{00-master-N-series,N2-conclusion-contract,N3-shadow-mode}.md` |
+| 9 | **N 系列协商剪除**（N2 结论契约 / N3 影子模式 / T-note 注记 / CUT-OK·CUT-HOLD 协议 / `shear.negotiate`） | 真机 44 会话 633 选样 68 注记 → CUT-OK 0 / CUT-HOLD 0 / 无回复 100%；叠加 N2 探针 0/134（账本 §71） | 已删除：`core/shear/{negotiate,conclusion}.ts`、两型 `shear-negotiation-*` 事实、`appendContent`、`shearNoteAttached`/`thinkingCutTokens` 字段；N1 分类器保留 | §9；工单封存 `implement/archive/{00-master-N-series,N2-conclusion-contract,N3-shadow-mode}.md`（N 总纲已入库） |
 | 10 | **T-loop 工具思考后截断** | 插件不是「模型是否已消费结果」的权威；等后续轮次再剪必改史断缓存（账本 §72） | 已删除：`ShearOp.stub-replace`、`T-loop` 档、`loopMaxConclusionChars`（策略 v2→v3） | §10 |
-| 11 | **W2 方向② 形态解析器**（测试/编译器输出形态匹配） | 实测 ≤0.44%、宽目录零增量、旧口径 90–99% 误报（账本 §74） | 未施工（仅评估探针，已删） | §11；评估记录 `implement/archive/W2c-output-shape.md` |
+| 11 | **W2 方向② 形态解析器**（测试/编译器输出形态匹配） | 实测 ≤0.44%、宽目录零增量、旧口径 90–99% 误报（账本 §74） | 未施工（仅评估探针，已删） | §11；评估记录 [`implement/archive/W2c-output-shape.md`](implement/archive/W2c-output-shape.md)（已入库） |
 | 12 | **R1–R4 工单与验收脚本** | 已封存为历史记录 | 工单在 `implement/archive/`；失效脚本在 `scripts/archive/` | §12 |
 | 13 | **实验框架 evalground** | 依赖清退前生产 lib，随残留清空中断 | 封存只读（`runs/`/`datasets/` 保全） | §13；`experiments/evalground/SEALED.md` |
 
@@ -118,7 +118,7 @@
   `T-note` 档、`CUT-OK`/`CUT-HOLD` 标记协议、预设 persona 协议段、`platform/tools.ts` `appendContent`
   （T-note 追加能力）、账本 `shearNoteAttached`/`thinkingCutTokens`、域 stats `notesAttached` 字段、
   `scripts/probe-n2.mjs`、`scripts/verify-p15{a,b}.mjs`。
-- **全文**：`implement/archive/{00-master-N-series,N2-conclusion-contract,N3-shadow-mode}.md`（只读，本地保全）；
+- **全文**：`implement/archive/{00-master-N-series,N2-conclusion-contract,N3-shadow-mode}.md`（只读；**N 总纲已入库**，N2/N3 本地保全）；
   git 历史 `docs/implement/{00-master,N2-conclusion-contract,N3-shadow-mode}.md`。
 
 ## 10. T-loop（工具思考后截断）
@@ -136,7 +136,7 @@
 - **为何关闭（用户裁定 2026-09-09，账本 §74）**：73 工具形态调研后实测——严格 drop-list 仅覆盖
   模型可见工具结果池的 **0.14%–0.29%**；宽 20+ 家族目录与仅 vitest 结果一致；语料上限 **0.44%**；
   唯一可安全丢的噪声类 = 测试运行器逐条 `✓` 行。旧口径的 18.9%/20.9% 是 90–99% 文件转储误报。
-- **后继**：无（关闭）。评估记录 `implement/archive/W2c-output-shape.md`（只读）；W2 剩余方向 ① 结论型/
+- **后继**：无（关闭）。评估记录 [`implement/archive/W2c-output-shape.md`](implement/archive/W2c-output-shape.md)（只读，已入库）；W2 剩余方向 ① 结论型/
   事实型准入分层、③ 同结果内确定性去重见 [TODO.md](implement/TODO.md) §3。
 
 ## 12. R1–R4 工单与验收脚本封存
