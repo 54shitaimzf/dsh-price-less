@@ -74,6 +74,15 @@ function makeClientCtx() {
     slots,
     settingsScope: { bind: vi.fn(() => scope) },
     remote,
+    // U17④：进度条经 ctx.sessions.binding(sessionId).eventSource 读会话事件窗。
+    sessions: {
+      binding: vi.fn((_id: string) => ({
+        eventSource: {
+          getSnapshot: () => ({ entries: [], hasMore: false, revision: 0, change: { kind: 'replace', entries: [] } }),
+          subscribe: () => () => {},
+        },
+      })),
+    },
     on: vi.fn((name: string, _fn: unknown) => {
       connectionEvents.push(name)
       const unsub = () => { unsubs.splice(unsubs.indexOf(unsub), 1) }
@@ -102,8 +111,8 @@ describe('client apply 冒烟（P1.2）', () => {
   it('槽注册面正确：settings.plugin.item + key=context-economy + face/actions 完整', async () => {
     const { ctx, registrations, slotsCalls } = makeClientCtx()
     expect(() => apply(ctx as never)).not.toThrow()
-    expect(slotsCalls).toEqual(['settings.plugin.item', 'conversation.input.right'])
-    expect(registrations).toHaveLength(2)
+    expect(slotsCalls).toEqual(['settings.plugin.item', 'conversation.input.right', 'conversation.input.dock'])
+    expect(registrations).toHaveLength(3)
     const reg = registrations.find((r) => r.options.name === 'settings.plugin.item')!
     expect(reg.options).toMatchObject({ name: 'settings.plugin.item', key: CONTEXT_ECONOMY_NS })
     expect(reg.component).toBeTypeOf('function')
@@ -124,6 +133,20 @@ describe('client apply 冒烟（P1.2）', () => {
     const result = await starFace.star!.preview!('session-1', 'draft')
     expect(result).toMatchObject({ ok: false, code: 'CE_STAR_UNAVAILABLE' })
     expect(ctx.get).toHaveBeenCalledWith('connection')
+
+    // U17④：进度条槽位——数据源是会话事件窗的观察源（无人订阅时不挂 feed；空闲 = null）。
+    const dockReg = registrations.find((r) => r.options.name === 'conversation.input.dock')!
+    expect(dockReg.options).toMatchObject({
+      name: 'conversation.input.dock', id: 'context-economy-compaction-progress', order: 20,
+    })
+    const dockFace = dockReg.inject('session-1') as {
+      hooks?: { compactionProgress?: { getSnapshot: () => unknown; subscribe: (l: () => void) => () => void } }
+    }
+    const source = dockFace.hooks?.compactionProgress
+    expect(source?.getSnapshot).toBeTypeOf('function')
+    expect(source?.subscribe).toBeTypeOf('function')
+    expect(source!.getSnapshot()).toBeNull()
+    expect(ctx.sessions.binding).toHaveBeenCalledWith('session-1')
   })
 
   it('订阅面完整：scope/模型目录 + llm/adapters-updated + settings/document-updated + connection/reset', async () => {

@@ -24,8 +24,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+// U17④：type-only 拉入 ctx.sessions（会话绑定 → 事件窗）与 SessionEventWindow 类型面。
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EconomyCard } from './Card.tsx'
+import { CompactionProgressDock, type CompactionProgressInjected } from './CompactionProgress.tsx'
+import { createCompactionProgressSource } from './compaction-progress.ts'
 import { EconomyCardController, type EconomyCardFace } from './controller.ts'
 import { StarButton } from './star/StarButton.tsx'
 import { createHostStarBridge } from './star/star-bridge.ts'
@@ -37,7 +41,7 @@ export const name = 'dsh-price-less'
 export const CONTEXT_ECONOMY_NS = 'context-economy'
 
 /** 浏览器插件所需服务（fiber 注入）。 */
-export const inject = ['slots', 'settingsScope', 'remote', 'remote.session', 'connection']
+export const inject = ['slots', 'settingsScope', 'remote', 'remote.session', 'connection', 'sessions']
 
 /**
  * 挂载配置卡片。
@@ -86,5 +90,20 @@ export function apply(ctx: ClientContext): void {
       order: 10,
       inject: (sessionId: SessionId) => ({ star: starBridge }),
     }, StarButton)
+  })
+
+  // U17④：压缩进度条。数据源 = 该会话的事件窗（`context-economy/*` 事实经 session/follow 到达，
+  // ignorable 事件不过滤）⇒ 不新增宿主→浏览器的推送通道，也就不存在"第二投递路径"的漂移面。
+  ctx.slots.inject('conversation.input.dock', function* () {
+    yield ctx.slots.register({
+      name: 'conversation.input.dock',
+      id: 'context-economy-compaction-progress',
+      order: 20,
+      inject: (sessionId: SessionId): CompactionProgressInjected => {
+        const binding = ctx.sessions.binding(sessionId)
+        if (binding === undefined) throw new Error(`context-economy: session "${String(sessionId)}" is unavailable`)
+        return { hooks: { compactionProgress: createCompactionProgressSource(binding.eventSource) } }
+      },
+    }, CompactionProgressDock)
   })
 }

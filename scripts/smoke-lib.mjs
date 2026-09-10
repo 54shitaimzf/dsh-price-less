@@ -7,6 +7,9 @@
  * 一项都没有（`docs/14 §4` 曾误称有，已于 2026-09-11 改正）。通道回环请跑
  * **`npm run probe:channel`**（`scripts/probe-channel.mjs`）。
  */
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { resolveJudgeModel, CE_JUDGE_NO_ROUTE } from '../lib/domains/input.js'
 import { resolveInitModel } from '../lib/domains/commands.js'
 import { CE_LLM_TIMEOUT_CODE, CE_LLM_TIMEOUT_MS, streamCeLlm } from '../lib/platform/llm.js'
@@ -20,6 +23,7 @@ import { createEventPump } from '../lib/platform/events.js'
 import { resolveConfig } from '../lib/config.js'
 
 const results = []
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const check = (name, ok, detail) => results.push({ name, ok, detail: String(detail) })
 
 // ——— U8：无内置默认模型 ———
@@ -110,6 +114,17 @@ check('U13.4 未知 class 不进分布', JSON.stringify(ledger.judgeVerdictDist)
   check('U13.5 自馈事件走下一轮且不丢', JSON.stringify(seen) === '[1,100,101,102]', JSON.stringify(seen))
   check('U13.5 派发计数与队列归零', pump.stats().dispatched === 4 && pump.stats().depth === 0, JSON.stringify(pump.stats()))
   pump.dispose()
+}
+
+// ——— U17④：压缩进度事实——宿主事实名 ↔ 客户端渲染面的**跨半边契约** ———
+// 客户端不许 import 宿主源码（S4），两侧靠同一字面耦合 ⇒ 漂移是**静默**的（进度条永不出现，
+// 无任何报错）。此处在产物层钉死：宿主 lib 的常量 === 客户端 bundle 里的字面。
+{
+  const { COMPACT_PROGRESS_FACT_TYPE } = await import('../lib/domains/compaction-facts.js')
+  const clientBundle = readFileSync(path.join(ROOT, 'lib', 'client.js'), 'utf8')
+  check('U17④ 宿主进度事实名', COMPACT_PROGRESS_FACT_TYPE === 'context-economy/compact-progress', COMPACT_PROGRESS_FACT_TYPE)
+  check('U17④ 客户端字面与宿主一致（静默漂移守卫）', clientBundle.includes(COMPACT_PROGRESS_FACT_TYPE), 'lib/client.js')
+  check('U17④ 进度条槽位真的打进 bundle', clientBundle.includes('conversation.input.dock'), 'lib/client.js')
 }
 
 const failed = results.filter((r) => !r.ok)

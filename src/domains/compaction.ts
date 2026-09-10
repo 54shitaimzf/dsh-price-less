@@ -55,6 +55,7 @@ import {
   type ArchiveStoreBody,
   type BoundaryProduct,
   type CompressCheckpoint,
+  type CompressMode,
   type CompressPolicy,
   type PressureProduct,
 } from '../core/compress/index.ts'
@@ -78,7 +79,7 @@ import type { CompactionOutcome, CompactionProduct } from '../platform/compactio
 import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
 import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
-import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
+import { COMPRESS_RUN_FACT_TYPE, COMPACT_PROGRESS_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE, type CompressRunFactData, type PressureFireFactData } from './compaction-facts.ts'
 
 const ZERO_DROPS: HotTailDropCounts = { badDecl: 0, unknownUnit: 0, remap: 0, fetch: 0, dup: 0, factReject: 0 }
 
@@ -326,6 +327,39 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   let disposed = false
 
   /**
+   * ④ 压缩进度提示（宿主半边）：一次**模型调用**的前后各发一条 ignorable 事实。
+   *
+   * 成对由 `try/finally` 保证——异常、超时、任意早退都不会留下未闭合的 `start`
+   * （跨函数的"尝试级"进度要散落十余处收尾，必漏；见 `core/compress/ledger.ts` 的取舍说明）。
+   * 缓存命中不会走到这里（零模型调用 = 零进度），与 04 §6 的内容寻址复用语义一致。
+   *
+   * @param session - 所属会话（事实落它的日志）。
+   * @param mode - 'boundary' 边界压缩 / 'pressure' 压力折叠（含保险丝与溢出接管）。
+   * @param range - 本次调用针对的被压区间端点（可缺省：压力路径的区间在调用点已定，按需传）。
+   * @param run - 真正发起调用的动作（其返回值/异常原样透传）。
+   * @returns `run` 的结果。
+   */
+  const withModelCallProgress = async <T>(
+    session: Session,
+    mode: CompressMode,
+    range: { startSeq: number; endSeq: number } | undefined,
+    run: () => Promise<T>,
+  ): Promise<T> => {
+    const base = {
+      mode,
+      ...(range === undefined ? {} : { startSeq: range.startSeq, endSeq: range.endSeq }),
+    }
+    const startedAt = now()
+    emitCeFact(session, COMPACT_PROGRESS_FACT_TYPE, { ...base, phase: 'start', at: startedAt }, logger)
+    try {
+      return await run()
+    } finally {
+      const endedAt = now()
+      emitCeFact(session, COMPACT_PROGRESS_FACT_TYPE, { ...base, phase: 'end', elapsedMs: Math.max(0, endedAt - startedAt), at: endedAt }, logger)
+    }
+  }
+
+  /**
    * HC3 回灌事实缓冲（docs/12 §3）：降级态下 `emitFact` 只写 KV 镜像、不 append 会话，
    * 事实因此不在 `readSessionEvents` 里。本域订阅 pump 的 `facts/session-event` 把这些
    * 事实按会话收下来，与会话事件并集成事实源（见 `factsFor`）。
@@ -568,14 +602,17 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         }
         let llmText = ''
         let failure: { code?: string; message: string } | undefined
-        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger, timeoutMs: CE_LLM_TIMEOUT_MS.compaction })) {
-          if (chunk.type === 'text-delta') llmText += chunk.text
-          if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
-            const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
-            failure = { code: reason.failure?.code, message: reason.failure?.message ?? 'non-stop finish' }
-            break
+        // ④ 进度：模型调用（长尾在这里）前后各一条事实；缓存命中不会到达本行（零调用零进度）。
+        await withModelCallProgress(session, 'boundary', range, async () => {
+          for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger, timeoutMs: CE_LLM_TIMEOUT_MS.compaction })) {
+            if (chunk.type === 'text-delta') llmText += chunk.text
+            if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
+              const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
+              failure = { code: reason.failure?.code, message: reason.failure?.message ?? 'non-stop finish' }
+              break
+            }
           }
-        }
+        })
         if (failure !== undefined) {
           const unavailable = failure.code === 'CE_LLM_UNAVAILABLE'
           skip(unavailable ? 'llm-unavailable' : 'llm-error', { calls: unavailable ? calls : calls + 1, ...(usage === undefined ? {} : { llmUsage: usage }) })
@@ -919,14 +956,17 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         }
         let llmText = ''
         let failure: { code?: string; message: string } | undefined
-        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger, timeoutMs: CE_LLM_TIMEOUT_MS.compaction })) {
-          if (chunk.type === 'text-delta') llmText += chunk.text
-          if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
-            const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
-            failure = { code: reason.failure?.code, message: reason.failure?.message ?? 'non-stop finish' }
-            break
+        // ④ 进度：同上（压力档的重试会各报一次，成对由 try/finally 保证）。
+        await withModelCallProgress(session, 'pressure', { startSeq: replaceStart, endSeq: replaceEnd }, async () => {
+          for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger, timeoutMs: CE_LLM_TIMEOUT_MS.compaction })) {
+            if (chunk.type === 'text-delta') llmText += chunk.text
+            if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
+              const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
+              failure = { code: reason.failure?.code, message: reason.failure?.message ?? 'non-stop finish' }
+              break
+            }
           }
-        }
+        })
         if (failure !== undefined) {
           const unavailable = failure.code === 'CE_LLM_UNAVAILABLE'
           fire('skip', { reason: unavailable ? 'llm-unavailable' : 'llm-error', chainDepth: depth, cutPointSeq: undefined })

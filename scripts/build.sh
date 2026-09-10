@@ -122,6 +122,9 @@ link_pkg @deepseek-ai/dsh-client-ui-conversation packages/client/ui-conversation
 link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 # P14b1：星标 Connection RPC 桥类型锚（源子路径 type-only；不级联 webserver/credentials/attachment）。
 link_pkg @deepseek-ai/dsh-client-connection packages/client/connection
+# U17④：client 进度条读会话事件窗（`ctx.sessions` 的 SessionBinding.eventSource）+ 节点槽位标准 props；
+# 全为 type-only（擦除），运行期由客户端外壳提供 services。
+link_pkg @deepseek-ai/dsh-api-session-controller packages/api/session-controller
 link_pkg tsdown node_modules/tsdown
 link_store_pkg react
 link_store_pkg @types/react

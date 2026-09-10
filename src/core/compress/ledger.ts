@@ -88,6 +88,30 @@ export interface CompressRunFactData {
   readonly emergency?: boolean
 }
 
+/**
+ * 压缩进度事实（④ 进度提示：宿主侧发、浏览器渲染；ignorable log-only）。
+ *
+ * **颗粒度 = 一次模型调用，不是一次压缩尝试**。三条理由：
+ * ① 长的是模型调用（真机 A/F2 实测阻塞 62.6s；装配/档案/事务都在毫秒级）——提示的就是这段等待；
+ * ② `start`/`end` 在**同一个 `try/finally`** 里成对（异常也不漏）；"尝试级"进度要跨十余条早退路径
+ *    各写一次收尾，必然漏（`compactSegment` 的 skip/parse/assemble 三条非 skip 出口即为证）；
+ * ③ 缓存命中 = 零模型调用 ⇒ 本就不该报进度（04 §6 内容寻址复用），局部成对天然满足这一点。
+ */
+export const COMPACT_PROGRESS_FACT_TYPE = 'context-economy/compact-progress' // ignorable
+
+/** {@link COMPACT_PROGRESS_FACT_TYPE} 载荷。 */
+export interface CompactProgressFactData {
+  /** `start` = 模型调用开始；`end` = 该次调用结束（成败无关——细节看同族的 compress-run）。 */
+  readonly phase: 'start' | 'end'
+  readonly mode: CompressMode
+  /** 本次调用针对的被压区间端点（start 时已知；end 照抄，便于单看一条 end 也能定位）。 */
+  readonly startSeq?: number
+  readonly endSeq?: number
+  /** 模型调用耗时毫秒（仅 `end`）：这是"慢在哪"的直接读数。 */
+  readonly elapsedMs?: number
+  readonly at: number
+}
+
 export interface CompressCallLedger {
   /** 07 字段：实际调用次数（复用/短路不计）。 */
   compressionCallCount: number

@@ -98,11 +98,19 @@ src/
 │  │                 #   档案与产物降级 / 段状态机与度量重算）→ restore-* 事实
 │  ├─ restore-facts.ts # 恢复三类 ignorable 事实声明合并（P21a）
 └─ client/           # 产品面（壳已保留，零结构改动）：Card/controller/components/field-model
+   ├─ star/          # P14a/b 星标按钮 + Connection RPC 桥（→ platform/star-bridge.ts）
+   └─ compaction-progress.ts / CompactionProgress.tsx
+                     # U17④ 压缩进度：事件窗 → 进行中状态的**纯核 fold**（+ 观察源）+ dock 进度条。
+                     #   数据源 = `ctx.sessions.binding(id).eventSource`（context-economy/* 事实经
+                     #   session/follow 到达）；**不新增宿主→浏览器推送通道**，故无第二投递路径可漂移。
+                     #   与宿主的耦合 = 事实名字面（client 禁 import host src，S4）⇒ 产物层由
+                     #   `smoke:lib` 的 3 项跨半边契约守卫
 ```
 
 **依赖铁律**：`domains → core + platform`；`core ↛ platform`（反向禁止，CI 断言）；
 platform 是唯一 `ctx` 触点（index.ts 装配根除外）；client 只经 settings/remote 面
-（H8/H11），不直接摸会话。
+（H8/H11），不直接摸会话。**U17④ 的唯一例外**：进度条经 `ctx.sessions.binding(id).eventSource`
+读**已到达浏览器**的会话事件窗（只读、不经 RPC）；写侧仍零例外。
 
 ## 3. 数据面：三轨持久化
 

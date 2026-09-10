@@ -91,9 +91,12 @@ npm run gate ; npm run typecheck:tests ; npm run smoke:lib ; npm run probe:chann
 2. `npm run typecheck:tests` 退出 0（词汇派生与编译闸的类型级守门）；
 3. `& bash scripts/build.sh` 退出 0；
 4. **lib 级冒烟 + 产物层探针**（三者都**跑在构建产物 `lib/` 上，不是 src**）：
-   - `npm run smoke:lib`（常驻脚本 `scripts/smoke-lib.mjs`）必须 **24/24 PASS**，覆盖**插件侧回归锚**
+   - `npm run smoke:lib`（常驻脚本 `scripts/smoke-lib.mjs`）必须 **27/27 PASS**，覆盖**插件侧回归锚**
      （U8–U13 起）：无路由 → `undefined`（无内置默认模型）、LLM 流硬超时、段锚/重试预算、恢复段归属、
-     折叠材料判据、`run` 动词、chain 逐字替换、class 白名单、drain 分批。
+     折叠材料判据、`run` 动词、chain 逐字替换、class 白名单、drain 分批；**U17④ 起 += 3 项跨半边契约**
+     （宿主 `COMPACT_PROGRESS_FACT_TYPE` 字面 === 客户端 bundle `lib/client.js` 里的字面 + 进度条槽位
+     真的打进 bundle）——客户端不许 import 宿主源码（S4），两侧靠同一字面耦合，漂移是**静默**的
+     （进度条永不出现且无报错），只有产物层读得出。
    - **`npm run probe:channel`（常驻脚本 `scripts/probe-channel.mjs`）必须全 PASS** —— **harness 接触面在此**：
      `SESSION_LOG_INTENT === 1`、真 `SessionStore` 上 `emitFact` 路由 = **`emitted`** 且日志尾带
      `{ignorable:true}`、v3 存储契约放行（会话可重载）、反证（无 `ignorable` 的未知类型被拒读）。

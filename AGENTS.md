@@ -32,15 +32,15 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 **2026-09-10 五路审查修复战役 U1–U13 全部落地**：U8–U13（提交 `9ca139c`/`80493fe`/`dc671df`/`14172a0`/`7c14e3d`/`82af4a4`）
 = 判别/辅助调用模型**去硬编码**（无路由跳过判别 + `CE_JUDGE_NO_ROUTE`）/ 永久封禁族（段锚 + 重试预算 2 + 孤儿事务自愈）/
 屏障与超时族（`streamCeLlm` 硬超时 + drain 按会话分桶 + settle 超时闩）/ 口径计量族 8 项 / 存储恢复族 3 项 / P3 五项；
-快照 **§82**（含两处偏离工单的理由与实测依据）。**构建产物级冒烟 = `npm run smoke:lib`（24 项，升级后必跑）**，
+快照 **§82**（含两处偏离工单的理由与实测依据）。**构建产物级冒烟 = `npm run smoke:lib`（27 项，升级后必跑）**，
 跑在 `lib/` 上（src 层 vitest 全绿也照样漏构建/链接漂移）。**harness 接触面**（ignorable 通道是否闭合）
 由 **`npm run probe:channel`** 守（`scripts/probe-channel.mjs`：探测 + 真 Session 回环 + 存储契约正反证；
 2026-09-11 新增——此前 `docs/14 §4` 误称 `smoke:lib` 已覆盖，实测零匹配）。
 **取代路线的构建产物级探针 = `npm run probe:provider`**（`scripts/probe-provider.mjs`，11 项：preset 换行的
 静态面 + 包 `exports` 解析 + `CompactionEngine` **模块实例同一** + 根 realm **无泄漏** + 缝从 isolate 组内
 可解析 + 官方 8 字段映射 + decline/busy/拒绝；2026-09-11 新增——这条路线的前提全都不在 `src/` 层）。
-**重建 + 重启一条命令**：`pwsh -File scripts\rebuild-and-run.ps1`（重链重编译 → gate → smoke →
-probe:channel → 停旧宿主 → `pnpm dsh web`）。
+**重建 + 重启一条命令**：`pwsh -File scripts\rebuild-and-run.ps1`（重链重编译 → gate → smoke:lib →
+probe:channel → probe:provider → 停旧宿主 → `pnpm dsh web`）。
 `context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
@@ -97,8 +97,15 @@ waterfall 上）⇒ 会把并行 provider 的**在途**事务关掉，对方收�
 （`compaction-basic` → `dsh-price-less/provider`，`command-compact`/`tool-result-pruner` 保留）。
 **D7 因此有第二个具名放行面**（`platform/provider-entry.ts`：服务缝触点，一个事件都不写）；
 验收 = `npm run probe:provider`（11 项，构建产物级：包 exports 解析 / 模块实例同一 / 根 realm 无泄漏 /
-缝从 isolate 组内可解析 / 8 字段映射）。**默认预设仍是 `standard`**（指过去需用户确认）；装 preset 用
-`npm run preset:install`，漂移用 `npm run preset:check` 看（主目录那份是手装输入，不随包更新）。
+缝从 isolate 组内可解析 / 8 字段映射）。**默认预设已由用户裁定指向 `price-less`**（2026-09-11；
+`~/.dsh/settings.yaml`，备份 `settings.yaml.bak-preset-standard`）——改默认预设**必须**先取得用户确认；
+装 preset 用 `npm run preset:install`，漂移用 `npm run preset:check` 看（主目录那份是手装输入，不随包更新）。
+**U17④ 压缩进度提示**：宿主在每次压缩的**模型调用**前后各发一条 `context-economy/compact-progress`
+（ignorable；`start`/`end` 由同一 `try/finally` 成对 ⇒ 异常也不漏；缓存命中零调用 ⇒ 零进度），
+浏览器侧 `conversation.input.dock` 的进度条按"最后一条是 start"渲染"压缩中…"、`end` 到达即消失
+（`client/compaction-progress.ts` 纯核 fold + 观察源，数据源 = `ctx.sessions.binding(id).eventSource`
+——**不新增宿主→浏览器推送通道**）。跨半边靠同一事实名字面耦合（client 禁 import host src，S4），
+漂移是**静默**的 ⇒ 由 `smoke:lib` 的 3 项跨半边契约在产物层守（27 项）。
 快照 **§90**。
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`

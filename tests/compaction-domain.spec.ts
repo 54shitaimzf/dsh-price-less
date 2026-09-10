@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { expectedReplaceOp, replaceEndpoints } from './replace-op.ts'
 import { mountCompactionDomain, boundaryArchiveKey } from '../src/domains/compaction.ts'
 import { readArchiveStore } from '../src/core/compress/index.ts'
-import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
+import { COMPACT_PROGRESS_FACT_TYPE, COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
 import { SHEAR_APPLIED_FACT_TYPE, SHEAR_DECISION_FACT_TYPE } from '../src/core/shear/index.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
 import type { AssembleDomain } from '../src/domains/assemble.ts'
@@ -166,7 +166,7 @@ function fakePump() {
   }
 }
 
-function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; assembleOk?: boolean; llm?: ReturnType<typeof fakeLlm>; storage?: FakeStorage; withLlm?: boolean; withMeter?: boolean; session?: FakeSession; wireTokens?: number; pump?: ReturnType<typeof fakePump> } = {}) {
+function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; assembleOk?: boolean; llm?: ReturnType<typeof fakeLlm>; storage?: FakeStorage; withLlm?: boolean; withMeter?: boolean; session?: FakeSession; wireTokens?: number; pump?: ReturnType<typeof fakePump>; now?: () => number } = {}) {
   const session = options.session ?? makeSession()
   const storage = options.storage ?? new FakeStorage()
   const llm = options.llm ?? fakeLlm()
@@ -183,7 +183,7 @@ function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; as
       : { heuristicTokensInRange: () => 4242, wireTokens: () => options.wireTokens },
     getLlm: () => options.withLlm === false ? undefined : llm.ctx,
     workspace: WORKSPACE,
-    now: () => 5000,
+    now: options.now ?? (() => 5000),
     ...(options.pump === undefined ? {} : { pump: options.pump as never }),
   })
   const runs = () => session.events.filter((event) => event.type === COMPRESS_RUN_FACT_TYPE).map((event) => event.data)
@@ -717,6 +717,67 @@ describe('U17 compactNow：显式空闲压缩（取代 /compact 的后端入口�
     if (outcome.ok) return
     expect(outcome.reason).toBe('range-empty')
     expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
+  })
+})
+
+/**
+ * ④ 压缩进度提示（宿主半边）：一次**模型调用**的前后各一条 ignorable 事实。
+ * 三条不变量：① start/end **成对**（异常与任意早退也不漏——`try/finally` 保证）；
+ * ② 缓存命中 = 零模型调用 ⇒ **零进度**（04 §6 内容寻址复用）；
+ * ③ `end` 带 `elapsedMs`（"慢在哪"的直接读数；`start` 不带）。
+ */
+describe('④ 压缩进度事实（compact-progress）', () => {
+  const progressOf = (session: FakeSession) =>
+    appendsOf(session, COMPACT_PROGRESS_FACT_TYPE).map((event) => event.data as Record<string, unknown>)
+
+  it('边界路径成功 → start/end 成对、同区间、end 带耗时', async () => {
+    let clock = 1000
+    const env = makeEnv({ now: () => (clock += 25) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 1 })
+
+    const facts = progressOf(env.session)
+    expect(facts).toHaveLength(2)
+    expect(facts[0]).toMatchObject({ phase: 'start', mode: 'boundary', startSeq: 0, endSeq: 3 })
+    expect(facts[0]!.elapsedMs).toBeUndefined()
+    expect(facts[1]).toMatchObject({ phase: 'end', mode: 'boundary', startSeq: 0, endSeq: 3 })
+    expect(facts[1]!.elapsedMs).toBeGreaterThan(0)
+    // 与 compress-run 同区间（两族对同一刀给同一个区间读数）
+    expect(env.runs()[0]).toMatchObject({ layer: 'boundary', outcome: 'ok' })
+  })
+
+  it('模型调用非正常结束 → 仍成对（异常/失败不留未闭合 start）', async () => {
+    const env = makeEnv({ llm: fakeLlm([{ text: '', finish: 'error', code: 'CE_LLM_UNAVAILABLE' }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 1 })
+
+    const facts = progressOf(env.session)
+    expect(facts.map((fact) => fact.phase)).toEqual(['start', 'end'])
+    expect(env.runs()[0]).toMatchObject({ outcome: 'skipped', reason: 'llm-unavailable' })
+  })
+
+  it('缓存命中（零模型调用）→ 零进度事实', async () => {
+    const storage = new FakeStorage()
+    const first = makeEnv({ storage })
+    await first.domain.onPreStep({ session: first.session as never, turn: 1 })
+    expect(progressOf(first.session)).toHaveLength(2)
+
+    // 同 storage/同区间/同材料 ⇒ 内容寻址命中，第二次零调用。
+    const second = makeEnv({ storage })
+    await second.domain.onPreStep({ session: second.session as never, turn: 1 })
+    expect(second.runs()[0]).toMatchObject({ outcome: 'ok', cacheHit: true, calls: 0 })
+    expect(progressOf(second.session)).toHaveLength(0)
+    // 但落刀照常（缓存复用不改变结果，只改变代价）
+  })
+
+  it('压力路径 → 同一对事实，mode=pressure 且区间 = 替换区间', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 120000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 1 })
+
+    const facts = progressOf(env.session)
+    expect(facts).toHaveLength(2)
+    expect(facts[0]).toMatchObject({ phase: 'start', mode: 'pressure' })
+    expect(facts[1]).toMatchObject({ phase: 'end', mode: 'pressure' })
+    expect(typeof facts[0]!.startSeq).toBe('number')
+    expect(typeof facts[0]!.endSeq).toBe('number')
   })
 })
 

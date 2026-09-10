@@ -12,7 +12,7 @@
  * 度量: 本文件即压缩族调用事实词汇表（07 回放原料）。
  */
 import type { SessionEventMap } from '@deepseek-ai/dsh-session'
-import type { CompressRunFactData } from '../core/compress/ledger.ts'
+import type { CompactProgressFactData, CompressRunFactData } from '../core/compress/ledger.ts'
 import type { PressureFireFactData } from '../core/compress/pressure.ts'
 import type { HardTruncateFactData } from '../core/compress/fuse.ts'
 
@@ -22,21 +22,25 @@ declare module '@deepseek-ai/dsh-session/types' {
     'context-economy/compress-run': CompressRunFactData // ignorable
     'context-economy/pressure-fired': PressureFireFactData // ignorable
     'context-economy/hard-truncate': HardTruncateFactData // ignorable
+    'context-economy/compact-progress': CompactProgressFactData // ignorable
   }
   interface IgnorableSessionEventMap {
     'context-economy/compress-run': CompressRunFactData // ignorable
     'context-economy/pressure-fired': PressureFireFactData // ignorable
     'context-economy/hard-truncate': HardTruncateFactData // ignorable
+    'context-economy/compact-progress': CompactProgressFactData // ignorable
   }
 }
 
 export { COMPRESS_RUN_FACT_TYPE } from '../core/compress/ledger.ts'
 export { PRESSURE_FIRED_FACT_TYPE } from '../core/compress/pressure.ts'
 export { HARD_TRUNCATE_FACT_TYPE } from '../core/compress/fuse.ts'
+export { COMPACT_PROGRESS_FACT_TYPE } from '../core/compress/ledger.ts'
 export type { CompressRunFactData } from '../core/compress/ledger.ts'
 export type { PressureFireFactData } from '../core/compress/pressure.ts'
 export type { HardTruncateFactData } from '../core/compress/fuse.ts'
+export type { CompactProgressFactData } from '../core/compress/ledger.ts'
 
 /** 声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。 */
 // ignorable: 压缩调用事实键的声明合并可见性锚（供类型级测试/审查引用；运行期不使用）。
-export type CompressFactMap = Pick<SessionEventMap, 'context-economy/compress-run' | 'context-economy/pressure-fired' | 'context-economy/hard-truncate'>
+export type CompressFactMap = Pick<SessionEventMap, 'context-economy/compress-run' | 'context-economy/pressure-fired' | 'context-economy/hard-truncate' | 'context-economy/compact-progress'>

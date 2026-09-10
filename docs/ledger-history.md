@@ -4085,3 +4085,61 @@ install-preset: price-less -> C:\Users\Administrator\.dsh\.agent-presets\price-l
 `docs/14 §3` 的接触面清单 **8 → 10 条**（新增：⑨ 压缩服务缝的抽象类签名/结果字段/`ManualCompactionError`
 分类/`runMaintenance`；⑩ preset 的 isolate 组形态 —— 上游改 `standard` 预设后**必须重取 diff 同步本仓 preset**），
 并把 `probe:provider` 写进 `§4` 验收清单与 `scripts/rebuild-and-run.ps1` 的 ③ 步（红 = 不要重启宿主）。
+
+---
+
+## §91 U17④ 压缩进度提示：宿主进度事实 + 浏览器 dock 进度条（2026-09-11）
+
+goal ④ 要的是"压缩时用户看得见"。真机 A/F2 复盘给的动机很直接：**压缩的模型调用实测阻塞 62.6s**
+（判词落地时首步思考早已产出），那段时间界面上没有任何反馈——用户会以为卡死。
+
+### 1. 三个取舍（都是刻意的）
+
+| 取舍 | 选定 | 被否的另一条与理由 |
+|---|---|---|
+| **颗粒度** | **一次模型调用**（start/end 夹住 `streamCeLlm`） | "一次压缩尝试"：长尾只有模型调用（装配/档案/事务毫秒级），而尝试级进度要在 `compactSegment` 的十余条早退路径**各写一次收尾**（skip/parse/assemble 三条非 skip 出口即为证），必漏 |
+| **配对保证** | 同一个 `try/finally`（异常/超时/早退都不留未闭合 `start`） | 跨函数状态机：漏一处就是"进度条永不消失"（比不显示更糟） |
+| **数据通道** | **复用会话事件窗**（`ctx.sessions.binding(id).eventSource`） | 新开宿主→浏览器推送：`context-economy/*` 事实本来就经 `session/follow` 到浏览器（ignorable 不过滤）⇒ 再开一条 = 同一事实两条投递路径，断一条就两边不一致（docs/12 §2 的耦合铁律同理） |
+
+**只显示"进行中"**：`end` 到达即消失。压缩结果已有落位物（checkpoint 节点、`/compact` 回复），
+再留一条"上次用了 62s"是噪声；而"几秒后自动隐藏"要定时器，与"事件驱动、无轮询"冲突（S5）。
+
+### 2. 改动（9 处）
+
+| # | 文件 | 改动 |
+|---|---|---|
+| 1 | `core/compress/ledger.ts` | `COMPACT_PROGRESS_FACT_TYPE` + `CompactProgressFactData`（`phase` · `mode` · `startSeq`/`endSeq` · `elapsedMs` · `at`） |
+| 2 | `domains/compaction-facts.ts` | 两处声明合并（`SessionEventMap` + `IgnorableSessionEventMap`）与转出 |
+| 3 | `domains/compaction.ts` | `withModelCallProgress`（start → run → finally end，`elapsedMs` 用域注入的 `now`）+ **两个调用点**（边界路径 `mode:'boundary'`、压力路径 `mode:'pressure'` 两者区间） |
+| 4 | `client/compaction-progress.ts`（新） | 纯核 `foldCompactionProgress`（只看**最后一条**进度事实，O(1)）+ `createCompactionProgressSource`（观察源：引用稳定 + 惰性挂 feed + 退订摘除） |
+| 5 | `client/CompactionProgress.tsx`（新） | `conversation.input.dock` 进度条（"上下文压缩中… · 任务边界压缩 · 区间 0–3"），零样式表零定时器 |
+| 6 | `client/index.ts` | 第 3 个槽位注册 + `inject += 'sessions'` |
+| 7 | `client/compaction-progress.ts` | 事实名与载荷形状**结构镜像**宿主（client 禁 import host src，S4） |
+| 8 | `scripts/build.sh` | `link_pkg @deepseek-ai/dsh-api-session-controller`（type-only，运行期不 import） |
+| 9 | `scripts/smoke-lib.mjs` | **+3 项跨半边契约**：宿主事实名 === 客户端 bundle 字面 + 槽位真的打进 bundle |
+
+### 3. 读数
+
+| 指标 | 改动前 | 改动后 |
+|---|---|---|
+| `npm run gate` | 689 passed / 60 文件 | **701 passed / 61 文件** + assert `ok=true vacuous=[]` |
+| `npm run typecheck` / `typecheck:client` / `typecheck:tests` | ✅ | ✅ |
+| `npm run smoke:lib` | 24/24 | **27/27 PASS**（+3 跨半边契约） |
+| `npm run probe:channel` / `probe:provider` | ALL PASS | ALL PASS（未受影响的接触面复跑） |
+| client bundle | 168.35 kB | **173.94 kB**（+5.6 kB）；运行期 `require` 仍只有 `react` / `react/jsx-runtime` / `@deepseek-ai/dsh-client-store`——`dsh-api-session-controller` **零运行期残留**（type-only 擦除实证） |
+
+**用例 +12**：宿主 `tests/compaction-domain.spec.ts` 的 `④ 压缩进度事实` 组 4 条（边界成功成对 + 同区间 +
+end 带耗时 / 模型非正常结束仍成对 / **缓存命中零进度**且 `calls:0` / 压力路径 mode 与区间）；
+client `tests/compaction-progress.spec.ts` 8 条（折叠语义 6 + 观察源引用稳定与订阅生命周期 2）。
+另改 `tests/client-apply-smoke.spec.ts`（槽位 2 → 3 + 新槽位注入面与观察源形状）。
+
+**踩到 S3**（纪律①：`context-economy/*` 字面锚需 `ignorable` 在窗口内）：`CompressFactMap` 的 `Pick`
+被我改成多行后，键行周围三行内没有 `ignorable` ⇒ S3 转 fail。处置 = 收成一行（原形），规则未放宽。
+
+### 4. 风险与剩余（诚实登记）
+
+| # | 事项 | 说明 |
+|---|---|---|
+| 1 | **真机可见性未验** | 需重启宿主（新 lib）+ 刷新页面（新 client bundle）。**渲染路径本身没有被单测覆盖**——测到的是纯核 fold、观察源生命周期、槽位注册面与"字面真的进了 bundle"；`conversation.input.dock` 的实际挂载由官方渲染器决定，只有真机能证伪 |
+| 2 | 只覆盖模型调用窗口 | 装配/落盘/事务（毫秒级）不显示；这是刻意的颗粒度选择（见 §1） |
+| 3 | 没有"压缩完成"提示 | 刻意（见 §1）；若日后要，需先立"自动消失"的事件驱动方案，不许引定时器 |

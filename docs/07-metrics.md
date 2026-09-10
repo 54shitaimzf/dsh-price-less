@@ -37,6 +37,13 @@
 > `shrink`/`storage`/`txn-*`（三者 + parse/schema 计入 **可重试**，预算 `RETRY_BUDGET=2`）。
 > 已归档判定键 = `${scopedTaskId}:${segmentStartSeq ?? ''}`（**U9 段锚**）——旧事实无
 > `segmentStartSeq` 时保守沿用旧键。压力路径同带段锚（`layer:'pressure'` 不参与归档判定）。
+>
+> **U17④ 压缩进度事实（`compact-progress`，2026-09-11）**：`phase{start|end}` · `mode{boundary|pressure}` ·
+> `startSeq`/`endSeq`（被压区间）· `elapsedMs`（仅 `end`；**这就是"慢在哪"的直接读数**——真机 A/F2 实测
+> 单次调用阻塞 **62.6s**）。颗粒度 = **一次模型调用**（不是一次压缩尝试）：长尾只有模型调用，且
+> start/end 在同一 `try/finally` 里成对 ⇒ 异常/任意早退都不留未闭合 `start`。**缓存命中不发**（零调用
+> ⇒ 零进度，04 §6）。宿主无消费者之外的用途：浏览器侧 `conversation.input.dock` 的进度条按
+> "最后一条是 start" 渲染"压缩中…"，`end` 到达即消失（客户端纯核 `client/compaction-progress.ts`）。
 
 ## 1. 关键字段语义
 
