@@ -69,7 +69,7 @@ import { toolCategory } from '../core/shear/tool.ts'
 import { calibrationRatio } from '../core/meter/estimate.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createHistoryPort } from '../platform/history.ts'
-import { CE_CONTEXT_OVERFLOW_CODE, resolveContextWindow, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
+import { CE_CONTEXT_OVERFLOW_CODE, CE_LLM_TIMEOUT_MS, resolveContextWindow, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
 import { readSessionEvents, readSessionModel, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import type { MeterPort } from '../platform/meter.ts'
@@ -456,7 +456,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         }
         let llmText = ''
         let failure: { code?: string; message: string } | undefined
-        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger })) {
+        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger, timeoutMs: CE_LLM_TIMEOUT_MS.compaction })) {
           if (chunk.type === 'text-delta') llmText += chunk.text
           if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
             const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
@@ -762,7 +762,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         }
         let llmText = ''
         let failure: { code?: string; message: string } | undefined
-        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger })) {
+        for await (const chunk of streamCeLlm(llm, options, { onUsage: (receipt) => { usage = receipt.usage }, logger, timeoutMs: CE_LLM_TIMEOUT_MS.compaction })) {
           if (chunk.type === 'text-delta') llmText += chunk.text
           if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
             const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }

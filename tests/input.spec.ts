@@ -10,6 +10,7 @@ import {
   type JudgeRecord,
 } from '../src/core/judge.ts'
 import { readSessionModel } from '../src/platform/events.ts'
+import { CE_LLM_TIMEOUT_CODE } from '../src/platform/llm.ts'
 import {
   resolveJudgeModel,
   mountAutoDiscriminator,
@@ -265,6 +266,64 @@ describe('auto discriminator llm and cache', () => {
     expect(rec).toMatchObject({ trigger: 'llm', decision: 'continue', class: 'action' })
     const dossierData = storage.getEntity('dossier', 'dossier:s1:task-1')
     expect((dossierData!.body as { annotations: Record<string, unknown[]> }).annotations['1']?.[0]).toMatchObject({ class: 'action', by: 'auto' })
+    auto.dispose()
+  })
+
+  it('U10：会话 A 判词挂死不阻塞会话 B——drain 按会话分桶（旧实现 = 单队列跨会话队头阻塞）', async () => {
+    const pump = makePump()
+    let calls = 0
+    const llm = {
+      stream: () => {
+        calls++
+        // A（首次调用）永不结束；B 正常返回
+        if (calls === 1) return (async function* () { await new Promise(() => {}) })()
+        return (async function* () {
+          yield { type: 'text-delta', index: 0, text: '{"decision":"continue","class":"action"}' }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        })()
+      },
+    }
+    // 超时给足 5s：本条测的不是超时，而是"挂死的会话不再占住整条队列"
+    const auto = mountAutoDiscriminator({ llm } as never, deps({
+      pump: pump as never, storage: makeStorage() as never, llmTimeoutMs: 5_000,
+    }))
+    pump.emit('input/user-message', { session: sessionWithModel('A'), seq: 1, time: 1, text: 'A 第一条' })
+    pump.emit('input/user-message', { session: sessionWithModel('B'), seq: 1, time: 1, text: 'B 第一条' })
+    await new Promise((r) => setTimeout(r, 100))
+    const records = auto.stats().records
+    // A 仍在飞（5s 超时未到）而 B 已完成 = B 没被 A 堵住（旧实现里 B 要等 A 结算，等满 60s）
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ trigger: 'llm', decision: 'continue' })
+    auto.dispose()
+  })
+
+  it('U10：硬超时打断挂死判词，失败码可辨（CE_LLM_TIMEOUT；旧实现一律 CE_JUDGE_FAIL）', async () => {
+    const pump = makePump()
+    const llm = { stream: () => (async function* () { await new Promise(() => {}) })() }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({
+      pump: pump as never, storage: makeStorage() as never, llmTimeoutMs: 20,
+    }))
+    pump.emit('input/user-message', { session: sessionWithModel('A'), seq: 1, time: 1, text: 'A 第一条' })
+    await new Promise((r) => setTimeout(r, 120))
+    expect(auto.stats().records[0]).toMatchObject({
+      trigger: 'error-fallback', error: { code: CE_LLM_TIMEOUT_CODE },
+    })
+    auto.dispose()
+  })
+
+  it('U10：同 seq 二次 settle 立即 timeout（超时闩：不再重复白等一个超时窗）', async () => {
+    const pump = makePump()
+    const llm = { stream: () => (async function* () { await new Promise(() => {}) })() }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({
+      pump: pump as never, storage: makeStorage() as never, llmTimeoutMs: 5_000,
+    }))
+    const session = sessionWithModel('s1')
+    pump.emit('input/user-message', { session, seq: 3, time: 1, text: 'x' })
+    await expect(auto.settle(session as never, 3, 10)).resolves.toBe('timeout')
+    const started = Date.now()
+    // 第二个窗口给足 100s：若仍等满就是闩失效；立即返回 = 闩生效
+    await expect(auto.settle(session as never, 3, 100_000)).resolves.toBe('timeout')
+    expect(Date.now() - started).toBeLessThan(1_000)
     auto.dispose()
   })
 

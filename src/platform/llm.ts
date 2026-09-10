@@ -36,6 +36,9 @@ export type CeAuxPurpose = (typeof CE_AUX_PURPOSES)[number]
 /** 溢出错误码（H3 request-error 接管判据；llm 词汇仍收口本文件，D6）。 */
 export const CE_CONTEXT_OVERFLOW_CODE = CONTEXT_WINDOW_EXCEEDED_CODE
 
+/** U10：辅助调用流超时错误码（硬超时；调用侧按非 stop finish 处理，fail-lazy）。 */
+export const CE_LLM_TIMEOUT_CODE = 'CE_LLM_TIMEOUT'
+
 /** 宿主已支持 purpose 与插件自定义 purpose 的并集（插件侧宽化形态）。 */
 export type CePurpose = CeAuxPurpose | 'compaction' | 'session-title'
 
@@ -50,6 +53,14 @@ export type CeGenerateOptions = Omit<GenerateOptions, 'purpose' | 'reasoningEffo
  * 插件侧唯一 cast 点：把宽化 purpose 选项收窄为宿主 GenerateOptions。
  * 宿主 adapter 对未知 purpose 无特殊策略；该值仍会传给 request extension 面。
  */
+/** U10：辅助调用超时预算（单一事实源；判别/★/init 短，压缩长）。 */
+export const CE_LLM_TIMEOUT_MS = {
+  judge: 60_000,
+  star: 60_000,
+  init: 60_000,
+  compaction: 180_000,
+} as const
+
 export function toHarnessGenerateOptions(options: CeGenerateOptions): GenerateOptions {
   return options as GenerateOptions
 }
@@ -93,6 +104,12 @@ export interface CeLlmStreamHooks {
   onUsage?: (receipt: CeLlmUsageReceipt) => void
   /** fail-lazy 诊断通道；未提供时仅以终止块表达失败（不静默）。 */
   logger?: { warn: (...args: unknown[]) => void }
+  /**
+   * U10：**流式硬超时**（毫秒）。到点 → abort 宿主请求 + 主动产出 `CE_LLM_TIMEOUT` 终止块。
+   * 关键：宿主若不响应 signal（或不产出任何块），**保底路径**仍必须结束——实现用
+   * `Promise.race(iterator.next(), deadline)`，绝不只依赖宿主。
+   */
+  timeoutMs?: number
 }
 
 /** TokenUsage → CeLlmUsage 纯映射；可选字段缺失时省略键；零算术、零估算。 */
@@ -172,6 +189,8 @@ export async function resolveContextWindow(
  * 服务缺失：warn + yield CE_LLM_UNAVAILABLE 终止块（fail-lazy，不抛）。
  * usage 回执：首个 usage 块触发 hooks.onUsage 一次；onUsage 抛错只 warn 不外溢（不中断流）；
  * 流块全部原样透传。消费者提前 break（iterator.return）时内层流随之关闭且不回执。
+ * U10：`hooks.timeoutMs` 到点 → abort 宿主请求 + 产出 CE_LLM_TIMEOUT 终止块（宿主不响应 signal
+ * 也照样结束：计时器与 `iterator.next()` 赛跑，绝不无限挂起）。
  */
 export async function* streamCeLlm(
   ctx: Pick<Context, 'llm'>,
@@ -194,24 +213,72 @@ export async function* streamCeLlm(
     return
   }
 
+  // U10：超时控制器。调用方自带的 signal 一并转发（不依赖 AbortSignal.any，兼容面更宽）。
+  const timeoutMs = hooks?.timeoutMs
+  const controller = timeoutMs === undefined ? undefined : new AbortController()
+  if (controller !== undefined) {
+    const upstream = options.signal
+    if (upstream?.aborted === true) controller.abort()
+    else upstream?.addEventListener?.('abort', () => { controller.abort() }, { once: true })
+  }
+  const requestOptions: CeGenerateOptions = controller === undefined ? options : { ...options, signal: controller.signal }
+
+  const iterator = service.stream(toHarnessGenerateOptions(requestOptions))[Symbol.asyncIterator]()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let hardStop = false
+  const deadline: Promise<'timeout'> | undefined = timeoutMs === undefined
+    ? undefined
+    : new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => { hardStop = true; controller?.abort(); resolve('timeout') }, Math.max(0, timeoutMs))
+    })
+  const clearTimer = (): void => { if (timer !== undefined) clearTimeout(timer); timer = undefined }
+
   let usageSeen = false
-  for await (const chunk of service.stream(toHarnessGenerateOptions(options))) {
-    if (chunk.type === 'usage' && !usageSeen) {
-      usageSeen = true
-      try {
-        hooks?.onUsage?.({
-          purpose: options.purpose,
-          provider: options.provider,
-          model: options.model,
-          usage: toCeLlmUsage(chunk.usage),
-        })
-      } catch (e) {
-        hooks?.logger?.warn(
-          'context-economy: llm usage receipt callback failed (contained)',
-          e instanceof Error ? e.message : String(e),
-        )
+  try {
+    for (;;) {
+      const step = deadline === undefined ? await iterator.next() : await Promise.race([iterator.next(), deadline])
+      if (step === 'timeout') {
+        hooks?.logger?.warn('context-economy: llm stream timed out (fail-lazy, request aborted)', String(timeoutMs))
+        yield {
+          type: 'finish',
+          reason: {
+            kind: 'error',
+            failure: {
+              message: `context-economy: llm stream timed out after ${String(timeoutMs)}ms`,
+              code: CE_LLM_TIMEOUT_CODE,
+            },
+          },
+        }
+        return
       }
+      if (step.done === true) return
+      const chunk = step.value
+      if (chunk.type === 'usage' && !usageSeen) {
+        usageSeen = true
+        try {
+          hooks?.onUsage?.({
+            purpose: options.purpose,
+            provider: options.provider,
+            model: options.model,
+            usage: toCeLlmUsage(chunk.usage),
+          })
+        } catch (e) {
+          hooks?.logger?.warn(
+            'context-economy: llm usage receipt callback failed (contained)',
+            e instanceof Error ? e.message : String(e),
+          )
+        }
+      }
+      yield chunk
     }
-    yield chunk
+  } finally {
+    clearTimer()
+    // 关闭内层流。硬超时时宿主可能永不结束（不响应 abort / 挂在未决 promise 上）→ 只点火不等待，
+    // 否则超时块永远送不出去；正常 break/收尾则等待关闭，保持"消费者 break 即关闭"的既有语义。
+    const closing = iterator.return?.()
+    if (closing !== undefined) {
+      if (hardStop) void Promise.resolve(closing).catch(() => {})
+      else await Promise.resolve(closing).catch(() => {})
+    }
   }
 }

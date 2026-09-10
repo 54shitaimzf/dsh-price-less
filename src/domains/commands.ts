@@ -12,7 +12,7 @@ import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState } from '../core/units.ts'
 import { createProjectFrame, projectFrameStorageKey, type ProjectFrameBody } from '../core/prefix.ts'
 import { createDossier, dossierStorageKey, foldDossierLedger, sessionScopedTaskId, type DossierBody } from '../core/dossier.ts'
-import { streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
+import { CE_LLM_TIMEOUT_MS, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
@@ -221,7 +221,7 @@ export function mountCommandFace(
       purpose: 'context-economy-init',
       temperature: 0,
     }
-    for await (const chunk of streamCeLlm(deps.llmCtx, options, { logger })) {
+    for await (const chunk of streamCeLlm(deps.llmCtx, options, { logger, timeoutMs: CE_LLM_TIMEOUT_MS.init })) {
       if (chunk.type === 'text-delta') llmText += chunk.text
       if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') throw new Error('非正常结束')
     }

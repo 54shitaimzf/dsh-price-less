@@ -24,7 +24,7 @@ import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey
 import type { LedgerFact } from '../core/ledger/types.ts'
 import { parseT0Command } from '../core/t0.ts'
 import { workspaceOf } from './workspace.ts'
-import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
+import { CE_LLM_TIMEOUT_MS, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { readSessionModel, type EventPump, type CeDomainEvents, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
@@ -55,6 +55,8 @@ export interface AutoDiscriminatorDeps {
   workspace?: string
   now?: () => number
   cacheLimit?: number
+  /** U10：单次判别 LLM 调用的硬超时（ms；测试可注入小值）。缺省 = CE_LLM_TIMEOUT_MS.judge。 */
+  llmTimeoutMs?: number
 }
 
 /** 边界判词等待上限（F2 阻塞式边界压缩，2026-09-09 用户裁定 60s；超时 fail-lazy）。 */
@@ -111,19 +113,26 @@ function sidOf(session: Session): string {
 }
 
 export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDiscriminatorDeps): AutoDiscriminator {
-  const { pump, storage, getConfig, logger, workspace = process.cwd().replaceAll('\\', '/'), now = Date.now, cacheLimit = DEFAULT_CACHE_LIMIT } = deps
+  const { pump, storage, getConfig, logger, workspace = process.cwd().replaceAll('\\', '/'), now = Date.now, cacheLimit = DEFAULT_CACHE_LIMIT, llmTimeoutMs = CE_LLM_TIMEOUT_MS.judge } = deps
   const factsBySession = new Map<string, LedgerFact[]>()
   const factKeys = new Map<string, Set<string>>()
   const firstSeqBySession = new Map<string, number>()
   const l1Cache = new Map<string, { decision: JudgeDecision; class: DossierClass; tableShadow?: JudgeTableShadow }>()
   const records: JudgeRecord[] = []
-  const queue: CeDomainEvents['input/user-message'][] = []
+  /**
+   * U10：按**会话分桶**的输入队列。旧实现 = 单队列 + 单 `processing` 标志：
+   * 一个会话的判词流挂死（宿主永不 finish）会让整条队列停摆——其他会话的用户消息
+   * 全部排队等待（跨会话队头阻塞），且每条消息的 F2 屏障都要白等满 60s。
+   */
+  interface SessionQueue { readonly queue: CeDomainEvents['input/user-message'][]; processing: boolean }
+  const queues = new Map<string, SessionQueue>()
   /** 每会话在飞判词计数（settle 屏障；含排队 + 处理中）。 */
   const pendingBySession = new Map<string, { count: number; waiters: Array<() => void> }>()
   /** 每会话已落地判词的最大用户消息 seq（settle 快速返回判据）。 */
   const lastDoneSeqBySession = new Map<string, number>()
+  /** U10：每会话已超时过的最大 seq——同 seq 二次 settle 立即返回 timeout，不再等满一个超时窗。 */
+  const lastTimedOutSeqBySession = new Map<string, number>()
   let disposed = false
-  let processing = false
   let processed = 0
 
   const recordFact = (sid: string, fact: LedgerFact): void => {
@@ -251,10 +260,16 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     for await (const chunk of streamCeLlm(ctx, options, {
       onUsage: (receipt) => { llmUsage = receipt.usage },
       logger,
+      timeoutMs: llmTimeoutMs,
     })) {
       if (chunk.type === 'text-delta') llmText += chunk.text
       if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
-        throw new Error('context-economy: non-stop finish')
+        // U10：把宿主/端口的失败码带出来（超时 CE_LLM_TIMEOUT、服务缺失 CE_LLM_UNAVAILABLE）——
+        // 旧实现一律抛裸 Error，drain 侧只能记 CE_JUDGE_FAIL，失败原因不可辨。
+        const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
+        const error = new Error(reason.failure?.message ?? 'context-economy: non-stop finish') as Error & { code?: string }
+        if (reason.failure?.code !== undefined) error.code = reason.failure.code
+        throw error
       }
     }
     latencyMs = now() - started
@@ -294,6 +309,9 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
   const trackSettled = (sid: string, seq: number): void => {
     const done = lastDoneSeqBySession.get(sid)
     if (done === undefined || seq > done) lastDoneSeqBySession.set(sid, seq)
+    // U10：落地即解除同 seq 的超时闩（新工作已推进，闩不再代表"仍在超时态"）。
+    const latched = lastTimedOutSeqBySession.get(sid)
+    if (latched !== undefined && seq >= latched) lastTimedOutSeqBySession.delete(sid)
     const entry = pendingBySession.get(sid)
     if (entry === undefined) return
     entry.count--
@@ -306,28 +324,43 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
    * 使 task 闭合 → 压缩发生在**新任务第一条模型调用之前**。
    * 先让两个 microtask 通过——pump 用 `queueMicrotask` 派发，同一提交周期内到达的
    * 用户消息要等它入队后才可见（否则屏障空转）。
+   * U10：同 seq 已超时过一次 → 立即 timeout（不再重复白等一个超时窗）。
    */
   const settle = async (session: Session, newestSeq: number, timeoutMs: number): Promise<'settled' | 'timeout'> => {
     const sid = sidOf(session)
     await Promise.resolve()
     await Promise.resolve()
+    if ((lastTimedOutSeqBySession.get(sid) ?? -1) >= newestSeq) return 'timeout'
     if ((lastDoneSeqBySession.get(sid) ?? -1) >= newestSeq) return 'settled'
     const entry = pendingBySession.get(sid)
     if (entry === undefined || entry.count <= 0) return 'settled'
     return new Promise<'settled' | 'timeout'>((resolve) => {
       let done = false
-      const timer = setTimeout(() => { if (done) return; done = true; resolve('timeout') }, Math.max(0, timeoutMs))
+      const timer = setTimeout(() => {
+        if (done) return
+        done = true
+        const latched = lastTimedOutSeqBySession.get(sid)
+        if (latched === undefined || newestSeq > latched) lastTimedOutSeqBySession.set(sid, newestSeq)
+        resolve('timeout')
+      }, Math.max(0, timeoutMs))
       entry.waiters.push(() => { if (done) return; done = true; clearTimeout(timer); resolve('settled') })
     })
   }
 
-  const drain = async (): Promise<void> => {
-    if (processing || disposed) return
-    processing = true
+  const bucketOf = (sid: string): SessionQueue => {
+    let bucket = queues.get(sid)
+    if (bucket === undefined) queues.set(sid, (bucket = { queue: [], processing: false }))
+    return bucket
+  }
+
+  /** U10：只消费**本会话**队列；一个会话挂死不再阻塞其他会话（旧实现单队列跨会话队头阻塞）。 */
+  const drain = async (sid: string): Promise<void> => {
+    const bucket = queues.get(sid)
+    if (bucket === undefined || bucket.processing || disposed) return
+    bucket.processing = true
     try {
-      while (queue.length > 0 && !disposed) {
-        const payload = queue.shift()!
-        const sid = sidOf(payload.session)
+      while (bucket.queue.length > 0 && !disposed) {
+        const payload = bucket.queue.shift()!
         try {
           if (getConfig().discriminator.auto !== true) continue
           processed++
@@ -347,15 +380,18 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
         }
       }
     } finally {
-      processing = false
+      bucket.processing = false
+      // 桶空即回收（同一同步段内不会再有人往里塞；循环退出与回收之间无 await）。
+      if (bucket.queue.length === 0) queues.delete(sid)
     }
   }
 
   const offInput = pump.on('input/user-message', (payload) => {
     if (disposed) return
-    trackEnqueue(sidOf(payload.session))
-    queue.push(payload)
-    void drain()
+    const sid = sidOf(payload.session)
+    trackEnqueue(sid)
+    bucketOf(sid).queue.push(payload)
+    void drain(sid)
   })
   const offFacts = pump.on('facts/session-event', ({ session, event }) => {
     if (disposed || getConfig().discriminator.auto !== true) return
@@ -365,7 +401,8 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
   return {
     dispose() {
       disposed = true
-      queue.length = 0
+      for (const bucket of queues.values()) bucket.queue.length = 0
+      queues.clear()
       for (const entry of pendingBySession.values()) for (const wake of entry.waiters.splice(0)) wake()
       pendingBySession.clear()
       offInput()
@@ -375,7 +412,9 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     stats() {
       let facts = 0
       for (const bucket of factsBySession.values()) facts += bucket.length
-      return { queued: queue.length, processed, facts, records: [...records], ledger: foldJudgeLedger(records) }
+      let queued = 0
+      for (const bucket of queues.values()) queued += bucket.queue.length
+      return { queued, processed, facts, records: [...records], ledger: foldJudgeLedger(records) }
     },
   }
 }

@@ -22,7 +22,7 @@ import { foldSegmentState } from '../core/units.ts'
 import { factsFromSessionEvents } from '../core/ledger/facts.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { estimateTokens } from '../core/ledger/fold.ts'
-import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
+import { CE_LLM_TIMEOUT_MS, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
@@ -242,7 +242,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       }
       let raw = ''
       let stopped = false
-      for await (const chunk of streamCeLlm(deps.llmCtx, options, { logger, onUsage: (receipt) => { usage = receipt.usage } })) {
+      for await (const chunk of streamCeLlm(deps.llmCtx, options, { logger, timeoutMs: CE_LLM_TIMEOUT_MS.star, onUsage: (receipt) => { usage = receipt.usage } })) {
         if (chunk.type === 'text-delta') raw += chunk.text
         if (chunk.type === 'finish') stopped = chunk.reason.kind === 'stop'
       }
