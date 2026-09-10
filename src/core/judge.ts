@@ -308,7 +308,11 @@ export function foldJudgeLedger(records: JudgeRecord[]): JudgeLedger {
       usage.cacheWriteTokens += record.llmUsage.cacheWriteTokens ?? 0
       usage.reasoningTokens += record.llmUsage.reasoningTokens ?? 0
     }
-    if (record.class !== undefined) verdictDist[record.class]++
+    // U13.4：class 白名单过滤——重放的历史事实可能带未知/坏 class（旧实现直接累加未知键
+    // 得到 NaN，污染整条账本口径）。口径源 = DOSSIER_CLASSES 单一事实源。
+    if (record.class !== undefined && (DOSSIER_CLASSES as readonly string[]).includes(record.class)) {
+      verdictDist[record.class]++
+    }
   }
 
   return {

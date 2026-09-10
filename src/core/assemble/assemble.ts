@@ -521,30 +521,49 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
     }
     // 第二趟：Zipf 权重分配（w_i = 1/i，重要者多分），未用配额向后 carry-over；
     // 配额不足以放最小内容 → 丢弃（F10：热尾无内容 = 无定位价值；计 quotaDrops）。
-    // v4：预留只对**需要定位标注**的条目计费（内容自证位置者不吃这份预算）。
-    const locatorCount = candidates.filter((candidate) => candidate.locator !== undefined).length
-    const overhead = policy.pointerOverheadTokens * locatorCount
-    const allocatable = Math.max(0, budget - overhead)
+    // U13.2：locator 开销**不预先从预算里扣**——候选趟按无 overhead 分配，装填后按**幸存**条目
+    //   结算；超出份额帽从**末位**撤标注（撤标注只损失定位、不丢内容 = 安全方向）。
+    //   旧实现按**候选**数白扣 `40 × 候选数`（含最终被丢弃的条目）→ 预算被虚减。
     const weights = candidates.map((_, index) => 1 / (index + 1))
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
     let carry = 0
     for (let index = 0; index < candidates.length; index++) {
       const candidate = candidates[index] as RawSelection
-      const quota = Math.floor((allocatable * (weights[index] as number)) / totalWeight) + carry
+      const quota = Math.floor((budget * (weights[index] as number)) / totalWeight) + carry
       if (candidate.tokens <= quota) {
         push(candidate)
         carry = quota - candidate.tokens
         continue
       }
-      const chars = tokensToChars(candidate.text, quota, policy.density) - HOT_TAIL_TRUNCATION_MARKER.length
-      if (chars >= policy.minTruncatedChars) {
-        const text = `${candidate.text.slice(0, chars)}${HOT_TAIL_TRUNCATION_MARKER}`
-        push({ ...candidate, text, tokens: estimateTokens(text, policy.density), truncated: true })
+      // U13.1：截断后**重估并收口 ≤ 配额**——两桶密度非线性，按配额反推的字符数并不保证
+      //   `estimate(截断文本) ≤ 配额`；旧实现只切不算，截断条目可超配额 → 总量越过份额帽
+      //   → 缩水校验把整单打回（白付一次调用）。
+      let chars = tokensToChars(candidate.text, quota, policy.density) - HOT_TAIL_TRUNCATION_MARKER.length
+      let text = ''
+      let tokens = 0
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (chars < policy.minTruncatedChars) break
+        text = `${candidate.text.slice(0, chars)}${HOT_TAIL_TRUNCATION_MARKER}`
+        tokens = estimateTokens(text, policy.density)
+        if (tokens <= quota) break
+        chars -= Math.max(1, tokensToChars(candidate.text, tokens - quota, policy.density))
+      }
+      if (text !== '' && chars >= policy.minTruncatedChars && tokens <= quota) {
+        push({ ...candidate, text, tokens, truncated: true })
         truncated++
       } else {
         quotaDrops++
       }
       carry = 0
+    }
+    // U13.2：按幸存条目结算 locator 开销，超帽从末位撤标注。
+    let overhead = 0
+    for (const selection of selections) if (selection.locator !== undefined) overhead += policy.pointerOverheadTokens
+    for (let index = selections.length - 1; index >= 0 && used + overhead > budget; index--) {
+      const selection = selections[index] as RawSelection
+      if (selection.locator === undefined) continue
+      overhead -= policy.pointerOverheadTokens
+      selections[index] = { ...selection, locator: undefined }
     }
     if (candidates.length === 0 && dropReasons.remap + dropReasons.fetch === declared.length) positionalFallback()
   }

@@ -449,6 +449,23 @@ describe('F9c 热尾：事实载体与预算（份额帽 / 仅指针 / 去重 / 
     expect(outcome.result.hotTail.budgetTokens).toBeGreaterThan(minShareFloor)
   })
 
+  it('U13.1：截断条目重估后收口 ≤ 配额（旧实现只切不算 → 越帽 → 缩水校验把整单打回）', () => {
+    // 混合密度长文本 + 极小预算：按配额反推的 chars 在两桶密度下不保证 estimate ≤ quota
+    const mixed = `${'x'.repeat(600)}${'必'.repeat(400)}`
+    const units = [unit('a', 1, mixed)]
+    const outcome = assembleArchive({
+      units,
+      hotTail: [{ unitId: 'a' }],
+      policy: policy({ hotTailTokens: 60, pointerOverheadTokens: 40, minTruncatedChars: 5 }),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    const hot = outcome.result.hotTail
+    // 核心不变量：总用量（含幸存 locator 开销）绝不越过预算
+    const located = hot.entries.filter((entry) => entry.locator !== undefined).length
+    expect(hot.tokens + located * 40).toBeLessThanOrEqual(hot.budgetTokens)
+    for (const entry of hot.entries) expect(entry.tokens).toBeLessThanOrEqual(hot.budgetTokens)
+  })
+
   it('配额不足 → 丢弃（F10：无内容 = 无定位价值；quotaDrops 计数）', () => {
     const units = [unit('a', 1, 'A'.repeat(100))]
     const outcome = assembleArchive({

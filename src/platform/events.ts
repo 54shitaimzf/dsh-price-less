@@ -169,8 +169,13 @@ export function createEventPump(ctx: Context, logger?: CeLogger): EventPump {
 
   const drain = (): void => {
     scheduled = false
-    while (queue.length > 0) {
-      const item = queue.shift()!
+    // U13.5：只消费**入队时快照**的那一批——处理期间新入队的事件走下一轮 schedule。
+    // 旧实现 `while (queue.length > 0)` 在同一轮里消化自馈入队（handler 又 publish/触发 append），
+    // 使一轮 drain 可无限长（微任务饿死定时器/IO，极端情况下表现为事件循环卡死）。
+    let depth = queue.length
+    while (depth-- > 0) {
+      const item = queue.shift()
+      if (item === undefined) break
       for (const fn of handlers.get(item.kind) ?? []) {
         try {
           ;(fn as (p: unknown) => void)(item.payload)
@@ -181,6 +186,7 @@ export function createEventPump(ctx: Context, logger?: CeLogger): EventPump {
       }
       stats.dispatched++
     }
+    // 本轮期间入队的事件由 publish/firehose 的 schedule() 安排（scheduled 已在函数头置 false）
   }
   const schedule = (): void => {
     if (scheduled || disposed) return

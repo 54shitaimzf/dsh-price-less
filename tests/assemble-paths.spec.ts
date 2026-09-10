@@ -114,26 +114,28 @@ describe('F10/v4 产物：总分零路径 + 热尾按需定位标注', () => {
     expect(outcome.result.hotTail.unlocated).toBe(1)
   })
 
-  it('v4：预留只对需要定位标注的条目计费（span 条目不吃预留）', () => {
+  it('U13.2：locator 开销按**幸存条目**结算——超帽先撤标注、不丢内容（旧实现按候选数白扣 → 内容被丢弃）', () => {
     const text = '必'.repeat(30)
     const units = [unit('a', 1, text, { path: 'D:/proj/src/a.ts', version: 1 })]
     const chains = foldFileChains([{ seq: 1, path: 'D:/proj/src/a.ts', kind: 'write', content: text }])
-    const p = policy({ hotTailTokens: 50, pointerOverheadTokens: 40, minTruncatedChars: 5 })
-    const located = assembleArchive({
-      units,
-      chains,
-      root: ROOT,
-      hotTail: [{ unitId: 'a', coord: { path: 'D:/proj/src/a.ts', version: 1 } }],
-      resolve: { a: text },
-      policy: p,
-    })
-    if (!located.ok) throw new Error('expected ok')
-    // 内容不自证位置 → 吃 40 预留 → 50 − 40 = 10 < 30 → 丢弃
-    expect(located.result.hotTail.entries).toHaveLength(0)
-    expect(located.result.hotTail.quotaDrops).toBe(1)
-    const span = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: p })
+    const hotTail = [{ unitId: 'a', coord: { path: 'D:/proj/src/a.ts', version: 1 } }]
+    const request = { units, chains, root: ROOT, hotTail, resolve: { a: text } } as const
+    // 预算 50：条目本体 20 + 标注 40 = 60 > 50 → 撤标注保内容
+    // （旧实现把 40 从预算里预扣 → 只剩 10 quota → 条目整个丢弃：为了一个标注丢掉内容，方向错误）
+    const tight = assembleArchive({ ...request, policy: policy({ hotTailTokens: 50, pointerOverheadTokens: 40, minTruncatedChars: 5 }) })
+    if (!tight.ok) throw new Error('expected ok')
+    expect(tight.result.hotTail.entries).toHaveLength(1)
+    expect(tight.result.hotTail.entries[0]!.text).toBe(text)
+    expect(tight.result.hotTail.entries[0]!.locator).toBeUndefined()
+    expect(tight.result.hotTail.located).toBe(0)
+    expect(tight.result.hotTail.quotaDrops).toBe(0)
+    // 预算够（120 ≥ 20 + 40）→ 标注保留
+    const roomy = assembleArchive({ ...request, policy: policy({ hotTailTokens: 120, pointerOverheadTokens: 40, minTruncatedChars: 5 }) })
+    if (!roomy.ok) throw new Error('expected ok')
+    expect(roomy.result.hotTail.entries[0]!.locator ?? '').toContain('a.ts')
+    expect(roomy.result.hotTail.located).toBe(1)
+    const span = assembleArchive({ units, hotTail: [{ unitId: 'a' }], policy: policy({ hotTailTokens: 50, pointerOverheadTokens: 40, minTruncatedChars: 5 }) })
     if (!span.ok) throw new Error('expected ok')
-    // 无坐标 → 无从标注 → 不吃预留 → 50 全额 → 30 放得下
     expect(span.result.hotTail.entries).toHaveLength(1)
     expect(span.result.hotTail.unlocated).toBe(1)
   })

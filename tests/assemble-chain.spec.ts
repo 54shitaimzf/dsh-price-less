@@ -37,7 +37,7 @@ describe('P17a 坐标层：版本链 fold', () => {
   it('edit 在已知全文里定位 → hunk（坐标 = 被替换版本行号）', () => {
     const chains = foldFileChains([write(1, 'a\nb\nc\nd'), edit(2, 'c', 'c1\nc2')])
     const chain = chains.get('a.ts')!
-    expect(chain.versions[1]!.hunks).toEqual([{ startLine: 3, endLine: 3, newLineCount: 2 }])
+    expect(chain.versions[1]!.hunks).toMatchObject([{ startLine: 3, endLine: 3, newLineCount: 2 }])
     expect(chain.versions[1]!.lineCount).toBe(5)
     expect(chain.versions[1]!.content).toEqual(['a', 'b', 'c1', 'c2', 'd'])
   })
@@ -45,14 +45,14 @@ describe('P17a 坐标层：版本链 fold', () => {
   it('edit 在部分读窗口里定位（无全文）→ 绝对行号 hunk + 行数位移推算', () => {
     const chains = foldFileChains([read(1, 5, ['e', 'f', 'g'], 12), edit(2, 'f', 'f1\nf2')])
     const chain = chains.get('a.ts')!
-    expect(chain.versions[1]!.hunks).toEqual([{ startLine: 6, endLine: 6, newLineCount: 2 }])
+    expect(chain.versions[1]!.hunks).toMatchObject([{ startLine: 6, endLine: 6, newLineCount: 2 }])
     expect(chain.versions[1]!.lineCount).toBe(13)
   })
 
   it('replace_all 多 hunk（逐处，不做并集）', () => {
     const chains = foldFileChains([write(1, 'x\ny\nx'), edit(2, 'x', 'xx', 'a.ts', true)])
     const hunks = chains.get('a.ts')!.versions[1]!.hunks!
-    expect(hunks).toEqual([
+    expect(hunks).toMatchObject([
       { startLine: 1, endLine: 1, newLineCount: 1 },
       { startLine: 3, endLine: 3, newLineCount: 1 },
     ])
@@ -67,7 +67,7 @@ describe('P17a 坐标层：版本链 fold', () => {
     ])
     const chain = chains.get('a.ts')!
     expect(chain.broken).toBe(false)
-    expect(chain.versions[1]!.hunks).toEqual([
+    expect(chain.versions[1]!.hunks).toMatchObject([
       { startLine: 2, endLine: 2, newLineCount: 2 },
       { startLine: 5, endLine: 5, newLineCount: 2 },
     ])
@@ -79,7 +79,7 @@ describe('P17a 坐标层：版本链 fold', () => {
       edit(3, 'Z2\nd', 'W', 'a.ts'),
     ]).get('a.ts')!
     expect(after.broken).toBe(false)
-    expect(after.versions[2]!.hunks).toEqual([{ startLine: 3, endLine: 4, newLineCount: 1 }])
+    expect(after.versions[2]!.hunks).toMatchObject([{ startLine: 3, endLine: 4, newLineCount: 1 }])
     expect(after.versions[2]!.lineCount).toBe(21)
   })
 
@@ -93,8 +93,36 @@ describe('P17a 坐标层：版本链 fold', () => {
       edit(4, 'Z2\nf', 'W', 'a.ts'),
     ]).get('a.ts')!
     expect(after.broken).toBe(false)
-    expect(after.versions[3]!.hunks).toEqual([{ startLine: 7, endLine: 8, newLineCount: 1 }])
+    expect(after.versions[3]!.hunks).toMatchObject([{ startLine: 7, endLine: 8, newLineCount: 1 }])
     expect(after.versions[3]!.lineCount).toBe(10)
+  })
+
+  it('U13.3：删除型 edit——`newString=""` 不留空行（行数与 harness 逐字语义一致）', () => {
+    // ① oldString **带**换行 → 该行整行消失，10 → 9
+    const withNewline = foldFileChains([write(1, lines(10)), edit(2, 'l3\n', '')]).get('a.ts')!
+    expect(withNewline.versions[1]!.lineCount).toBe(9)
+    expect(withNewline.versions[1]!.content).toEqual(
+      Array.from({ length: 9 }, (_, i) => (i < 2 ? `l${i + 1}` : `l${i + 2}`)),
+    )
+    expect(withNewline.versions[1]!.hunks![0]).toMatchObject({ startLine: 3, endLine: 3, newLineCount: 0, delta: -1 })
+    // ② oldString **不带**换行 → 该行变空行（行数不变；harness = 逐字替换）
+    const withoutNewline = foldFileChains([write(1, lines(10)), edit(2, 'l3', '')]).get('a.ts')!
+    expect(withoutNewline.versions[1]!.lineCount).toBe(10)
+    expect(withoutNewline.versions[1]!.content![2]).toBe('')
+    expect(withoutNewline.versions[1]!.hunks![0]).toMatchObject({ startLine: 3, endLine: 3, newLineCount: 0, delta: 0 })
+  })
+
+  it('U13.3：行中间的部分替换逐字生效（旧实现整行替换 → 全文失真、后续定位失败）', () => {
+    const after = foldFileChains([
+      write(1, 'const a = foo(1)\nconst b = 2'),
+      edit(2, 'foo(1)', 'bar(1)'),
+      // 后续 edit 定位在**部分替换后**的文本上：旧实现把第 1 行整行换成 'bar(1)' → 此处定位失败（链断）
+      edit(3, 'const b = 2', 'const b = 3'),
+    ]).get('a.ts')!
+    expect(after.broken).toBe(false)
+    expect(after.versions[1]!.content).toEqual(['const a = bar(1)', 'const b = 2'])
+    expect(after.versions[2]!.content).toEqual(['const a = bar(1)', 'const b = 3'])
+    expect(after.versions[1]!.hunks![0]).toMatchObject({ startLine: 1, endLine: 1, delta: 0, startOffset: 10, endOffset: 16 })
   })
 
   it('定位失败（oldString 不在已知内容）→ 链断，不猜位置', () => {

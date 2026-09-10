@@ -280,6 +280,31 @@ describe('异步旁路队列（docs/11 §4 纪律②）', () => {
  * HC3（REPAIR-2026-09-10 §8.3）：`publish` = 与 firehose 同队列、同 FIFO、同计数的内部投递口，
  * 供降级态"镜像事实回灌"使用（domains 侧对事实来源保持零感知）。
  */
+describe('drain 批次上界（U13.5）', () => {
+  it('处理期间自馈入队走下一轮：一轮只消化入队快照，不会无限拉长', async () => {
+    const { ctx, fire } = makeFakeCtx()
+    const pump = createEventPump(ctx as never, { info() {}, warn() {}, error() {} })
+    const seen: number[] = []
+    let reentered = false
+    pump.on('metrics/session-event', (payload) => {
+      const seq = (payload as { event: { seq: number } }).event.seq
+      seen.push(seq)
+      // 第一个事件处理时自馈三条：它们必须落到下一轮 drain（本轮批次已定格）
+      if (!reentered) {
+        reentered = true
+        for (const n of [100, 101, 102]) pump.publish('metrics/session-event', { session: {}, event: { type: 'step/start', seq: n } } as never)
+      }
+    })
+    fire({ header: {} }, { type: 'step/start', seq: 1, time: 1, data: {} })
+    await new Promise((r) => setTimeout(r, 0))
+    // 全部送达（自馈不丢），且批次语义可见：stats.depth 归零、dispatched = 4
+    expect(seen).toEqual([1, 100, 101, 102])
+    expect(pump.stats().dispatched).toBe(4)
+    expect(pump.stats().depth).toBe(0)
+    pump.dispose()
+  })
+})
+
 describe('EventPump.publish 内部投递口（HC3）', () => {
   it('投递到 facts 面：同 FIFO 派发、enqueued/dispatched 计数、dispose 后计 dropped', async () => {
     const { ctx } = makeFakeCtx()

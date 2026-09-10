@@ -163,6 +163,17 @@ describe('judge', () => {
     expect(Object.keys(dist).sort()).toEqual([...DOSSIER_CLASSES].sort())
   })
 
+  it('U13.4：未知 class 不进分布（旧实现直接累加未知键 → NaN 污染整条账本口径）', () => {
+    const ledger = foldJudgeLedger([
+      { seq: 1, time: 1, trigger: 'llm', decision: 'continue', class: 'action' },
+      // 重放的历史/坏事实可能带未知 class
+      { seq: 2, time: 2, trigger: 'llm', decision: 'continue', class: 'bogus' as never },
+    ])
+    expect(ledger.judgeVerdictDist).toEqual({ action: 1, pureQ: 0, verifyQ: 0 })
+    expect(Number.isNaN(ledger.judgeVerdictDist.action)).toBe(false)
+    expect(Object.keys(ledger.judgeVerdictDist).sort()).toEqual([...DOSSIER_CLASSES].sort())
+  })
+
   it('judge datasets 同源: 规则分句与 v2.3 切片逐字节一致、输出含三分类', () => {
     const v23 = readFileSync('datasets/prompt-discriminator-v2.3.txt', 'utf8')
     const expected = v23.slice(v23.indexOf('先决排除：'), v23.indexOf('\n\n<anchor>'))

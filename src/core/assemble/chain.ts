@@ -34,11 +34,23 @@ export interface FileOp {
   readonly replaceAll?: boolean
 }
 
-/** 一处替换（坐标 = 被替换版本的自身行号；newLineCount = 替换文本行数）。 */
+/** 一处替换（行坐标为 1-based 闭区间；另带逐字语义所需的字符偏移与精确行差）。 */
 export interface Hunk {
   readonly startLine: number
   readonly endLine: number
+  /**
+   * 替换文本在**本版**占的行数（U13.3：空串 = 原地删除 → **0**）。
+   * 用途 = `mapLine` 把落在替换区内的坐标机械收拢到替换后跨度。
+   */
   readonly newLineCount: number
+  /**
+   * 行数**净变化**（U13.3）：逐字替换下恒等于 `newlines(newString) − newlines(oldString)`，
+   * 与 harness `edit` 的真实语义（`content.split(old).join(new)`，删除不留空行）严格一致。
+   */
+  readonly delta: number
+  /** 匹配起点/终点字符偏移（相对被定位的那段文本：全文 joined 或某个读窗口 joined）。 */
+  readonly startOffset: number
+  readonly endOffset: number
 }
 
 /**
@@ -111,10 +123,40 @@ function matchStarts(joined: string, needle: string, limit: number): number[] | 
   return starts.length === 0 ? undefined : starts
 }
 
-function hunkOf(joined: string, start: number, end: number, newLineCount: number, baseLine: number): Hunk {
+function hunkOf(joined: string, start: number, end: number, op: FileOp, baseLine: number): Hunk {
   const startLine = baseLine + lineIndexOf(joined, start)
   const endLine = baseLine + lineIndexOf(joined, end <= 0 ? 0 : end - 1)
-  return { startLine, endLine: Math.max(startLine, endLine), newLineCount }
+  const oldString = op.oldString ?? ''
+  const newString = op.newString ?? ''
+  return {
+    startLine,
+    endLine: Math.max(startLine, endLine),
+    newLineCount: replacementLines(newString).length,
+    delta: newlineCount(newString) - newlineCount(oldString),
+    startOffset: start,
+    endOffset: end,
+  }
+}
+
+/** U13.3：替换文本的行数组——**空串 = 零行**（harness `edit` 的删除不留空行）。 */
+function replacementLines(text: string): string[] {
+  return text === '' ? [] : text.split('\n')
+}
+
+function newlineCount(text: string): number {
+  let count = 0
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') count++
+  return count
+}
+
+/**
+ * 逐字替换（与 harness `edit` 同构）：偏移处确实匹配 `oldString` 才动刀，否则返回 undefined
+ * （调用侧退回行区间近似——窗口去重后偏移可能属于另一个重叠窗口，**宁可近似也不改错位置**）。
+ */
+function spliceAt(joined: string, hunk: Hunk, oldString: string, newString: string): string | undefined {
+  if (oldString === '') return undefined
+  if (joined.slice(hunk.startOffset, hunk.startOffset + oldString.length) !== oldString) return undefined
+  return joined.slice(0, hunk.startOffset) + newString + joined.slice(hunk.startOffset + oldString.length)
 }
 
 /** 定位 oldString → hunk 列表；歧义 / 找不到 = undefined（不猜位置）。 */
@@ -122,14 +164,13 @@ function locate(full: string[] | undefined, windows: readonly Window[], op: File
   const oldString = op.oldString
   const newString = op.newString
   if (oldString === undefined || oldString === '' || newString === undefined) return undefined
-  const newLineCount = newString.split('\n').length
   const limit = op.replaceAll === true ? 4096 : 1
   if (full !== undefined) {
     const joined = full.join('\n')
     const starts = matchStarts(joined, oldString, limit)
     if (starts === undefined) return undefined
     if (op.replaceAll !== true && starts.length > 1) return undefined
-    return starts.map((at) => hunkOf(joined, at, at + oldString.length, newLineCount, 1))
+    return starts.map((at) => hunkOf(joined, at, at + oldString.length, op, 1))
   }
   // 无全文：在已知窗口里定位；按绝对行位置去重后必须唯一（否则歧义 = 链断）。
   const byPosition = new Map<string, Hunk>()
@@ -139,7 +180,7 @@ function locate(full: string[] | undefined, windows: readonly Window[], op: File
     const starts = matchStarts(joined, oldString, limit)
     if (starts === undefined) continue
     for (const at of starts) {
-      const hunk = hunkOf(joined, at, at + oldString.length, newLineCount, win.offset)
+      const hunk = hunkOf(joined, at, at + oldString.length, op, win.offset)
       byPosition.set(`${hunk.startLine}:${hunk.endLine}`, hunk)
     }
   }
@@ -150,28 +191,38 @@ function locate(full: string[] | undefined, windows: readonly Window[], op: File
 }
 
 function deltaOf(hunk: Hunk): number {
-  return hunk.newLineCount - (hunk.endLine - hunk.startLine + 1)
+  return hunk.delta
 }
 
-function applyHunksToFull(full: string[], hunks: readonly Hunk[], newString: string): string[] {
-  const replacement = newString.split('\n')
-  let lines = full.slice()
-  for (const hunk of hunks.slice().sort((a, b) => b.startLine - a.startLine)) {
-    const from = Math.max(0, hunk.startLine - 1)
-    const to = Math.min(lines.length - 1, hunk.endLine - 1)
-    if (to < from) continue
-    lines = [...lines.slice(0, from), ...replacement, ...lines.slice(to + 1)]
+/**
+ * 全文版应用（U13.3：**逐字替换**，与 harness `edit` 同构）。
+ * 旧实现按"整行区间 → `newString.split('\n')`"近似：行中间的部分替换（如改行内一个 token）
+ * 会把整行替换掉，全文失真；`newString=''` 还会留下幻影空行。误差会污染后续 `locate` 与链上坐标。
+ */
+function applyHunksToFull(full: string[], hunks: readonly Hunk[], oldString: string, newString: string): string[] {
+  let joined = full.join('\n')
+  for (const hunk of [...hunks].sort((a, b) => b.startOffset - a.startOffset)) {
+    joined = spliceAt(joined, hunk, oldString, newString)
+      ?? lineSplice(joined, hunk, 1, newString)
   }
-  return lines
+  return splitLines(joined)
+}
+
+/** 行区间兜底（`startLineBase` = 该 hunk 行坐标的基准：全文 1；窗口 = win.offset）。 */
+function lineSplice(joined: string, hunk: Hunk, startLineBase: number, newString: string): string {
+  const lines = joined.split('\n')
+  const from = Math.max(0, hunk.startLine - startLineBase)
+  const to = Math.min(lines.length - 1, hunk.endLine - startLineBase)
+  if (to < from) return joined
+  return [...lines.slice(0, from), ...replacementLines(newString), ...lines.slice(to + 1)].join('\n')
 }
 
 /** 窗口内应用 hunk；hunk 部分越窗（不可精确重建）→ undefined（窗口作废）。 */
-function applyHunksToWindow(win: Window, hunks: readonly Hunk[], newString: string): Window | undefined {
-  const replacement = newString.split('\n')
-  let lines = win.lines.slice()
+function applyHunksToWindow(win: Window, hunks: readonly Hunk[], oldString: string, newString: string): Window | undefined {
+  let joined = win.lines.join('\n')
   // U3：窗内 hunk 的局部坐标一律以**原窗口 offset** 计——窗前 hunk 只平移窗口绝对位置、
-  // 不改窗口内容；窗内应用按**降序**（与 applyHunksToFull 同构：降序时前置坐标永不过期，
-  // 升序在 delta≠0 时让后续 hunk 在已平移数组上按旧坐标切割 = 窗口内容错乱、版本链行号失真）。
+  // 不改窗口内容；窗内应用按**降序**（与全文版同构：降序时前置坐标永不过期，升序在 delta≠0 时
+  // 让后续 hunk 在已平移数组上按旧坐标切割 = 窗口内容错乱、版本链行号失真）。
   const inWindow: Hunk[] = []
   let offsetDelta = 0
   for (const hunk of hunks) {
@@ -184,11 +235,10 @@ function applyHunksToWindow(win: Window, hunks: readonly Hunk[], newString: stri
   }
   for (let i = inWindow.length - 1; i >= 0; i--) {
     const hunk = inWindow[i]!
-    const localStart = hunk.startLine - win.offset
-    const localEnd = hunk.endLine - win.offset
-    lines = [...lines.slice(0, localStart), ...replacement, ...lines.slice(localEnd + 1)]
+    // 先试逐字替换（偏移在本窗文本上校验通过才用）；否则退回行区间近似。
+    joined = spliceAt(joined, hunk, oldString, newString) ?? lineSplice(joined, hunk, win.offset, newString)
   }
-  return { offset: win.offset + offsetDelta, lines }
+  return { offset: win.offset + offsetDelta, lines: joined === '' ? [] : joined.split('\n') }
 }
 
 function sameLines(a: readonly string[], b: readonly string[]): boolean {
@@ -246,13 +296,13 @@ export function foldFileChains(ops: readonly FileOp[]): Map<string, FileChain> {
         full = undefined
         state.windows = []
       } else if (full !== undefined) {
-        full = applyHunksToFull(full, hunks, op.newString ?? '')
+        full = applyHunksToFull(full, hunks, op.oldString ?? '', op.newString ?? '')
         lineCount = full.length
       } else {
         lineCount = prevLineCount === undefined ? undefined : prevLineCount + hunks.reduce((sum, h) => sum + deltaOf(h), 0)
         const next: Window[] = []
         for (const win of state.windows) {
-          const applied = applyHunksToWindow(win, hunks, op.newString ?? '')
+          const applied = applyHunksToWindow(win, hunks, op.oldString ?? '', op.newString ?? '')
           if (applied !== undefined) next.push(applied)
         }
         state.windows = next
