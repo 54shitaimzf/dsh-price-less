@@ -47,14 +47,21 @@ export interface DossierRebuild {
 }
 
 /**
- * 消息所属段（09 §1「task 段 = 意图轴单位」；`[startSeq, endSeq)` 半开区间）。
+ * 消息所属段（09 §1「task 段 = 意图轴单位」）。
+ * **U12.3 区间语义 = `[startSeq, endSeq]`（两端闭）** —— 对齐 live 写入口径：
+ * live 在判词/边界落地**之前**就把消息 append 进"当时末段"的卷宗，故 `endSeq` 那条消息
+ * 属于**前段**。旧实现末端开区间 `seq < endSeq`：verdict 边界（`endSeq = anchor − 1`）会把
+ * 前段末条消息漏出去、掉进调用侧的 `?? lastSegment`（恢复后卷宗错位，off-by-one）。
+ * 起点保持闭区间是必须的：首段 `startSeq = sessionFirstSeq`（就是首条用户消息），
+ * 而 verdict 边界的 `startSeq = anchor`（正是新 task 的首条消息）。
+ * 同 seq 同时是前段 end 与后段 start（t0 边界：事实 seq）时**归前段**（先匹配者胜）。
  * 无匹配段（消息早于首边界 / 空段表）→ undefined，调用侧归末段。
  */
 export function segmentForSeq(segments: readonly TaskSegment[], seq: number): TaskSegment | undefined {
   for (const segment of segments) {
     const start = segment.startSeq ?? Number.NEGATIVE_INFINITY
     if (seq < start) continue
-    if (segment.endSeq === null || seq < segment.endSeq) return segment
+    if (segment.endSeq === null || seq <= segment.endSeq) return segment
   }
   return undefined
 }

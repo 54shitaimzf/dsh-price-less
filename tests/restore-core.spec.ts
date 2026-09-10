@@ -81,12 +81,24 @@ describe('P21a 卷宗日志重放重建', () => {
     { taskId: 'task-2', startSeq: 5, endSeq: null, closed: false, switchReason: 't0-close' },
   ]
 
-  it('段区间归属为半开区间 [start, end)', () => {
+  it('U12.3：段区间两端闭 [start, end]——边界 seq 归**前段**（对齐 live 追加序）', () => {
     expect(segmentForSeq(segments, 0)!.taskId).toBe('task-1')
     expect(segmentForSeq(segments, 4)!.taskId).toBe('task-1')
-    expect(segmentForSeq(segments, 5)!.taskId).toBe('task-2')
+    // t0 边界：endSeq = 后段 startSeq = 边界事实的 seq（该位置不是消息位）→ 归前段
+    expect(segmentForSeq(segments, 5)!.taskId).toBe('task-1')
+    expect(segmentForSeq(segments, 6)!.taskId).toBe('task-2')
     expect(segmentForSeq(segments, 99)!.taskId).toBe('task-2')
     expect(segmentForSeq([], 3)).toBeUndefined()
+  })
+
+  it('U12.3：verdict 边界（endSeq = anchor − 1）前段末条消息归还前段，不漏进末段', () => {
+    const verdictSegments: TaskSegment[] = [
+      { taskId: 'task-1', startSeq: 0, endSeq: 9, closed: true, switchReason: 'verdict-new-task' },
+      { taskId: 'task-2', startSeq: 10, endSeq: null, closed: false, switchReason: 'verdict-new-task' },
+    ]
+    // 旧实现末端开区间：9 < 9 为假 → 落空 → 调用侧 ?? lastSegment（错归 task-2）
+    expect(segmentForSeq(verdictSegments, 9)!.taskId).toBe('task-1')
+    expect(segmentForSeq(verdictSegments, 10)!.taskId).toBe('task-2')
   })
 
   it('按段归属重建卷宗 + judge-recorded 标注回放 + 会话级键', () => {

@@ -14,6 +14,7 @@ import type {} from '@deepseek-ai/dsh-storage-domain'
 import { openContextEconomyStorage, type ContextEconomyStorage } from './platform/storage.ts'
 import { watchSkillCatalog, type SkillCatalogSnapshot } from './platform/skills.ts'
 import { projectFrameStorageKey, reconcileProjectFrame, type ProjectFrameBody, type ProjectFrameRecord } from './core/prefix.ts'
+import { normalizeWorkspace, workspaceOf } from './domains/workspace.ts'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { BOUNDARY_JUDGE_WAIT_MS, mountAutoDiscriminator, type AutoDiscriminator } from './domains/input.ts'
 import { mountShearDomain } from './domains/shear.ts'
@@ -33,26 +34,44 @@ const PROJECT_FRAME_TABLE = 'project_frame' as const
 
 export { Config } from './config.ts'
 
-function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): () => void {
+/**
+ * 稳定前缀对账 watch（P8 接线 + U12.2 多根）。
+ *
+ * **U12.2**：项目帧键必须按**会话工作区**派生（F3 唯一键源）——旧实现固定 `process.cwd()`，
+ * 于是"在别的目录里开的会话"其项目帧永不重建（skill 目录变化对它毫无作用）。
+ * 现行根集合 = 进程 cwd ∪ 各会话 `workspaceOf(session)`：会话首见即加根，并在下次
+ * （或当前）目录快照到达时对该根对账一次。
+ */
+interface StablePrefixWatch {
+  addRoot(root: string): void
+  stop(): void
+}
+
+function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): StablePrefixWatch {
   const log = ceLogger(ctx)
-  const key = projectFrameStorageKey(process.cwd().replaceAll('\\', '/'))
-  let missingLogged = false
-  return watchSkillCatalog(ctx, (catalog: SkillCatalogSnapshot | undefined) => {
+  const roots = new Set<string>([normalizeWorkspace(process.cwd())])
+  /** 每个根只报一次"尚无项目帧"（原为单布尔，多根下会互相压制）。 */
+  const missingLogged = new Set<string>()
+  let lastCatalog: SkillCatalogSnapshot | undefined
+  let stopped = false
+
+  const reconcile = (root: string): void => {
+    const key = projectFrameStorageKey(root)
     try {
       const stored = storage.getEntity(PROJECT_FRAME_TABLE, key)
       const current: ProjectFrameRecord | undefined = stored == null
         ? undefined
         : { version: stored.version, body: stored.body as ProjectFrameBody }
-      const result = reconcileProjectFrame(current, catalog, 'skill')
+      const result = reconcileProjectFrame(current, lastCatalog, 'skill')
       if (result == null) {
         // 状态变化才记录：skill watch 每次回调都打会刷屏（实测 18 分钟 9,136 条）。
-        if (!missingLogged) {
-          missingLogged = true
-          log.info('context-economy: prefix unavailable until init frame (skill watch active, no project_frame yet)')
+        if (!missingLogged.has(root)) {
+          missingLogged.add(root)
+          log.info(`context-economy: prefix unavailable until init frame (skill watch active, no project_frame for ${root})`)
         }
         return
       }
-      missingLogged = false
+      missingLogged.delete(root)
       if (!result.rebuilt) return
       void storage.putEntity(
         PROJECT_FRAME_TABLE,
@@ -75,7 +94,26 @@ function startStablePrefixWatch(ctx: Context, storage: ContextEconomyStorage): (
     } catch (e) {
       log.warn('context-economy: project frame reconcile failed (contained, fail-lazy)', e instanceof Error ? e.message : String(e))
     }
+  }
+
+  const stopWatch = watchSkillCatalog(ctx, (catalog: SkillCatalogSnapshot | undefined) => {
+    lastCatalog = catalog
+    for (const root of [...roots]) reconcile(root)
   })
+
+  return {
+    addRoot(root: string): void {
+      const normalized = normalizeWorkspace(root)
+      if (stopped || roots.has(normalized)) return
+      roots.add(normalized)
+      // 首见即对账一次：下一次 skills/change 可能永不到来。
+      if (lastCatalog !== undefined) reconcile(normalized)
+    },
+    stop(): void {
+      stopped = true
+      stopWatch()
+    },
+  }
 }
 
 export function apply(ctx: Context, config: Partial<ConfigShape>): void {
@@ -139,6 +177,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   stopSessionStart = onAgentSessionStart(ctx, {
     logger: ceLogger(ctx),
     handler: (payload) => {
+      // U12.2：会话工作区首见即加根（帧键一律经 workspaceOf 派生，不再固定进程 cwd）。
+      addPrefixRoot(workspaceOf(payload.session, process.cwd()))
       if (restoreHandler === undefined) {
         pendingStarts.push(payload)
         if (pendingStarts.length > PENDING_STARTS_LIMIT) {
@@ -157,6 +197,17 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   let stopCommands: (() => void) | undefined
   let starHost: ReturnType<typeof mountStarHost> | undefined
   let stopStarBridge: (() => Promise<void>) | undefined
+
+  // U12.2：稳定前缀 watch 的根集合 = 进程 cwd ∪ 各会话工作区。根在 apply 作用域持久保留
+  // （storage 服务重挂时 watch 会重建，已见过的会话不会再发 session-start）。
+  let prefixWatch: StablePrefixWatch | undefined
+  const knownPrefixRoots = new Set<string>()
+  const addPrefixRoot = (root: string): void => {
+    const normalized = normalizeWorkspace(root)
+    if (knownPrefixRoots.has(normalized)) return
+    knownPrefixRoots.add(normalized)
+    prefixWatch?.addRoot(normalized)
+  }
 
   ctx.inject(['storageDomain'], (storageCtx) => {
     storageCtx.effect(() => {
@@ -206,7 +257,13 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
             stopSkillWatch?.()
             stopSkillWatch = undefined
             skillsCtx = skillsCtx2 as Context
-            stopSkillWatch = startStablePrefixWatch(skillsCtx, opened)
+            const watch = startStablePrefixWatch(skillsCtx, opened)
+            prefixWatch = watch
+            for (const root of knownPrefixRoots) watch.addRoot(root)
+            stopSkillWatch = () => {
+              watch.stop()
+              if (prefixWatch === watch) prefixWatch = undefined
+            }
             ;(skillsCtx2 as Context).effect(() => () => {
               stopSkillWatch?.()
               stopSkillWatch = undefined

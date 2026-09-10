@@ -2,7 +2,7 @@
  * diag-sink spec（P1.1 工单 §5）——诊断落盘九组用例，全部 fake（无 cordis 运行时 import，
  * 同 apply-smoke 纪律；Message/Exporter 仅 type-only）。真机全链路属 dev_self_test 用户核验项。
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -157,6 +157,40 @@ describe('diag-sink（P1.1）', () => {
       ex.export(msg({ args: ['two'] }))
     }
     expect(errSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('U12.1①：滚动 rename 失败 → 原地截断兜底并继续 append（旧实现静默放弃 = 文件无界增长）', () => {
+    const { ctx, exporters } = makeCtx()
+    attachDiagSink(ctx as never, { dir, capBytes: 256 })
+    const file = join(dir, 'context-economy.log')
+    // 占位：让 `${file}.1` 是**目录** → renameSync 必失败（Windows / POSIX 同）
+    mkdirSync(`${file}.1`)
+    for (let i = 0; i < 20; i++) {
+      for (const ex of exporters.values()) ex.export(msg({ args: ['y'.repeat(60), i] }))
+    }
+    // 旧实现：rename 失败被吞 → 20 行全留（无界）；新实现：原地截断，文件保持有界
+    expect(statSync(file).size).toBeLessThan(3 * 256)
+    const kept = lines(file) // 截断对齐行边界 → 仍是完整 JSONL
+    expect(kept.length).toBeGreaterThan(0)
+    expect(errSpy).toHaveBeenCalled()
+    // 截断 ≠ 停用：后续日志继续落盘（末行就是刚写的那条）
+    for (const ex of exporters.values()) ex.export(msg({ args: ['after-truncate'] }))
+    expect(lines(file).at(-1)?.msg).toContain('after-truncate')
+  })
+
+  it('U12.1②：单条坏消息只丢该条——sink 不停用（旧实现 warnOnce 停用整个 sink）', () => {
+    const { ctx, exporters } = makeCtx()
+    attachDiagSink(ctx as never, { dir })
+    const file = join(dir, 'context-economy.log')
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    for (const ex of exporters.values()) {
+      ex.export(msg({ args: ['ok-1'] }))
+      ex.export(msg({ args: [circular] })) // JSON.stringify 抛错
+      ex.export(msg({ args: ['ok-2'] }))
+    }
+    expect(lines(file).map((r) => r.msg)).toEqual(['ok-1', 'ok-2'])
+    expect(errSpy).toHaveBeenCalled() // 丢条不静默
   })
 
   it('⑧ 注销即净：disposer 后 emit 零新增行', () => {

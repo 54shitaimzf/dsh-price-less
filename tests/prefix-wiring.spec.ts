@@ -122,10 +122,16 @@ function makeHarness(opts: { withSkills?: boolean } = {}) {
 
   const flush = async (): Promise<void> => { for (let i = 0; i < 12; i++) await Promise.resolve() }
   const emitSkillsChange = (): void => { for (const fn of [...(listeners.get('skills/change') ?? [])]) fn() }
-  const projectFrame = (): EntityRecord | undefined => domain.table('project_frame').get(projectFrameStorageKey(process.cwd().replaceAll('\\', '/'))) as EntityRecord | undefined
+  /** U12.2：模拟 H9 session-start（带会话工作区 header.cwd）。 */
+  const emitSessionStart = (cwd: string): void => {
+    const payload = { agent: { session: { header: { id: 's1', cwd } } }, source: 'startup' }
+    for (const fn of [...(listeners.get('agent/session-start') ?? [])]) (fn as unknown as (p: unknown) => void)(payload)
+  }
+  const frameAt = (root: string): EntityRecord | undefined => domain.table('project_frame').get(projectFrameStorageKey(root)) as EntityRecord | undefined
+  const projectFrame = (): EntityRecord | undefined => frameAt(process.cwd().replaceAll('\\', '/'))
   const setCatalog = (next: SkillCatalogSnapshot | undefined): void => { catalog = next }
 
-  return { ctx, disposers, domain, flush, emitSkillsChange, projectFrame, setCatalog, listeners }
+  return { ctx, disposers, domain, flush, emitSkillsChange, emitSessionStart, projectFrame, frameAt, setCatalog, listeners }
 }
 
 describe('prefix wiring', () => {
@@ -198,6 +204,29 @@ describe('prefix wiring', () => {
     expect(h.projectFrame()!.version).toBe(2)
     for (const d of [...h.disposers]) d()
     expect(h.projectFrame()!.version).toBe(2)
+  })
+
+  it('U12.2：会话工作区首见即加根——非进程 cwd 的项目帧也随 skill 变化重建', async () => {
+    const h = makeHarness()
+    const other = 'D:/some/other/project'
+    await h.domain.table('project_frame').put(projectFrameStorageKey(other), {
+      schemaVersion: 1,
+      version: 1,
+      source: { taskId: 'init', eventType: 'init', evidence: {} },
+      body: { goal: 'G', aspects: [], skillCatalog: catalogA },
+    })
+    apply(h.ctx as never, {})
+    await h.flush()
+    // 旧实现帧键固定 = process.cwd()：这个根**永远**不在对账范围内
+    expect(h.frameAt(other)!.version).toBe(1)
+    h.emitSessionStart(other)
+    h.setCatalog(catalogB)
+    h.emitSkillsChange()
+    await h.flush()
+    const rec = h.frameAt(other)!
+    expect(rec.version).toBe(2)
+    expect((rec.body as { skillCatalog: SkillCatalogSnapshot }).skillCatalog.skills[0]!.name).toBe('beta')
+    expect((rec.source.evidence as { cause: string }).cause).toBe('skill')
   })
 
   it('无 skills 服务时主插件仍可用：不注册 skills/change watch，也不创建项目帧', async () => {

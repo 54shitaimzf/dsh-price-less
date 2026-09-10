@@ -10,7 +10,7 @@
  * 无 'context-economy/' 字面量（S3）；注销经本插件 fiber effect 承接 exporter() 的 disposer
  * （内建 disposer 挂根 fiber，卸载即净靠本层，11 §1 入口铁律）。
  */
-import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context, Exporter, Message } from '@deepseek-ai/cordis'
@@ -18,6 +18,8 @@ import type { Context, Exporter, Message } from '@deepseek-ai/cordis'
 const DIAG_NAME = 'context-economy'; const DIAG_FILE = 'context-economy.log'
 const CAP_BYTES = 2 << 20 // 单文件 2 MiB 封顶，滚动保留 1 份 .log.1
 const DEBUG_LEVEL = 3 // cordis LoggerLevel.DEBUG（const enum 不可运行时 import，字面钉值）
+/** U12.1②：序列化失败按条跳过；每 N 条告警一次（不静默、也不刷屏）。 */
+const DROP_WARN_EVERY = 100
 
 let warnDisabled = false
 function warnOnce(msg: string, err: unknown): void {
@@ -78,16 +80,61 @@ export function attachDiagSink(ctx: Context, opts: { dir?: string; capBytes?: nu
     return undefined
   }
   const cap = opts.capBytes ?? CAP_BYTES
+  let droppedLines = 0
+  let rolloverWarned = false
+  /**
+   * U12.1①：封顶滚动。rename 失败（Windows 上 `.log.1` 被占用 / 权限）→ **原地截断兜底**：
+   * 读回、保留后半段、重写，继续 append。旧实现把 rename 失败整个吞掉 → 文件**无界增长**
+   * （诊断面无限膨胀，且最终拖慢的是 append 本身）。
+   */
+  const rollIfNeeded = (): void => {
+    let size: number
+    try {
+      size = statSync(file).size
+    } catch {
+      return // 文件尚不存在（首写）→ 直接追加
+    }
+    if (size < cap) return
+    try {
+      renameSync(file, `${file}.1`)
+      return
+    } catch { /* 落到原地截断 */ }
+    try {
+      const text = readFileSync(file, 'utf8')
+      // 从 cap/2 处起、**对齐到行边界**（否则截断会留下半行坏 JSON，破坏 JSONL 可解析性）
+      const cut = Math.max(0, text.length - Math.floor(cap / 2))
+      const nextLineBreak = text.indexOf('\n', cut)
+      const keepFrom = nextLineBreak < 0 ? text.length : nextLineBreak + 1
+      writeFileSync(file, text.slice(keepFrom))
+      console.error(`[context-economy] diag sink: rollover rename failed; truncated in place (kept ${String(text.length - keepFrom)} chars)`)
+    } catch (err) {
+      // 兜底也失败 → 只告警一次，**不停用** sink（失败方向 = 尽量继续留证据）。
+      if (!rolloverWarned) {
+        rolloverWarned = true
+        console.error('[context-economy] diag sink: rollover and in-place truncate both failed; file may grow unbounded', err instanceof Error ? err.message : err)
+      }
+    }
+  }
   const exporter: Exporter = {
     colors: false,
     levels: { default: DEBUG_LEVEL },
     export: (message) => {
       if (warnDisabled || message.name !== DIAG_NAME) return
+      // U12.1②：序列化**逐条隔离**——坏消息（循环引用 / 巨对象）只丢这一条。
+      // 旧实现让它落到外层 catch → `warnOnce` **停用整个 sink**（此后所有诊断永久消失）。
+      let line: string
       try {
-        if (statSync(file).size >= cap) renameSync(file, `${file}.1`)
-      } catch { /* 文件尚不存在（首写）→ 直接追加 */ }
+        line = toLine(message)
+      } catch {
+        droppedLines++
+        if (droppedLines === 1 || droppedLines % DROP_WARN_EVERY === 0) {
+          console.error(`[context-economy] diag sink: dropped ${String(droppedLines)} unserializable message(s) (sink stays active)`)
+        }
+        return
+      }
+      rollIfNeeded()
       try {
-        appendFileSync(file, `${toLine(message)}\n`)
+        appendFileSync(file, `${line}\n`)
       } catch (err) {
         warnOnce(`append failed ${file}`, err)
       }
