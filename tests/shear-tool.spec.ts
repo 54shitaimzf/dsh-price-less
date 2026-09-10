@@ -97,6 +97,17 @@ describe('P15a §2 T-entry 写时整形（W2 保守准入，账本 §73）', () 
     expect(shapeEntryContent({ seq: 1, time: 0, callId: 'c5', name: 'read', argsText: '{}' }, bigLog(400))).toBeUndefined()
     expect(shapeEntryContent(logCall('c6'), 'ok\n')).toBeUndefined()
   })
+  it('U11.5：`run` 只认真实脚本运行器动词——文件名里的 run 不整形', () => {
+    const scriptCall = (callId: string, command: string) => ({ seq: 1, time: 0, callId, name: 'bash', argsText: JSON.stringify({ command }) })
+    // 旧实现裸 \brun\b 命中 `run.py` / `run-migration.ts` → 脚本输出被误整形（丢内容）
+    expect(shapeEntryContent(scriptCall('r1', 'node run.py'), bigLog(400))).toBeUndefined()
+    expect(shapeEntryContent(scriptCall('r2', 'python run.py'), bigLog(400))).toBeUndefined()
+    expect(shapeEntryContent(scriptCall('r3', 'node scripts/run-migration.ts'), bigLog(400))).toBeUndefined()
+    // 脚本运行器动词仍是过程日志（含自定义脚本名——旧实现只认动词表里的 build/test）
+    expect(shapeEntryContent(scriptCall('r4', 'npm run build'), bigLog(400))).toBeDefined()
+    expect(shapeEntryContent(scriptCall('r5', 'pnpm run gate'), bigLog(400))).toBeDefined()
+    expect(shapeEntryContent(scriptCall('r6', 'yarn run my-custom-script'), bigLog(400))).toBeDefined()
+  })
   it('体积门槛：行数或字节不足 → 不动刀', () => {
     expect(shapeEntryContent(logCall('c1'), bigLog(100))).toBeUndefined()
     const fewBigLines = Array.from({ length: 30 }, () => 'y'.repeat(2000)).join('\n')

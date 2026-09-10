@@ -140,6 +140,26 @@ describe('P17b 装配域：双通道取真', () => {
     expect(outcome.result.hotTail.entries[0]!.text).toBe('307 tests passed')
   })
 
+  it('U11.2：同一 unitId 重复申报且坐标不同 → 首申报胜出（取真内容与 locator 不错配）', async () => {
+    const env = makeEnv({ files: filesWith({ 'a.ts': ['first'], 'b.ts': ['second'] }) })
+    env.appendCall('c1', 'read', { file_path: 'a.ts' })
+    env.appendResult('c1', '1: first', env.readMeta('a.ts', ['first']))
+    env.appendCall('c2', 'read', { file_path: 'b.ts' })
+    env.appendResult('c2', '1: second', env.readMeta('b.ts', ['second']))
+    const outcome = await env.domain.assemble({
+      session: env.session as never, taskId: 'task-1', range: rangeOf(env.session),
+      hotTail: [
+        { unitId: 'c1', coord: { path: 'a.ts', version: 1, lineRange: { start: 1, end: 1 } } },
+        { unitId: 'c1', coord: { path: 'b.ts', version: 1, lineRange: { start: 1, end: 1 } } },
+      ],
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    // 旧实现：第二次申报覆盖 resolve['c1'] → 取到 b.ts 内容，而 locator 仍指向 a.ts（内容与标注错配）
+    expect(outcome.result.hotTail.entries[0]!.source).toBe('file')
+    expect(outcome.result.hotTail.entries[0]!.text).toBe('first')
+    expect(outcome.result.hotTail.entries[0]!.locator ?? '').toContain('a.ts')
+  })
+
   it('fs 缺失 = 通道 A 丢弃计数 + 兜底照常（不 fatal）', async () => {
     const env = makeEnv()
     env.appendCall('c1', 'read', { file_path: 'a.ts' })

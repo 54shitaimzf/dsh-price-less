@@ -230,9 +230,14 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
     } else {
       const windows = new Map<string, Awaited<ReturnType<FilesPort['readLines']>>>()
       let fetches = 0
+      // U11.2：按 unitId 去重、**首申报胜出**。resolve 表以 unitId 为键——重复申报若允许后者覆盖，
+      // 取真内容会与首申报被选中的 locator 错配（产物里的定位标注指向另一处内容）。
+      const seenUnits = new Set<string>()
       for (const [index, decl] of gated.accepted.entries()) {
         const coord = decl.coord
         if (coord === undefined) continue
+        if (seenUnits.has(decl.unitId)) continue
+        seenUnits.add(decl.unitId)
         if (fetches >= policy.maxFetchUnits) {
           // F9f：申报洪泛时静默截断改明账（不再无计数）。
           fetchCapped = gated.accepted.slice(index).filter((item) => item.coord !== undefined).length

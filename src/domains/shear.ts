@@ -187,6 +187,9 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
 
   const shapeEntry = (view: ToolResultView): string | undefined => {
     if (disposed || !enabled()) return undefined
+    // U11.4：失败原文一律保留（`isError` 是工具层权威判定；正则形态识别只作兜底）——
+    // 判据不成立就不动刀，失败方向永远朝用户数据安全侧。
+    if (view.isError === true) return undefined
     const shaped = shapeEntryContent(callOf(view), view.resultText, view.args)
     if (shaped === undefined) return undefined
     const beforeTokens = estimateTokens(view.resultText)

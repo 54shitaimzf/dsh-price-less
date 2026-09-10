@@ -196,7 +196,10 @@ function attemptedTaskIds(facts: readonly LedgerFact[], retryBudget = RETRY_BUDG
     if (typeof data.taskId !== 'string' || data.taskId === '') continue
     // 只有边界路径的尝试才算"该 task 已归档"；压力路径的 compress-run 不阻止 task 闭合归档。
     if (data.layer !== 'boundary') continue
-    if (data.outcome === 'skipped' && data.reason === 'llm-unavailable') continue
+    // 非封禁原因（U9 + U11.8）：llm-unavailable = 瞬态；range-empty = 区间/表面结构条件。
+    // U11.8 新发的 range-empty 只是**可观测**事实，绝不能因此把该段永久封禁——
+    // 旧实现这几处根本不发事实、每步照试；加了事实却顺带改了封禁语义就是引入新缺陷。
+    if (data.outcome === 'skipped' && (data.reason === 'llm-unavailable' || data.reason === 'range-empty')) continue
     const key = data.segmentStartSeq === undefined ? data.taskId : `${data.taskId}:${data.segmentStartSeq ?? ''}`
     if (isTransientCompressFailure(data)) {
       transient.set(key, (transient.get(key) ?? 0) + 1)
@@ -265,6 +268,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   /** F3：会话级工作区（header.cwd 优先；deps.workspace/进程 cwd 仅作回落）。 */
   const workspaceFor = (session: Session): string => workspaceOf(session, deps.workspace ?? process.cwd())
   const counts: CompactionDomainStats = { preSteps: 0, triggers: 0, compactions: 0, cacheHits: 0, skips: 0, rangeSkips: 0, errors: 0 }
+  /** U11.8：range-skip 事实节流（同一段的区间定位失败每进程只记一次，防每步刷屏）。 */
+  const rangeSkipNotified = new Set<string>()
   const busy = new WeakSet<Session>()
   /** 压力触发 turn 守卫（一个 turn 至多一次常规压力尝试；紧急折叠另有守卫）。 */
   const pressureTurn = new WeakMap<Session, number>()
@@ -379,6 +384,17 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       counts.skips++
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({ ...base, outcome: 'skipped' as const, reason, ...extra }), logger)
     }
+    /**
+     * U11.8：区间定位失败（旧实现**零事实**——`rangeSkips` 只在内存计数里，回放不可见）。
+     * 每段每进程只记一次（节流；`rangeSkips` 仍如实累计）。
+     */
+    const rangeSkip = (): void => {
+      counts.rangeSkips++
+      const key = `${scopedTaskId}:${segment.startSeq ?? ''}`
+      if (rangeSkipNotified.has(key)) return
+      rangeSkipNotified.add(key)
+      skip('range-empty')
+    }
 
     // ① 区间落表面（权威表面 = harness session.surface.nodes；尾必须排除下一段起点 = 新 task 首条消息）。
     // F9a：范围端点必须取自权威表面——从原始事件自折在事件窗被截断时会复活已遮蔽节点，
@@ -396,15 +412,15 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     }
     const start = surface.find((seq) => isRealNode(Number(seq)) && seq >= (segment.startSeq ?? 0) && seq < nextStartSeq)
     const end = start === undefined ? undefined : [...surface].reverse().find((seq) => isRealNode(Number(seq)) && seq >= start && seq < nextStartSeq)
-    if (start === undefined || end === undefined) { counts.rangeSkips++; return }
+    if (start === undefined || end === undefined) { rangeSkip(); return }
     const balanced = history.balanceRange({ start: start as never, end: end as never })
-    if (balanced === null) { counts.rangeSkips++; return }
+    if (balanced === null) { rangeSkip(); return }
     const shadowedSeqs = history.spanShadowedSeqs(balanced)
-    if (shadowedSeqs === null || shadowedSeqs.length === 0) { counts.rangeSkips++; return }
+    if (shadowedSeqs === null || shadowedSeqs.length === 0) { rangeSkip(); return }
     const range = { startSeq: Number(balanced.start), endSeq: Number(balanced.end) }
     const domain = new Set<number>(shadowedSeqs.map(Number))
     const regionText = renderDomainTranscript(events, domain)
-    if (regionText === '') { counts.rangeSkips++; return }
+    if (regionText === '') { rangeSkip(); return }
     const units = deps.assemble.unitList(session, range, domain)
 
     // ② 档案体 + 续传链（机制 A）+ 内容寻址键。
@@ -974,7 +990,9 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (wireTokens === undefined) return
     const floorTokens = fuseFloorTokens(contextWindow)
     if (floorTokens === undefined || !fuseArmed({ wireTokens, contextWindow })) return
-    const guardKey = `${turn}:${step}`
+    // U11.7：键分前缀——保险丝（fuse）与溢出接管（err）是两条独立通道，同一 (turn,step) 下
+    // 旧实现共用一个键，先到者会把另一条挤掉（保险丝挤掉同拍溢出接管 = 该轮不再重试）。
+    const guardKey = `fuse:${turn}:${step}`
     if (emergencyGuard.get(session) === guardKey) return
     emergencyGuard.set(session, guardKey)
     fuseTurn.set(session, turn)
@@ -999,7 +1017,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const config = getConfig()
     if (config.compression?.pressure === false) return 'pass'
     if (payload.failureCode !== CE_CONTEXT_OVERFLOW_CODE) return 'pass'
-    const guardKey = `${payload.turn}:${payload.step}`
+    const guardKey = `err:${payload.turn}:${payload.step}`
     if (emergencyGuard.get(payload.session) === guardKey) return 'pass'
     emergencyGuard.set(payload.session, guardKey)
     if (busy.has(payload.session)) return 'pass'

@@ -77,6 +77,16 @@ describe('foldRunShear（对话 run 状态机）', () => {
     expect(foldRunShear(events).decisions).toEqual([{ runKey: '1..4', decision: 'hold', reason: 'verify-dependency-window' }])
   })
 
+  it('U11.6：观察窗按**消息类事件**计量——非消息事件不占窗口额度（旧实现漏判依赖）', () => {
+    const events = [
+      u(1, '跑一下 gate 测试'), v(2, 1, 'verifyQ'), t(3, 'gate 全绿\n[exit code: 0]'), a(4, '通过'),
+      // 四个非消息事件：旧实现把它们填满观察窗（窗口文本为空）→ 指纹漏判 → 误判可剪
+      plan(5, []), plan(6, []), plan(7, []), plan(8, []),
+      u(9, '那 gate 的 D10 断言呢？'), v(10, 9, 'action'),
+    ]
+    expect(foldRunShear(events).decisions).toEqual([{ runKey: '1..4', decision: 'hold', reason: 'verify-dependency-window' }])
+  })
+
   it('星标剪切清单覆盖长 run → star-note 落刀（选坐标不造坐标）', () => {
     const events = [
       u(1, 'Q1'), v(2, 1, 'pureQ'), a(3, 'A1'),

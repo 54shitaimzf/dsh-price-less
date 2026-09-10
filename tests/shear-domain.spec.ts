@@ -173,6 +173,15 @@ describe('P15b 同步相：T-entry 整形（W2 保守准入）', () => {
     expect((await env.postExecute(fakeExec({ name: 'bash', parent: Symbol('p') }), fakeResult(LOG_400))).nextCalls).toBe(1)
     expect(env.facts()).toHaveLength(0)
   })
+  it('U11.4：结果 isError=true → 一律不整形（工具层权威判定；失败原文保留）', async () => {
+    const env = makeEnv()
+    const exec = fakeExec({ name: 'bash', arguments: { command: 'npm test' } })
+    // 干净文本 + isError：形态判据本会放行（旧实现只看文本里的失败特征），必须按 isError 拦下
+    expect((await env.postExecute(exec, fakeResult(LOG_400, true))).nextCalls).toBe(1)
+    // 对照组：同一 exec、同一文本、isError=false → 照常整形（证明拦下的原因就是 isError）
+    expect((await env.postExecute(exec, fakeResult(LOG_400, false))).nextCalls).toBe(0)
+  })
+
   it('G1：enabled=false → 同步相与异步相全部零行为', async () => {
     const env = makeEnv({ enabled: false })
     expect((await env.postExecute(fakeExec({ name: 'bash' }), fakeResult(BIG))).nextCalls).toBe(1)

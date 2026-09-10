@@ -282,7 +282,9 @@ export function foldRunShear(events: readonly RunEvent[], policy: RunPolicy = DE
       return
     }
     if (draft.klass === 'verifyQ') {
-      const window = ordered.filter((event) => event.seq > closing.endSeq).slice(0, policy.observationWindow)
+      // U11.6：观察窗按**消息类事件**计量（旧实现把 verdict/star-plan 等非消息事件也占掉窗口额度，
+      // 真消息被挤出去 → verify 依赖检测漏判）。
+      const window = ordered.filter((event) => event.seq > closing.endSeq && isMessageEvent(event)).slice(0, policy.observationWindow)
       const windowText = window.map((event) => (event.kind === 'user-message' || event.kind === 'assistant-message' ? event.text : '')).join(' ')
       const windowTokens = new Set(salientTokens(windowText, policy))
       if (questionTokens.some((token) => windowTokens.has(token))) {

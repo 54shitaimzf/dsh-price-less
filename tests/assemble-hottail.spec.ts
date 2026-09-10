@@ -423,6 +423,32 @@ describe('F9c 热尾：事实载体与预算（份额帽 / 仅指针 / 去重 / 
     expect(outcome.result.hotTail.tokens).toBeLessThanOrEqual(400)
   })
 
+  it('U11.1：摘要估算按截断后文本——超长总述/分步不会把份额帽压到 0.05 下限', () => {
+    const REGION = 100_000
+    const maxShareCap = Math.ceil(REGION * 0.4)
+    const minShareFloor = Math.ceil(REGION * 0.05)
+    const units = [unit('a', 1, 'A'.repeat(1000))]
+    // 摘要超长（远超 gistMaxChars 80 / stepMaxChars 120 / digestMaxTokens 1000）
+    const longDigest = {
+      gist: 'G'.repeat(4000),
+      steps: Array.from({ length: 30 }, (_, i) => ({ type: 'plan' as const, text: `${i}:${'S'.repeat(4000)}` })),
+    }
+    const outcome = assembleArchive({
+      units,
+      digest: longDigest,
+      hotTail: [{ unitId: 'a' }],
+      regionTokens: REGION,
+      policy: policy({ hotTailTokens: 1_000_000, pointerOverheadTokens: 0, minTruncatedChars: 5 }),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    // 不变量：份额帽 = maxShare×区间 − **截断后**摘要头体量（digestPlan.tokens 就是截断后体量）。
+    // 旧实现拿未截断原文估（≈3 万 token）→ 预算被砍到 1 万上下；两者必须相等才算"同一渲染函数"。
+    expect(outcome.result.hotTail.budgetTokens).toBe(maxShareCap - outcome.result.digestPlan.tokens)
+    // 且确实没落到 minShare 地板
+    expect(outcome.result.hotTail.budgetTokens).toBeGreaterThan(maxShareCap - 5_000)
+    expect(outcome.result.hotTail.budgetTokens).toBeGreaterThan(minShareFloor)
+  })
+
   it('配额不足 → 丢弃（F10：无内容 = 无定位价值；quotaDrops 计数）', () => {
     const units = [unit('a', 1, 'A'.repeat(100))]
     const outcome = assembleArchive({

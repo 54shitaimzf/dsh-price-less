@@ -35,6 +35,12 @@ const SAMPLE: LedgerSessionEvent[] = [
   ev(3, 'compaction/start', { compactionId: 'x', turn: 1 }),
   ev(4, 'user/message', { content: [text('C1')], source: { kind: 'plugin', plugin: 'compact' } }, expectedReplaceOp(0, 2)),
   ev(5, 'context-economy/compress-run', { at: 1 }),
+  // U11.3：本插件自己的 notice（source.kind='plugin'，plugin 名**不是** compact）——旧实现只认
+  // plugin==='compact'，于是这条被当成原文材料再折一遍（双份摘要 + foldedTokens 虚高）。
+  ev(6, 'user/message', {
+    content: [text('NOTICE: 已压缩 task-1')],
+    source: { kind: 'plugin', plugin: 'context-economy', form: 'notice', summary: '已压缩 task-1' },
+  }, 'append'),
 ]
 
 describe('P20a 压力纯核：阈值与断路器', () => {
@@ -100,16 +106,19 @@ describe('P20a 压力纯核：折叠区材料转写', () => {
     expect(isPressureMaterial(SAMPLE[3]!)).toBe(false)
     expect(isPressureMaterial(SAMPLE[4]!)).toBe(false)
     expect(isPressureMaterial(SAMPLE[5]!)).toBe(false)
+    // U11.3：**一切** plugin 源消息（含本插件 notice）都不是任务材料
+    expect(isPressureMaterial(SAMPLE[6]!)).toBe(false)
   })
 
   it('折叠区 = 上次缝之后的原始材料（被遮蔽原文重新可见，检查点节点不重复入料）', () => {
-    const transcript = renderFoldMaterialTranscript(SAMPLE, { startSeq: 0, endSeq: 5 })
+    const transcript = renderFoldMaterialTranscript(SAMPLE, { startSeq: 0, endSeq: 6 })
     expect(transcript).toContain('head')
     expect(transcript).toContain('mid')
     expect(transcript).toContain('tail')
     expect(transcript).not.toContain('C1')
+    expect(transcript).not.toContain('NOTICE')
     expect(transcript).not.toContain('compaction/start')
-    expect(foldMaterialTokens(SAMPLE, { startSeq: 0, endSeq: 5 })).toBeGreaterThan(0)
+    expect(foldMaterialTokens(SAMPLE, { startSeq: 0, endSeq: 6 })).toBeGreaterThan(0)
   })
 })
 

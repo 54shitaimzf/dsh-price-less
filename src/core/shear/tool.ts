@@ -55,8 +55,23 @@ export const LISTING_MIN_LINES = 8
  * 允许保头尾整形。判据 = 命令名出现在 shell 语句起点 + 同行出现构建/测试动词；
  * **数据查询类命令**（git / Get-Content / Select-String / 目录列表 / npm ls …）不在白名单 →
  * 原文保留——载荷在中间，保头尾会丢答案（真机 typst-ecd9 seq 44/75/78 等）。
+ * U11.5：`run` 动词收紧为「包管理器 run」（`npm run build`）或**行首** `run `——
+ * 旧实现裸 `\brun\b` 会把 `node run.py` / `python run.py` 这类脚本执行误判成过程日志。
  */
-export const LOG_COMMAND_RE = /(?:^\s*|[\n|;&]\s*)(?:npm|pnpm|yarn|bun|npx|node|deno|vitest|jest|mocha|ava|playwright|pytest|tox|ruff|mypy|cargo|rustc|tsc|eslint|biome|prettier|make|cmake|ninja|meson|bazel|gradle|mvn|dotnet|pip|poetry|uv|pipenv|golangci-lint|gcc|clang|go|python)(?=[^\n]{0,200}?\b(?:test|build|check|lint|compile|install|ci|run|clippy|typecheck|verify|gate|pytest|vitest|jest|tsc|eslint|biome|prettier)\b)/i
+const LOG_VERB_RE = '\\b(?:test|build|check|lint|compile|install|ci|clippy|typecheck|verify|gate|pytest|vitest|jest|tsc|eslint|biome|prettier)\\b'
+/**
+ * `run` 动词收紧（U11.5）：只认**独立单词 + 后随空白**的 `run `（= 脚本运行器动词，
+ * 覆盖 `npm run build` 与 `npm run <自定义脚本名>`）。
+ * **不**要求前面必须是包管理器——那会漏掉 `npm run <自定义脚本名>`（脚本名不在动词表里）；
+ * 只要求后随空白即可排除 `node run.py` / `python run.py` / `scripts/run-migration.ts`
+ * 这类**文件名里的 run**（这正是旧实现裸 `\brun\b` 的误判来源）。
+ */
+const RUN_VERB_RE = '\\brun\\s'
+export const LOG_COMMAND_RE = new RegExp(
+  '(?:^\\s*|[\\n|;&]\\s*)(?:npm|pnpm|yarn|bun|npx|node|deno|vitest|jest|mocha|ava|playwright|pytest|tox|ruff|mypy|cargo|rustc|tsc|eslint|biome|prettier|make|cmake|ninja|meson|bazel|gradle|mvn|dotnet|pip|poetry|uv|pipenv|golangci-lint|gcc|clang|go|python)'
+  + `(?=[^\\n]{0,200}?(?:${RUN_VERB_RE}|${LOG_VERB_RE}))`,
+  'i',
+)
 
 export function toolCategory(name: string): ShearToolCategory {
   if (READ_TOOLS.has(name)) return 'read'

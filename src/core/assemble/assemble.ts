@@ -272,16 +272,16 @@ export function archiveRefOf(priorChainLength: number): string {
 }
 
 /**
- * 产物渲染（F10：总述 → 分步（零指针）→ 热尾（头指档案 + ▸n 内容）；字节稳定）。
- * 摘要硬帽：超限从**最后一条分步**起整条丢弃（机械；不重写）。
- * `digestText` = 档案落盘正文（仅总分，零事实、零热尾）；`text` = 替换入上下文全文。
+ * 摘要头渲染（F10 契约；U11.1 抽为**单一事实源**）：gist 截断 → 分步逐条截断 → 摘要硬帽整条丢尾。
+ *
+ * 为什么必须共用：热尾预算的份额帽要扣掉摘要头体量（`hotTailMaxShare × 区间 − digestEstimate`）。
+ * 旧实现用**未截断**原文估算——长总述/长分步被严重高估，份额帽被压到 `hotTailMinShare`(0.05) 下限，
+ * 热尾被无谓砍掉（真机表现：产物比预期小得多）。截断规则只许在这里写一次。
  */
-export function renderProduct(
+function renderDigestHead(
   digest: TaskDigest,
-  entries: readonly HotTailSelection[],
-  policy: AssemblePolicy = DEFAULT_ASSEMBLE_POLICY,
-  archiveRef = 'v1',
-): { text: string; digestText: string; plan: DigestPlan } {
+  policy: AssemblePolicy,
+): { gist: string; lines: string[]; digestText: string; tokens: number } {
   const gist = truncateChars(digest.gist, policy.gistMaxChars, ELLIPSIS)
   const lines: string[] = []
   for (const step of digest.steps) {
@@ -292,6 +292,21 @@ export function renderProduct(
     lines.pop()
   }
   const digestText = [gist === '' ? '' : `${GIST_LABEL}${gist}`, ...lines].filter((part) => part !== '').join('\n')
+  return { gist, lines, digestText, tokens: digestText === '' ? 0 : estimateTokens(digestText, policy.density) }
+}
+
+/**
+ * 产物渲染（F10：总述 → 分步（零指针）→ 热尾（头指档案 + ▸n 内容）；字节稳定）。
+ * 摘要硬帽：超限从**最后一条分步**起整条丢弃（机械；不重写）。
+ * `digestText` = 档案落盘正文（仅总分，零事实、零热尾）；`text` = 替换入上下文全文。
+ */
+export function renderProduct(
+  digest: TaskDigest,
+  entries: readonly HotTailSelection[],
+  policy: AssemblePolicy = DEFAULT_ASSEMBLE_POLICY,
+  archiveRef = 'v1',
+): { text: string; digestText: string; plan: DigestPlan } {
+  const { gist, lines, digestText } = renderDigestHead(digest, policy)
   const body = entries
     .map(
       (entry) =>
@@ -434,11 +449,9 @@ export function assembleArchive(input: AssembleInput): AssembleOutcome {
   for (const unit of units) if (!byId.has(unit.id)) byId.set(unit.id, unit)
 
   // F9 预算：绝对帽 + 份额帽（≤ maxShare × 区间，防产物 ≥ 被压区间被缩水校验打回）。
+  // U11.1：摘要头体量按**截断后**文本估算（与 renderProduct 同一渲染函数），否则份额帽被虚高压缩。
   const regionTokens = input.regionTokens ?? 0
-  const digestHead = effective.gist === '' && effective.steps.length === 0
-    ? ''
-    : `${effective.gist}\n${effective.steps.map((step) => step.text).join('\n')}`
-  const digestEstimate = digestHead === '' ? 0 : estimateTokens(digestHead, policy.density)
+  const digestEstimate = renderDigestHead(effective, policy).tokens
   const shareCap = regionTokens > 0
     ? Math.max(Math.ceil(regionTokens * policy.hotTailMinShare), Math.ceil(regionTokens * policy.hotTailMaxShare) - digestEstimate)
     : policy.hotTailTokens

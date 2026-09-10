@@ -13,6 +13,7 @@
  */
 import { estimateTokens } from '../ledger/fold.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../ledger/types.ts'
+import { isPluginSourceEvent } from '../assemble/assemble.ts'
 import type { ArchiveEntry } from '../assemble/types.ts'
 import { renderRegionTranscript } from './region.ts'
 import { DEFAULT_COMPRESS_POLICY, type CompressCheckpoint, type CompressPolicy } from './types.ts'
@@ -116,22 +117,21 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
-/** 本插件/原生压缩检查点节点（plugin:compact）——不进折叠材料（机制 A 续传面）。 */
+/** 本插件/官方压缩检查点节点判据 = 「插件源消息」（`source.kind = 'plugin'`）。 */
 function isCompactCheckpoint(event: LedgerSessionEvent): boolean {
-  if (event.type !== 'user/message') return false
-  const root = recordOf(event.data)
-  if (root === undefined) return false
-  const message = recordOf(root.message) ?? root
-  const source = recordOf(message.source)
-  return source?.kind === 'plugin' && source.plugin === 'compact'
+  return event.type === 'user/message' && isPluginSourceEvent(event.data)
 }
 
 /**
  * 折叠材料判据（04 §3：折叠区 = 上次缝之后的原始材料）：
  * 只取 user/assistant/tool 四类可读材料，剔除 compaction 协议事件、事实事件与检查点节点。
+ * U11.3：插件源判据改用 `isPluginSourceEvent`（**一切** `source.kind='plugin'` 消息，含本插件自己的
+ * notice）——旧实现只认 `plugin === 'compact'`，于是自家"已压缩"notice 被当成原文材料再折一遍
+ * （双份摘要形态 + foldedTokens 虚高，缩水校验分母被污染）。
  */
 export function isPressureMaterial(event: LedgerSessionEvent): boolean {
-  if (event.type === 'user/message') return !isCompactCheckpoint(event)
+  if (isPluginSourceEvent(event.data)) return false
+  if (event.type === 'user/message') return true
   return event.type === 'assistant/message' || event.type === 'tool/call' || event.type === 'tool/result'
 }
 

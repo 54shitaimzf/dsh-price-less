@@ -574,6 +574,32 @@ describe('P20b 保险丝：地板以上自动折叠 + 溢出接管', () => {
     expect(env.runs()[0]).toMatchObject({ layer: 'pressure', outcome: 'ok', emergency: true })
   })
 
+  it('U11.7：保险丝与溢出接管守卫键分前缀——同 (turn,step) 下保险丝不再挤掉溢出接管', async () => {
+    // 一个 turn 内先走 pre-step（保险丝方向折叠一次；用断路器耗尽的档案让常规压力让位），
+    // 随后同一 (turn,step) 收到溢出错误。判据 = **确实尝试了**（发出 overflow-* 事实）：
+    // 旧实现共用 `${turn}:${step}` 键，在守卫处就 return 'pass'，零事实零重试。
+    const storage = new FakeStorage()
+    storage.entities.set(`boundary_archive:${ARCHIVE_KEY}`, {
+      version: 1,
+      body: {
+        schemaVersion: 1, workspace: WORKSPACE,
+        entries: [0, 1, 2].map((i) => ({ taskId: 'sp:task-1', kind: 'checkpoint', text: `C${i}`, sessionId: 'sp', layer: 'pressure', at: i, cutPointSeq: 1, rangeEndSeq: 2 })),
+        cache: {},
+      },
+    })
+    const env = makeEnv({
+      session: makePressureSession(), storage, wireTokens: 90000,
+      llm: fakeLlm([{ text: PRESSURE_PRODUCT }], { contextWindow: 100000 }),
+    })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3, step: 1 })
+    expect(hardFactsOf(env.session)).toHaveLength(1)
+    expect(hardFactsOf(env.session)[0]).toMatchObject({ outcome: 'fuse-fold' })
+    const action = await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })
+    expect(['retry', 'pass']).toContain(action)
+    expect(hardFactsOf(env.session)).toHaveLength(2)
+    expect(hardFactsOf(env.session)[1]!.outcome).toMatch(/^overflow-(retry|declined)$/)
+  })
+
   it('非溢出码 → pass 零行为；同 (turn,step) 二次接管 → pass（不重复折叠）', async () => {
     const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
     expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'OTHER' })).toBe('pass')
@@ -610,6 +636,20 @@ describe('F9a 压力区间守卫（INVALID_RANGE 回归，2026-09-09 真机缺�
     expect(firesOf(session)[0]).toMatchObject({ outcome: 'skip', reason: 'range' })
     expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
     expect(env.runs()).toHaveLength(0)
+  })
+
+  it('U11.8：区间定位失败 → 节流事实 range-empty（旧实现零事实）；不因新事实永久封禁该段', async () => {
+    const session = makeSession()
+    // 表面损坏：闭合段区间内已无可用端点（端点在权威表面上找不到）→ range-skip
+    session.nodes = session.nodes.filter((seq) => seq >= 4)
+    const env = makeEnv({ session })
+    await env.domain.onPreStep({ session: session as never, turn: 1 })
+    await env.domain.onPreStep({ session: session as never, turn: 2 })
+    // 节流：同一段每进程只记一次（否则每步刷屏）
+    expect(env.runs().filter((data) => data.reason === 'range-empty')).toHaveLength(1)
+    // 真实尝试次数仍如实累计（内存计数不因节流失真）
+    expect(env.domain.stats().rangeSkips).toBe(2)
+    expect(env.llm.calls).toHaveLength(0)
   })
 
   it('权威表面 = 真源：端点必落在 session.surface.nodes（越界即 skip，不抛 INVALID_RANGE）', async () => {
