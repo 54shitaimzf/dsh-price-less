@@ -17,6 +17,7 @@ import {
   type AutoDiscriminatorDeps,
 } from '../src/domains/input.ts'
 import { judgeRecordToFactData, factDataToJudgeRecord } from '../src/domains/judge-facts.ts'
+import { annotateDossier, type DossierBody } from '../src/core/dossier.ts'
 import { resolveConfig } from '../src/config.ts'
 
 interface FakeStorageRecord { version: number; body: unknown }
@@ -151,6 +152,41 @@ describe('auto discriminator quick paths', () => {
     await flush()
     expect(llmCalled).toBe(true)
     expect(auto.stats().records[0]).toMatchObject({ trigger: 'llm', decision: 'continue' })
+    auto.dispose()
+  })
+
+  it('U5：判词在飞期间并发回填 → 重放式 CAS 不丢并发内容（旧实现拿陈旧体盲写必丢 backfill 标注）', async () => {
+    const pump = makePump()
+    const storage = makeStorage()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const llm = { stream: async function* () {
+      await gate
+      yield { type: 'text-delta', index: 0, text: '{"decision":"continue","class":"action"}' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never }))
+    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 5, time: 100, text: '改一下配置' })
+    // 等 append 落盘（v1）且判词流已挂起在 gate 上
+    const dossierEntry = async (): Promise<[string, FakeStorageRecord]> => {
+      for (let i = 0; i < 50; i++) {
+        const found = [...storage.data.entries()].find(([k]) => k.startsWith('dossier:'))
+        if (found !== undefined) return found as [string, FakeStorageRecord]
+        await new Promise((r) => setTimeout(r, 2))
+      }
+      throw new Error('dossier record never appeared')
+    }
+    const [recKey, v1] = await dossierEntry()
+    // 并发 ★ 回填：以当前体（含判别消息 seq 5）为基加 backfill 标注 → v2
+    const backfilled = annotateDossier(v1.body as DossierBody, 5, 'action', 'backfill', 999)
+    await storage.putEntity('dossier', recKey.slice('dossier:'.length), backfilled, {}, { baseVersion: v1.version })
+    release()
+    await flush()
+    const final = ([...storage.data.entries()].find(([k]) => k.startsWith('dossier:'))![1]!.body) as DossierBody
+    expect(final.messages.some((m) => m.seq === 5)).toBe(true)
+    const annotations = final.annotations['5'] ?? []
+    expect(annotations.some((a) => a.by === 'backfill')).toBe(true)
+    expect(annotations.some((a) => a.by === 'auto')).toBe(true)
     auto.dispose()
   })
 })

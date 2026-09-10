@@ -144,22 +144,27 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     return rec ? { body: rec.body as DossierBody, version: rec.version } : { body: createDossier(taskId), version: undefined }
   }
 
-  const writeDossier = async (taskId: string, body: DossierBody, baseVersion: number | undefined): Promise<boolean> => {
+  /**
+   * 卷宗写入（U5：重放式 CAS）——冲突时**在新体上重跑 mutate**（append/annotate 幂等，重放安全）；
+   * 旧行为拿判词开始前的陈旧 body 配新 baseVersion 盲写，会把判词在飞期间并发写者
+   * （★ 回填）的标注/消息无声盖掉。现读现放：读-写窗口内不再有陈旧体。
+   */
+  const writeDossier = async (taskId: string, mutate: (current: DossierBody) => DossierBody): Promise<boolean> => {
     const key = dossierStorageKey(taskId)
-    const source = { taskId, eventType: 'dossier-append', evidence: { seq: body.messages.at(-1)?.seq } }
-    try {
-      await storage.putEntity('dossier', key, body, source, { baseVersion: baseVersion ?? 0 })
-      return true
-    } catch {
-      const current = storage.getEntity('dossier', key)
-      if (current === undefined || current.version === baseVersion) return false
+    const sourceOf = (body: DossierBody) => ({ taskId, eventType: 'dossier-append', evidence: { seq: body.messages.at(-1)?.seq } })
+    const attempt = async (body: DossierBody, baseVersion: number): Promise<boolean> => {
       try {
-        await storage.putEntity('dossier', key, body, source, { baseVersion: current.version })
+        await storage.putEntity('dossier', key, body, sourceOf(body) as never, { baseVersion })
         return true
       } catch {
         return false
       }
     }
+    const initial = readDossier(taskId)
+    if (await attempt(mutate(initial.body), initial.version ?? 0)) return true
+    const current = storage.getEntity('dossier', key)
+    if (current === undefined || current.version === (initial.version ?? 0)) return false
+    return attempt(mutate(current.body as DossierBody), current.version)
   }
 
   const processOne = async (payload: CeDomainEvents['input/user-message']): Promise<void> => {
@@ -173,10 +178,10 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     const segments = foldSegmentState(sessionFacts, { sessionFirstSeq })
     const localTaskId = segments.segments.at(-1)!.taskId
     const taskId = sessionScopedTaskId(sid, localTaskId)
-    const { body, version } = readDossier(taskId)
+    const { body } = readDossier(taskId)
     const message = { seq, time, text }
     const appended = appendDossierMessage(body, message)
-    if (appended !== body) await writeDossier(taskId, appended, version)
+    if (appended !== body) await writeDossier(taskId, (current) => appendDossierMessage(current, message))
 
     const t0 = parseT0Command(text)
     if (t0.boundary !== null) {
@@ -248,8 +253,9 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     })
     if (l1Cache.size > cacheLimit) l1Cache.delete(l1Cache.keys().next().value!)
     if (appended !== body && parsed.class !== undefined) {
-      const annotated = annotateDossier(appended, seq, parsed.class, 'auto', time)
-      if (annotated !== appended) await writeDossier(taskId, annotated, storage.getEntity('dossier', dossierStorageKey(taskId))?.version)
+      // U5：重放闭包以当前体为基（append 幂等：消息已落则只补标注）——并发回填不丢。
+      const klass = parsed.class
+      await writeDossier(taskId, (current) => annotateDossier(appendDossierMessage(current, message), seq, klass, 'auto', time))
     }
     if (parsed.decision === 'new-task') {
       const data = toJudgeVerdictFactData(parsed.decision, seq)
