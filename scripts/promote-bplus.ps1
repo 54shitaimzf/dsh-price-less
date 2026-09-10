@@ -81,7 +81,8 @@ if ($SkipPlugin) {
 } else {
   Step "③ 重链 + 重编译插件（DSH_CHECKOUT=$Checkout）"
   $env:DSH_CHECKOUT = ($Checkout -replace '\\', '/')
-  & $gitBash scripts/build.sh
+  # build.sh 自己 cd 到仓库根，故传绝对路径（相对路径会被调用方 cwd 影响）。
+  & $gitBash (Join-Path $pluginRoot 'scripts/build.sh')
   if ($LASTEXITCODE -ne 0) { Fail '插件 build.sh 失败' }
   Push-Location $pluginRoot
   try {
