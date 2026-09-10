@@ -108,6 +108,24 @@ export function renderRegionTranscript(
   return blocks.join('\n\n')
 }
 
+/**
+ * 实际遮蔽集转写（U1）：定义域 = replace 将遮蔽的**位置 span 成员**（shadowedSeqs），
+ * 而非 seq 数值区间——replace 后位置序与 seq 序永久分叉，seq 区间只是近似。
+ * 「进产物 ⇔ 被遮蔽」在此严格等价（docs/04 §2）。
+ */
+export function renderDomainTranscript(
+  events: readonly LedgerSessionEvent[],
+  seqs: ReadonlySet<number>,
+): string {
+  const blocks: string[] = []
+  for (const event of events) {
+    if (!seqs.has(event.seq)) continue
+    const block = nodeBlock(event)
+    if (block !== undefined) blocks.push(block)
+  }
+  return blocks.join('\n\n')
+}
+
 /** 区间转写体量（机械计量，仅入事实轨）。 */
 export function regionTokens(
   events: readonly LedgerSessionEvent[],

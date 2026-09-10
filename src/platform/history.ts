@@ -151,6 +151,12 @@ export interface HistoryPort {
    * 选到非表面端点 → replace 抛 INVALID_RANGE（2026-09-09 真机缺陷 F9a）。
    */
   surfaceNodes(): readonly SessionSeq[]
+  /**
+   * range 的实际遮蔽集（位置 span 成员；无效区间 = null）。U1：压缩的转写/单元定义域
+   * 必须以此为准——replace 后位置序与 seq 序永久分叉，seq 数值区间会罩住区间外的节点
+   * （真机 P0：新 task 首条消息被遮蔽却未进产物）。
+   */
+  spanShadowedSeqs(range: SurfaceRange): SessionSeq[] | null
   pairBalancedBefore(seq: SessionSeq): boolean
   pairBalancedAfter(seq: SessionSeq): boolean
 }
@@ -317,6 +323,13 @@ export function createHistoryPort(
     findActiveCompaction: () => scanActiveCompaction(session),
     balanceRange,
     surfaceNodes: () => session.surface.nodes.slice(),
+    spanShadowedSeqs: (range) => {
+      try {
+        return findSpan(session, range).shadowedSeqs
+      } catch {
+        return null
+      }
+    },
     pairBalancedBefore: (seq) => balanceChecker.before(session, seq),
     pairBalancedAfter: (seq) => balanceChecker.after(session, seq),
   }

@@ -81,8 +81,8 @@ export interface AssembleDomainStats {
 export interface AssembleDomain {
   dispose(): void
   stats(): AssembleDomainStats
-  /** 闭合段内单元清单（压缩器 prompt 枚举面；P18 消费）。 */
-  unitList(session: Session, range: { startSeq: number; endSeq: number }): AssembleUnit[]
+  /** 闭合段内单元清单（压缩器 prompt 枚举面；P18 消费）。U1：传 `domain`（实际遮蔽集）时按其过滤，seq 区间仅作缺省近似。 */
+  unitList(session: Session, range: { startSeq: number; endSeq: number }, domain?: ReadonlySet<number>): AssembleUnit[]
   /** 装配一条边界档案计划（纯内存 + 盘上取真；注入与档案 vN 归 P19）。 */
   assemble(request: AssembleRequest): Promise<AssembleOutcome>
 }
@@ -172,10 +172,12 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
     return state.events.filter((event) => event.type === 'tool/call' || surface.has(event.seq))
   }
 
-  const unitsIn = (session: Session, range: { startSeq: number; endSeq: number }): AssembleUnit[] => {
+  const unitsIn = (session: Session, range: { startSeq: number; endSeq: number }, domain?: ReadonlySet<number>): AssembleUnit[] => {
     const state = stateOf(session)
-    return foldAssembleInputs(visibleEvents(state)).units
-      .filter((unit) => unit.seqStart >= range.startSeq && unit.seqEnd <= range.endSeq)
+    const units = foldAssembleInputs(visibleEvents(state)).units
+    // U1：单元归域以 seqEnd（表面节点）为准——tool/call 是日志事件不在遮蔽集里，但其结果节点在。
+    if (domain !== undefined) return units.filter((unit) => domain.has(unit.seqEnd))
+    return units.filter((unit) => unit.seqStart >= range.startSeq && unit.seqEnd <= range.endSeq)
   }
 
   const assemble = async (request: AssembleRequest): Promise<AssembleOutcome> => {
@@ -297,7 +299,7 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
       off()
     },
     stats: () => ({ ...counts }),
-    unitList: (session, range) => unitsIn(session, range),
+    unitList: (session, range, domain) => unitsIn(session, range, domain),
     assemble,
   }
 }

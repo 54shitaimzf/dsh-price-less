@@ -226,6 +226,36 @@ describe('P21b 四触发次序：域侧交错 e2e（档案只追加）', () => {
     expect(env.runs().map((run) => run.carried)).toEqual([0, 0])
   })
 
+  it('边→边（F2 真机时序）：task-2 首条消息先于 task-1 压缩入账 → 第二次压缩"进产物 ⇔ 被遮蔽"（U1 P0 回归）', async () => {
+    const session = new FakeSession()
+    appendTaskOne(session)
+    // F2 真机时序：pre-step 等判词期间 task-2 已开（首条用户消息先入账），然后才压 task-1——
+    // 第一次压缩的 checkpoint 节点 seq 高于 userB、位置却早于 userB（replace 原位 splice）。
+    const userB = session.append('user/message', { content: textBlock('做 B'.repeat(40)), source: { kind: 'user' } }, { surfaceOp: 'append' })
+    const env = makeEnv({ session, llm: fakeLlm([VALID_PRODUCT, VALID_PRODUCT]), wireTokens: 0 })
+    await env.domain.onPreStep({ session: session as never, turn: 1 })
+    const checkpoint = session.events.find((e) => e.type === 'user/message' && (e.data as { source?: { kind?: string } })?.source?.kind === 'plugin')
+    expect(checkpoint).toBeDefined()
+    expect(Number(checkpoint!.seq)).toBeGreaterThan(Number(userB.seq))
+    expect(session.nodes.indexOf(Number(checkpoint!.seq))).toBeLessThan(session.nodes.indexOf(Number(userB.seq)))
+    // 补完 task-2 材料 + 闭合 + task-3 首条消息，第二次压缩 task-2。
+    session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }] } }, { surfaceOp: 'append' })
+    session.append('tool/result', { message: { content: [{ type: 'tool-result', toolCallId: 'c2', content: textBlock('2: b line') }] } }, { surfaceOp: 'append' })
+    session.append('context-economy/task-boundary', { boundary: 'close', taskId: 'task-2' }, { ignorable: true })
+    session.append('user/message', { content: textBlock('做 C'), source: { kind: 'user' } }, { surfaceOp: 'append' })
+    await env.domain.onPreStep({ session: session as never, turn: 2 })
+    expect(env.runs().filter((run) => run.outcome === 'ok')).toHaveLength(2)
+    const summaries = session.events.filter((e) => e.type === 'compaction/summary')
+    expect(summaries).toHaveLength(2)
+    const second = summaries[1]!.data as { shadowedSeqs?: number[] }
+    // ① userB 进第二次产物才允许被遮蔽（旧实现：被遮蔽却不在 prompt 里 = 静默丢失）
+    expect(second.shadowedSeqs).toContain(Number(userB.seq))
+    // ② 压缩器输入含 userB 正文
+    expect(String(env.llm.calls[1]!.messages[0]!.content[0]!.text)).toContain('做 B')
+    // ③ 第一次 checkpoint（plugin 产物节点）不被第二次复消化
+    expect(second.shadowedSeqs).not.toContain(Number(checkpoint!.seq))
+  })
+
   it('积压多闭合段（恢复/曾关开关）→ 逐次 pre-step 各压一个，不被新节点卡死（P21b 验收发现缺陷的回归）', async () => {
     const session = makeTwoClosedTasks() // 两个闭合段的事件都已存在，压缩发生在事件之后
     const env = makeEnv({ session, llm: fakeLlm([VALID_PRODUCT, VALID_PRODUCT]), wireTokens: 0 })
@@ -238,12 +268,16 @@ describe('P21b 四触发次序：域侧交错 e2e（档案只追加）', () => {
     expect(env.runs().filter((run) => run.outcome === 'ok')).toHaveLength(2)
   })
 
-  it('压→边：同 task 先检查点后边界 → 链 [checkpoint, boundary]（机制 A 续传）', async () => {
+  it('压→边：同 task 先检查点后边界 → 链 [checkpoint, boundary]（机制 A 续传；U1：检查点只经 priorChain 进 prompt 一次）', async () => {
     const session = makePressureSession('sp')
     const env = makeEnv({ session, llm: fakeLlm([PRESSURE_PRODUCT, VALID_PRODUCT]), wireTokens: 120000 })
     await env.domain.onPreStep({ session: session as never, turn: 3 })
     expect(archiveEntriesOf(env.storage).map((entry) => entry.kind)).toEqual(['checkpoint'])
-    // 闭合该 task → 边界路径以既有检查点链为 priorChain
+    // 压力折叠后 task 表面只剩 checkpoint 节点 → 补入真实新材料再闭合：
+    // 边界压缩新材料、以检查点链续传；检查点文本不再作为区间材料复消化（digest∘digest 修复）。
+    session.append('user/message', { content: textBlock('收尾：改配置'), source: { kind: 'user' } }, { surfaceOp: 'append' })
+    session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c3', name: 'edit', arguments: '{"file_path":"c.ts"}' }] } }, { surfaceOp: 'append' })
+    session.append('tool/result', { message: { content: [{ type: 'tool-result', toolCallId: 'c3', content: textBlock('3: done') }] } }, { surfaceOp: 'append' })
     session.append('context-economy/task-boundary', { boundary: 'close', taskId: 'task-1' }, { ignorable: true })
     env.storage.getEntity = env.storage.getEntity.bind(env.storage)
     const lowWire = makeEnv({ session, storage: env.storage, llm: env.llm, wireTokens: 0 })
@@ -256,6 +290,10 @@ describe('P21b 四触发次序：域侧交错 e2e（档案只追加）', () => {
     const boundaryRun = lowWire.runs().find((run) => run.layer === 'boundary')!
     expect(boundaryRun).toMatchObject({ outcome: 'ok', carried: 1 })
     expect(lowWire.requests[0].priorChain.map((entry: { text: string }) => entry.text)).toEqual(['进度：已完成 A\n当前状态：B 已就绪\n下一步：做 C\n仍生效的约束：\n- 不要改 D'])
+    // 边界 prompt：新材料进转写；检查点文本只出现一次（priorChain），不进区间转写
+    const prompt = String(env.llm.calls[1]!.messages[0]!.content[0]!.text)
+    expect(prompt).toContain('收尾：改配置')
+    expect(prompt.split('已完成 A').length - 1).toBe(1)
   })
 })
 

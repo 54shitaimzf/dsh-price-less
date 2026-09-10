@@ -98,8 +98,11 @@ function pathOfArgs(args: Record<string, unknown> | undefined): string | undefin
   return typeof args.path === 'string' ? args.path : undefined
 }
 
-/** 插件/官方压缩检查点消息（source.kind = 'plugin'）不是任务材料，不进单元清单。 */
-function isPluginMessage(data: unknown): boolean {
+/**
+ * 插件源消息（`source.kind = 'plugin'`：本插件 notice 与官方 compact checkpoint 同判）不是任务材料。
+ * 压缩域端点候选同样排除（U1：产物节点 seq 高、位置早，seq 谓词会被它骗到区间起点）。
+ */
+export function isPluginSourceEvent(data: unknown): boolean {
   const root = recordOf(data)
   if (root === undefined) return false
   const message = recordOf(root.message) ?? root
@@ -171,7 +174,7 @@ export function foldAssembleInputs(events: readonly LedgerSessionEvent[]): Assem
     }
     // F9c：user/assistant 消息也是任务材料（用户约束、引号内文本、结论）——可被热尾逐字携带。
     if (event.type === 'user/message' || event.type === 'assistant/message') {
-      if (isPluginMessage(event.data)) continue
+      if (isPluginSourceEvent(event.data)) continue
       const text = messageTextOf(event.data)
       if (text.trim() === '') continue
       units.push({

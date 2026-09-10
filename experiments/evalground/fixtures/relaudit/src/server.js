@@ -65,9 +65,11 @@ export function createApp(options = {}) {
         if (out && typeof out === 'object' && out.status !== undefined) return out
         return { status: 200, body: out }
       }
-      const rel = url.pathname === '/' ? 'index.html' : url.pathname.slice(1)
-      const file = path.join(staticRoot, rel)
-      if (file.startsWith(staticRoot) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+      const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1))
+      const file = path.resolve(staticRoot, rel)
+      const relFromRoot = path.relative(staticRoot, file)
+      const inside = relFromRoot !== '' && !relFromRoot.startsWith('..') && !path.isAbsolute(relFromRoot)
+      if (inside && fs.existsSync(file) && fs.statSync(file).isFile()) {
         const ext = path.extname(file)
         const type = ext === '.html' ? 'text/html' : ext === '.css' ? 'text/css' : ext === '.js' ? 'text/javascript' : 'application/octet-stream'
         return { status: 200, raw: fs.readFileSync(file), type }

@@ -22,7 +22,7 @@ import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.t
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
 import { workspaceOf } from './workspace.ts'
-import { DEFAULT_ASSEMBLE_POLICY, archiveChainMonotone, foldAssembleInputs, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
+import { DEFAULT_ASSEMBLE_POLICY, archiveChainMonotone, foldAssembleInputs, isPluginSourceEvent, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
 import {
   COMPRESS_PROMPT_VERSION,
   COMPRESS_POLICY_VERSION,
@@ -49,6 +49,7 @@ import {
   renderFoldMaterialTranscript,
   renderPressurePrompt,
   foldMaterialTokens,
+  renderDomainTranscript,
   renderRegionTranscript,
   type ArchiveStoreBody,
   type BoundaryProduct,
@@ -332,20 +333,29 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     // ① 区间落表面（权威表面 = harness session.surface.nodes；尾必须排除下一段起点 = 新 task 首条消息）。
     // F9a：范围端点必须取自权威表面——从原始事件自折在事件窗被截断时会复活已遮蔽节点，
     // 选到非表面端点 → replace 抛 INVALID_RANGE（真机 2026-09-09）。
+    // U1（P0 修复）：端点候选排除 plugin 源节点（checkpoint/notice 的 seq 是追加时新高、位置却落在
+    // 被替换 span 原位——seq 谓词会被这种"seq 高、位置早"的产物节点骗到起点，使位置 span 罩住
+    // seq 区间外的真实消息：新 task 首条用户消息被静默遮蔽却未进产物）；转写/单元的定义域
+    // 改为 findSpan 实际遮蔽集（shadowedSeqs），"进产物 ⇔ 被遮蔽"严格等价。
     const history = createHistoryPort(session)
     const surface = history.surfaceNodes()
-    // 起点必须同时落在本段区间内：压缩产物节点（checkpoint，seq 高但语义属更早区间）不得被当起点，
-    // 否则"多闭合段积压"（如恢复后 / 曾关开关）场景会取到新节点 → 区间反空 → 每步 rangeSkip 卡死。
-    const start = surface.find((seq) => seq >= (segment.startSeq ?? 0) && seq < nextStartSeq)
-    const end = start === undefined ? undefined : [...surface].reverse().find((seq) => seq >= start && seq < nextStartSeq)
+    const eventBySeq = new Map<number, LedgerSessionEvent>(events.map((event) => [event.seq, event] as const))
+    const isRealNode = (seq: number): boolean => {
+      const event = eventBySeq.get(Number(seq))
+      return event === undefined || !isPluginSourceEvent(event.data)
+    }
+    const start = surface.find((seq) => isRealNode(Number(seq)) && seq >= (segment.startSeq ?? 0) && seq < nextStartSeq)
+    const end = start === undefined ? undefined : [...surface].reverse().find((seq) => isRealNode(Number(seq)) && seq >= start && seq < nextStartSeq)
     if (start === undefined || end === undefined) { counts.rangeSkips++; return }
     const balanced = history.balanceRange({ start: start as never, end: end as never })
     if (balanced === null) { counts.rangeSkips++; return }
+    const shadowedSeqs = history.spanShadowedSeqs(balanced)
+    if (shadowedSeqs === null || shadowedSeqs.length === 0) { counts.rangeSkips++; return }
     const range = { startSeq: Number(balanced.start), endSeq: Number(balanced.end) }
-    const visibleSeqs = new Set<number>(surface.map((seq) => Number(seq)))
-    const regionText = renderRegionTranscript(events, range, visibleSeqs)
+    const domain = new Set<number>(shadowedSeqs.map(Number))
+    const regionText = renderDomainTranscript(events, domain)
     if (regionText === '') { counts.rangeSkips++; return }
-    const units = deps.assemble.unitList(session, range)
+    const units = deps.assemble.unitList(session, range, domain)
 
     // ② 档案体 + 续传链（机制 A）+ 内容寻址键。
     const existing = storage.getEntity('boundary_archive', storeKey)
