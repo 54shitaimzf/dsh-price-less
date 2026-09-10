@@ -1,6 +1,11 @@
 /**
  * U8–U13 落地后的 **lib 级冒烟**（跑在构建产物 lib/ 上，不是 src）。
- * 临时脚本：跑完即删；读数记入 docs/ledger-history.md §82。
+ * **常驻**（`npm run smoke:lib`，升级后必跑；读数记入 docs/ledger-history.md §82/§83）。
+ *
+ * ⚠️ 覆盖面仅限**插件侧回归**（U8–U13）。**harness 接触面不在本脚本内**——
+ * `SESSION_LOG_INTENT` / `SESSION_FORMAT_VERSION` / 端点常量 / replace / 通道→`emitted`
+ * 一项都没有（`docs/14 §4` 曾误称有，已于 2026-09-11 改正）。通道回环请跑
+ * **`npm run probe:channel`**（`scripts/probe-channel.mjs`）。
  */
 import { resolveJudgeModel, CE_JUDGE_NO_ROUTE } from '../lib/domains/input.js'
 import { resolveInitModel } from '../lib/domains/commands.js'

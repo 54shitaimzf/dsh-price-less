@@ -174,20 +174,30 @@ describe('judge', () => {
     expect(Object.keys(ledger.judgeVerdictDist).sort()).toEqual([...DOSSIER_CLASSES].sort())
   })
 
-  it('judge datasets 同源: 规则分句与 v2.3 切片逐字节一致、输出含三分类', () => {
-    const v23 = readFileSync('datasets/prompt-discriminator-v2.3.txt', 'utf8')
-    const expected = v23.slice(v23.indexOf('先决排除：'), v23.indexOf('\n\n<anchor>'))
+  it('judge datasets 同源: 规则分句与 v2.4 切片逐字节一致、输出含三分类', () => {
+    const v24 = readFileSync('datasets/prompt-discriminator-v2.4.txt', 'utf8')
+    const expected = v24.slice(v24.indexOf('先决排除：'), v24.indexOf('\n\n<anchor>'))
     expect(expected.length).toBeGreaterThan(800)
     expect(JUDGE_PROMPT_RULES_CLAUSES).toBe(expected)
     expect(JUDGE_PROMPT_OUTPUT).toContain('"action"|"pureQ"|"verifyQ"')
   })
 
-  it('v4 任务定义：同一对象/目标持续改进 + 子task 不分流 + 换对象覆盖言说层', () => {
-    expect(JUDGE_PROMPT_VERSION).toBe(4)
-    expect(JUDGE_PROMPT_CONTEXT).toContain('对同一工作对象')
+  it('v5 任务定义：粒度锚在功能/模块 + 粒度自检 + 禁以仓库层级判 continue', () => {
+    expect(JUDGE_PROMPT_VERSION).toBe(5)
+    // 定义改功能/模块锚
+    expect(JUDGE_PROMPT_CONTEXT).toContain('围绕**同一个功能 / 模块 / 产物**')
+    expect(JUDGE_PROMPT_CONTEXT).toContain('粒度自检')
+    expect(JUDGE_PROMPT_CONTEXT).toContain('太粗，不合格')
+    // 子task 仍不分流（过程类型轴不动）
     expect(JUDGE_PROMPT_CONTEXT).toContain('子task，不是任务边界')
+    // 换对象/换意图写明同一仓库内的功能切换
     expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('同对象言说层')
-    expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('若针对的是新的工作对象，同样算换对象')
+    expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('同一仓库内从一个功能 / 模块切到另一个功能 / 模块 = 换对象')
+    expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('同一仓库 / 同一插件内推进另一件功能上的事 = 换意图')
+    expect(JUDGE_PROMPT_RULES_CLAUSES).toContain('为由判 continue')
+    // v4 的两个"任选层级"逃生口必须消失（本次缺陷的根因，防回退）
+    expect(JUDGE_PROMPT_CONTEXT).not.toContain('或同类目标')
+    expect(JUDGE_PROMPT_RULES_CLAUSES).not.toContain('（文件/项目/产物/工具/代码库）')
   })
 
   it('judge deterministic: prompt 与 fold 连续三次字节一致', () => {

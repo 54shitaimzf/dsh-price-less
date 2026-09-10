@@ -3366,3 +3366,176 @@ U13.5 自馈事件走下一轮：seen=[1,100,101,102]，dispatched=4，depth=0
 - **阶段二三**（`REPAIR-2026-09-10.md §5/§6`）：真机冒烟 / 账本回放对照 / 三个独立复审代理 —— 仍待办。
 - **U11.8 的 `range-empty`**：只作**可观测**事实，已确认不会改变"已归档"判定（见 U11 行）。
 - 真机冒烟读数与 `F8c` calibration 样本仍未取得（需重启宿主）。
+
+---
+
+## §83 原地 B+ promote + 判别器 v5 粒度收紧（2026-09-11；提交 = 本账本同提交）
+
+**触发**：用户两问——①「插件与现有 harness 的兼容性如何，dsh 的 ignore 透传完成了没有」；
+②「压力压缩没触发、边界压缩也没触发，是不是和 preset 绑定了」。查证后半程追加用户裁定：
+**task 粒度必须收敛到"功能/模块"级**。
+
+### 1. 兼容性与透传核查（承接 §81/§82 的 B+ 与 U1–U13）
+
+**真机事实**（`session-6ef03ab9`，32913 事件 / 150 条用户消息 / 62 条判词）：
+
+- `compaction-basic` 的 `auto:false` 覆写**有效**——`compaction/start` 带 `sourceCommandId`（手动 `/compact`）= 29；
+  `turn` 非空 = 6，且 6 条 `compactionId` **全部是插件自产**（`ce-compact-boundary-*` ×1、`ce-compact-pressure-*` ×5）；
+  **原生自动压缩 = 0**。→ "和 preset 绑定"**不成立**。
+- 但**插件的边界压缩从未触发**：全史 `compress-run` = 7（边界 1 / 压力 6）、`assemble-run` = 1、
+  `pressure-fired` = 5、`hard-truncate` = 0。唯一一次边界成功 = `session-7d73bb3f`（347 事件、`cordis` 预设、
+  verdict 锚 `[19, 197]`、`ce-compact-boundary-task-1-19-190`）。
+- 根因三条，**均与提示词严格度无关**：
+  1. **覆盖率**：62 条判词**全部**落在 9/9 04:04→11:15；此前 **88 条（59%）一条判词都没有**
+     （`discriminator.auto` 当时未开或插件未挂载——日志本身分不出是哪一种）。
+  2. **可见性（F1）**：真正产出的 2 条 `new-task`（锚 `21198`/`21255`）落在 4000 条事件窗**之外**——
+     `ledgerEventsOf()` 的 `slice(-COMPACTION_EVENT_LIMIT)` 把边界事实切掉 → 段状态机永远只见 1 段 →
+     `runBoundary` 的 `segments.length < 2` 早退。**换成完美提示词也救不了这个会话。**
+  3. **粒度（本次 v5 处理，见 §3）**：v4 定义允许把整仓一天算作同一 task。
+- 反面对照 `session-309527a5`（8 条用户消息 / 8 条判词 / 1 条 `new-task`）：8 条同属一条工作流，
+  判 `continue` 逐条站得住；唯一 verdict 锚 = `firstUserSeq` → 正确丢弃（隐式 task-1）→ 只有 1 段 → 无边界。
+  **即"确实只有一个 task"，不是判别器漏判。**
+
+**代码修复（F1/F3/F4）**：
+
+| 编号 | 缺陷 | 修复 | 落点 |
+|---|---|---|---|
+| **F1** | `ledgerEventsOf()` 尾部截断 4000 条 → 边界事实被切在窗外 | 删除 `COMPACTION_EVENT_LIMIT` 与 `slice(-4000)`，改全量 `return out`（附长注释说明为何不得再截） | `domains/compaction.ts` |
+| **F3** | 压力路径 `parseCompressProduct` 失败分支**不发事实** → 账本上看是"从未触发" | 该分支补 `fire('skip', { reason, chainDepth })`，再发 `COMPRESS_RUN_FACT_TYPE` | `domains/compaction.ts` |
+| **F4** | 降级态（KV 镜像）下跨域实时事实断线 → 边界触发链拿不到事实 | 订阅 `deps.pump.on('facts/session-event')` + `replayedFacts: WeakMap<Session, LedgerFact[]>`（上界 `REPLAYED_FACT_LIMIT = 20000`）；`factsFor(session, events)` 对会话事实 ∪ 回灌事实按 `` `${type}\|${seq}\|${JSON.stringify(data)}` `` 去重后按 `(seq ?? time)` 合并；两处调用点改用它 | `domains/compaction.ts`、`index.ts` |
+
+### 2. 原地 B+ promote（脚本化）
+
+`scripts/promote-bplus.ps1` 三步幂等：① 移除临时 worktree `G:\dsh-bplus-wt` + `worktree prune`；
+② 主 checkout `git checkout bplus-0.1.5` + `pnpm install --prefer-offline` + `pnpm run build:lib`；
+③ `DSH_CHECKOUT=G:/deepseek-harness` + Git Bash `scripts/build.sh` 重链 junction 并重编译插件。
+
+**为什么必须"原地"**：`bplus-0.1.5` 被 worktree 占用时主 checkout **无法** checkout 同一分支；
+且 harness 的 `lib/` 是 **gitignored** 产物 → **光 checkout 没有任何效果**，必须 `build:lib`。
+
+**读数**：worktree list 只剩 `G:/deepseek-harness f0dc41471c [bplus-0.1.5]`；`G:\dsh-bplus-wt` 已不存在；
+HEAD 在分支上（非 detached）、工作区干净；插件 28 个 junction 全指 `G:\deepseek-harness`；
+宿主 `packages/core/session/lib/index.js` 含 `SESSION_LOG_INTENT` ×2。
+
+**构建产物级通道回环探针（新；跑在 `lib/` 上，不是 src）**：
+
+```
+resolved dsh-session: G:\deepseek-harness\packages\core\session\lib\index.js
+PASS 探测：SESSION_LOG_INTENT === 1
+PASS 发射路由 = emitted                [emitted]      ← 不再是 mirrored
+PASS 计数 emitted +1                   [0->1]
+PASS 日志尾事件类型正确 / 带 ignorable:true
+PASS v3 存储契约放行（会话可重载）
+PASS 反证：无 ignorable 的未知类型被拒读（fail-closed 缺口真实存在）
+```
+
+→ **ignorable 透传在产物层闭合**；重启后事实轨由 KV 镜像切回会话日志真源。
+
+**发现并改正的数据安全缺陷**：`promote-bplus.ps1` 结尾与 `docs/14 §5` 原写"清空/挪走
+`~/.dsh/sessions` 与 `~/.dsh/storages`（v2 → v3）"——**该建议已作废**：B+ 最高迁移包 =
+`session-format-v2-to-v3`（格式版本 **3**），现有会话文件 = `session.v3.jsonl.zstd`，两边同为 v3，
+照做会**删光全部会话历史**。两处已改正。
+
+**登记（未动）**：
+- `dsh-session-projection` / `dsh-system-prompt` 两个 junction 全仓**零引用**；`dsh-tool-todo` 仅作为
+  预设行名出现在 `presets/price-less/agent.cordis.yml:253`。`build.sh` 不管理这三个，属早期手工残留，
+  现均指向正确的树。
+- **`docs/14 §4` 第 4 条与实现不符**：它称 `npm run smoke:lib` 覆盖 harness 接触面
+  （`SESSION_LOG_INTENT` / `SESSION_FORMAT_VERSION` / 端点常量 / replace / `foldSurfaceNodes` / 通道→`emitted`），
+  但 `scripts/smoke-lib.mjs` 里这些**零匹配**，实际 24 项全是 U8–U13 插件侧回归 →
+  **通道回环此前没有常驻闸**。**已办（同单）**：新增常驻 `scripts/probe-channel.mjs`
+  （`npm run probe:channel`，退出码即判据），并把 `docs/14 §4` 改正为两个脚本各司其职、
+  `smoke-lib.mjs` 头注标明"覆盖面仅限插件侧回归"。
+
+### 3. 判别器 v5：task 粒度 = 功能/模块级（用户裁定）
+
+**根因**：v4 定义
+```
+task = 对同一工作对象（文件/模块/项目/产物）或同类目标持续改进的努力，其上下文特点相近
+```
+的对象枚举是**并列**的——模型只要挑"项目"这一层，整仓一天的工作就天然是"同一对象"；
+`或同类目标` 与 `上下文特点相近` 是另两个并列洞。三个洞叠加 → **粒度只能往粗处收敛**。
+**上游根因**：粒度本应继承自**项目帧的方面分解**（`docs/02 §2`），而项目帧至今**未被驱动**
+（写入方仍是进程级 skill-catalog watcher，§70 遗点 4）→ 判别器拿不到"方面"，只能退回"对象"、
+对象再退回"仓库"。**把项目帧方面分解驱动起来才是粒度钉死的正解，属 R2 欠账。**
+
+**v5 落点**（`core/judge.ts`，`JUDGE_PROMPT_VERSION` 4→5）：
+
+| # | 段 | 改动 |
+|---|---|---|
+| 1 | `JUDGE_PROMPT_CONTEXT` 定义 | 改**功能/模块/产物锚**：「粒度必须落到**可命名的那一个功能点**上……不是整仓、整项目、整类工作」；**删去「或同类目标」** |
+| 2 | `JUDGE_PROMPT_CONTEXT` 新增 | **粒度自检**：先给 target 起一个功能级名字，与上下文当前名字不同即换对象；"这个插件 / 这个项目 / 这个仓库 / 这部分工作"判**不合格**，必须继续往细里命名 |
+| 3 | 规则 1 言说层 | 「当前工作对象或目标」→「**当前功能 / 模块 / 目标**」 |
+| 4 | 规则 5 换意图 | 补「**同一仓库 / 同一插件内推进另一件功能上的事 = 换意图**」 |
+| 5 | 规则 6 换对象 | 合格对象去掉「项目/代码库」→（功能/模块/产物/文件/工具）；补「**仓库名、项目名、产品名不是工作对象（太粗）**，不得据此判同一 task；同一仓库内从一个功能/模块切到另一个功能/模块 = 换对象」 |
+| 6 | continue 尾巴 | 改「**同一个功能 / 模块**的进行、细化、推进…」+ **禁止**以"都在同一个仓库 / 同一个插件 / 同一类工作"为由判 continue |
+
+**代价（用户已明确接受）**：闭合 task 变多 → 边界压缩的 compress 调用次数上涨（一天 6 个功能点
+≈ 最多 6 次调用 + 6 次装配 + 6 条档案）；档案条数变多、单条变小，10K 热尾按 task 重复出现。
+用户裁定理由：**复利增加、模型能力得到更好管理、热尾仍合理**。
+
+**同步面**：`datasets/prompt-discriminator-v2.4.txt`（新；与 `JUDGE_PROMPT_RULES_CLAUSES` **逐字节**
+同源断言）、`tests/judge.spec.ts`（v4 断言 → v5，**并新增两条防回退断言**：
+`not.toContain('或同类目标')`、`not.toContain('（文件/项目/产物/工具/代码库）')`）、
+`docs/00`（task 一行）、`docs/01 §3.5`（正典定义 + 意图归属条）、`docs/02 §3`（含 v5 修订理由与代价）、
+`docs/implement/TODO.md`（F13b）、`AGENTS.md`。
+
+### 4. 读数
+
+| 指标 | 改动前（§82 基线） | 改动后 |
+|---|---|---|
+| `npm run gate` | 退出 0：662 passed / 59 文件 + assert `ok=true vacuous=[]` | 退出 0：**666 passed / 59 文件** + assert `ok=true vacuous=[]` |
+| `npm run typecheck:tests` | ✅ | ✅ |
+| `npm run build`（host + client） | ✅ | ✅ |
+| `npm run smoke:lib` | 24/24 PASS | **24/24 PASS**（覆盖面未变 = 仅插件侧回归） |
+| **`npm run probe:channel`**（新，跑构建产物） | 无 | **7/7 PASS**——`SESSION_LOG_INTENT === 1` / 路由 `emitted` / 日志尾带 `ignorable:true` / v3 契约放行 / 反证拒读 |
+| 新增回归用例 | — | **+4**（F1 长窗仍触发 / F4 降级回灌触发 / F4 回灌去重防二次闭合 / F3 压力 parse 失败发 `skip`）+ judge 断言 v5 改写 |
+
+> 口径说明：本快照读数为**测试 + 构建产物冒烟 + 定向探针**产出，无新增 07 字段；
+> **真机读数待用户重启后补**：① 事实轨进 JSONL（带 `ignorable:true`）而非只长 `fact_mirror`；
+> ② v5 判词的 `new-task` 率与边界压缩触发次数变化；③ 归档键带段锚后的去重行为。
+
+## §84 双语 README 的依赖与实验性醒目标注 + 上架状态核查（2026-09-11）
+
+### 1. 上架状态核查（用户提问："我的项目进入 awesome-dsh-plugin 了吗？"）
+
+用 GitHub Search API 枚举 `awesome-dsh` / `awesome-dsh-plugin` / `awesome-deepseek-harness`
+三组仓库，取 31 个候选列表，逐个拉默认分支的 `README.md` / `README.zh.md` / `README.zh-CN.md` /
+`README_zh.md` / `readme.md` 全文，正则 `price[-_ ]?less|54shitaimzf|priceless`（大小写不敏感）。
+
+| 结论 | 证据 |
+|---|---|
+| **已收录 1 处** | `Dominic789654/awesome-deepseek-harness`（237★）——`README.md` 第 1568 行 + `README.zh-CN.md` 均有条目；来源提交 `44d13eb`「Auto-add 14 community DSH plugins from 20260908 scan (#427)」= **自动扫描收录，非人工评审** |
+| **主流列表全部未收录**（30/31） | `awesome-dsh-plugin/awesome-dsh-plugin`(15189★)、`0xsline`(1039★)、`Anil-matcha`(1005★)、`Zhiyuan-Fan`(569★)、`bruc3van`(325★)、`libukai`(254★)、`imsai-sh`(226★)、`beancookie`(137★)、`web-casa`(116★)、`Sanqi-normal`(105★)、`Alex-Yanggg`(96★)、`like-study1`(83★)、`kejixiaoliang`(41★) … |
+| **npm 未发布** | `dsh-price-less` 与 `@deepseek-ai/dsh-price-less` 在 registry 均为 **404** |
+| **远端落后** | `origin/main` 落后本地 **19 个提交**（本账本与 §83 均未推送） |
+| 仓库元数据 | 1★ / 0 fork / MIT / 创建 2026-09-07 / 最后推送 2026-09-09；topics 8 个 |
+
+> 解读：目前唯一的对外曝光是**自动扫描列表**，其条目文案取自仓库 description；
+> 主流列表未收录属预期（无 npm 包、无 release、无 CI 徽章、无发布流程）。
+
+### 2. 改动：双语 README 置顶「先读这个」节（用户要求"对用户负责"）
+
+`README.md` / `README.zh-CN.md` 对称新增，插在页头与目录之间（**目录之前**，属全页最醒目位置）：
+
+- 引用块警示：实验性 / 未发布 / 依赖打过补丁的 harness / 会改写会话历史；
+- **硬依赖表 5 行**：① 本地 harness 源码 checkout（无 npm 包，必须自建，别人的绝对路径无效）
+  ② 带本地 ignorable 通道补丁的宿主（`SESSION_LOG_INTENT` / `LogIntent`，**不在上游**；缺失则
+  事实轨静默降级到 `fact_mirror`，回放/导出不可见）③ `surfaceOp` 端点 + 格式 v3 对齐
+  （`history.ts` 编译期锚**故意变红**，禁止消红）④ Node 20+ / `dev_inject_plugin` / **需重启**
+  ⑤ 辅助模型路由（可选、有真实花费、提示词内容外发）；
+- **实验状态 6 条**：真机验证薄（边界压缩真机仅成功 **1** 次，粒度 2026-09-11 又改 v5）/
+  行为随提交变化（数字是时点快照非承诺）/ **会改写会话历史，先备份 `~/.dsh/sessions`** /
+  绑定特定宿主构建 / 省 token 是目标不是承诺 / 无支持承诺；
+- 目录新增首条锚点；徽章 `status-development-yellow` → **`status-experimental-orange`**。
+
+### 3. 读数
+
+| 指标 | 读数 |
+|---|---|
+| `npm run assert` | `ok=true vacuous=[]`（D9 / M1–M5 / S1–S5 全 PASS） |
+| 受影响文件 | `README.md`、`README.zh-CN.md`（纯文档，无代码/无构建产物变化 → 无需重编译） |
+| 未做 | 未推送远端、未提 PR 到任何 awesome 列表、未发布 npm |
+
+> 口径说明：本节所有数字为 **2026-09-11 当日**读取 GitHub API 的网络快照结果；
+> star 数与列表收录状态会随时间漂移；复查口径见本节 §1 首段（31 仓库 × 5 个文件名变体）。

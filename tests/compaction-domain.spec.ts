@@ -149,7 +149,24 @@ function fakeLlm(
   return { ctx, calls }
 }
 
-function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; assembleOk?: boolean; llm?: ReturnType<typeof fakeLlm>; storage?: FakeStorage; withLlm?: boolean; withMeter?: boolean; session?: FakeSession; wireTokens?: number } = {}) {
+/** U14 夹具：pump 的 `facts/session-event` 面替身（降级态事实回灌）。 */
+function fakePump() {
+  const handlers = new Set<(payload: { session: unknown; event: FakeEvent }) => void>()
+  return {
+    on(_kind: string, fn: unknown): () => void {
+      const handler = fn as (payload: { session: unknown; event: FakeEvent }) => void
+      handlers.add(handler)
+      return () => { handlers.delete(handler) }
+    },
+    /** 模拟 HC3 回灌：镜像事实（不 append 会话）投递到领域事件面。 */
+    replay(session: FakeSession, event: FakeEvent): void {
+      for (const handler of handlers) handler({ session, event })
+    },
+    size: () => handlers.size,
+  }
+}
+
+function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; assembleOk?: boolean; llm?: ReturnType<typeof fakeLlm>; storage?: FakeStorage; withLlm?: boolean; withMeter?: boolean; session?: FakeSession; wireTokens?: number; pump?: ReturnType<typeof fakePump> } = {}) {
   const session = options.session ?? makeSession()
   const storage = options.storage ?? new FakeStorage()
   const llm = options.llm ?? fakeLlm()
@@ -167,6 +184,7 @@ function makeEnv(options: { config?: Partial<ConfigShape>; rendered?: string; as
     getLlm: () => options.withLlm === false ? undefined : llm.ctx,
     workspace: WORKSPACE,
     now: () => 5000,
+    ...(options.pump === undefined ? {} : { pump: options.pump as never }),
   })
   const runs = () => session.events.filter((event) => event.type === COMPRESS_RUN_FACT_TYPE).map((event) => event.data)
   return { session, storage, llm, domain, requests, runs, config, warns }
@@ -691,6 +709,85 @@ describe('F9a 压力区间守卫（INVALID_RANGE 回归，2026-09-09 真机缺�
     expect(env.llm.calls).toHaveLength(0)
     expect(firesOf(session)[0]).toMatchObject({ outcome: 'skip', reason: 'range' })
     expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
+  })
+})
+
+/**
+ * U14（2026-09-11 真机复盘）三处修复的回归：
+ * ① 事实源必须取**全量**事件（旧 4000 条"丢最老"窗口把界定段边界的 judge-verdict /
+ *    task-boundary 事实切掉 → 长会话里边界压缩永久空转）；
+ * ② 降级态（ignorable 通道缺失、事实只写 KV 镜像并经 HC3 回灌）必须并入回灌事实，
+ *    否则界见不到任何判词；
+ * ③ 压力路径 parse/schema 失败必须留下 pressure-fired（"决定开火"的半条账）。
+ */
+describe('U14 边界触发事实源（全量事件 + HC3 回灌）', () => {
+  /** 会话：task-1（nodes 0..3，含 /task close 事实）→ task-2 首条消息；再堆 >4000 条无关事件。 */
+  function longSession(filler: number): FakeSession {
+    const session = makeSession()
+    for (let i = 0; i < filler; i++) {
+      // 非表面填充：不产生表面节点，只把关键事实推出旧窗口之外。
+      session.append('assistant/message', { message: { content: [textBlock('filler')] } })
+    }
+    return session
+  }
+
+  it('① 关键事实落在末 4000 条之外时边界压缩仍然触发（旧实现零尝试）', async () => {
+    const env = makeEnv({ session: longSession(4500) })
+    expect(env.session.events.length).toBeGreaterThan(4000)
+    await env.domain.onPreStep({ session: env.session as never, turn: 7 })
+    expect(env.requests[0]).toMatchObject({ taskId: 's1:task-1', layer: 'boundary' })
+    expect(env.runs()).toHaveLength(1)
+    expect(env.runs()[0]).toMatchObject({ outcome: 'ok', layer: 'boundary', taskId: 's1:task-1' })
+    expect(env.domain.stats()).toMatchObject({ triggers: 1, compactions: 1 })
+  })
+
+  it('② 降级态：判词只经 HC3 回灌到达时，边界压缩照常触发', async () => {
+    // 会话里**没有**任何 context-economy/* 事实（模拟通道缺失：事实只落 KV 镜像）。
+    const session = new FakeSession()
+    session.append('user/message', { content: [textBlock('做 A'.repeat(40))], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }] } }, { surfaceOp: 'append' })
+    session.append('tool/result', { message: { content: [{ type: 'tool-result', toolCallId: 'c1', content: [textBlock('1: old line')] }] } }, { surfaceOp: 'append' })
+    session.append('user/message', { content: [textBlock('做 B')], source: { kind: 'user' } }, { surfaceOp: 'append' })
+    expect(session.events.some((e) => e.type.startsWith('context-economy/'))).toBe(false)
+
+    const pump = fakePump()
+    const env = makeEnv({ session, pump })
+    // 未回灌 → 段状态机只见 1 段，零尝试（这正是真机上观察到的静默空转）。
+    await env.domain.onPreStep({ session: session as never, turn: 1 })
+    expect(env.requests).toHaveLength(0)
+    expect(pump.size()).toBe(1)
+
+    // HC3 回灌一条判词（seq 为到达序重建，锚在日志尾之后）→ 段边界成立 → 触发。
+    pump.replay(session, { type: 'context-economy/judge-verdict', seq: 900, time: 900, data: { verdict: 'new-task', anchorSeq: 3 }, ignorable: true })
+    await env.domain.onPreStep({ session: session as never, turn: 2 })
+    expect(env.requests[0]).toMatchObject({ taskId: 's1:task-1', layer: 'boundary' })
+    expect(env.runs()[0]).toMatchObject({ outcome: 'ok', layer: 'boundary' })
+  })
+
+  it('②b 通道可用时回灌与会话事件同源 → 去重后不双计（重复事实不生成第二个闭合段）', async () => {
+    const session = makeSession()
+    // 会话内既有 task-boundary 事实，又经 firehose/回灌面重复投递同一枚事实。
+    const fact = session.events.find((e) => e.type === 'context-economy/task-boundary')!
+    const pump = fakePump()
+    const env = makeEnv({ session, pump })
+    pump.replay(session, { ...fact })
+    // 不去重则同一枚 close 事实会折叠出第二个闭合段（起点 4），第二轮 pre-step 会把它当成
+    // 未归档的新段再压一次 —— 两轮只允许一次落刀。
+    await env.domain.onPreStep({ session: session as never, turn: 1 })
+    await env.domain.onPreStep({ session: session as never, turn: 2 })
+    expect(env.requests).toHaveLength(1)
+    expect(appendsOf(session, 'compaction/start')).toHaveLength(1)
+    expect(env.domain.stats()).toMatchObject({ triggers: 1, compactions: 1 })
+  })
+
+  it('③ 压力路径 parse 失败留下 pressure-fired（amount 与 compress-run 同源）', async () => {
+    const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, llm: fakeLlm([{ text: 'not json' }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
+    const fires = firesOf(env.session)
+    expect(fires).toHaveLength(1)
+    // 无 contextWindow → 阀门基准回落绝对安全网 thresholdTokens(100000) → 0.35 × 100000。
+    expect(fires[0]).toMatchObject({ outcome: 'skip', reason: 'parse', wireTokens: 150000, thresholdTokens: 35000 })
+    expect(env.runs()[0]).toMatchObject({ outcome: 'parse' })
   })
 })
 

@@ -68,6 +68,7 @@
     "test": "vitest run --pool=threads",
     "assert": "node scripts/assert-structure.mjs",
     "gate": "npm run typecheck && npm run typecheck:client && npm test && npm run assert",
-    "smoke:lib": "node scripts/smoke-lib.mjs"
+    "smoke:lib": "node scripts/smoke-lib.mjs",
+    "probe:channel": "node scripts/probe-channel.mjs"
   }
 }

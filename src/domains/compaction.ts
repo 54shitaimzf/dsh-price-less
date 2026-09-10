@@ -17,7 +17,7 @@
  */
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
-import { compactFact, factsFromSessionEvents } from '../core/ledger/facts.ts'
+import { FACT_TYPE_PREFIX, compactFact, factsFromSessionEvents } from '../core/ledger/facts.ts'
 import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.ts'
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
@@ -70,7 +70,7 @@ import { calibrationRatio } from '../core/meter/estimate.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createHistoryPort } from '../platform/history.ts'
 import { CE_CONTEXT_OVERFLOW_CODE, CE_LLM_TIMEOUT_MS, resolveContextWindow, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
-import { readSessionEvents, readSessionModel, type CeLogger } from '../platform/events.ts'
+import { readSessionEvents, readSessionModel, type CeLogger, type EventPump } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import type { MeterPort } from '../platform/meter.ts'
 import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
@@ -100,6 +100,12 @@ export interface CompactionDomainDeps {
   getLlm?: () => Pick<Context, 'llm'> | undefined
   workspace?: string
   now?: () => number
+  /**
+   * HC3 事实回灌面（docs/12 §3）。**降级态下必需**：通道缺失时 `emitFact` 只写 KV 镜像、
+   * 不 append 会话，事实进不了 `readSessionEvents`——不订阅本面则 `foldSegmentState`
+   * 看不到任何 `judge-verdict`，边界压缩静默全灭（2026-09-11 真机复盘）。
+   */
+  pump?: Pick<EventPump, 'on'>
 }
 
 export interface CompactionDomainStats {
@@ -121,8 +127,23 @@ export interface CompactionDomain {
   onRequestError(payload: { session: Session; turn: number; step: number; failureCode: string }): Promise<'retry' | 'pass'>
 }
 
-/** 会话内参与段状态 fold 的原始事件上限（超出丢最老；只影响超老段的发现）。 */
-export const COMPACTION_EVENT_LIMIT = 4000
+/**
+ * U14（2026-09-11 真机复盘）：原 `COMPACTION_EVENT_LIMIT = 4000` 的"丢最老"事件窗已**删除**。
+ *
+ * 该窗把 `ledgerEventsOf` 的返回截成末 4000 条，而 `ledgerEventsOf` 同时是**事实源**与
+ * **首条用户消息锚**的来源，于是：
+ * ① 界定 task 段的 `judge-verdict` 事实（边界压缩的全部触发依据）在长会话里永远落在窗外，
+ *    `foldSegmentState` 恒只见 1 段 → `runBoundary` 在 `segments.length < 2` 处永久空转。
+ *    实测三例：4130 事件会话（窗内首条 user seq = 152、判词 anchor = 19）、32913 事件会话
+ *    （窗内 28935、判词 21198/21255）均为零次尝试；唯一成功的一次是 347 事件的短会话。
+ * ② `firstUserSeq` 取到的是**窗内**首条用户消息而非会话首条，段状态机基准随之漂移。
+ *
+ * `readSessionEvents` 本就返回全量快照，切片只省下游 CPU 却切断正确性——故整段移除。
+ * 边界段的原文渲染天然由区间（startSeq/endSeq）限定，不因此放大开销。
+ */
+
+/** 回灌事实的每会话缓冲上限（防御性；降级态一个进程内的判词/剪切事实量级远低于此）。 */
+export const REPLAYED_FACT_LIMIT = 20000
 
 /** 档案区实体键（workspace 隔离；docs/09 §1）。 */
 export function boundaryArchiveKey(workspace: string): string {
@@ -158,7 +179,7 @@ function ledgerEventsOf(session: Session): LedgerSessionEvent[] {
       ...(event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp }),
     })
   }
-  return out.slice(-COMPACTION_EVENT_LIMIT)
+  return out
 }
 
 function firstUserSeq(events: readonly LedgerSessionEvent[]): number {
@@ -278,6 +299,53 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   /** 保险丝自动折叠 turn 守卫（每轮至多一次；与压力 turn 守卫独立）。 */
   const fuseTurn = new WeakMap<Session, number>()
   let disposed = false
+
+  /**
+   * HC3 回灌事实缓冲（docs/12 §3）：降级态下 `emitFact` 只写 KV 镜像、不 append 会话，
+   * 事实因此不在 `readSessionEvents` 里。本域订阅 pump 的 `facts/session-event` 把这些
+   * 事实按会话收下来，与会话事件并集成事实源（见 `factsFor`）。
+   *
+   * 不回读 storage 的 `fact_mirror` 表：镜像行没有日志位（seq 缺失），跨源合成的 seq 与
+   * HC3 回灌路径自增的 seq 无法对齐，dupe 判据会失效并双计。**已知边界**：进程重启后，
+   * 上一个进程写入镜像的历史事实不在本缓冲里（那部分段状态需通道恢复后自然补齐）。
+   */
+  const replayedFacts = new WeakMap<Session, LedgerFact[]>()
+  const offReplayedFacts = deps.pump?.on('facts/session-event', ({ session, event }) => {
+    if (!event.type.startsWith(FACT_TYPE_PREFIX)) return
+    const list = replayedFacts.get(session) ?? []
+    list.push({
+      type: event.type,
+      seq: event.seq,
+      time: event.time,
+      data: event.data,
+    })
+    if (list.length > REPLAYED_FACT_LIMIT) list.splice(0, list.length - REPLAYED_FACT_LIMIT)
+    replayedFacts.set(session, list)
+  })
+
+  /**
+   * 事实源并集（docs/12 §3「会话 ignorable 事件 ∨ KV 镜像」的域侧落点）。
+   *
+   * 通道可用 → 回灌面收到的与会话事件同源同序（firehose 把 `context-economy/*` 也送进
+   * `facts/session-event`，events.ts），按 `(type, seq, data)` 去重后**不双计**；
+   * 通道缺失 → 事实只在回灌缓冲里，不并集则段状态机与判词彻底失明。
+   * 合并后按 `seq ?? time` 升序，使回灌事实（seq 锚在日志尾）稳定落在会话事实之后。
+   */
+  const factsFor = (session: Session, events: readonly LedgerSessionEvent[]): LedgerFact[] => {
+    const fromEvents = factsFromSessionEvents([...events])
+    const replayed = replayedFacts.get(session)
+    if (replayed === undefined || replayed.length === 0) return fromEvents
+    const seen = new Set(fromEvents.map((fact) => `${fact.type}|${fact.seq}|${JSON.stringify(fact.data)}`))
+    const merged = [...fromEvents]
+    for (const fact of replayed) {
+      const key = `${fact.type}|${fact.seq}|${JSON.stringify(fact.data)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      merged.push(fact)
+    }
+    merged.sort((a, b) => (a.seq ?? a.time) - (b.seq ?? b.time))
+    return merged
+  }
 
   const policiesOf = (config: ConfigShape): { assemble: AssemblePolicy; compress: CompressPolicy } => ({
     assemble: {
@@ -800,6 +868,11 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         warnTokenDrift(renderedPromptTokens, usage, logger)
         const parsed = parseCompressProduct(llmText, 'pressure', units)
         if (!parsed.ok) {
+          // U14：parse/schema 是压力路径**已经真正开火**（调用已发生、费用已产生）的结果，
+          // 旧实现只发 compress-run 而不发 pressure-fired → 账本上"决定开火"的那半条记录消失，
+          // 回放只见一次孤立的失败调用（2026-09-11 真机：一次 schema 失败烧掉 718K input tokens
+          // 却在 `pressure-fired` 计数里完全不可见）。与 shrink/cutpoint/range/no-units 各路径对齐。
+          fire('skip', { reason: parsed.reason, chainDepth: depth })
           emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
             ...runBase, outcome: parsed.reason, calls, emergency: opts.emergency,
             ...(usage === undefined ? {} : { llmUsage: usage }),
@@ -1024,7 +1097,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     busy.add(payload.session)
     try {
       const events = ledgerEventsOf(payload.session)
-      const facts = factsFromSessionEvents(events)
+      const facts = factsFor(payload.session, events)
       const wireTokens = deps.getMeter?.()?.wireTokens(payload.session) ?? 0
       const thresholdTokens = pressureThreshold({
         domainTokens: config.compression.domainTokens,
@@ -1056,7 +1129,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     busy.add(session)
     try {
       const events = ledgerEventsOf(session)
-      const facts = factsFromSessionEvents(events)
+      const facts = factsFor(session, events)
       if (config.compression?.boundary !== false) await runBoundary(session, turn, events, facts)
       if (config.compression?.pressure !== false) {
         // P20c：每步只探一次主模型窗口，压力阀门与保险丝地板共用同一值。
@@ -1073,7 +1146,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
   }
 
   return {
-    dispose() { disposed = true },
+    dispose() { disposed = true; offReplayedFacts?.() },
     stats: () => ({ ...counts }),
     onPreStep,
     onRequestError,

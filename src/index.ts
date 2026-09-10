@@ -298,6 +298,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
             getMeter: () => meter,
             getLlm: () => llmCtx,
             workspace: process.cwd().replaceAll('\\', '/'),
+            // U14：降级态事实源（HC3 回灌面）；通道缺失时边界压缩的全部触发依据只能从这里拿。
+            pump,
           })
           stopPreStep = onAgentPreStep(ctx, {
             logger: ceLogger(ctx),

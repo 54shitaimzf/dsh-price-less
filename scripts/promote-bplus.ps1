@@ -103,8 +103,13 @@ Write-Host @"
 
 === promote 完成 ===
 接下来（自行决定，脚本不做）：
-  1) 清空 / 挪走 v2 时代的会话与实体：~/.dsh/sessions 、 ~/.dsh/storages
+  1) **不要清空** ~/.dsh/sessions 与 ~/.dsh/storages：B+ 与 rc.1 同为会话格式 v3
+     （最高迁移包 = session-format-v2-to-v3；现有文件 = session.v3.jsonl.zstd）→ 直接沿用。
+     只有宿主实际报「格式不认识」时才备份后另议。
   2) 重启宿主：停掉正在跑的 `pnpm dsh web`，重新 `cd G:\deepseek-harness ; pnpm dsh web`
   3) 浏览器 Ctrl+F5 硬刷新
+  4) 重启后自检（事实轨应从 KV 镜像切回会话日志真源）：
+     新会话 JSONL 里应出现 `context-economy/*` 且带 `ignorable:true`；
+     若仍只有 `fact_mirror` 增长，说明宿主加载的还是旧 lib。
 回滚见 docs/14 §5。
 "@ -ForegroundColor Green

@@ -32,11 +32,29 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 = 判别/辅助调用模型**去硬编码**（无路由跳过判别 + `CE_JUDGE_NO_ROUTE`）/ 永久封禁族（段锚 + 重试预算 2 + 孤儿事务自愈）/
 屏障与超时族（`streamCeLlm` 硬超时 + drain 按会话分桶 + settle 超时闩）/ 口径计量族 8 项 / 存储恢复族 3 项 / P3 五项；
 快照 **§82**（含两处偏离工单的理由与实测依据）。**构建产物级冒烟 = `npm run smoke:lib`（24 项，升级后必跑）**，
-跑在 `lib/` 上（src 层 vitest 全绿也照样漏构建/链接漂移）。
+跑在 `lib/` 上（src 层 vitest 全绿也照样漏构建/链接漂移）。**harness 接触面**（ignorable 通道是否闭合）
+由 **`npm run probe:channel`** 守（`scripts/probe-channel.mjs`：探测 + 真 Session 回环 + 存储契约正反证；
+2026-09-11 新增——此前 `docs/14 §4` 误称 `smoke:lib` 已覆盖，实测零匹配）。
+**重建 + 重启一条命令**：`pwsh -File scripts\rebuild-and-run.ps1`（重链重编译 → gate → smoke →
+probe:channel → 停旧宿主 → `pnpm dsh web`）。
 `context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
 事实轨降级 KV 镜像、账本口径不变；**checkout 升级后跑 `npm test` 自检（回环用例即通道测试）**。
+**2026-09-11 原地 B+ 完成**：harness 主 checkout 已**原地**切到 B+（`bplus-0.1.5` @ `f0dc41471c`，
+临时 worktree `G:\dsh-bplus-wt` 已移除，插件 28 个 junction 全指 `G:\deepseek-harness`）；
+构建产物级回环探针读数 = **`emitted` + `ignorable:true` + v3 存储契约放行**（透传已闭合）。
+**会话与 storages 已是格式 v3（最高迁移包 `session-format-v2-to-v3`）→ 切换基线时不要清空/挪走
+`~/.dsh/sessions` 与 `~/.dsh/storages`**（旧 runbook 的"清空 v2 会话"建议已作废并改正）。
+**判别器 v5（用户裁定 2026-09-11）= task 粒度收紧**：task 锚在**功能/模块/产物**这一级，
+**不锚仓库/项目**——"都在同一个仓库/插件里"不构成同一 task。v4 的对象枚举（文件/模块/项目/产物）
+与"或同类目标"是**并列洞**，模型挑"项目"这层即可把整仓一天算作一个 task（真机 `session-6ef03ab9`：
+150 条消息只出 2 条 `new-task` 且全在事件窗外 → 边界压缩零触发）。v5 落点：定义改功能点锚、
+规则 6 去掉"项目/代码库"并写明"仓库名/项目名/产品名不是工作对象"、规则 5 补"同一仓库内推进
+另一件功能 = 换意图"、**新增粒度自检**（给 target 起功能级名字，不同即 `new_task`；"这个插件/
+这个项目"判不合格）、continue 尾巴禁止以"都在同一个仓库"放行；判据模板 = 
+`datasets/prompt-discriminator-v2.4.txt`（与 `core/judge.ts` 同源断言）。代价（已确认接受）：
+闭合 task 变多 → compress 调用次数上涨。快照 **§83**。
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
 （历史记录，只读）；**N 系列「协商剪除」（语义层）已整体退役**（账本 §71；遗留登记 `docs/legacy.md` §9），原总纲与 N2/N3 工单封存于 `docs/implement/archive/`
@@ -95,7 +113,7 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 ## Architecture
 
 - 平面分层：L0 确定性规则 → L1 结构（模型打辅助）→ L2 模型最小断面（`docs/01`）。
-- 分划单位（正典 `docs/01 §3.5`）：task = 意图轴单位（项目某一方面目标的持续努力；**闭合 = 区间信息稳定点，边界压缩时机的根据**）；子task = 活动类型轴单位（构建/审查…，压缩分结构单位，无检测机制/无档案地位）；交换对 = 剪切层微削单位（连续同类交换构成 run）。判别器只守意图轴，剪切层只动交换对。
+- 分划单位（正典 `docs/01 §3.5`）：task = 意图轴单位（围绕**同一个功能/模块/产物**的持续努力，**粒度锚功能点、不锚仓库**；**闭合 = 区间信息稳定点，边界压缩时机的根据**）；子task = 活动类型轴单位（构建/审查…，压缩分结构单位，无检测机制/无档案地位）；交换对 = 剪切层微削单位（连续同类交换构成 run）。判别器只守意图轴，剪切层只动交换对。
 - 状态分层：会话（历史/工具结果）/ task（卷宗 vN、优化产物 vN）/ 项目（项目帧 vN、边界档案 vN）——单一事实源与版本协议在 `docs/09`。
 - 可见性（docs/01 §4）：**无隐藏注入段**——可见层 = 优化后 prompt（用户预览确认）+ 用户指令原文（权威段）+ 剪除/压缩的结论落位物；插件内部标志（run 范围、行式裁决）**不进模型视野**（带外原则，docs/03 §3）。
 - 工程结构：platform 适配 / core 纯核（零 harness import）/ domains 编排 / client 壳——模块树与搭建序 = `docs/11`。

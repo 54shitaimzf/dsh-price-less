@@ -52,7 +52,7 @@ pnpm exec vitest run packages/core/session     # 本次读数：15 文件 / 504 
 cd D:\deepseek-plugin
 $env:DSH_CHECKOUT='G:/dsh-bplus-wt'           # 或升级完成后的 G:/deepseek-harness
 & 'C:\Program Files\Git\bin\bash.exe' scripts/build.sh   # 重链 node_modules junction + 编译 lib
-npm run gate ; npm run typecheck:tests
+npm run gate ; npm run typecheck:tests ; npm run smoke:lib ; npm run probe:channel
 ```
 
 > Windows 上 `bash` 解析到 `C:\Windows\system32\bash.exe`（WSL），`npm run build` 会挂在
@@ -88,15 +88,20 @@ npm run gate ; npm run typecheck:tests
 1. `npm run gate` 退出 0（typecheck + typecheck:client + vitest + assert `ok=true vacuous=[]`）；
 2. `npm run typecheck:tests` 退出 0（词汇派生与编译闸的类型级守门）；
 3. `& bash scripts/build.sh` 退出 0；
-4. **lib 级冒烟**：`npm run smoke:lib`（常驻脚本 `scripts/smoke-lib.mjs`，**跑在构建产物 `lib/` 上，不是 src**）
-   必须 **24/24 PASS**。它覆盖两类东西：
-   - **harness 接触面**（升级真正会踩的）：`SESSION_LOG_INTENT`/`SESSION_FORMAT_VERSION`、端点常量与
-     权威形状一致且读写同源、真 `SessionStore` 接受 replace 且系统节点存活、`foldSurfaceNodes` 正确遮蔽、
-     通道可用 → `emitted` 且带 `{ignorable:true}`、通道缺失 + 镜像 + 回灌 → facts 面到达；
-   - **插件侧回归锚**（U8–U13 起）：无路由 → `undefined`（无内置默认模型）、LLM 流硬超时、
-     段锚/重试预算、恢复段归属、折叠材料判据、`run` 动词、chain 逐字替换、class 白名单、drain 分批。
-   > 这些断言在 src 层的 vitest 里也有；lib 层的价值是**证明构建产物本身正确**（tsc/打包漂移、
-   > junction 指错树、`lib/` 陈旧都会在这里暴露，而 vitest 全绿也照样漏）。
+4. **lib 级冒烟 + 通道探针**（两者都**跑在构建产物 `lib/` 上，不是 src**）：
+   - `npm run smoke:lib`（常驻脚本 `scripts/smoke-lib.mjs`）必须 **24/24 PASS**，覆盖**插件侧回归锚**
+     （U8–U13 起）：无路由 → `undefined`（无内置默认模型）、LLM 流硬超时、段锚/重试预算、恢复段归属、
+     折叠材料判据、`run` 动词、chain 逐字替换、class 白名单、drain 分批。
+   - **`npm run probe:channel`（常驻脚本 `scripts/probe-channel.mjs`）必须全 PASS** —— **harness 接触面在此**：
+     `SESSION_LOG_INTENT === 1`、真 `SessionStore` 上 `emitFact` 路由 = **`emitted`** 且日志尾带
+     `{ignorable:true}`、v3 存储契约放行（会话可重载）、反证（无 `ignorable` 的未知类型被拒读）。
+   > **2026-09-11 修正**：本条此前声称 `smoke:lib` 覆盖 harness 接触面（`SESSION_LOG_INTENT` /
+   > `SESSION_FORMAT_VERSION` / 端点常量 / replace / `foldSurfaceNodes` / 通道→`emitted`）——**与实现不符**：
+   > `scripts/smoke-lib.mjs` 里这些**零匹配**，24 项全是插件侧回归。于是"升级后必跑"的那道闸
+   > **并没有在测通道**，通道是否闭合只能靠人肉。已拆成上面两个脚本；**换基线后两个都要跑**。
+   > 这些断言在 src 层 vitest 里也有（`tests/harness-session.spec.ts` 回环 + `tests/ignorable-channel.spec.ts`）；
+   > lib 层的价值是**证明构建产物本身正确**（tsc/打包漂移、junction 指错树、`lib/` 陈旧都会在这里暴露，
+   > 而 vitest 全绿也照样漏）。
 5. harness 侧：`pnpm exec vitest run packages/core/session` 全绿（补丁自带的 5 条用例在内）；
 6. 真机：冒烟清单见 [`implement/REPAIR-2026-09-10.md §5.3`](implement/REPAIR-2026-09-10.md)。
 
@@ -110,7 +115,9 @@ npm run gate ; npm run typecheck:tests
 ```powershell
 # 切换
 pwsh -File D:\deepseek-plugin\scripts\promote-bplus.ps1
-# 之后：清空/挪走 ~/.dsh/sessions 与 ~/.dsh/storages（v2 → v3，用户自决）；然后重启 dsh web
+# 之后：**不要**清空 ~/.dsh/sessions 与 ~/.dsh/storages——B+ 与 rc.1 同为会话格式 v3
+#       （最高迁移包 = session-format-v2-to-v3；现有文件 = session.v3.jsonl.zstd），直接沿用；
+#       然后重启 dsh web
 
 # 回滚
 cd G:\deepseek-harness

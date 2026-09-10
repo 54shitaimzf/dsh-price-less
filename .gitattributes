@@ -1,0 +1,5 @@
+# 判据模板夹具：与 `src/core/judge.ts` 的常量做**逐字节**同源断言（`tests/judge.spec.ts`）。
+# 仓库 `core.autocrlf=true` 且无本文件时，LF 会在 checkout 时被换成 CRLF（本文件写入前实测：
+# v2.3 工作树为纯 LF 只是因为从未经过一次 checkout 往返）→ 同源断言会红。
+# 故对数据集文本禁用一切 EOL 归一化：进仓库什么字节，出仓库就什么字节。
+datasets/*.txt -text
