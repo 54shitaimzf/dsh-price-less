@@ -75,6 +75,14 @@ log-only 事件——日志 append 后永不重写，状态损毁也能按事件
 | 状态 | 存哪 | 恢复 | 失效语义 |
 |---|---|---|---|
 | 卷宗 | durable KV | 读盘 + 版本校验；损毁 → 日志重放 | 当作空卷宗重新积累 |
+
+> **段归属口径（U12.3，2026-09-10）**：卷宗重放时「消息属于哪一段」用**两端闭区间
+> `[startSeq, endSeq]`**（`core/restore/rebuild.ts: segmentForSeq`）——**边界 seq 归前段**。
+> 理由 = 对齐 live 写入口径：live 在判词/边界落地**之前**就把消息追加进"当时末段"的卷宗，
+> 故段边界那条消息属于前段。旧实现末端开区间会把 verdict 边界（`endSeq = anchor − 1`）的
+> 前段末条消息漏出去、掉进调用侧 `?? lastSegment`。起点保持闭区间是必须的：首段
+> `startSeq = sessionFirstSeq`（就是首条用户消息），verdict 边界的 `startSeq = anchor`
+> （正是新 task 的首条消息）；同 seq 既是前段 end 又是后段 start（t0 边界 = 事实 seq）时归前段。
 | 项目帧 | durable KV | 读盘 + 校验 | 退回上一版本；无版本 → 重新 init |
 | 边界档案 | durable KV | 读盘 + hash | 回退上一版本 |
 | 段状态机（task 表） | 会话日志 fold（纯函数） | 回放重建 | 当作新 task |

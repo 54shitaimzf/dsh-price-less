@@ -364,7 +364,9 @@ link_pkg @deepseek-ai/dsh-client-ui-session packages/client/ui-session
 `{sessionId,previewId,editedProduct}`）；信封 = `ConnectionRpcResult`。错误码：
 `CE_STAR_BAD_REQUEST` / `CE_STAR_UNKNOWN_ENDPOINT` / `CE_STAR_NO_SESSION` /
 `CE_STAR_LLM_FAILED` / `CE_STAR_PARSE_FAILED` / `CE_STAR_UNKNOWN_PREVIEW` /
-`CE_STAR_STORAGE_FAILED` / `CE_STAR_INTERNAL` / `CE_STAR_UNAVAILABLE`（client 侧无连接服务）。
+`CE_STAR_STORAGE_FAILED` / `CE_STAR_INTERNAL` / `CE_STAR_UNAVAILABLE`（client 侧无连接服务）/
+**`CE_STAR_NO_MODEL`（U8，2026-09-10 追加）**：无可用模型路由（未配置 `discriminator.provider/model`
+且会话尚无 `request/header`）——插件**不再内置默认模型**，故不猜路由，向前端明确回报。
 
 **类型面策略**：`@deepseek-ai/dsh-client-connection` 根 d.ts 会级联
 `dsh-host-webserver`/`dsh-credentials`/`dsh-attachment`（插件未链接）。端口只从**源文件子路径**

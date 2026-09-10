@@ -16,7 +16,13 @@
 | 族 | 字段 |
 |---|---|
 | 通用（回放） | `roundsPerTask` · `tokensPerRound` · `toolCallsPerTask` · `compoundedVolume` · `reDiscoveryTokens` · `costPerSuccessfulTask` |
-| 判别 | `segmentsPerSession` · `taskSwitchRate` · `judgeCount` · `judgeErrorRate` · `judgeCacheHitRate` · `judgeLatencyMs` · `judgeLLMUsage` · `judgeCtxTokens`（卷宗体积）· `judgeVerdictDist{action|pureQ|verifyQ}` · `l0CaptureRate` · `tableHitRate`（对表命中）· `judgeEffort{requested,sent}`（推理档，缺省=跟随） |
+| 判别 | `segmentsPerSession` · `taskSwitchRate` · `judgeCount` · `judgeErrorRate` · `judgeCacheHitRate` · `judgeLatencyMs` · `judgeLLMUsage` · `judgeCtxTokens`（卷宗体积）· `judgeVerdictDist{action\|pureQ\|verifyQ}` · `l0CaptureRate` · `tableHitRate`（对表命中）· `judgeEffort{requested,sent}`（推理档，缺省=跟随） |
+
+> **判别失败码（U8/U10，2026-09-10）**：`judge-error{code}` 现在可辨——`CE_JUDGE_NO_ROUTE`
+> （会话首条消息无路由 = 未配置且尚无 `request/header`，**按设计跳过判别**，非故障）、
+> `CE_LLM_TIMEOUT`（硬超时打断，`CE_LLM_TIMEOUT_MS`：判/★/init 60s、压缩 180s）、
+> `CE_LLM_UNAVAILABLE`（服务缺失）。旧实现一律塌成 `CE_JUDGE_FAIL`，失败原因不可分。
+> `judgeVerdictDist` 只统计白名单 class（`DOSSIER_CLASSES`，U13.4：未知 class 不再产 `NaN`）。
 | 断面（星标） | `optimizePromptTokens{in,out}`（含 reasoning，usage 分列）· `verdictBackfill{count,conflicts}` · `shearAtStar{pairs,tokens}` · `metaStrippedLines`（元注释剥离）· `optimizeEffort{requested,sent}` · `previewCacheHits`（结果复用命中，零调用）· `explorationAvoided`（星标后探索类调用配对 Δ）· `rerunAfterCut` |
 | 剪切 | `cutEvents{kind}` · `cutTokensSaved` · `cutBreakCost` · `cutMisfireDetected` · `questionBacklogDepth` · `toolPruneByClass` · `shearDecision{cut|hold|keep}`（`entrySkipListing` 分列）· `tableRepair{Count,Tokens}` · `repairCoverage` · `rereadAfterRepair` |
 | 压缩 | `digestBytes` · `digestEntryCount` · `digestTokens` · `gistBytes` · `stepCount` · `stepTokens` · `factLeaks` · `quotaDrops` · `errorDrops` · `factRejects` · `dupDrops` · `hotTailPointers` · `hotTailLocated` · `hotTailUnlocated` · `fetchCapped` · `archiveOverCap` · `archiveTruncate{count,tokens}` · `compressionCallCount` · `compressionCacheHitRate` · `extraSearchCalls` · `hotTailTokens` · `hotTailDeclaredUnits` · `hotTailStopReason{budget|list-end}` · `hotTailSource{model|positional-fallback}` · `hotTailFloorFilled` · `pressureFireCount` · `pressureTriggerWireTokens` · `pressureChainDepth` · `pressureBreakerTrips` · `compressionLayer{boundary|pressure}` · `hardTruncateCount` |
@@ -24,6 +30,13 @@
 
 全部字段可从会话 JSONL 回放计算（`sourceEventSeqs` 溯源 + `compaction/prune` 影子价），
 无需重跑。
+
+> **`compress-run` 的 skipped 归因（U9/U11.8，2026-09-10 起扩容）**：`reason` ∈
+> `llm-unavailable`（瞬态，不封禁）· `range-empty`（**U11.8 新增**：区间/表面定位失败，
+> 每段每进程节流一条，仅可观测、**不封禁**）· `no-units` · `parse`/`schema` ·
+> `shrink`/`storage`/`txn-*`（三者 + parse/schema 计入 **可重试**，预算 `RETRY_BUDGET=2`）。
+> 已归档判定键 = `${scopedTaskId}:${segmentStartSeq ?? ''}`（**U9 段锚**）——旧事实无
+> `segmentStartSeq` 时保守沿用旧键。压力路径同带段锚（`layer:'pressure'` 不参与归档判定）。
 
 ## 1. 关键字段语义
 

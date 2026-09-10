@@ -67,6 +67,7 @@
     "typecheck:tests": "tsc -p tsconfig.tests.json --noEmit",
     "test": "vitest run --pool=threads",
     "assert": "node scripts/assert-structure.mjs",
-    "gate": "npm run typecheck && npm run typecheck:client && npm test && npm run assert"
+    "gate": "npm run typecheck && npm run typecheck:client && npm test && npm run assert",
+    "smoke:lib": "node scripts/smoke-lib.mjs"
   }
 }

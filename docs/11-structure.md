@@ -138,6 +138,12 @@ workspace 隔离（F3）：按**会话 `header.cwd`** 分域（缺失回落进�
   消息流内轻量条目（剪除了多少、压缩了什么——用户可见可审计）。
 - 模型路由：`MODEL_PRESET_ROUTES` + `session.modelCatalog()`（H11 remote）+
   revision fence（controller 已实现，零改动）。
+- **辅助调用模型路由（U8，2026-09-10）**：**无内置默认模型**。`discriminator.provider`/`model`
+  两项齐全 → 用配置；否则跟随会话当前模型（最近一次 `request/header`）；二者皆无（**会话首条消息**）
+  → 判别**跳过**并发 `judge-error{code:'CE_JUDGE_NO_ROUTE'}` + `judge-recorded{trigger:'error-fallback'}`，
+  从第二条消息起自动跟随；★ 回 `CE_STAR_NO_MODEL`，`/init` 回明确指引，压缩两路径复用
+  `llm-unavailable`（瞬态，第二条消息即自愈）。**原硬编码 `deepseek-v4.1-flash-expires-on-0910`
+  已删除**（按命名即 0910 到期，且"插件猜模型名"本身是漂移源）。
 
 ## 6. 装配开关与默认态
 

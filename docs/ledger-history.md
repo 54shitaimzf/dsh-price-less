@@ -3296,3 +3296,73 @@ D3 断言追加 `setFactReplay` 越界即红。镜像事实无日志位 → `seq
   `~/.dsh/storages`（**由用户执行**；脚本不碰数据）。故 §8.5 的"迁移未端到端验证"风险归零。
 - **HC4 的 `eventAt` 4 处**（`domains/shear.ts`）仍留：上游尚未给出替代读法（`docs/legacy.md §14`）。
 - **`docs/implement/REPAIR-2026-09-10.md §4` 的 U8–U13 + 阶段二三**：仍未开工（与本次基线切换无关）。
+
+---
+
+## §82 U8–U13 缺陷修复（2026-09-10；提交 = `9ca139c` / `80493fe` / `dc671df` / `14172a0` / `7c14e3d` / `82af4a4`）
+
+承接 §80/§81 的 B+ 基线，按 `docs/implement/REPAIR-2026-09-10.md §4` 逐单元落地 **U8–U13**
+（五路审查缺陷的剩余部分）。**基线保持 B+**：上游 `origin/master` @ `c291e7961a`（0.1.5-rc.2）
++ 重放 ignorable 补丁（harness 分支 `bplus-0.1.5`）。
+
+### 逐单元改动
+
+| 单元 | 提交 | 改了什么（缺陷 → 修复） |
+|---|---|---|
+| **U8** | `9ca139c` | **判别/辅助调用模型去硬编码**。删 `DEFAULT_MODEL`/`DEFAULT_INIT_MODEL`（`deepseek-v4.1-flash-expires-on-0910`，按命名 0910 到期）→ `resolveJudgeModel`/`resolveInitModel` 返回 `… \| undefined`：配置齐全 → 配置；否则跟随会话模型；二者皆无（**会话首条消息**，尚无 `request/header`）→ **跳过判别**并发 `judge-error{code:'CE_JUDGE_NO_ROUTE'}` + `judge-recorded{trigger:'error-fallback'}`；★ 回 `CE_STAR_NO_MODEL`；`/init` 回明确指引；压缩两路径复用 `llm-unavailable`（瞬态）。client 预设删该档、placeholder 改"留空 = 跟随会话当前模型"。**副作用修正**：边界路径提交记账不再二次解析路由（改用本次实际路由 `chosen.provider/model`）。 |
+| **U9** | `80493fe` | **永久封禁族**。① 段锚：`CompressRunFactData.segmentStartSeq` + 已归档键改 `${scopedTaskId}:${segmentStartSeq ?? ''}`（旧事实无该字段保守沿用旧键）——同名 task 换段（事实窗截断致段编号复用）不再被永久封禁；② 统一重试预算 `SCHEMA_RETRY_BUDGET=1` → **`RETRY_BUDGET=2`**，可重试面扩为 `parse`/`schema`/`skipped(shrink\|storage\|txn-*)`；③ **孤儿事务自愈**：`runCompactionTxn` 遇活动事务残留 → `findActiveCompaction()` + 带 `error:'orphan-closed'` 闭合 + 报 `COMPACTION_ACTIVE_ORPHAN_CLOSED`（旧行为 = 该会话压缩**永久瘫痪**）；④ 压力路径 6 处 `compress-run` 头收口为 `runBase`（同带段锚）。 |
+| **U10** | `dc671df` | **屏障与超时族**。① `streamCeLlm` 增 `hooks.timeoutMs`：`Promise.race(iterator.next(), deadline)` **保底**结束（宿主不响应 signal 也照样产出 `CE_LLM_TIMEOUT` 终止块）+ 转发调用方 signal + abort 宿主请求；调用点预算收口 `CE_LLM_TIMEOUT_MS`（判/★/init 60s、压缩 180s）；② `drain` 按**会话分桶**（`Map<sid, {queue, processing}>`）——挂死会话不再跨会话队头阻塞（旧实现单队列 + 单 `processing` 标志）；③ `settle` **超时闩**（同 seq 二次 settle 立即 `timeout`，不再重复白等一个超时窗）；④ 终止块失败码**透传**（旧实现一律 `CE_JUDGE_FAIL`，超时/服务缺失不可辨）。 |
+| **U11** | `14172a0` | **口径与计量族 8 项**。① 摘要估算改用**截断后**文本（抽 `renderDigestHead` = `renderProduct` 同一渲染函数；旧实现按未截断原文高估 → 份额帽被压到 0.05 下限）；② 取真循环按 unitId **首申报胜出**（重复申报不再覆盖 `resolve` → 内容与 locator 错配）；③ 折叠材料排除**一切** plugin 源消息（复用 `isPluginSourceEvent`；旧实现只认 `plugin==='compact'` → 自家 notice 被当原文再折一遍）；④ T-entry `shapeEntry` 尊重 `isError`；⑤ `run` 动词收紧为 `\brun\s`（`npm run <自定义脚本>` 仍认；`node run.py` / `python run.py` / `scripts/run-migration.ts` 不再误判）；⑥ verifyQ 观察窗按**消息类事件**计量（非消息事件不再挤占额度）；⑦ `emergencyGuard` 键分前缀 `fuse:` / `err:`（保险丝不再挤掉同拍溢出接管）；⑧ compactSegment 4 处 range-skip 发**节流事实** `reason:'range-empty'`（旧实现零事实），并**同时**把 `range-empty` 列入非封禁原因（加事实不得顺带改封禁语义）。 |
+| **U12** | `7c14e3d` | **存储与恢复族**。① `diag-sink` 滚动 `rename` 失败 → **原地截断兜底**（对齐行边界，保持 JSONL 可解析；旧实现静默吞掉 → 文件无界增长）+ 序列化**逐条隔离**（坏消息只丢该条；旧实现 `warnOnce` 停用整个 sink）；② skill-watch 根集合 = 进程 cwd ∪ 各会话 `workspaceOf(session)`（会话首见即加根；旧实现固定 `process.cwd()` → 别的目录里开的会话其项目帧永不重建）；③ `segmentForSeq` 区间语义改**两端闭** `[start, end]`（verdict 边界 `endSeq = anchor − 1` 的前段末条消息不再漏进末段）。 |
+| **U13** | `82af4a4` | **P3 选择性五项**。① Zipf 截断分支**重估并收口 ≤ 配额**（≤3 次回砍；旧实现只切不算 → 越帽 → 缩水校验把整单打回）；② locator 开销按**幸存条目**结算（超帽从末位**撤标注不丢内容**；旧实现按候选数预扣 → 为标注丢内容）；③ `core/assemble/chain.ts` 应用面改**逐字替换**（与 harness `edit` 的 `content.split(old).join(new)` 同构）：`Hunk` 增 `delta` + 字符偏移，`applyHunksToFull`/`ToWindow` 走偏移替换（窗口上偏移校验失败才退回行区间近似）——修掉"删除留幻影空行"与"行中间部分替换整行失真"；④ `foldJudgeLedger` class 白名单（未知 class 不再产 `NaN`）；⑤ `EventPump.drain` 按**入队快照长度**分批（处理期间自馈入队走下一轮，防微任务饿死事件循环）。 |
+
+### 读数（改动前后）
+
+| 指标 | 改动前（§81 基线） | 改动后 |
+|---|---|---|
+| `npm run gate` | 退出 0：typecheck ×2 + **637 passed / 59 文件** + assert `ok=true vacuous=[]` | 退出 0：typecheck ×2 + **662 passed / 59 文件** + assert `ok=true vacuous=[]` |
+| `npm run typecheck:tests` | ✅ | ✅ |
+| `npm run build`（host + client） | ✅ | ✅（`lib/client.js` 168.35 kB） |
+| **lib 级冒烟**（新，`npm run smoke:lib`，跑构建产物） | 无 | **24/24 PASS** |
+| 新增回归用例 | — | **+25**（U8×1 / U9×3 / U10×4 / U11×9 / U12×4 / U13×5；另改写 2 例：U9 重试预算 2、U13.2 开销按幸存结算） |
+
+**lib 级冒烟读数（`scripts/smoke-lib.mjs`，24/24）**——关键几项：
+
+```
+U8  resolveJudgeModel(无配置无会话模型) = undefined          ← 旧值 = 硬编码 0910 档
+U8  硬编码档已从 lib 产物消失
+U10 永不结束的流 + timeoutMs=30 → 32ms 收到 CE_LLM_TIMEOUT   ← 旧实现永久挂起
+U9  RETRY_BUDGET = 2；shrink/storage/txn-* 皆 transient
+U12.3 verdict 边界端 seq 9 → task-1；anchor seq 10 → task-2   ← 旧实现 seq 9 落空错归末段
+U11.3 插件 notice 不是折叠材料；普通用户消息仍是
+U11.5 `npm run build`/`npm run my-script` 认；`node run.py`/`python run.py` 不认
+U13.3 删除带换行 → 行数 10→9；行中间部分替换逐字生效且后续 edit 仍可定位
+U13.4 未知 class → dist = {action:1,pureQ:0,verifyQ:0}（无 NaN）
+U13.5 自馈事件走下一轮：seen=[1,100,101,102]，dispatched=4，depth=0
+```
+
+> 口径说明：本快照的读数为**测试 + lib 产物冒烟**产出（本战役全部改动都在"事实发射点之后"的
+> 处理链上，无新增 07 字段，故没有新的回放管道样本）；**真机冒烟读数（`logs/context-economy.log`
+> 的 `CE_JUDGE_NO_ROUTE` / `range-empty` / `fuse:`+`err:` 双事实 / 归档键带段锚）待用户重启后补**，
+> 清单见 `REPAIR-2026-09-10.md §5.3` ①②③⑤⑦。
+
+### 与工单的两处**偏差**（已核实并在此登记）
+
+1. **U13.3 的改法**：工单写"`newString===''` 时 `newLineCount` 按 0 计"。实测 harness
+   `packages/fs/fs-local/src/fsio.ts:816` = `content.split(oldNorm).join(newNorm)`（LF 归一化后**逐字**
+   替换，删除**不**留空行）。据此：(a) `newLineCount=0` 只对"**span 行数**"语义成立（`mapLine` 用），
+   已照做；(b) 但**行数净变化**必须用 `delta = newlines(new) − newlines(old)`——`oldString` 带不带
+   尾换行决定该行是"消失"还是"变空行"，工单的单一 `newLineCount` 表达不了，故加了 `delta` 与字符
+   偏移；(c) 顺带修掉工单未提的**行中间部分替换整行失真**（同类：链上全文失真 → 后续 `locate` 断链、
+   盘上取真取错行）。`Hunk` 形状变更是**加法**；既有 `toEqual` 断言放宽为 `toMatchObject`（只钉行字段），
+   偏移/delta 由新增两例显式钉死。
+2. **U12.3 的区间**：工单写 `(start, end]`（左开右闭）。实测左开会让**首段**（`startSeq = sessionFirstSeq`，
+   就是首条用户消息）与 **verdict 边界的 anchor**（新 task 首条消息）双双落空 → 掉进调用侧
+   `?? lastSegment`。故实现为**两端闭** `[start, end]`（同 seq 既是前段 end 又是后段 start 时归前段），
+   与 live 追加序一致；`tests/restore-core.spec.ts` 相应改写并新增 verdict 边界例。
+
+### 未做（登记）
+
+- **阶段二三**（`REPAIR-2026-09-10.md §5/§6`）：真机冒烟 / 账本回放对照 / 三个独立复审代理 —— 仍待办。
+- **U11.8 的 `range-empty`**：只作**可观测**事实，已确认不会改变"已归档"判定（见 U11 行）。
+- 真机冒烟读数与 `F8c` calibration 样本仍未取得（需重启宿主）。

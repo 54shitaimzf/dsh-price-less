@@ -35,7 +35,7 @@
 
 | 档 | 时机 | 挂点 | 断裂成本 | 准入与动作 |
 |---|---|---|---|---|
-| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | **W2 保守准入（账本 §73）**：仅**过程日志**（构建/测试/安装/检查，`LOG_COMMAND_RE` 白名单）且输出 ≥120 行 **且** ≥16 KiB 才保头尾（12/12）；**失败（非零退出码/错误词）原文保留**；**列表类命令（W1）与数据查询类命令（git / Get-Content / Select-String / npm ls …）一律不整形**——载荷在中间，保头尾会丢答案，列表记 `entry-skip-listing` |
+| T-entry | 写时整形（结果落账**前**） | `tools/post-execute` accept `content` 覆盖（自有工具 `finalizeContent`） | **0**（完整版从未入账） | **W2 保守准入（账本 §73）**：仅**过程日志**（构建/测试/安装/检查，`LOG_COMMAND_RE` 白名单）且输出 ≥120 行 **且** ≥16 KiB 才保头尾（12/12）；**失败原文保留**——判据 = 工具层 `isError === true`（**U11.4**：权威判定；正则形态识别只作兜底）；**列表类命令（W1）与数据查询类命令（git / Get-Content / Select-String / npm ls …）一律不整形**——载荷在中间，保头尾会丢答案，列表记 `entry-skip-listing`。**U11.5 动词收紧**：`run` 只认「独立单词 + 后随空白」（`npm run build` / `pnpm run <自定义脚本>`）；文件名里的 run（`node run.py` / `python run.py` / `scripts/run-migration.ts`）不再被误判成过程日志 |
 | T0 / T0-R | 读后写超越 / 读件修复（§2.2） | surfaceOp replace | 中段剪（仅限被写超越的旧读；重推导兜底） | read@t1 被写@t2>t1 超越 → 旧读剪；声明表文件读后写 → 原位修复 |
 | T-boundary | 边界搭车 | task 压缩大 replace | 已付（搭车） | **老调用对唯一合法去处**，绝不中段独立剪 |
 

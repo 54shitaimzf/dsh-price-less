@@ -88,12 +88,15 @@ npm run gate ; npm run typecheck:tests
 1. `npm run gate` 退出 0（typecheck + typecheck:client + vitest + assert `ok=true vacuous=[]`）；
 2. `npm run typecheck:tests` 退出 0（词汇派生与编译闸的类型级守门）；
 3. `& bash scripts/build.sh` 退出 0；
-4. **lib 级冒烟**（跑在构建产物上，非 src）——五项，缺一不可：
-   - `SESSION_LOG_INTENT === 1`（补丁生效）与 `SESSION_FORMAT_VERSION` 符合预期；
-   - `REPLACE_OP_KEYS` 与 harness 权威形状一致、且读写两侧是**同一常量对象**；
-   - 真 `SessionStore` 接受一次 replace，且 `system/message` 头节点存活；
-   - `foldSurfaceNodes` 对**新端点名**正确遮蔽（旧实现会静默返回未遮蔽序列）；
-   - 通道可用 → `emitted` 且 append 带 `{ignorable:true}`；通道缺失 + 镜像 + 回灌 → facts 面到达。
+4. **lib 级冒烟**：`npm run smoke:lib`（常驻脚本 `scripts/smoke-lib.mjs`，**跑在构建产物 `lib/` 上，不是 src**）
+   必须 **24/24 PASS**。它覆盖两类东西：
+   - **harness 接触面**（升级真正会踩的）：`SESSION_LOG_INTENT`/`SESSION_FORMAT_VERSION`、端点常量与
+     权威形状一致且读写同源、真 `SessionStore` 接受 replace 且系统节点存活、`foldSurfaceNodes` 正确遮蔽、
+     通道可用 → `emitted` 且带 `{ignorable:true}`、通道缺失 + 镜像 + 回灌 → facts 面到达；
+   - **插件侧回归锚**（U8–U13 起）：无路由 → `undefined`（无内置默认模型）、LLM 流硬超时、
+     段锚/重试预算、恢复段归属、折叠材料判据、`run` 动词、chain 逐字替换、class 白名单、drain 分批。
+   > 这些断言在 src 层的 vitest 里也有；lib 层的价值是**证明构建产物本身正确**（tsc/打包漂移、
+   > junction 指错树、`lib/` 陈旧都会在这里暴露，而 vitest 全绿也照样漏）。
 5. harness 侧：`pnpm exec vitest run packages/core/session` 全绿（补丁自带的 5 条用例在内）；
 6. 真机：冒烟清单见 [`implement/REPAIR-2026-09-10.md §5.3`](implement/REPAIR-2026-09-10.md)。
 
