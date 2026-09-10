@@ -100,6 +100,8 @@ function makeHarness(opts: { withSkills?: boolean } = {}) {
       const d = fn()
       if (typeof d === 'function') disposers.push(d as () => unknown)
     },
+    // U17：host 平面发布 `contextEconomy`；真实 cordis 的 provide 自带 fiber 注销，替身只需可调用。
+    provide: () => () => {},
     inject: (deps: readonly string[], cb: (provided: unknown) => unknown) => {
       if (deps.includes('skills')) {
         if (!withSkills) return

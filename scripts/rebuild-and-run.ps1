@@ -6,7 +6,8 @@
   幂等五步：
     ① 插件重链 node_modules junction + 重编译 lib（DSH_CHECKOUT = 当前 harness）
     ② 验收：typecheck:tests → gate → smoke:lib
-    ③ 通道探针 probe:channel（事实轨是走会话日志真源还是降级 KV 镜像）
+    ③ 产物层探针：probe:channel（事实轨走会话日志真源还是降级 KV 镜像）
+       + probe:provider（U17 取代路径：preset 的 provider 行能否被解析并落地）
     ④ 停掉占用端口的旧宿主进程
     ⑤ 从 harness 启动 `pnpm dsh web`（前台，Ctrl+C 停）
 
@@ -66,9 +67,13 @@ try {
     npm run smoke:lib       ; if ($LASTEXITCODE -ne 0) { Fail 'smoke:lib 失败——不要重启宿主' }
 
     # ── ③ 通道探针：ignorable 透传是否在产物层闭合 ────────────────────────────────
-    Step '③ 通道探针 probe:channel'
+    Step '③ 通道探针 probe:channel + 取代路径探针 probe:provider'
     npm run probe:channel
     if ($LASTEXITCODE -ne 0) { Fail '通道未闭合（事实轨会降级 KV 镜像）——检查 harness 是否真的在 B+' }
+    # U17：取代路线的前提（包 exports 解析 / 模块实例同一 / 根 realm 无泄漏 / 缝可从 isolate 组内解析）
+    # 全都不在 src 层，只有产物层看得出；红了说明 preset 换行会挂载失败。
+    npm run probe:provider
+    if ($LASTEXITCODE -ne 0) { Fail '取代路径未闭合（preset 的 provider 行会挂载失败）' }
   } else {
     Step '② ③ 已按 -SkipChecks 跳过'
   }

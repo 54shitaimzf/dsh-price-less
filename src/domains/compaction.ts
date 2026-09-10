@@ -22,7 +22,7 @@ import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.t
 import type { LedgerFact, LedgerSessionEvent } from '../core/ledger/types.ts'
 import { foldSegmentState, type TaskSegment } from '../core/units.ts'
 import { workspaceOf } from './workspace.ts'
-import { DEFAULT_ASSEMBLE_POLICY, archiveChainMonotone, foldAssembleInputs, isPluginSourceEvent, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
+import { DEFAULT_ASSEMBLE_POLICY, archiveChainMonotone, ceTxnId, foldAssembleInputs, isPluginSourceEvent, planTxn, type AssemblePolicy, type HotTailDropCounts } from '../core/assemble/index.ts'
 import {
   COMPRESS_PROMPT_VERSION,
   COMPRESS_POLICY_VERSION,
@@ -73,6 +73,8 @@ import { CE_CONTEXT_OVERFLOW_CODE, CE_LLM_TIMEOUT_MS, resolveContextWindow, reso
 import { readSessionEvents, readSessionModel, type CeLogger, type EventPump } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import type { MeterPort } from '../platform/meter.ts'
+// U17：产物/结局的形状与 host 面合同归 platform（服务缝唯一构造点）——域只管产出与消费。
+import type { CompactionOutcome, CompactionProduct } from '../platform/compaction-port.ts'
 import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
 import { runCompactionTxn, type AssembleDomain } from './assemble.ts'
@@ -87,6 +89,9 @@ function warnTokenDrift(estimated: number | undefined, usage: CeLlmUsage | undef
   if (ratio === null || (ratio >= 0.75 && ratio <= 1.25)) return
   logger.warn(`context-economy: token estimate drift (estimated ${estimated}, actual ${actual}, ratio ${ratio.toFixed(2)})`)
 }
+
+/** U17：产物/结局的形状归 `platform/compaction-port.ts`；此处转出，域侧消费方与测试沿用本模块名。 */
+export type { CompactionOutcome, CompactionProduct } from '../platform/compaction-port.ts'
 
 export interface CompactionDomainDeps {
   storage: ContextEconomyStorage
@@ -108,6 +113,15 @@ export interface CompactionDomainDeps {
   pump?: Pick<EventPump, 'on'>
 }
 
+/**
+ * 内部捕获槽：`compactSegment` 有十余条早退路径（全部走 `skip(...)`），
+ * 让它们各自返回结果会改动十几处 return；改为在 `skip` 与成功点各写一次捕获槽。
+ */
+interface CompactCapture {
+  result?: CompactionProduct
+  reason?: string
+}
+
 export interface CompactionDomainStats {
   preSteps: number
   triggers: number
@@ -123,8 +137,19 @@ export interface CompactionDomain {
   stats(): CompactionDomainStats
   /** H2 步准入回调体：一次尝试至多压一个闭合 task（挂点收口见 platform/agent-step.ts）。 */
   onPreStep(payload: { session: Session; turn: number; step?: number }): Promise<void>
+  /**
+   * A/F2（2026-09-11 真机复盘）：pre-step 载荷已判 `new-task` → 在 `next()` 之前压**当前开放段**。
+   * 见 `runBoundaryBeforeStep`（与 `onPreStep` 的分工：后者只压"已被判词标记闭合"的段）。
+   */
+  onBoundaryBeforeStep(payload: { session: Session; turn: number }): Promise<void>
   /** H3 溢出接管（P20b）：'retry' = 本轮重试；'pass' = 委派上游。 */
   onRequestError(payload: { session: Session; turn: number; step: number; failureCode: string }): Promise<'retry' | 'pass'>
+  /**
+   * U17：显式空闲压缩（取代原生 `/compact` 的后端入口）。压**最早**尚未归档的闭合段；
+   * 无此段则压当前开放段。事务 `turn: null`（轮间独立括号）——平台侧必须以
+   * `agent.runMaintenance` 保证此刻无开轮，否则撞 harness 属主守卫（`validateOwner`）。
+   */
+  compactNow(payload: { session: Session }): Promise<CompactionOutcome>
 }
 
 /**
@@ -430,11 +455,13 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
 
   const compactSegment = async (
     session: Session,
-    turn: number,
+    /** 事务属主轮；`null` = 轮间独立事务（U17 空闲手动压缩用，平台侧由 runMaintenance 保证无开轮）。 */
+    turn: number | null,
     events: readonly LedgerSessionEvent[],
     facts: readonly LedgerFact[],
     segment: TaskSegment,
     nextStartSeq: number,
+    capture?: CompactCapture,
   ): Promise<void> => {
     const config = getConfig()
     const sid = sessionIdOf(session)
@@ -450,6 +477,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     }
     const skip = (reason: string, extra: Partial<CompressRunFactData> = {}): void => {
       counts.skips++
+      if (capture !== undefined) capture.reason = reason
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({ ...base, outcome: 'skipped' as const, reason, ...extra }), logger)
     }
     /**
@@ -631,13 +659,15 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     // ⑤ 事务：open → prune（影子价）→ summary+checkpoint 替换 → close。
     const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, range.startSeq, range.endSeq) ?? shadowedTokens
     const plan = planTxn({
-      txnId: `ce-compact-boundary-${segment.taskId}-${range.startSeq}-${range.endSeq}`,
+      txnId: ceTxnId('boundary', segment.taskId, range.startSeq, range.endSeq),
       layer: 'boundary', taskId: scopedTaskId, range: { start: range.startSeq, end: range.endSeq },
       shadowedTokenCount: shadowPrice, replaceKind: 'digest', turn,
     })
+    // U17：捕获提交结果（薄 provider 需回传官方 CompactionResult 的 summarySeq / shadowedSeqs）。
+    let committed: { summaryEvent: { seq: number }; landed: { shadowedSeqs: readonly number[] } } | undefined
     const txn = runCompactionTxn(history, plan, (h) => {
       h.recordPrune({ start: range.startSeq as never, end: range.endSeq as never, shadowedTokenCount: shadowPrice })
-      h.commitCheckpoint({
+      committed = h.commitCheckpoint({
         compactionId: plan.txnId,
         text: chosen!.rendered,
         summary: chosen!.rendered,
@@ -656,6 +686,20 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       return
     }
     counts.compactions++
+
+    // U17：成功落刀 → 回填捕获槽（取代路线：本域要能作为 `ctx.compaction` 的实现作答）。
+    if (capture !== undefined && committed !== undefined) {
+      capture.result = {
+        compactionId: plan.txnId,
+        startSeq: txn.markers?.startSeq ?? 0,
+        summarySeq: Number(committed.summaryEvent.seq),
+        endSeq: txn.markers?.endSeq ?? 0,
+        summaryText: chosen!.rendered,
+        shadowedRange: { start: range.startSeq, end: range.endSeq },
+        shadowedSeqs: (committed.landed.shadowedSeqs as readonly number[]).map(Number),
+        shadowedTokenCount: shadowPrice,
+      }
+    }
 
     // ⑥ T-boundary 搭车补账（会计；折叠由大 replace 构造性完成）。
     const held = heldPairsInRange(events, facts, range)
@@ -676,6 +720,9 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       productBytes: new TextEncoder().encode(chosen.rendered).length,
       shadowedTokens, productTokens: chosen.productTokens,
       droppedHotTail: chosen.dropped.badDecl + chosen.dropped.unknownUnit,
+      // U15：归因拆分——合并数看不出"为什么退化为位置兜底"（assemble-run 只看得到过滤后的空数组）。
+      droppedHotTailBadDecl: chosen.dropped.badDecl,
+      droppedHotTailUnknownUnit: chosen.dropped.unknownUnit,
       carried: priorChain.length, archiveEntries: written.entries,
       archiveTruncateCount: chosen.truncation.count, archiveTruncateTokens: chosen.truncation.tokens,
       archiveOverCap: written.overCap,
@@ -704,6 +751,32 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (typeof nextStartSeq !== 'number') return
     counts.triggers++
     await compactSegment(session, turn, events, facts, segments[index] as TaskSegment, nextStartSeq)
+  }
+
+  /**
+   * A/F2（2026-09-11 真机复盘）：pre-step 已判 `new-task` → 在 `next()` 之前压**当前开放段**到表面尾。
+   *
+   * 与 `runBoundary` 的差别：此段**尚未**被 `judge-verdict` 标记闭合——判词要等该消息落进会话才有 seq
+   * （harness 在**步准入回调**返回之后才 `append('user/message')`）。故直接取 `segments.at(-1)`，
+   * 并把区间右端开成表面尾（`nextStartSeq` 取 MAX_SAFE_INTEGER，只被 L481/L482 的 `seq < nextStartSeq`
+   * 消费）：此刻新消息尚未提交，**表面尾就是边界**。
+   *
+   * 防重：本次照常发 `compress-run`（带 `taskId` + `segmentStartSeq`），后续 pre-step 由
+   * `attemptedTaskIds` 拦下；判词落盘后 `runBoundary` 也会看到同一段，但已被 `attempted` 排除。
+   */
+  const runBoundaryBeforeStep = async (session: Session, turn: number): Promise<void> => {
+    const events = ledgerEventsOf(session)
+    const facts = factsFor(session, events)
+    const first = firstUserSeq(events)
+    if (typeof first !== 'number') return
+    const segments = foldSegmentState([...facts], { sessionFirstSeq: first }).segments
+    const open = segments.at(-1)
+    if (open === undefined || typeof open.startSeq !== 'number') return
+    const sid = sessionIdOf(session)
+    const attempted = attemptedTaskIds(facts)
+    if (attempted.has(`${sid}:${open.taskId}`) || attempted.has(`${sid}:${open.taskId}:${open.startSeq}`)) return
+    counts.triggers++
+    await compactSegment(session, turn, events, facts, open, Number.MAX_SAFE_INTEGER)
   }
 
   interface PressureAttempt {
@@ -955,7 +1028,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const shadowPrice = deps.getMeter?.()?.heuristicTokensInRange(session, replaceStart, replaceEnd)
       ?? estimateTokens(renderRegionTranscript(events, { startSeq: replaceStart, endSeq: replaceEnd }, visibleSeqs), compressPolicy.density)
     const plan = planTxn({
-      txnId: `ce-compact-pressure-${segment.taskId}-${replaceStart}-${replaceEnd}`,
+      txnId: ceTxnId('pressure', segment.taskId, replaceStart, replaceEnd),
       layer: 'pressure', taskId: scopedTaskId, range: { start: replaceStart, end: replaceEnd },
       shadowedTokenCount: shadowPrice, replaceKind: 'checkpoint', turn,
     })
@@ -1119,6 +1192,49 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     }
   }
 
+  /**
+   * U17：显式空闲压缩（取代原生 `/compact` 的后端入口）。
+   *
+   * 选段：**最早**尚未被 `attemptedTaskIds` 归档的闭合段优先（"压更老的历史" = 原生语义）；
+   * 无此段则退回当前开放段（区间右端 = 表面尾）。两条都走 `compactSegment`，与压力路径
+   * **共用** `planTxn`/`runCompactionTxn` 事务原语、装配器、档案 vN 与缩水校验——即"用我们
+   * 自己的压缩取代原生"，而不是另起一套。一次调用至多落一刀（与 `onPreStep` 同口径），
+   * 免得一条命令把整会话刮空。
+   */
+  const compactNow = async (session: Session): Promise<CompactionOutcome> => {
+    if (disposed) return { ok: false, reason: 'disposed' }
+    const events = ledgerEventsOf(session)
+    const facts = factsFor(session, events)
+    const first = firstUserSeq(events)
+    if (typeof first !== 'number') return { ok: false, reason: 'no-session' }
+    const segments = foldSegmentState([...facts], { sessionFirstSeq: first }).segments
+    if (segments.length === 0) return { ok: false, reason: 'no-task' }
+    const sid = sessionIdOf(session)
+    const attempted = attemptedTaskIds(facts)
+    const keys = (segment: TaskSegment): string[] => [
+      `${sid}:${segment.taskId}`,
+      `${sid}:${segment.taskId}:${segment.startSeq ?? ''}`,
+    ]
+    const isAttempted = (segment: TaskSegment): boolean => keys(segment).some((k) => attempted.has(k))
+    const closed = segments.findIndex((segment, i) => segment.closed && i < segments.length - 1 && !isAttempted(segment))
+    const capture: CompactCapture = {}
+    if (closed >= 0) {
+      const nextStartSeq = segments[closed + 1]?.startSeq
+      if (typeof nextStartSeq !== 'number') return { ok: false, reason: 'no-next-boundary' }
+      counts.triggers++
+      await compactSegment(session, null, events, facts, segments[closed] as TaskSegment, nextStartSeq, capture)
+    } else {
+      const open = segments.at(-1)
+      if (open === undefined || typeof open.startSeq !== 'number') return { ok: false, reason: 'no-task' }
+      if (isAttempted(open)) return { ok: false, reason: 'already-compacted' }
+      counts.triggers++
+      await compactSegment(session, null, events, facts, open, Number.MAX_SAFE_INTEGER, capture)
+    }
+    return capture.result === undefined
+      ? { ok: false, reason: capture.reason ?? 'no-result' }
+      : { ok: true, result: capture.result }
+  }
+
   const onPreStep = async (payload: { session: Session; turn: number; step?: number }): Promise<void> => {
     if (disposed) return
     const { session, turn } = payload
@@ -1149,6 +1265,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     dispose() { disposed = true; offReplayedFacts?.() },
     stats: () => ({ ...counts }),
     onPreStep,
+    onBoundaryBeforeStep: (payload) => runBoundaryBeforeStep(payload.session, payload.turn),
+    compactNow: (payload) => compactNow(payload.session),
     onRequestError,
   }
 }

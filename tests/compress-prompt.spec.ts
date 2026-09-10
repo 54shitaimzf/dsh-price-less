@@ -43,6 +43,14 @@ describe('P18 prompt：两模式组装', () => {
     expect(render.version).toBe(COMPRESS_PROMPT_VERSION)
   })
 
+  it('U15：清单行首即 unitId（无方括号）+ 抄写纪律入模板', () => {
+    const render = renderBoundaryPrompt({ regionText: 'r', units: [unit('a')] })
+    const listing = render.prompt.slice(render.prompt.lastIndexOf('<单元清单>'))
+    expect(listing).toContain('a ~')
+    expect(listing).not.toContain('[a]')
+    expect(render.prompt).toContain('不得加方括号、引号、尖括号或其他包裹符号')
+  })
+
   it('两模式各自 schema 段落齐备', () => {
     const boundary = renderBoundaryPrompt({ regionText: 'r', units: [unit('a')] }).prompt
     for (const marker of ['"gist"', '"steps"', 'plan|impl|verify|decide|note', '"hotTail"', '禁止任何预算计算', '零事实']) {
@@ -81,13 +89,15 @@ describe('P18 prompt：两模式组装', () => {
     const unlimited = compressUnitList(units)
     expect(unlimited.listed).toBe(3)
     expect(unlimited.omitted).toBe(0)
-    expect(unlimited.text).toContain('[a]')
+    expect(unlimited.text).toContain('a ~')
+    // U15：清单不再用方括号包裹 unitId（旧格式诱导模型照抄括号 → 申报 100% 被拒）。
+    expect(unlimited.text).not.toContain('[a]')
     const capped = compressUnitList(units, policy({ maxUnitListEntries: 2 }))
     expect(capped.listed).toBe(2)
     expect(capped.omitted).toBe(1)
-    expect(capped.text).not.toContain('[a]')
-    expect(capped.text).toContain('[b]')
-    expect(capped.text).toContain('[c]')
+    expect(capped.text).not.toContain('a ~')
+    expect(capped.text).toContain('b ~')
+    expect(capped.text).toContain('c ~')
   })
 
   it('regionTokens 按注入密度机械计量；空区域/空清单不抛错', () => {

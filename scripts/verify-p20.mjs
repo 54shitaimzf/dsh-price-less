@@ -101,7 +101,10 @@ check('域侧收口：不改史直调/不直摸 llm/计量/挂点（S2/D6/D14/D1
 const assertSrc = readText('scripts/assert-structure.mjs')
 check('结构断言 D14 扩面（agent/request-error 收口）',
   /id: 'D14'/.test(assertSrc) && /agent\/request-error/.test(assertSrc) && /RequestErrorAction/.test(assertSrc))
-check('patch.yml：compaction-basic auto:false（防双触发）',
+// U16：本条只校验「文件里有这条声明」，**不再声称它防住了双触发**——实测该覆写落在 web-app
+// （`packages/bundle/web-app/cordis.patch.yml:427-428`）已 disabled 的 profile 行上，作用不到
+// preset 的 `isolate: {compaction: true}` 组内实例（原生自动档一直是开的）。见 docs/ledger-history.md §87。
+check('patch.yml：声明了 compaction-basic auto:false（意图记录；**非生效保证** —— 见 §87）',
   /- id: compaction-basic/.test(readText('cordis.patch.yml')) && /auto: false/.test(readText('cordis.patch.yml')) &&
   /dsh-price-less/.test(readText('cordis.patch.yml')))
 check('三事实声明合并（compress-run / pressure-fired / hard-truncate；ignorable）',
@@ -224,9 +227,12 @@ class FakeStorage {
 const makePressureSession = (id) => {
   const session = new FakeSession(id)
   session.append('user/message', { content: blk('做 A '.repeat(200)), source: { kind: 'user' } }, { surfaceOp: 'append' })
-  session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }, { surfaceOp: 'append' })
+  // U16 修：旧 fixture 用已退役的 `tool/call` 事件当表面节点，而配对平衡守卫（F9a）只看
+  // `assistant/message` 里的 tool-call 块 ⇒ balanceRange 恒 null ⇒ E2E 恒 skip(range)。
+  // 形状对齐 tests/compaction-domain.spec.ts 的 makePressureSession（那份是绿的）。
+  session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' }] } }, { surfaceOp: 'append' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: blk('x'.repeat(2000)) }] } }, { surfaceOp: 'append' })
-  session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }, { surfaceOp: 'append' })
+  session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }] } }, { surfaceOp: 'append' })
   session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: blk('y'.repeat(50)) }] } }, { surfaceOp: 'append' })
   session.append('user/message', { content: blk('继续'), source: { kind: 'user' } }, { surfaceOp: 'append' })
   // 主会话路由（readSessionModel 倒序扫描；非表面事件，不影响表面序）——P20c 窗口探针输入。
@@ -274,11 +280,28 @@ check('端到端压力：单次调用 + 检查点档案 + 事务四段 + 保留�
   session.events.filter((event) => event.type === 'compaction/summary').length === 1 &&
   session.events.filter((event) => event.type === 'compaction/end').length === 1 &&
   archive?.version === 1 && archive.body.entries.length === 1 && archive.body.entries[0].kind === 'checkpoint' &&
-  archive.body.entries[0].cutPointSeq === 3 && archive.body.entries[0].rangeEndSeq === 5 &&
+  archive.body.entries[0].cutPointSeq === 4 && archive.body.entries[0].rangeEndSeq === 5 &&
   runs.length === 1 && runs[0].data.outcome === 'ok' && runs[0].data.layer === 'pressure' &&
-  landedText.includes('[3] tool/call read c2') && landedText.includes('y'.repeat(50)) &&
-  fires.length === 1 && fires[0].data.outcome === 'fired' && fires[0].data.chainDepth === 0)
-const summarySeq = session.events.filter((event) => event.type === 'compaction/summary')[0].seq
+  landedText.includes('[4] tool/result c2') && landedText.includes('y'.repeat(50)) &&
+  fires.length === 1 && fires[0].data.outcome === 'fired' && fires[0].data.chainDepth === 0 && fires[0].data.cutPointSeq === 4)
+const summarySeq = session.events.filter((event) => event.type === 'compaction/summary')[0]?.seq
+// U16：把合并断言拆成可诊断读数——U15 的教训是"只记合并数看不出为什么失败"。
+if (process.env.P20_DEBUG !== undefined || summarySeq === undefined) {
+  console.log('[p20 e2e 读数]', JSON.stringify({
+    llmCalls: llm.calls.length,
+    purpose: llm.calls[0]?.purpose,
+    temperature: llm.calls[0]?.temperature,
+    starts: session.events.filter((e) => e.type === 'compaction/start').length,
+    summaries: session.events.filter((e) => e.type === 'compaction/summary').length,
+    ends: session.events.filter((e) => e.type === 'compaction/end').length,
+    runs: runs.map((r) => r.data),
+    fires: fires.map((f) => f.data),
+    archiveVersion: archive?.version,
+    entries: archive?.body?.entries?.length,
+    entry0: archive?.body?.entries?.[0],
+    landedTextHead: landedText.slice(0, 160),
+  }, null, 1))
+}
 check('官方协议紧邻契约 + 影子价来自 token-meter（4242）',
   landed.seq === summarySeq + 1 && session.events.filter((event) => event.type === 'compaction/summary')[0].data.shadowedTokenCount === 4242)
 

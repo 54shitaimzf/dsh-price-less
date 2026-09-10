@@ -294,22 +294,62 @@ describe('P17b 共享事务原语执行器', () => {
     expect(session.appends.at(-1)!.data.error).toBeUndefined()
   })
 
-  it('U9：活动事务残留 → 自愈闭合 + 如实报失败；闭合后下一次正常开事务（防会话级永久瘫痪）', () => {
+  /**
+   * U16：自愈只许碰**自家**残留。判据 = 事务 ID 前缀（`ce-compact-`）——本插件事务临界区全同步，
+   * 执行到自愈分支时自家不可能有真在途事务。异己标记（harness 原生 compaction-basic 等并行 provider）
+   * 可能真的在途（其括号跨一次摘要 await），闭合它就是破坏别人。
+   */
+  it('U16：异己在途事务 → 绝不闭合，只报 TXN_ACTIVE，对方锁完好', () => {
     const session = makeSurface()
     const history = createHistoryPort(session as never)
-    history.beginCompaction({ compactionId: 'orphan-1', turn: null })
-    const plan = planTxn({ txnId: 'txn-2', layer: 'boundary', taskId: 'task-1', range: { start: 0, end: 2 }, shadowedTokenCount: 1, replaceKind: 'digest' })
+    const nativeId = 'f70909af-37b5-4ace-95fb-aadb250b9dba'
+    history.beginCompaction({ compactionId: nativeId, turn: null })
+    const plan = planTxn({ txnId: 'ce-compact-boundary-task-1-0-2', layer: 'boundary', taskId: 'task-1', range: { start: 0, end: 2 }, shadowedTokenCount: 1, replaceKind: 'digest' })
+    const result = runCompactionTxn(history, plan, () => {})
+    expect(result).toMatchObject({ ok: false, code: 'TXN_ACTIVE' })
+    expect(result.steps).toBe(0)
+    // 关键断言：没有替对方写任何收尾标记（否则对方随后的 close 会变成无主标记）
+    expect(session.appends.filter((entry) => entry.type === 'compaction/end')).toHaveLength(0)
+    expect(String(history.findActiveCompaction()?.compactionId)).toBe(nativeId)
+  })
+
+  it('U9.3/U16：自家残留（ce-compact-*）→ 自愈闭合 + 如实报失败；闭合后下一次正常开事务', () => {
+    const session = makeSurface()
+    const history = createHistoryPort(session as never)
+    const ownId = 'ce-compact-pressure-task-1-0-2'
+    history.beginCompaction({ compactionId: ownId, turn: null })
+    const plan = planTxn({ txnId: 'ce-compact-boundary-task-1-0-2', layer: 'boundary', taskId: 'task-1', range: { start: 0, end: 2 }, shadowedTokenCount: 1, replaceKind: 'digest' })
     const result = runCompactionTxn(history, plan, () => {})
     expect(result).toMatchObject({ ok: false, code: 'COMPACTION_ACTIVE_ORPHAN_CLOSED' })
     // 残留事务被带 error 闭合（可回放辨认），持锁状态解除
     const closes = session.appends.filter((entry) => entry.type === 'compaction/end')
     expect(closes).toHaveLength(1)
-    expect(closes[0]!.data).toMatchObject({ compactionId: 'orphan-1', error: 'orphan-closed' })
+    expect(closes[0]!.data).toMatchObject({ compactionId: ownId, error: 'orphan-closed' })
     expect(history.findActiveCompaction()).toBeUndefined()
     // 旧行为 = 每次都被 TXN_ACTIVE 拒 → 该会话压缩永久瘫痪；自愈后同一 plan 正常开+闭
     const second = runCompactionTxn(history, plan, () => {})
     expect(second.ok).toBe(true)
     expect(session.appends.filter((entry) => entry.type === 'compaction/start').length).toBe(2)
+  })
+
+  /**
+   * U16：另一条独立的"永久瘫痪"来源——上一生命周期（崩溃/强杀）留下的未闭合标记。
+   * harness 官方语义 = `session/end-seed`（构造期种子边界）作废在途事务，本条与 harness
+   * compaction 不变式同义（`compaction/src/invariant.ts` 的 trace 在 end-seed 处置空）。
+   */
+  it('U16：session/end-seed 作废上一生命周期的未闭合事务 → 无需自愈即可正常落刀', () => {
+    const session = makeSurface()
+    const history = createHistoryPort(session as never)
+    // 上一进程死在 open 与 close 之间（异己 provider，绝不会被自愈救）
+    session.append('compaction/start', { compactionId: 'f70909af-37b5-4ace-95fb-aadb250b9dba', turn: null })
+    expect(String(history.findActiveCompaction()?.compactionId)).toBe('f70909af-37b5-4ace-95fb-aadb250b9dba')
+    session.append('session/end-seed', {})
+    expect(history.findActiveCompaction()).toBeUndefined()
+    const plan = planTxn({ txnId: 'ce-compact-boundary-task-1-0-2', layer: 'boundary', taskId: 'task-1', range: { start: 0, end: 2 }, shadowedTokenCount: 1, replaceKind: 'digest' })
+    const result = runCompactionTxn(history, plan, () => {})
+    expect(result.ok).toBe(true)
+    // 残留标记原样留在日志里（可回放辨认），只是不再构成锁
+    expect(session.appends.filter((entry) => entry.type === 'compaction/end')).toHaveLength(1)
   })
 
   it('业务失败 → 带 error 闭合事务（绝不半开标记）', () => {

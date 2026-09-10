@@ -213,9 +213,30 @@ function mergeSourceSeqs(extra: readonly SessionSeq[] | undefined, shadowed: rea
   return [...set].sort((a, b) => a - b).map((n) => n as SessionSeq)
 }
 
+/**
+ * 未闭合的压缩事务（在途 = 锁）。
+ *
+ * **U16 修正**：`session/end-seed`（构造期种子边界，重启/迁移时追加）**清空**在途事务——
+ * 这是 harness 官方语义，两处独立实现同义：
+ * ① `compaction/src/invariant.ts` 的 trace：`session/end-seed` 经 `applyCompactionTransition`
+ *    返回 undefined ⇒ `trace.compaction` 置空；其 `validateCompactionEvent` 对 `compaction/start`
+ *    只在 `trace.compaction !== undefined` 时判 "still compacting"，故种子边界之后可以合法开新事务。
+ * ② `compaction-basic/src/region.ts` 的 `assertCompactionInactive`：`latestEndSeedSeq > startSeq`
+ *    ⇒ 该未闭合 start 属**上一生命周期残留**，不构成 busy。
+ *
+ * 旧实现只看 start/end 配对，**完全忽略种子边界**：上一进程崩溃/被强杀在 open 与 close 之间留下的
+ * 未闭合括号会被永久判为"在途"，该会话的压缩从此**永久瘫痪**（`beginCompaction` 每次被拒）。
+ * 真机证据：live 会话 `session-ed9fe428` 在 seq 1271 有唯一一条 `session/end-seed`（正是 resume 边界，
+ * restore 于 1272–1280 紧随其后）。
+ */
 function scanActiveCompaction(session: Session): ActiveCompaction | undefined {
   let open: ActiveCompaction | undefined
   for (const event of readSessionEvents(session)) {
+    // 种子边界 ⇒ 上一生命周期的未闭合事务作废（与 harness compaction 不变式同义）。
+    if (event.type === 'session/end-seed') {
+      open = undefined
+      continue
+    }
     if (event.type === 'compaction/start') {
       open = {
         compactionId: event.data.compactionId,

@@ -145,7 +145,28 @@
 # keys every fold by Session, and owns the context-meter projection units the
 # browser reads for every session — behind a realm those units would come and go
 # with whichever presets happen to be mounted. What a preset chooses is whether
-# its agent compacts at all, which is `compaction-basic` below.
+# its agent compacts at all, which is the provider row below.
+#
+# ── dsh-price-less：本组是**取代原生压缩**的落点（U17 / 账本 §87 §6 + §89） ──────────
+#
+# 原行 `compaction-basic` 已被**移出**本组，改为挂本插件的 provider entry：
+# `dsh-price-less/provider`（`lib/platform/provider-entry.js` 的 default export =
+# `PriceLessCompactionEngine extends CompactionEngine`）。
+#
+# 为什么必须在这一组里换、而不能在 host 平面实现：`command-compact` 就在**同一个
+# isolate 组**内（下面几行），命令解析是 scoped 遮蔽 global ⇒ 它只会解析到**组内**的
+# `compaction` 实例。host 平面注册的 `ctx.compaction` 既不被 `command-compact` 解析，
+# 也不能靠"在 host 平面再注册一个 compact 命令"取胜（同样被 preset 作用域遮蔽）。
+#
+# 为什么 provider 能在组内取到 host 平面的东西：`isolate` **只隔离列名服务**
+# （上面两行 `compaction` / `toolResultPruner`），其余名字照常沿 fiber 链向上解析——
+# provider 依赖的 `contextEconomy` 由插件 `apply()` 在 host 平面发布
+# （boot/app-boot/tests/config-reload.spec.ts:399-438 是这条语义的官方用例）。
+#
+# 自动压缩的归属不变：本插件的自动触发（task 边界 + 35% 窗口压力阀门 + 溢出保险丝）
+# 一直注册在 host 平面的步准入/请求失败两个 waterfall 上，与预设无关；移走
+# `compaction-basic` 去掉的正是它的自动档（原生阈值 0.8×窗口 ≈ 800K 那条重复路径）
+# 与它的 `/compact` 后端。`tool-result-pruner` 保留（模型无关的大结果剪枝，与压缩正交）。
 - id: compaction
   name: cordis:group
   group: true
@@ -153,8 +174,8 @@
     compaction: true
     toolResultPruner: true
   config:
-    - id: compaction-basic
-      name: '@deepseek-ai/dsh-compaction-basic'
+    - id: price-less-compaction
+      name: 'dsh-price-less/provider'
 
     - id: command-compact
       name: '@deepseek-ai/dsh-command-compact'

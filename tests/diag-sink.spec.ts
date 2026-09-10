@@ -55,6 +55,8 @@ function makeCtx() {
       const d = fn()
       if (typeof d === 'function') disposers.push(d as () => void)
     },
+    // U17：host 平面发布 `contextEconomy`；真实 cordis 的 provide 自带 fiber 注销，替身只需可调用。
+    provide: () => () => {},
   }
   return { ctx, disposers, exporters }
 }

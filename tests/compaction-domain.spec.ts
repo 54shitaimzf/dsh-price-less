@@ -217,6 +217,41 @@ describe('P19b 边界压缩：触发与全路径', () => {
     expect(env.domain.stats()).toMatchObject({ triggers: 1, compactions: 1 })
   })
 
+  // U15 回归（真机 session-ed9fe428，2026-09-11）：清单旧渲染 `[c1] …` 让模型把方括号一起抄进 unitId
+  // → 10/10 申报判 unknown-unit → 热尾整体退化为位置兜底（产物 95% 是原文切片）。
+  // 归一化后应零误拒；且拒绝归因分列落账（旧口径只有一个合并数，账本上诊断不出真因）。
+  it('U15：包裹符号 unitId 归一化接受 + 拒绝归因分列落账', async () => {
+    const product = JSON.stringify({
+      gist: '目标与方向',
+      steps: [{ type: 'plan', text: '先做一' }],
+      hotTail: [{ unitId: '[c1]' }, { unitId: '<ghost>' }],
+    })
+    const env = makeEnv({ llm: fakeLlm([{ text: product }]) })
+    await env.domain.onPreStep({ session: env.session as never, turn: 7 })
+    expect(env.runs()).toHaveLength(1)
+    expect(env.runs()[0]).toMatchObject({
+      outcome: 'ok',
+      droppedHotTail: 1,
+      droppedHotTailBadDecl: 0,
+      droppedHotTailUnknownUnit: 1,
+    })
+  })
+
+  // A/F2（2026-09-11）：pre-step 载荷已判 new-task，但该消息尚未落会话（无 seq）⇒ 段还没被
+  // `judge-verdict` 标记闭合。`onBoundaryBeforeStep` 直接压**当前开放段**（区间右端 = 表面尾）。
+  it('A/F2：onBoundaryBeforeStep 压当前开放段（不依赖闭合判词）；同段二次调用被 attempted 拦下', async () => {
+    const env = makeEnv()
+    await env.domain.onBoundaryBeforeStep({ session: env.session as never, turn: 8 })
+    expect(env.runs()).toHaveLength(1)
+    expect(env.runs()[0]).toMatchObject({ layer: 'boundary', outcome: 'ok' })
+    const started = env.session.events.filter((e) => e.type === 'compaction/start').map((e) => e.data as { compactionId: string })
+    expect(started).toHaveLength(1)
+    expect(started[0]!.compactionId.startsWith('ce-compact-boundary-')).toBe(true)
+    // 防重：本次已发 compress-run（带 taskId + segmentStartSeq）→ 后续 pre-step/本入口都不再压。
+    await env.domain.onBoundaryBeforeStep({ session: env.session as never, turn: 8 })
+    expect(env.runs()).toHaveLength(1)
+  })
+
   it('已归档守卫：第二次 pre-step 不再调用（事实键，防每步重复计费）', async () => {
     const env = makeEnv()
     await env.domain.onPreStep({ session: env.session as never, turn: 1 })
@@ -304,10 +339,11 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     expect(env.runs()[0]).toMatchObject({ outcome: 'skipped', reason: 'storage', calls: 1 })
   })
 
-  it('U6/U9：事务失败（活动事务残留 → 自愈闭合 + TXN_ACTIVE）→ 档案补偿复位，幽灵条目不残留', async () => {
+  it('U6/U16：事务失败（异己在途事务 → 不自愈、只报 TXN_ACTIVE）→ 档案补偿复位，幽灵条目不残留', async () => {
     const session = makeSession()
     // 预插半开事务：writeStore 成功后 beginCompaction 被拒 → txn 失败（= 档案已写未落刀的幽灵场景）
-    session.append('compaction/start', { compactionId: 'orphan-1', turn: 1 })
+    // 异己 ID（非 ce-compact-*）⇒ U16 后不再被自愈闭合，如实报 TXN_ACTIVE。
+    session.append('compaction/start', { compactionId: 'f70909af-37b5-4ace-95fb-aadb250b9dba', turn: 1 })
     const env = makeEnv({ session })
     await env.domain.onPreStep({ session: session as never, turn: 2 })
     const run = env.runs().at(-1)!
@@ -319,9 +355,10 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     expect(readArchiveStore(rec!.body, WORKSPACE).entries).toEqual([])
   })
 
-  it('U9：孤儿事务自愈——首次 pre-step 闭合残留并 skip（可重试），第二次直接落刀（旧行为 = 会话永久瘫痪）', async () => {
+  it('U9.3/U16：自家孤儿事务自愈——首次 pre-step 闭合残留并 skip（可重试），第二次直接落刀（旧行为 = 会话永久瘫痪）', async () => {
     const session = makeSession()
-    session.append('compaction/start', { compactionId: 'orphan-1', turn: 1 })
+    // 自家残留（ce-compact-*）才允许自愈；异己见下一条用例。
+    session.append('compaction/start', { compactionId: 'ce-compact-boundary-task-1-1-1', turn: 1 })
     const env = makeEnv({ session })
     await env.domain.onPreStep({ session: session as never, turn: 2 })
     const first = env.runs().at(-1)!
@@ -638,6 +675,48 @@ describe('P20b 保险丝：地板以上自动折叠 + 溢出接管', () => {
     const env = makeEnv({ session: makePressureSession(), wireTokens: 150000, config, llm: fakeLlm([{ text: PRESSURE_PRODUCT }]) })
     expect(await env.domain.onRequestError({ session: env.session as never, turn: 3, step: 1, failureCode: 'CONTEXT_WINDOW_EXCEEDED' })).toBe('pass')
     expect(env.llm.calls).toHaveLength(0)
+  })
+})
+
+/**
+ * U17（"用插件取代原生压缩"的前置）：`compactNow` = 显式空闲压缩入口。
+ * 契约两条：① 成功必须回传**官方形状**产物（start/summary/end 三个 seq + 遮蔽集 + 影子价），
+ * 这正是薄 provider 转成 `CompactionResult` 所需的全部字段；② 事务是 `turn: null` 的
+ * **轮间独立括号**（harness 属主守卫要求此刻确无开轮，平台侧由 runMaintenance 保证）。
+ */
+describe('U17 compactNow：显式空闲压缩（取代 /compact 的后端入口）', () => {
+  it('最早未归档闭合段 → 单刀落账 + 官方形状产物 + turn:null 独立括号（与 onPreStep 同段同区间）', async () => {
+    const env = makeEnv()
+    const outcome = await env.domain.compactNow({ session: env.session as never })
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    // 共用 compactSegment ⇒ 与 P19b 的 onPreStep 路径落在**同一段、同一区间**
+    expect(outcome.result.compactionId).toBe('ce-compact-boundary-task-1-0-3')
+    expect(outcome.result.shadowedRange).toEqual({ start: 0, end: 3 })
+    expect(outcome.result.shadowedSeqs).toEqual([0, 1, 2, 3])
+    expect(outcome.result.shadowedTokenCount).toBe(4242)
+    expect(outcome.result.summaryText).toBe('R')
+    const start = appendsOf(env.session, 'compaction/start')[0]!
+    const summary = appendsOf(env.session, 'compaction/summary')[0]!
+    const end = appendsOf(env.session, 'compaction/end')[0]!
+    expect(outcome.result.startSeq).toBe(start.seq)
+    expect(outcome.result.summarySeq).toBe(summary.seq)
+    expect(outcome.result.endSeq).toBe(end.seq)
+    expect(start.data).toMatchObject({ turn: null })
+    expect(end.data).toMatchObject({ turn: null })
+    // 一次调用至多一刀 + 档案 vN 照常落盘
+    expect(env.storage.entities.get(`boundary_archive:${ARCHIVE_KEY}`)!.version).toBe(1)
+  })
+
+  it('无可压段（表面为空）→ 可读 reason，且**零** compaction/start（绝不半开事务）', async () => {
+    const session = makeSession()
+    session.nodes = []
+    const env = makeEnv({ session })
+    const outcome = await env.domain.compactNow({ session: session as never })
+    expect(outcome.ok).toBe(false)
+    if (outcome.ok) return
+    expect(outcome.reason).toBe('range-empty')
+    expect(appendsOf(session, 'compaction/start')).toHaveLength(0)
   })
 })
 

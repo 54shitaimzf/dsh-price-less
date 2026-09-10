@@ -114,6 +114,24 @@ describe('P18/F9 产物：边界模式（宽松修复 > 拒单）', () => {
     if (!result.ok || result.product.mode !== 'boundary') return
     expect(result.product.hotTail).toEqual([{ unitId: 'a', fact: 'verbatim' }])
   })
+
+  // U15 回归：清单旧渲染把 ID 包在方括号里，模型照抄方括号（真机 10/10 被拒）。
+  it('U15：带包裹符号的 unitId 归一化后接受（不再判 unknownUnit）', () => {
+    const raw = JSON.stringify({
+      gist: '结论',
+      steps: [],
+      hotTail: [{ unitId: '[a]', coord: { path: 'src/a.ts', version: 2 } }, { unitId: '<b>' }, { unitId: '[ghost]' }],
+    })
+    const result = parseCompressProduct(raw, 'boundary', [unit('a'), unit('b')])
+    expect(result.ok).toBe(true)
+    if (!result.ok || result.product.mode !== 'boundary') return
+    expect(result.product.hotTail).toEqual([
+      { unitId: 'a', coord: { path: 'src/a.ts', version: 2 } },
+      { unitId: 'b' },
+    ])
+    expect(result.dropped.badDecl).toBe(0)
+    expect(result.dropped.unknownUnit).toBe(1)
+  })
 })
 
 describe('P18 产物：压力模式', () => {

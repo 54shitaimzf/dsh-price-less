@@ -151,9 +151,14 @@ export const RULES = [
       : [] },
 
   { id: 'D7', canon: 'docs/10 §1 H4/H5（compaction/* 全族）+ docs/11 §2 history.ts', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
+    // U17 工单追加放行面（取代路线）：`src/platform/provider-entry.ts` 是**服务缝**的触点，不是写史触点——
+    // 它 import `dsh-compaction` 只为继承 `CompactionEngine` 抽象类与构造 `CompactionResult`/`CompactionId`，
+    // **一个事件都不写**（落刀照常只经 platform/history.ts）。放行面从 1 个文件变成 2 个文件是刻意的：
+    // 契约说"provider 挂在 preset 的 isolate 组内才被解析"（§87 §6），而这个入口必须是本包的
+    // 一个可被 preset 行 import 的模块（`dsh-price-less/provider`）。
     /(CompactionId|compaction\/start|compaction\/end|compaction\/prune|compaction\/summary|toolPairingBalanced|@deepseek-ai\/dsh-compaction)/.test(f.text)
-      && f.path !== 'src/platform/history.ts'
-      ? [{ message: 'history protocol concepts (H4/H5 compaction/* + pairing guard) must only appear in src/platform/history.ts (docs/10 §1 H4/H5)' }]
+      && f.path !== 'src/platform/history.ts' && f.path !== 'src/platform/provider-entry.ts'
+      ? [{ message: 'history protocol concepts (H4/H5 compaction/* + pairing guard) must only appear in src/platform/history.ts (docs/10 §1 H4/H5); the compaction provider seam is the one declared second surface (src/platform/provider-entry.ts, U17)' }]
       : [] },
   { id: 'D8', canon: 'docs/10 §1 H6 + docs/11 §2 + docs/13 §3.9', appliesTo: (p) => p.startsWith('src/') && p.endsWith('.ts'), check: (f) =>
     /(tools\/execute|tools\/post-execute|PostToolDecision|ToolDispatchExecution|ToolExecutionResult|\bToolExecution\b|@deepseek-ai\/dsh-tools)/.test(f.text)

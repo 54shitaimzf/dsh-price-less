@@ -41,6 +41,14 @@ export interface CompressRunFactData {
   readonly productBytes?: number
   readonly outcome?: CompressOutcome
   readonly droppedHotTail?: number
+  /**
+   * U15 归因拆分：热尾申报被拒的两类原因分开落账。
+   * 之所以必须拆：`droppedHotTail` 是 parse 阶段的合并计数，而 `assemble-run.dropReasons` 看到的
+   * 已是过滤后的空数组（恒 0）——只记合并数则账本上"热尾为何退化为位置兜底"不可诊断
+   * （真机 `session-ed9fe428` 即为此：compress-run 记 10、assemble-run 记 0，真因是 unitId 被包了方括号）。
+   */
+  readonly droppedHotTailBadDecl?: number
+  readonly droppedHotTailUnknownUnit?: number
   readonly llmUsage?: CompressLlmUsage
   // —— P19 边界路径归因（压力路径 P20a 复用同字段） ——
   /** 会话级 taskId（`sessionScopedTaskId`；一次尝试一条事实，重放可判"已归档"）。 */
@@ -102,6 +110,9 @@ export interface CompressCallLedger {
   archiveAppends: number
   shearBoundaryFolded: number
   retiredDossiers: number
+  /** U15 自持位：热尾申报被拒的两类原因（07 无此字段；`droppedHotTail` 只记合并数不够诊断）。 */
+  hotTailDroppedBadDecl: number
+  hotTailDroppedUnknownUnit: number
   /** 估算标定（F8b）：估算 promptTokens vs 真实 llmUsage.inputTokens 的对账；无样本 = ratio null。 */
   calibration: { samples: number; estimated: number; actual: number; ratio: number | null }
   /** P20a 压力自持位（不属 07 字段；pressure* 四字段由 pressure-fired 事实 fold）。 */
@@ -128,6 +139,8 @@ export function emptyCompressCallLedger(): CompressCallLedger {
     archiveAppends: 0,
     shearBoundaryFolded: 0,
     retiredDossiers: 0,
+    hotTailDroppedBadDecl: 0,
+    hotTailDroppedUnknownUnit: 0,
     calibration: { samples: 0, estimated: 0, actual: 0, ratio: null },
     pressureOk: 0,
     pressureFoldedTokens: 0,
@@ -171,6 +184,9 @@ export function foldCompressCalls(facts: readonly LedgerFact[]): CompressCallLed
     if (numberField(data.archiveEntries) > 0) ledger.archiveAppends++
     ledger.shearBoundaryFolded += numberField(data.shearFolded)
     if (data.dossierRetired === true) ledger.retiredDossiers++
+    // U15：热尾申报拒绝的归因拆分（旧事实无这两键 → 记 0）。
+    ledger.hotTailDroppedBadDecl += numberField(data.droppedHotTailBadDecl)
+    ledger.hotTailDroppedUnknownUnit += numberField(data.droppedHotTailUnknownUnit)
     // P20a 压力路径：成功落刀的压力折叠（compressionLayer.pressure 的唯一计数源）。
     if (data.layer === 'pressure' && data.outcome === 'ok') ledger.pressureOk++
     ledger.pressureFoldedTokens += numberField(data.foldedTokens)

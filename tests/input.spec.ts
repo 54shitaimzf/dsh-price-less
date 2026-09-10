@@ -452,6 +452,55 @@ describe('F2 边界判词屏障（settle）', () => {
   })
 })
 
+describe('A/F2 pre-step 预判（preJudge）：尚未落会话的消息也能定边界', () => {
+  const capturingSession = (id = 's1') => {
+    const appended: Array<{ type: string; data: unknown }> = []
+    return {
+      appended,
+      session: {
+        ...sessionWithModel(id),
+        append(type: string, data: unknown) { appended.push({ type, data }); return appended.length },
+      },
+    }
+  }
+
+  it('预判返回裁决；同文本落盘时复用（LLM 只调一次）并补发 judge-verdict（带真 seq）', async () => {
+    const pump = makePump()
+    let calls = 0
+    const llm = { stream: async function* () {
+      calls++
+      yield { type: 'text-delta', index: 0, text: '{"decision":"new_task","class":"action"}' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
+    const { session, appended } = capturingSession()
+    // ① pre-step：消息尚未落会话（没有 seq）→ 只能按文本预判
+    await expect(auto.preJudge(session as never, '改判别器粒度', 5_000)).resolves.toEqual({ kind: 'verdict', decision: 'new-task' })
+    expect(calls).toBe(1)
+    // ② 消息落盘 → pump 处理同一条文本：复用裁决（零二次调用）
+    pump.emit('input/user-message', { session, seq: 9, time: 5, text: '改判别器粒度' })
+    await flush()
+    expect(calls).toBe(1)
+    expect(auto.stats().records.at(-1)).toMatchObject({ seq: 9, trigger: 'l1-cache', decision: 'new-task', class: 'action' })
+    // ③ 判词到此才拿到真 seq → verdict 必须在落盘路径补发（preJudge 无 seq 可锚）
+    const verdicts = appended.filter((e) => e.type === 'context-economy/judge-verdict')
+    expect(verdicts).toHaveLength(1)
+    expect(verdicts[0]!.data).toMatchObject({ verdict: 'new-task', anchorSeq: 9 })
+    // ④ 缓存一次性（同文本再走 pump 时按 l1 口径、不再补发 verdict）
+    auto.dispose()
+  })
+
+  it('预判 fail-lazy：auto 关闭 / 文本空 / 无路由 → skipped（都不算错误）', async () => {
+    const autoOff = mountAutoDiscriminator({ llm: llmStream('{}') } as never, deps({ getConfig: () => cfg(false) }))
+    await expect(autoOff.preJudge(sessionWithModel('s1') as never, '随便', 10)).resolves.toEqual({ kind: 'skipped' })
+    autoOff.dispose()
+    const auto = mountAutoDiscriminator({ llm: llmStream('{}') } as never, deps())
+    await expect(auto.preJudge(sessionWithModel('s1') as never, '   ', 10)).resolves.toEqual({ kind: 'skipped' })
+    await expect(auto.preJudge(sessionWithoutModel('s1') as never, '首条消息无路由', 10)).resolves.toEqual({ kind: 'skipped' })
+    auto.dispose()
+  })
+})
+
 describe('judge facts mapping', () => {
   it('judge-recorded 载荷往返且不含 error', () => {
     const record: JudgeRecord = { seq: 1, time: 2, trigger: 'llm', decision: 'continue', class: 'action', ctxTokens: 10, llmUsage: { inputTokens: 1, outputTokens: 2 } }

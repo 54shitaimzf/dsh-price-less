@@ -39,6 +39,8 @@ export const COMPRESS_BOUNDARY_RULES = [
   '   **错误信息（报错、异常、失败输出）一律不进 hotTail**。',
   '6. hotTail = 下一个任务开工真正要用的任务材料，按重要性降序申报；每项 = 1 条内容；禁止任何预算计算。',
   '7. hotTail 每项 = {"unitId":"<清单 ID>","coord":{"path":"...","version":N,"lineRange":{"start":a,"end":b}},"fact":"逐字摘抄（可选）"}；',
+  '   unitId 必须逐字等于 <单元清单> 行**开头的第一个词**（如 seq-1268 / call_00_xxx），',
+  '   **不得加方括号、引号、尖括号或其他包裹符号**（加包裹 = 找不到该单元 = 整条丢弃）；',
   '   coord 仅文件类单元可带；fact 必须是该单元原文的逐字子串（机器校验，不匹配即丢弃）。',
   '8. coord 的 path 与 version 只能从 <单元清单> 抄写（选坐标不造坐标）；行号用你见过的版本；不确定就省略 lineRange。',
 ].join('\n')

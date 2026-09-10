@@ -14,6 +14,20 @@ import type { LineRange } from './types.ts'
 
 export const TXN_POLICY_VERSION = 1
 
+/**
+ * 本插件事务 ID 的**唯一前缀**（U16）。存在理由不是美观：并行的 provider（harness 原生
+ * compaction-basic）也用同一份日志里的未闭合标记当锁，**自愈闭合只允许碰自家残留**——
+ * 闭合别人的在途事务会让对方随后的收尾成为无主标记，撞上 harness 的压缩不变式。
+ * 判据可判定：本插件事务的 open→body→close 是**全同步临界区**（无 await），故执行到自愈分支时
+ * 自家不可能真有在途事务，带此前缀的未闭合标记必为自家残留。
+ */
+export const CE_TXN_ID_PREFIX = 'ce-compact-'
+
+/** 本插件压缩事务 ID（层 + 任务 + 目标区间；边界/压力两路径共用此唯一构造点）。 */
+export function ceTxnId(layer: TxnLayer, taskId: string, start: number, end: number): string {
+  return `${CE_TXN_ID_PREFIX}${layer}-${taskId}-${start}-${end}`
+}
+
 /** 压缩层（生产/消费不对称律；层名只用于账本归因，不影响原语语义）。 */
 export type TxnLayer = 'boundary' | 'pressure'
 

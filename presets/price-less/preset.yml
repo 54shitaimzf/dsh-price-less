@@ -1,6 +1,7 @@
 name: 价格低耗
 description: >-
   标准编码 Agent + 固定 native 工具呈现（工具 schema 走请求的 tools 数组，系统提示词不含 PTC 的
-  SDK 段）+ 输出措辞纪律（名词具体、沿用用户用词、简明扼要）。配合 dsh-price-less 插件的机械剪切与
-  压缩机制使用。
+  SDK 段）+ 输出措辞纪律（名词具体、沿用用户用词、简明扼要）。**压缩由 dsh-price-less 插件取代原生**：
+  compaction 组内不再挂 compaction-basic，改挂本插件的 provider entry（/compact 与压缩事务都由插件
+  自己的压缩域执行），自动触发仍由插件在宿主平面负责。需宿主已加载含 provider 入口的插件构建。
 order: 5

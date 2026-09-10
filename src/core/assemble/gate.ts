@@ -31,12 +31,35 @@ function isPositiveInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1
 }
 
+/** 成对包装符（一层；只剥两端同对者）。 */
+const WRAPPER_PAIRS: readonly (readonly [string, string])[] = [
+  ['[', ']'], ['<', '>'], ['(', ')'], ['{', '}'], ['"', '"'], ["'", "'"], ['`', '`'],
+]
+
+/**
+ * U15 unitId 归一化：清单行渲染成 `[id] 名称 路径@vN ~Nt`，模型常把包裹符号一起抄回
+ * （真机 `session-ed9fe428` 边界压缩：10 条热尾申报 100% 因 `[seq-1268]` 判 unknown-unit
+ * 被拒 → 热尾整体退化为位置兜底，产物 95% 是原文切片）。
+ * 口径：先 trim，再剥**一层**成对包裹；只剥两端成对者（单元 ID 不含这些字符，无误伤）。
+ * 归一化只影响比对与产出的 `unitId`，不改变"ID 必须真实存在"这一硬要求。
+ */
+export function normalizeUnitId(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.length <= 2) return trimmed
+  for (const [open, close] of WRAPPER_PAIRS) {
+    if (trimmed.startsWith(open) && trimmed.endsWith(close)) return trimmed.slice(1, -1).trim()
+  }
+  return trimmed
+}
+
 /** 申报形状校验：坏形状 = undefined（调用方丢弃 + 计数；额外字段被剥离，防模型夹带）。 */
 export function validateHotTailDecl(value: unknown): HotTailDecl | undefined {
   const root = recordOf(value)
   if (root === undefined) return undefined
-  const unitId = root.unitId
-  if (typeof unitId !== 'string' || unitId === '') return undefined
+  const rawUnitId = root.unitId
+  if (typeof rawUnitId !== 'string' || rawUnitId === '') return undefined
+  const unitId = normalizeUnitId(rawUnitId)
+  if (unitId === '') return undefined
   const fact = typeof root.fact === 'string' && root.fact.trim() !== '' ? root.fact : undefined
   const withFact = fact === undefined ? {} : { fact }
   if (root.coord === undefined) return { unitId, ...withFact }

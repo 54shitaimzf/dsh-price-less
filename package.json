@@ -14,6 +14,10 @@
     "./client": {
       "default": "./lib/client.js"
     },
+    "./provider": {
+      "types": "./lib/types/platform/provider-entry.d.ts",
+      "default": "./lib/platform/provider-entry.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -69,6 +73,9 @@
     "assert": "node scripts/assert-structure.mjs",
     "gate": "npm run typecheck && npm run typecheck:client && npm test && npm run assert",
     "smoke:lib": "node scripts/smoke-lib.mjs",
-    "probe:channel": "node scripts/probe-channel.mjs"
+    "probe:channel": "node scripts/probe-channel.mjs",
+    "probe:provider": "node scripts/probe-provider.mjs",
+    "preset:install": "node scripts/install-preset.mjs",
+    "preset:check": "node scripts/install-preset.mjs --check"
   }
 }

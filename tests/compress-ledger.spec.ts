@@ -98,6 +98,18 @@ describe('P18 账本：调用口径', () => {
     expect(ledger.compressionCallCount).toBe(4)
   })
 
+  // U15：热尾申报拒绝的归因拆分（旧口径只有一个合并数，账本上诊断不出"为何退化为位置兜底"）。
+  it('U15 自持位：热尾申报拒绝按 badDecl / unknownUnit 分列', () => {
+    const ledger = foldCompressCalls([
+      fact({ at: 1, layer: 'boundary', promptVersion: 4, policyVersion: 3, outcome: 'ok', droppedHotTail: 10, droppedHotTailBadDecl: 0, droppedHotTailUnknownUnit: 10 }),
+      fact({ at: 2, layer: 'boundary', promptVersion: 4, policyVersion: 3, outcome: 'ok', droppedHotTail: 3, droppedHotTailBadDecl: 3, droppedHotTailUnknownUnit: 0 }, 2),
+      // 旧事实（无这两键）→ 记 0，不污染。
+      fact({ at: 3, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'ok', droppedHotTail: 2 }, 3),
+    ])
+    expect(ledger.hotTailDroppedUnknownUnit).toBe(10)
+    expect(ledger.hotTailDroppedBadDecl).toBe(3)
+  })
+
   it('合并进压缩族 fold 时 P19 自持位同步透出', () => {
     const ledger = foldCompressionLedger([
       fact({ at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1, outcome: 'skipped', reason: 'shrink', calls: 1, retry: 1, shearFolded: 2 }),

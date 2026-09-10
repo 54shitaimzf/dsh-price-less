@@ -24,7 +24,7 @@ import { appendDossierMessage, annotateDossier, createDossier, dossierStorageKey
 import type { LedgerFact } from '../core/ledger/types.ts'
 import { parseT0Command } from '../core/t0.ts'
 import { workspaceOf } from './workspace.ts'
-import { CE_LLM_TIMEOUT_MS, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
+import { CE_LLM_TIMEOUT_CODE, CE_LLM_TIMEOUT_MS, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { readSessionModel, type EventPump, type CeDomainEvents, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
@@ -62,6 +62,13 @@ export interface AutoDiscriminatorDeps {
 /** 边界判词等待上限（F2 阻塞式边界压缩，2026-09-09 用户裁定 60s；超时 fail-lazy）。 */
 export const BOUNDARY_JUDGE_WAIT_MS = 60_000
 
+/** `preJudge` 结果（A/F2）。`skipped` = auto 关闭 / 文本空 / 无路由（都不是错误）；`timeout`/`error` = fail-lazy。 */
+export type PreJudgeOutcome =
+  | { readonly kind: 'verdict'; readonly decision: JudgeDecision }
+  | { readonly kind: 'skipped' }
+  | { readonly kind: 'timeout' }
+  | { readonly kind: 'error' }
+
 export interface AutoDiscriminator {
   dispose(): void
   stats(): { queued: number; processed: number; facts: number; records: JudgeRecord[]; ledger: ReturnType<typeof foldJudgeLedger> }
@@ -70,6 +77,16 @@ export interface AutoDiscriminator {
    * timeout = 超时（调用侧 fail-lazy 放行，退回"下一 pre-step 再压"）。F2：边界压缩阻塞屏障。
    */
   settle(session: Session, newestSeq: number, timeoutMs: number): Promise<'settled' | 'timeout'>
+  /**
+   * A/F2（2026-09-11 真机复盘）：对**尚未落会话**的用户消息文本先判一次。
+   *
+   * 为什么必须按文本判：harness 在**步准入回调**返回之后才 `append('user/message')`
+   * （`agent-loop/src/agent.ts` L289 → L302 → L375），故该消息此刻**没有 seq**，
+   * 按 seq 的 `settle` 屏障对它恒为空转（真机实测：`new-task` 判词落地时首步思考已产出，
+   * 压缩被推到第二步并阻塞 62.6s）。裁决按**文本**缓存，消息落盘时 `processOne` 复用
+   * （`trigger:"l1-cache"`）→ 不重复调模型、不重复计费。
+   */
+  preJudge(session: Session, text: string, timeoutMs: number): Promise<PreJudgeOutcome>
 }
 
 /**
@@ -118,6 +135,11 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
   const factKeys = new Map<string, Set<string>>()
   const firstSeqBySession = new Map<string, number>()
   const l1Cache = new Map<string, { decision: JudgeDecision; class: DossierClass; tableShadow?: JudgeTableShadow }>()
+  /**
+   * A/F2：pre-step 预判缓存，**按文本**为键（此刻还没有 seq）。
+   * 消息落盘后 `processOne` 命中即复用裁决（`trigger:"l1-cache"`）并补发 `judge-verdict`（带真 seq）。
+   */
+  const preJudged = new Map<string, { decision: JudgeDecision; class: DossierClass; tableShadow?: JudgeTableShadow }>()
   const records: JudgeRecord[] = []
   /**
    * U10：按**会话分桶**的输入队列。旧实现 = 单队列 + 单 `processing` 标志：
@@ -188,6 +210,119 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     return attempt(mutate(current.body as DossierBody), current.version)
   }
 
+  /** 判别 LLM 单次调用（`processOne` 与 `preJudge` **共用**：prompt 渲染/推理档/超时口径只有这一处）。 */
+  const callJudge = async (
+    session: Session,
+    body: DossierBody,
+    target: { seq: number; text: string },
+    provider: string,
+    model: string,
+    timeoutMs: number,
+  ): Promise<{
+    parsed: { decision: JudgeDecision; class: DossierClass }
+    ctxTokens: number
+    latencyMs: number
+    llmUsage?: JudgeRecord['llmUsage']
+    requestedEffort?: string
+    sentEffort?: string
+  }> => {
+    const rendered = renderJudgePrompt(body, target)
+    let llmText = ''
+    let llmUsage: JudgeRecord['llmUsage']
+    const started = now()
+    // P14f：推理档来自设置（discriminator.reasoningEffort）；缺省 = 跟随模型默认（不覆盖）。
+    // 关闭思考会明显影响边界判断，故不默认强制；用户显式选择才传，且只传模型声明支持的档。
+    const desiredEffort = reasoningEffortSetting(getConfig())
+    const sentEffort = desiredEffort === undefined
+      ? undefined
+      : await resolveReasoningEffort(ctx, provider, model, desiredEffort, logger)
+    const options: CeGenerateOptions = {
+      provider,
+      model,
+      messages: [{ role: 'user', content: [{ type: 'text', text: rendered.prompt }], source: { kind: 'user' }, id: 'judge' }] as never,
+      purpose: 'context-economy-judge',
+      temperature: 0,
+      ...(sentEffort === undefined ? {} : { reasoningEffort: sentEffort }),
+    }
+    for await (const chunk of streamCeLlm(ctx, options, {
+      onUsage: (receipt) => { llmUsage = receipt.usage },
+      logger,
+      timeoutMs,
+    })) {
+      if (chunk.type === 'text-delta') llmText += chunk.text
+      if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
+        // U10：把宿主/端口的失败码带出来（超时 CE_LLM_TIMEOUT、服务缺失 CE_LLM_UNAVAILABLE）——
+        // 旧实现一律抛裸 Error，drain 侧只能记 CE_JUDGE_FAIL，失败原因不可辨。
+        const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
+        const error = new Error(reason.failure?.message ?? 'context-economy: non-stop finish') as Error & { code?: string }
+        if (reason.failure?.code !== undefined) error.code = reason.failure.code
+        throw error
+      }
+    }
+    const latencyMs = now() - started
+    const parsed = parseJudgeLlmOutput(llmText)
+    if (parsed === null) throw new Error('context-economy: bad judge output')
+    return {
+      parsed,
+      ctxTokens: rendered.ctxTokens,
+      latencyMs,
+      ...(llmUsage === undefined ? {} : { llmUsage }),
+      ...(desiredEffort === undefined ? {} : { requestedEffort: desiredEffort }),
+      ...(sentEffort === undefined ? {} : { sentEffort }),
+    }
+  }
+
+  const rememberPreJudged = (text: string, value: { decision: JudgeDecision; class: DossierClass; tableShadow?: JudgeTableShadow }): void => {
+    preJudged.set(text, value)
+    if (preJudged.size > cacheLimit) preJudged.delete(preJudged.keys().next().value!)
+  }
+
+  /**
+   * A/F2：pre-step 预判（语义见 `AutoDiscriminator.preJudge`）。
+   *
+   * 可复用性的前提：此处用**落盘前**的卷宗体渲染，`target.seq` 取 MAX_SAFE_INTEGER（排除集为空），
+   * 而该消息此刻尚未进体——与 `processOne` 把消息 append 进体后再渲染（其 `target.seq` 排除自身）
+   * **逐字节相同**。故落盘路径命中缓存复用的裁决必然与它自己调模型的结果一致。
+   */
+  const preJudge = async (session: Session, text: string, timeoutMs: number): Promise<PreJudgeOutcome> => {
+    if (getConfig().discriminator.auto !== true) return { kind: 'skipped' }
+    const trimmed = text.trim()
+    if (trimmed === '') return { kind: 'skipped' }
+    const sid = sidOf(session)
+    const hit = preJudged.get(trimmed)
+    if (hit !== undefined) return { kind: 'verdict', decision: hit.decision }
+    // T0 显式宣告：与 processOne 同口径（模型零调用）。
+    if (parseT0Command(trimmed).boundary !== null) return { kind: 'verdict', decision: 'continue' }
+    const route = resolveJudgeModel(getConfig(), readSessionModel(session))
+    if (route === undefined) return { kind: 'skipped' }
+    const sessionFacts = factsBySession.get(sid) ?? []
+    const sessionFirstSeq = firstSeqBySession.get(sid) ?? sessionFacts[0]?.seq ?? 0
+    const segments = foldSegmentState(sessionFacts, { sessionFirstSeq })
+    const taskId = sessionScopedTaskId(sid, segments.segments.at(-1)!.taskId)
+    const { body } = readDossier(taskId)
+    const table = readJudgeTable(storage, workspaceOf(session, workspace))
+    const tableMatch = matchJudgeTable(trimmed, table)
+    try {
+      const call = await callJudge(
+        session, body, { seq: Number.MAX_SAFE_INTEGER, text: trimmed },
+        route.provider, route.model, Math.min(timeoutMs, llmTimeoutMs),
+      )
+      rememberPreJudged(trimmed, {
+        decision: call.parsed.decision,
+        class: call.parsed.class,
+        ...(tableMatch.hit ? { tableShadow: { hit: true as const, score: tableMatch.score } } : {}),
+      })
+      return { kind: 'verdict', decision: call.parsed.decision }
+    } catch (e) {
+      if ((e as { code?: unknown }).code === CE_LLM_TIMEOUT_CODE) {
+        logger.warn('context-economy: pre-step judge timed out (fail-lazy: no boundary compression this step)')
+        return { kind: 'timeout' }
+      }
+      logger.warn('context-economy: pre-step judge failed (fail-lazy: no boundary compression this step)', e instanceof Error ? e.message : String(e))
+      return { kind: 'error' }
+    }
+  }
+
   const processOne = async (payload: CeDomainEvents['input/user-message']): Promise<void> => {
     if (getConfig().discriminator.auto !== true) return
     const session = payload.session
@@ -231,6 +366,25 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       return
     }
 
+    // A/F2：pre-step 预判复用（同一消息在 pre-step 已判过 → 零调用、零重复计费）。
+    // 判词到此才拿到真 seq，故 `judge-verdict` 必须在**这里**补发（preJudge 无 seq 可锚）。
+    // trigger 沿用 `l1-cache`：语义与 L1 同（重放同一条消息的既有裁决），不新增口径。
+    const pre = preJudged.get(text)
+    if (pre !== undefined) {
+      preJudged.delete(text)
+      await writeDossier(taskId, (current) => annotateDossier(appendDossierMessage(current, message), seq, pre.class, 'auto', time))
+      if (pre.decision === 'new-task') {
+        const data = toJudgeVerdictFactData(pre.decision, seq)
+        emitCeFact(session, JUDGE_VERDICT_FACT_TYPE, data, logger)
+        recordFact(sid, { type: JUDGE_VERDICT_FACT_TYPE, seq, time, data })
+      }
+      emitRecorded(session, sid, {
+        seq, time, trigger: 'l1-cache', decision: pre.decision, class: pre.class,
+        ...(pre.tableShadow === undefined ? {} : { tableShadow: pre.tableShadow }),
+      })
+      return
+    }
+
     // 对表 = 影子记账（P14c §2 修订）：**只算不拦**——命中照常走 LLM，只记录"机械本会怎么判"。
     // 唯一允许不调模型就下结论的是 T0（用户显式宣告）与 L1（重放同一条消息的既有裁决）；
     // 任何"用特征猜意图"的短路都会带来无声漏边界，故对表层不参与决策。
@@ -238,50 +392,16 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
     const table = readJudgeTable(storage, workspaceOf(session, workspace))
     const tableMatch = matchJudgeTable(text, table)
 
-    const rendered = renderJudgePrompt(appended, { seq, text })
-    let llmText = ''
-    let llmUsage: JudgeRecord['llmUsage']
-    let latencyMs: number | undefined
-    const started = now()
-    // P14f：推理档来自设置（discriminator.reasoningEffort）；缺省 = 跟随模型默认（不覆盖）。
-    // 关闭思考会明显影响边界判断，故不默认强制；用户显式选择才传，且只传模型声明支持的档。
-    const desiredEffort = reasoningEffortSetting(getConfig())
-    const sentEffort = desiredEffort === undefined
-      ? undefined
-      : await resolveReasoningEffort(ctx, provider, model, desiredEffort, logger)
-    const options: CeGenerateOptions = {
-      provider,
-      model,
-      messages: [{ role: 'user', content: [{ type: 'text', text: rendered.prompt }], source: { kind: 'user' }, id: 'judge' }] as never,
-      purpose: 'context-economy-judge',
-      temperature: 0,
-      ...(sentEffort === undefined ? {} : { reasoningEffort: sentEffort }),
-    }
-    for await (const chunk of streamCeLlm(ctx, options, {
-      onUsage: (receipt) => { llmUsage = receipt.usage },
-      logger,
-      timeoutMs: llmTimeoutMs,
-    })) {
-      if (chunk.type === 'text-delta') llmText += chunk.text
-      if (chunk.type === 'finish' && chunk.reason.kind !== 'stop') {
-        // U10：把宿主/端口的失败码带出来（超时 CE_LLM_TIMEOUT、服务缺失 CE_LLM_UNAVAILABLE）——
-        // 旧实现一律抛裸 Error，drain 侧只能记 CE_JUDGE_FAIL，失败原因不可辨。
-        const reason = chunk.reason as { kind: 'error'; failure?: { code?: string; message?: string } }
-        const error = new Error(reason.failure?.message ?? 'context-economy: non-stop finish') as Error & { code?: string }
-        if (reason.failure?.code !== undefined) error.code = reason.failure.code
-        throw error
-      }
-    }
-    latencyMs = now() - started
-    const parsed = parseJudgeLlmOutput(llmText)
-    if (parsed === null) throw new Error('context-economy: bad judge output')
+    // A：与 preJudge 共用同一调用路径（prompt 渲染/推理档/超时口径单点）。
+    const call = await callJudge(session, appended, { seq, text }, provider, model, llmTimeoutMs)
+    const parsed = call.parsed
     const record: JudgeRecord = {
       seq, time, trigger: 'llm', decision: parsed.decision, class: parsed.class,
-      ctxTokens: rendered.ctxTokens, latencyMs,
+      ctxTokens: call.ctxTokens, latencyMs: call.latencyMs,
     }
-    if (llmUsage !== undefined) record.llmUsage = llmUsage
-    if (desiredEffort !== undefined) record.requestedEffort = desiredEffort
-    if (sentEffort !== undefined) record.sentEffort = sentEffort
+    if (call.llmUsage !== undefined) record.llmUsage = call.llmUsage
+    if (call.requestedEffort !== undefined) record.requestedEffort = call.requestedEffort
+    if (call.sentEffort !== undefined) record.sentEffort = call.sentEffort
     if (tableMatch.hit) record.tableShadow = { hit: true, score: tableMatch.score }
     l1Cache.set(cacheKey, {
       decision: parsed.decision, class: parsed.class,
@@ -409,6 +529,7 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       offFacts()
     },
     settle,
+    preJudge,
     stats() {
       let facts = 0
       for (const bucket of factsBySession.values()) facts += bucket.length

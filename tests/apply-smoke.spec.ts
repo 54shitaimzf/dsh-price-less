@@ -47,6 +47,9 @@ function makeFakeCtx(opts: { settings?: boolean } = {}) {
       const d = fn()
       if (typeof d === 'function') disposers.push(d)
     },
+    // U17：apply 在 host 平面发布 `contextEconomy`（取代路线的服务缝）。真实 cordis 里
+    // `provide` 自带 fiber effect 注销；本替身只计**显式 `ctx.effect` 挂载点**，故不占 disposer 计数。
+    provide: () => () => {},
   }
   return { ctx, logs, disposers, installed, listeners }
 }

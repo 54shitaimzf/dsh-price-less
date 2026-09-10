@@ -332,7 +332,12 @@ export function renderProduct(
   }
 }
 
-/** 单元清单（压缩器输入尾部机械追加；ID·名称·路径版本·粗标体量，供模型选坐标）。F9e：路径相对化。 */
+/**
+ * 单元清单（压缩器输入尾部机械追加；ID·名称·路径版本·粗标体量，供模型选坐标）。F9e：路径相对化。
+ * U15：ID **不加包裹符号**——行首第一个词就是 unitId 原文。旧格式 `[${id}]` 让模型把方括号一起
+ * 抄进 `unitId`（真机 10/10 申报被 unknown-unit 拒绝 → 热尾退化为位置兜底）。守卫另在
+ * `gate.ts normalizeUnitId`（仍接受被包裹的形态，双保险）。
+ */
 export function renderUnitList(units: readonly AssembleUnit[], root?: string): string {
   return units
     .map((unit) => {
@@ -340,7 +345,7 @@ export function renderUnitList(units: readonly AssembleUnit[], root?: string): s
       const where = unit.path === undefined
         ? ''
         : ` ${relativePath(unit.path, root)}${unit.version === undefined ? '' : `@v${unit.version}`}`
-      return `[${unit.id}]${name}${where} ~${unit.tokens}t`
+      return `${unit.id}${name}${where} ~${unit.tokens}t`
     })
     .join('\n')
 }

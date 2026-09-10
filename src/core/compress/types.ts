@@ -19,8 +19,8 @@ import type {
 } from '../assemble/types.ts'
 import { DEFAULT_TOKEN_DENSITY, type TokenDensity } from '../meter/estimate.ts'
 
-/** prompt 模板版本（改模板必须升版本：产物 schema 与模板同版演进）。 */
-export const COMPRESS_PROMPT_VERSION = 3
+/** prompt 模板版本（改模板必须升版本：产物 schema 与模板同版演进）。U15：3→4（unitId 抄写纪律）。 */
+export const COMPRESS_PROMPT_VERSION = 4
 
 /** 调用策略版本（计量口径可复现；同 docs/03 §4 哲学）。 */
 export const COMPRESS_POLICY_VERSION = 3

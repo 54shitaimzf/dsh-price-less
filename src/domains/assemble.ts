@@ -14,6 +14,7 @@
  */
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import {
+  CE_TXN_ID_PREFIX,
   DEFAULT_ASSEMBLE_POLICY,
   assembleArchive,
   foldAssembleInputs,
@@ -92,18 +93,41 @@ export interface TxnRunResult {
   readonly code?: string
   readonly message?: string
   readonly steps: number
+  /**
+   * 成功时的事务标记 seq（`CompactionResult.startSeq/endSeq` 的来源）。
+   * 存在理由：本插件要作为 `ctx.compaction` 的**实现**回传官方结果契约（见 docs/ledger-history §89），
+   * 而契约要求 start/summary/end 三个 seq——summary 由 `commitCheckpoint` 直接给出，
+   * 标记对则由执行器持有。
+   */
+  readonly markers?: { readonly startSeq: number; readonly endSeq: number }
 }
 
 /**
- * U9.3 孤儿事务自愈：`COMPACTION_ACTIVE` 在**单线程同步窗口**内不存在真并发，
- * 必为残留（进程崩溃 / 被强杀在 open 与 close 之间）。后果极重——`beginCompaction` 每次都被拒，
- * 该会话的压缩**永久瘫痪**；而修复成本只是一次闭合。
- * 返回 true = 确实闭合了一个残留事务（调用方据此把这次失败标成可重试的临时失败）。
+ * U9.3 孤儿事务自愈（**U16 收紧**）：只闭合**自家**残留。
+ *
+ * 旧前提"`COMPACTION_ACTIVE` 在单线程同步窗口内不存在真并发，必为残留"**已被证伪**：
+ * 同一份会话日志里的未闭合标记是**跨 provider 共享的锁**，而 harness 原生 compaction-basic
+ * 的括号**跨越一次摘要 await**（open 与 close 之间确实会挂几十秒），且它**默认注册**在同一个
+ * 步准入 waterfall 上（`preset ... isolate: compaction` 组内的 compaction-basic 无 config ⇒
+ * `auto: config.auto ?? true`）。实测该 provider 的自动档从被触发只因阈值 0.8×窗口（1M ⇒ 800K）
+ * 高于本插件阀门 0.35×窗口（⇒ 350K）——是**阈值差**在挡，不是本仓 `cordis.patch.yml` 的
+ * `auto:false`（该补丁落在 web-app 已 `disabled` 的 profile 行上，管不到 preset 组内的实例）。
+ * 故自愈一旦无条件闭合，就会把对方**在途**的事务关掉，对方随后收尾即撞 harness 压缩不变式。
+ *
+ * 新判据（可判定，非启发式）：只闭合带 {@link CE_TXN_ID_PREFIX} 的标记。本插件事务临界区全同步，
+ * 执行到此分支时自家不可能真有在途事务，故带该前缀者必为自家残留；异己标记一律**不碰**，
+ * 如实返回 `TXN_ACTIVE`（有界重试后自然放弃，绝不以破坏别人来换自己继续）。
+ *
+ * 另一条**独立的**永久瘫痪来源已由 `platform/history.ts` 的 `scanActiveCompaction` 修掉：
+ * 上一生命周期（崩溃/强杀）留下的未闭合标记由 `session/end-seed` 作废，不再需要靠自愈解围。
+ *
+ * @returns true = 确实闭合了一个自家残留事务（调用方据此把这次失败标成可重试的临时失败）。
  */
 function closeOrphanCompaction(history: HistoryPort): boolean {
   try {
     const active = history.findActiveCompaction()
     if (active === undefined) return false
+    if (!String(active.compactionId).startsWith(CE_TXN_ID_PREFIX)) return false
     history.endCompaction({
       compactionId: String(active.compactionId),
       turn: active.turn,
@@ -119,7 +143,9 @@ function closeOrphanCompaction(history: HistoryPort): boolean {
 /**
  * 共享事务原语执行器（docs/04 §1）：assertNoActiveCompaction → open → 业务 op → close。
  * 业务 op 失败也**闭合事务**（带 error，绝不半开标记）；标记对与配对平衡守卫锁在 platform/history（D7）。
- * U9.3：活动事务残留 → 先自愈闭合再如实报失败（下一次 pre-step 自然重试成功）。
+ * U9.3 / U16：活动事务 → 仅对**自家**（{@link CE_TXN_ID_PREFIX}）残留先自愈闭合再如实报失败
+ * （下一次步准入自然重试成功）；异己（原生 compaction-basic 等并行 provider）的在途事务
+ * **绝不触碰**，只报 `TXN_ACTIVE`。理由见 `closeOrphanCompaction`。
  */
 export function runCompactionTxn(
   history: HistoryPort,
@@ -138,14 +164,14 @@ export function runCompactionTxn(
       steps: healed ? 1 : 0,
     }
   }
-  history.beginCompaction({ compactionId: plan.txnId, turn: plan.turn })
+  const startEvent = history.beginCompaction({ compactionId: plan.txnId, turn: plan.turn })
   let steps = 1
   try {
     apply(history)
     steps++
-    history.endCompaction({ compactionId: plan.txnId, turn: plan.turn })
+    const endEvent = history.endCompaction({ compactionId: plan.txnId, turn: plan.turn })
     steps++
-    return { ok: true, steps }
+    return { ok: true, steps, markers: { startSeq: Number(startEvent.seq), endSeq: Number(endEvent.seq) } }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     try {

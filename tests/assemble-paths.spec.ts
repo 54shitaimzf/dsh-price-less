@@ -142,7 +142,8 @@ describe('F10/v4 产物：总分零路径 + 热尾按需定位标注', () => {
 
   it('renderUnitList 按 root 相对化（省输入 token）', () => {
     const units = [unit('c1', 1, 'x', { path: 'D:/proj/src/a.ts', version: 3 })]
-    expect(renderUnitList(units)).toBe('[c1] D:/proj/src/a.ts@v3 ~1t')
-    expect(renderUnitList(units, ROOT)).toBe('[c1] src/a.ts@v3 ~1t')
+    // U15：行首第一个词 = unitId 原文（不再用 [ ] 包裹——旧格式诱导模型照抄括号）。
+    expect(renderUnitList(units)).toBe('c1 D:/proj/src/a.ts@v3 ~1t')
+    expect(renderUnitList(units, ROOT)).toBe('c1 src/a.ts@v3 ~1t')
   })
 })

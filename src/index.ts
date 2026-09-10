@@ -20,6 +20,8 @@ import { BOUNDARY_JUDGE_WAIT_MS, mountAutoDiscriminator, type AutoDiscriminator 
 import { mountShearDomain } from './domains/shear.ts'
 import { mountAssembleDomain } from './domains/assemble.ts'
 import { mountCompactionDomain } from './domains/compaction.ts'
+// U17：host 面服务名唯一构造点（provider-entry 解析同一常量；见 platform/compaction-port.ts）。
+import { CONTEXT_ECONOMY_SERVICE } from './platform/compaction-port.ts'
 import { onAgentPreStep, onAgentRequestError, onAgentSessionStart, type AgentSessionStartPayload } from './platform/agent-step.ts'
 import { mountRestoreDomain } from './domains/restore.ts'
 import { createMeterPort, type MeterPort } from './platform/meter.ts'
@@ -192,6 +194,17 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
     },
   })
   let compaction: ReturnType<typeof mountCompactionDomain> | undefined
+
+  // U17 取代路线：host 平面**发布**压缩面（`contextEconomy`），供 preset 域内的薄 provider 委派。
+  // 为什么必须发布（§87 §6）：`ctx.compaction` 作用域隔离在 preset 组内，host 平面实现不被解析；
+  // 而**未被 isolate 列名**的服务从组内照常向上解析（boot/app-boot/tests/config-reload.spec.ts:399-438）。
+  // 形状与名字的唯一构造点 = platform/compaction-port.ts；此处只接线。
+  // 惰性委派（面先发布、域后装配）：storage 打开前到达的调用得到可读原因，而不是 `undefined.foo`。
+  ctx.provide(CONTEXT_ECONOMY_SERVICE, {
+    compactNow: async (session: Session) => compaction === undefined
+      ? { ok: false as const, reason: 'domain-unavailable' }
+      : await compaction.compactNow({ session }),
+  })
   let skillsCtx: Context | undefined
   let llmCtx: Context | undefined
   let stopCommands: (() => void) | undefined
@@ -303,10 +316,23 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           })
           stopPreStep = onAgentPreStep(ctx, {
             logger: ceLogger(ctx),
-            handler: async ({ session, turn, step }) => {
-              // F2（2026-09-09）：边界压缩必须阻塞在**新任务第一条模型调用之前**——
-              // 先等本轮判词落地（60s 有界；超时 fail-lazy，退回"下一 pre-step 再压"）。
+            handler: async ({ session, turn, step, userTexts }) => {
               const discriminator = autoDisc
+              // A/F2（2026-09-11 真机复盘）：本步**尚未落会话**的用户消息（harness pre-step 载荷）
+              // 按**文本**先判一次。旧实现只按会话 seq 建屏障，而 harness 在 pre-step 返回之后才
+              // `append('user/message')`（agent-loop/src/agent.ts L289→L302→L375），故屏障对本轮消息
+              // **恒空转**：实测 new-task 判词落地时首步思考早已产出，压缩被推到第二步并阻塞 62.6s。
+              if (discriminator !== undefined && userTexts.length > 0) {
+                // 一批里判**最后一条**——任务边界由最新那条用户消息决定。
+                const outcome = await discriminator.preJudge(session, userTexts[userTexts.length - 1] as string, BOUNDARY_JUDGE_WAIT_MS)
+                if (outcome.kind === 'verdict' && outcome.decision === 'new-task') {
+                  // 边界已成立，且此刻新消息尚未提交 ⇒ **表面尾就是边界**：立刻压，
+                  // 赶在本步第一次模型调用之前（这就是 F2 的成文原意）。
+                  await compaction?.onBoundaryBeforeStep({ session, turn })
+                }
+              }
+              // 兜底（原 F2 语义，保留）：本步带**已落会话**但判词仍在飞的消息时（后台唤醒注入等），
+              // 仍按 seq 等一次判词落地，再走常规 pre-step（等本轮判词落地，60s 有界，超时 fail-lazy）。
               if (discriminator !== undefined && getConfig().discriminator.auto === true) {
                 const newestSeq = readSessionUserMessages(session).at(-1)?.seq
                 if (newestSeq !== undefined) {

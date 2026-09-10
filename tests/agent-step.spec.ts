@@ -43,6 +43,37 @@ describe('P19a H2 步准入端口', () => {
     expect(seen[0]!.session).toMatchObject({ id: 's1' })
   })
 
+  it('A：载荷 userTexts = 本步即将落会话的用户消息；回调未 resolve 前 next() 不得被调用', async () => {
+    const { ctx, fire } = makeCtx()
+    const seen: AgentPreStepPayload[] = []
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    onAgentPreStep(ctx as never, { handler: async (p) => { seen.push(p); await gate } })
+    let nextCalled = false
+    const done = fire(
+      {
+        ...payload(),
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: '第一条' }], source: { kind: 'user' } },
+          // 非用户来源的同型 user/message（AGENTS 注入 / 插件通知）——**不得**进 userTexts
+          { role: 'user', content: [{ type: 'text', text: '<system-reminder>x</system-reminder>' }], source: { kind: 'agent-instructions' } },
+          { role: 'user', content: [{ type: 'text', text: '第二条' }], source: { kind: 'user' } },
+          { role: 'user', content: [{ type: 'image', source: { kind: 'base64', mediaType: 'image/png', data: 'x' } }], source: { kind: 'user' } },
+        ],
+      },
+      async () => { nextCalled = true; return 'next' },
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+    // 只收文本非空的消息（图片块 → 无文本 → 不进 userTexts）
+    expect(seen[0]!.userTexts).toEqual(['第一条', '第二条'])
+    // 阻塞证明：回调还挂在 gate 上时，waterfall 尚未放行（F2 边界压缩靠这一点压在第一模型调用之前）
+    expect(nextCalled).toBe(false)
+    release?.()
+    await expect(done).resolves.toBe('next')
+    expect(nextCalled).toBe(true)
+  })
+
   it('回调异常只 warn 不外溢，仍放行下一步', async () => {
     const { ctx, fire } = makeCtx()
     const warnings: unknown[][] = []

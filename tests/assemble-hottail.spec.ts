@@ -322,7 +322,9 @@ describe('P17a 输入 fold：单元清单', () => {
   it('单元清单逐行确定（供压缩器 prompt 枚举）', () => {
     const inputs = foldAssembleInputs(events)
     // 两桶密度（其余 2.9 字符/token）：'1: l1\n2: l2'(11) → 4；'5 tests passed'(14) → 5
-    expect(renderUnitList(inputs.units)).toBe('[c1] read a.ts@v1 ~4t\n[c2] bash ~5t')
+    // U15：行首第一个词 = unitId 原文，**不加方括号**（旧格式 [c1] 让模型把括号抄进 unitId）。
+    expect(renderUnitList(inputs.units)).toBe('c1 read a.ts@v1 ~4t\nc2 bash ~5t')
+    expect(renderUnitList(inputs.units)).not.toContain('[')
   })
 })
 
@@ -344,6 +346,44 @@ describe('P17c 热尾：HT 软门与计数修复', () => {
     )
     expect(gate.accepted).toEqual([{ unitId: 'a', coord: { path: 'x.ts', version: 1 } }])
     expect(gate.rejected).toEqual([{ reason: 'unknown-unit', unitId: 'ghost' }, { reason: 'bad-decl' }])
+  })
+
+  // U15 回归（真机 session-ed9fe428，2026-09-11）：清单旧渲染 `[c1] …` 让模型把方括号一起抄进
+  // unitId → 10/10 申报判 unknown-unit → 热尾整体退化为位置兜底（产物 95% 是原文切片）。
+  it('U15：unitId 被包裹符号包住 → 剥一层后仍接受', () => {
+    const units = [unit('a', 1, 'x'), unit('seq-1268', 1, 'y')]
+    const gate = gateHotTailDecls(
+      [
+        { unitId: '[a]' },
+        { unitId: ' seq-1268 ' },
+        { unitId: '<seq-1268>' },
+        { unitId: '`seq-1268`' },
+        { unitId: '[ghost]' },
+        { unitId: '[ ]' },
+        { unitId: '[a' },
+      ],
+      units,
+    )
+    // 归一化后的 unitId 才是账本/装配看到的 ID；只剥两端成对的一层（'[a' 保持原样 → unknown-unit）。
+    expect(gate.accepted.map((decl) => decl.unitId)).toEqual(['a', 'seq-1268', 'seq-1268', 'seq-1268'])
+    expect(gate.rejected).toEqual([
+      { reason: 'unknown-unit', unitId: 'ghost' },
+      { reason: 'bad-decl', unitId: '[ ]' },
+      { reason: 'unknown-unit', unitId: '[a' },
+    ])
+  })
+
+  it('U15：被包裹 ID 归一化后走 model 路径（不退化为位置兜底）', () => {
+    const outcome = assembleArchive({
+      units: [unit('a', 1, 'A'.repeat(6)), unit('b', 1, 'B'.repeat(6))],
+      hotTail: [{ unitId: '[b]' }],
+      policy: policy({ hotTailTokens: 100 }),
+    })
+    if (!outcome.ok) throw new Error('expected ok')
+    expect(outcome.result.hotTail.source).toBe('model')
+    expect(outcome.result.hotTail.entries.map((selection) => selection.unitId)).toEqual(['b'])
+    expect(outcome.result.hotTail.declaredUnits).toBe(1)
+    expect(outcome.result.hotTail.dropReasons.unknownUnit).toBe(0)
   })
 
   it('软门：坏形状不抛错、只计数（其余申报照常装填）', () => {

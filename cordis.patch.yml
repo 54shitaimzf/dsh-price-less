@@ -1,8 +1,15 @@
-# dsh-price-less bundle 层：插入插件行 + 覆写原生自动压缩（防双触发）。
-# 观察模式设置项已清理（2026-09）；机制开关随 R2 工单按 docs/11 §6 落位。
-# R4（P20b）：原生 compaction-basic auto:false —— 自动压力与溢出恢复的唯一提供者 = 本插件
-# （H2 边界触发 + H3 压力 / request-error 接管，docs/10 §1 辨析③）；patch 整体替换 config，
-# 未列字段保持默认（auto 是唯一覆写项）。
+# dsh-price-less bundle 层：把插件行插入 profile 组合。
+#
+# ⚠️ U16 更正（2026-09-11 实测）：本文件下面那条 `compaction-basic: auto:false`
+# **不构成"防双触发"的保证**——它作用不到真正生效的实例：
+#   ・补丁链（profile 组合）= base → web-app → dsh-price-less；`web-app/cordis.patch.yml:427-428`
+#     已把 profile 树里的 compaction-basic 设为 `disabled: true`，故本条 config 覆写落在**禁用行**上；
+#   ・生效的是 **agent preset** 里 `isolate: {compaction: true}` 组内的那个 compaction-basic
+#     （`presets/standard/agent.cordis.yml:138-156`，无 config ⇒ `auto: config.auto ?? true`），
+#     该组合由 agent-presets 服务**运行期单独挂载**，不在补丁链上。
+# 实测后果：原生自动档**一直是开着的**（阈值 0.8×窗口 = 800K），我们没被咬只是因为本插件阀门更低
+# （0.35×窗口 = 350K，实测 wireTokens 峰值 423K ⇒ 从未越过 800K）。详见 docs/ledger-history.md §87。
+# 保留本条 = 记录意图，不代表生效；真正关闭/取代必须发生在 preset 组内（后续增量）。
 - insert:
     - id: dsh-price-less
       name: 'dsh-price-less'

@@ -190,6 +190,10 @@ describe('正样本（干净文件 → 0 issue）', () => {
   it('D7：history 协议概念只许在 platform/history.ts（docs/10 §1 H4/H5 + docs/11 §2）', () => {
     const historyFile = "import { CompactionId, toolPairingBalancedAfter } from '@deepseek-ai/dsh-compaction'\nsession.append('compaction/start', d)\nsession.append('compaction/prune', d)\nsession.append('compaction/summary', d)"
     expect(rule('D7').check({ path: 'src/platform/history.ts', text: historyFile }, new Map())).toEqual(NO_ISSUES)
+    // U17 工单追加的第二个放行面：**服务缝**触点（provider 继承抽象类 + 构造官方结果，一个事件都不写）。
+    expect(rule('D7').check({ path: 'src/platform/provider-entry.ts', text: "import { CompactionId } from '@deepseek-ai/dsh-compaction'" }, new Map())).toEqual(NO_ISSUES)
+    // 放行面只有那两个：第三个文件同文本仍红（面变宽必须是显式工单，不是顺手）。
+    expect(check('D7', 'src/platform/events.ts', "import { CompactionId } from '@deepseek-ai/dsh-compaction'\n")).not.toEqual(NO_ISSUES)
   })
   it('D8：工具事件概念只许在 platform/tools.ts；ContentBlock 不拦（docs/10 §1 H6 + docs/13 §3.9）', () => {
     const toolFile = "ctx.on('tools/execute', ...); ctx.on('tools/post-execute', ...)\nPostToolDecision; ToolDispatchExecution; ToolExecution; ToolExecutionResult\nimport type {} from '@deepseek-ai/dsh-tools'"

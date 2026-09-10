@@ -93,8 +93,12 @@ export function readSessionEvents(session: Session): readonly SessionEvent[] {
   return typeof face.snapshotEvents === 'function' ? face.snapshotEvents.call(session) : []
 }
 
-/** user/message 文本（text blocks 拼接 trim）；空文本 → null（02 §2「文本非空」条件）。 */
-function userMessageText(data: UserMessage): string | null {
+/**
+ * user/message 文本（text blocks 拼接 trim）；空文本 → null（02 §2「文本非空」条件）。
+ * A（2026-09-11）：`export` 供步准入端口复用——harness 传给 `pre-step` 的 `messages` 与会话事件的
+ * `data` 同形，两处必须同一读取口径（否则"即将落会话的消息"与"已落会话的消息"会判出不同文本）。
+ */
+export function userMessageText(data: UserMessage): string | null {
   const text = data.content
     .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
     .map((b) => b.text)
