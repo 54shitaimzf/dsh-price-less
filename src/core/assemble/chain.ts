@@ -168,17 +168,27 @@ function applyHunksToFull(full: string[], hunks: readonly Hunk[], newString: str
 /** 窗口内应用 hunk；hunk 部分越窗（不可精确重建）→ undefined（窗口作废）。 */
 function applyHunksToWindow(win: Window, hunks: readonly Hunk[], newString: string): Window | undefined {
   const replacement = newString.split('\n')
-  let offset = win.offset
   let lines = win.lines.slice()
+  // U3：窗内 hunk 的局部坐标一律以**原窗口 offset** 计——窗前 hunk 只平移窗口绝对位置、
+  // 不改窗口内容；窗内应用按**降序**（与 applyHunksToFull 同构：降序时前置坐标永不过期，
+  // 升序在 delta≠0 时让后续 hunk 在已平移数组上按旧坐标切割 = 窗口内容错乱、版本链行号失真）。
+  const inWindow: Hunk[] = []
+  let offsetDelta = 0
   for (const hunk of hunks) {
-    const localStart = hunk.startLine - offset
-    const localEnd = hunk.endLine - offset
-    if (localEnd < 0) { offset += deltaOf(hunk); continue }
-    if (localStart >= lines.length) break
-    if (localStart < 0 || localEnd > lines.length - 1) return undefined
+    const localStart = hunk.startLine - win.offset
+    const localEnd = hunk.endLine - win.offset
+    if (localEnd < 0) { offsetDelta += deltaOf(hunk); continue }
+    if (localStart >= win.lines.length) break
+    if (localStart < 0 || localEnd > win.lines.length - 1) return undefined
+    inWindow.push(hunk)
+  }
+  for (let i = inWindow.length - 1; i >= 0; i--) {
+    const hunk = inWindow[i]!
+    const localStart = hunk.startLine - win.offset
+    const localEnd = hunk.endLine - win.offset
     lines = [...lines.slice(0, localStart), ...replacement, ...lines.slice(localEnd + 1)]
   }
-  return { offset, lines }
+  return { offset: win.offset + offsetDelta, lines }
 }
 
 function sameLines(a: readonly string[], b: readonly string[]): boolean {

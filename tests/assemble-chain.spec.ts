@@ -58,6 +58,45 @@ describe('P17a 坐标层：版本链 fold', () => {
     ])
   })
 
+  it('U3：部分读窗口内 replace_all ≥2 处且行数变化 → 窗口不错乱（降序应用；后续编辑仍可正确定位）', () => {
+    // 真实文件 20 行，窗口只见 1–6 行（两处 Xb 均在窗内）；审查复现：升序应用会让第二处
+    // hunk 在已平移数组上按旧坐标切割 → 窗口残留旧文本 + 后续版本链行号失真（盘上取错行）。
+    const chains = foldFileChains([
+      read(1, 1, ['a', 'Xb', 'd', 'e', 'Xb', 'f'], 20),
+      edit(2, 'Xb', 'Z\nZ2', 'a.ts', true),
+    ])
+    const chain = chains.get('a.ts')!
+    expect(chain.broken).toBe(false)
+    expect(chain.versions[1]!.hunks).toEqual([
+      { startLine: 2, endLine: 2, newLineCount: 2 },
+      { startLine: 5, endLine: 5, newLineCount: 2 },
+    ])
+    expect(chain.versions[1]!.lineCount).toBe(22)
+    // 窗口内容钉死：修复后窗口 = a,Z,Z2,d,e,Z,Z2,f —— 跨第一处替换尾部的后续编辑必须定位成功
+    const after = foldFileChains([
+      read(1, 1, ['a', 'Xb', 'd', 'e', 'Xb', 'f'], 20),
+      edit(2, 'Xb', 'Z\nZ2', 'a.ts', true),
+      edit(3, 'Z2\nd', 'W', 'a.ts'),
+    ]).get('a.ts')!
+    expect(after.broken).toBe(false)
+    expect(after.versions[2]!.hunks).toEqual([{ startLine: 3, endLine: 4, newLineCount: 1 }])
+    expect(after.versions[2]!.lineCount).toBe(21)
+  })
+
+  it('U3：窗前 hunk 只平移窗口绝对位置，不改窗内局部坐标（多窗口 replace_all）', () => {
+    // 窗口 A（1–2 行）与窗口 B（4–6 行）；replace_all 同时命中 A 内（行 2）与 B 内（行 5），
+    // A 处替换扩行后 B 的窗内局部坐标必须仍按 B 原 offset 计（旧行为会错位 B 的应用位置）。
+    const after = foldFileChains([
+      read(1, 1, ['a', 'Xb'], 9),
+      read(2, 4, ['w', 'Xb', 'f'], 9),
+      edit(3, 'Xb', 'Z\nZ2', 'a.ts', true),
+      edit(4, 'Z2\nf', 'W', 'a.ts'),
+    ]).get('a.ts')!
+    expect(after.broken).toBe(false)
+    expect(after.versions[3]!.hunks).toEqual([{ startLine: 7, endLine: 8, newLineCount: 1 }])
+    expect(after.versions[3]!.lineCount).toBe(10)
+  })
+
   it('定位失败（oldString 不在已知内容）→ 链断，不猜位置', () => {
     const chain = foldFileChains([write(1, 'a\nb'), edit(2, 'zzz', 'q')]).get('a.ts')!
     expect(chain.broken).toBe(true)
