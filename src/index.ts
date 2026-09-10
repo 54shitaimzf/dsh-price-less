@@ -126,11 +126,19 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
   // P21a：H9 在 apply() 同步注册（storage 异步打开期到达的 session-start 先进缓冲，装配后回放）。
   let restoreHandler: ((payload: AgentSessionStartPayload) => Promise<void>) | undefined
   const pendingStarts: AgentSessionStartPayload[] = []
+  // U4：缓冲上界（storage 永不就绪时无界增长防护；溢出丢最旧 + warn 计数）。
+  const PENDING_STARTS_LIMIT = 64
+  let pendingStartsDropped = 0
   stopSessionStart = onAgentSessionStart(ctx, {
     logger: ceLogger(ctx),
     handler: (payload) => {
       if (restoreHandler === undefined) {
         pendingStarts.push(payload)
+        if (pendingStarts.length > PENDING_STARTS_LIMIT) {
+          pendingStarts.shift()
+          pendingStartsDropped++
+          ceLogger(ctx).warn('context-economy: pending session-start buffer overflow (oldest dropped)', String(pendingStartsDropped))
+        }
         return
       }
       return restoreHandler(payload)
@@ -186,11 +194,22 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           }
           ctx.inject(['skills'], (skillsCtx2) => {
             if (disposed) return
+            // U4：重入防护（storage 服务重启重跑回调）+ fiber 卸载清理（effect）——
+            // 旧行为只覆写变量，服务重载后旧 watch 判别器双挂载、pump 监听器泄漏。
+            stopSkillWatch?.()
+            stopSkillWatch = undefined
             skillsCtx = skillsCtx2 as Context
             stopSkillWatch = startStablePrefixWatch(skillsCtx, opened)
+            ;(skillsCtx2 as Context).effect(() => () => {
+              stopSkillWatch?.()
+              stopSkillWatch = undefined
+              skillsCtx = undefined
+            })
           })
           ctx.inject(['llm'], (llmCtx2) => {
             if (disposed) return
+            stopAuto?.()
+            stopAuto = undefined
             llmCtx = llmCtx2 as Context
             const discriminator = mountAutoDiscriminator(llmCtx, {
               pump,
@@ -199,7 +218,12 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
               logger: ceLogger(llmCtx),
             })
             autoDisc = discriminator
-            stopAuto = () => { autoDisc = undefined; discriminator.dispose() }
+            stopAuto = () => { if (autoDisc === discriminator) autoDisc = undefined; discriminator.dispose() }
+            ;(llmCtx2 as Context).effect(() => () => {
+              // llm fiber 卸载（服务重启/重载）→ 判别器随之卸载：不卸则每条用户消息双份判词 LLM 调用与双份事实。
+              discriminator.dispose()
+              if (autoDisc === discriminator) autoDisc = undefined
+            })
           })
           // P19b：边界压缩域（H2 闭合触发 → 调用 → 装配 → 档案 vN → 事务替换）。
           compaction = mountCompactionDomain({
@@ -237,6 +261,8 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
           ctx.inject(['sessions'], (sessionsCtx) => {
             if (disposed) return
             const sessions = sessionsCtx.get('sessions') as { get(id: string): Session | undefined } | undefined
+            starHost?.dispose()
+            starHost = undefined
             const host = mountStarHost({
               storage: opened,
               getConfig,
@@ -247,16 +273,27 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
               resolveSession: sessions === undefined ? undefined : (id) => sessions.get(id),
             })
             starHost = host
+            ;(sessionsCtx as Context).effect(() => () => {
+              host.dispose()
+              if (starHost === host) starHost = undefined
+            })
             ctx.inject(['connection'], (bridgeCtx) => {
               if (disposed) return
               const connection = bridgeCtx.get('connection') as StarConnectionFace | undefined
               if (connection === undefined) return
-              stopStarBridge = registerStarBridge(connection, host, ceLogger(bridgeCtx))
+              void stopStarBridge?.()
+              const stopBridge = registerStarBridge(connection, host, ceLogger(bridgeCtx))
+              stopStarBridge = stopBridge
+              ;(bridgeCtx as Context).effect(() => () => {
+                void stopBridge()
+              })
             })
           })
           ctx.inject(['commands'], (commandsCtx) => {
             if (disposed) return
-            stopCommands = mountCommandFace({
+            stopCommands?.()
+            stopCommands = undefined
+            const face = mountCommandFace({
               commandsCtx: commandsCtx as Context,
               storage: opened,
               getConfig,
@@ -273,7 +310,11 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
                   ? { kind: 'success', text: renderPreviewCommandText(result.value) }
                   : { kind: 'error', text: `${result.code}：${result.message}` }
               },
-            }).dispose
+            })
+            stopCommands = face.dispose
+            ;(commandsCtx as Context).effect(() => () => {
+              face.dispose()
+            })
           })
         })
         .catch((e) => {
