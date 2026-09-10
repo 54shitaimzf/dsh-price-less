@@ -236,7 +236,7 @@ context-economy:
   discriminator:
     auto: false              # 自动识别默认关闭
     # provider: deepseek-official
-    # model: deepseek-v4.1-flash-expires-on-0910
+    # model: deepseek-v4-flash-vision-exp
     # reasoningEffort: high
 ```
 
@@ -254,7 +254,7 @@ context-economy:
 | `discriminator.provider` / `model` | string | 未设置 | 辅助模型路由；两项都设置时覆盖，留空则跟随会话模型 |
 | `discriminator.reasoningEffort` | string | 未设置 | 辅助调用推理档；未设置 = 跟随模型默认 |
 
-> schema 未给 `provider` / `model` 声明默认值。留空时，辅助调用（自动识别、`/init`、星标断面、边界压缩）优先**跟随当前会话模型**（最近一次请求的 provider/model），无请求记录时回落内置默认 `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910`；两项**都**填写时以配置为准。开启 `discriminator.auto` 或使用 `/init`、星标按钮、边界压缩可能会调用辅助模型，产生 API 费用，并可能把相关提示词内容发送给所配置的服务商。
+> schema 未给 `provider` / `model` 声明默认值，插件也**不再内置任何默认模型**（2026-09-10：原硬编码档按命名已到期，且"插件猜模型名"本身是漂移源）。留空时，辅助调用（自动识别、`/init`、星标断面、边界压缩）优先**跟随当前会话模型**（最近一次请求的 provider/model）；**会话首条消息**尚无请求记录 → **跳过判别**并发可观测事实 `CE_JUDGE_NO_ROUTE`（`/init`、星标则命令面/前端明确回报"模型未配置"），从第二条消息起自动跟随。两项**都**填写时以配置为准。开启 `discriminator.auto` 或使用 `/init`、星标按钮、边界压缩可能会调用辅助模型，产生 API 费用，并可能把相关提示词内容发送给所配置的服务商。
 
 ## 命令
 

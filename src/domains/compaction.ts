@@ -230,6 +230,9 @@ interface ProductAttempt {
   readonly dropped: HotTailDropCounts
   readonly calls: number
   readonly cacheHit: boolean
+  /** U8：本次实际使用的辅助调用路由（cacheHit 时为空串）；提交记账直接复用，不再二次解析。 */
+  readonly provider: string
+  readonly model: string
   readonly usage?: CeLlmUsage
   readonly rawOutput?: string
   readonly rendered: string
@@ -421,6 +424,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         const rendered = renderBoundaryPrompt({ regionText, units, priorChain, policy: compressPolicy, root })
         renderedPromptTokens = estimateTokens(rendered.prompt, compressPolicy.density)
         const route = resolveJudgeModel(config, readSessionModel(session))
+        // U8：无路由（未配置 + 会话尚无 request/header）→ 复用 llm-unavailable（瞬态：第二条消息起即有会话模型）。
+        if (route === undefined) { skip('llm-unavailable', { calls }); return undefined }
         provider = route.provider
         model = route.model
         const desired = reasoningEffortSetting(config)
@@ -478,7 +483,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         assemblePolicy,
       )
       return {
-        product, dropped, calls, cacheHit, rendered: outcome.result.rendered, digestText: outcome.result.digestText,
+        product, dropped, calls, cacheHit, provider, model,
+        rendered: outcome.result.rendered, digestText: outcome.result.digestText,
         productTokens: estimateTokens(outcome.result.rendered, compressPolicy.density),
         truncation: append.truncation, entries: append.kept,
         ...(usage === undefined ? {} : { usage }),
@@ -536,8 +542,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         summary: chosen!.rendered,
         range: { start: range.startSeq as never, end: range.endSeq as never },
         shadowedTokenCount: shadowPrice,
-        provider: chosen!.cacheHit ? '' : resolveJudgeModel(config, readSessionModel(session)).provider,
-        model: chosen!.cacheHit ? '' : resolveJudgeModel(config, readSessionModel(session)).model,
+        provider: chosen!.cacheHit ? '' : chosen!.provider,
+        model: chosen!.cacheHit ? '' : chosen!.model,
         ...(chosen!.usage === undefined ? {} : { usage: chosen!.usage }),
         ...(chosen!.rawOutput === undefined ? {} : { rawOutput: chosen!.rawOutput }),
       })
@@ -716,6 +722,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         const renderedPrompt = renderPressurePrompt({ regionText: candidateText, units, priorChain, policy: compressPolicy, root })
         renderedPromptTokens = estimateTokens(renderedPrompt.prompt, compressPolicy.density)
         const route = resolveJudgeModel(config, readSessionModel(session))
+        // U8：无路由（未配置 + 会话尚无 request/header）→ 复用 llm-unavailable（瞬态）。
+        if (route === undefined) { fire('skip', { reason: 'llm-unavailable', chainDepth: depth }); return undefined }
         provider = route.provider
         model = route.model
         const desired = reasoningEffortSetting(config)

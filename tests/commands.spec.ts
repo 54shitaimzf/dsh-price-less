@@ -18,11 +18,15 @@ const _sessionEventMapCheck: AssertSessionEventMap = true
 
 const logger = { info() {}, warn() {}, error() {} }
 
+/** U8 夹具：辅助调用路由不再有内置兜底——真实会话在模型调用后必有 `request/header`（前置合成，
+ *  `readSessionModel` 自尾向首扫描 → 夹具里已有的真实 header 仍优先）。 */
+const MODEL_HEADER_EVENT = { type: 'request/header', seq: -1, time: 0, data: { header: { config: { provider: 'judge-p', model: 'judge-m' } } } }
+
 function makeSession(events: unknown[] = [], id = 's1'): Session {
   return {
     header: { id },
     id,
-    snapshotEvents: () => events,
+    snapshotEvents: () => [MODEL_HEADER_EVENT, ...events],
   } as unknown as Session
 }
 

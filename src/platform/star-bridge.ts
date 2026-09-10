@@ -35,6 +35,8 @@ export const STAR_BRIDGE_CODES = {
   storageFailed: 'CE_STAR_STORAGE_FAILED',
   internal: 'CE_STAR_INTERNAL',
   unavailable: 'CE_STAR_UNAVAILABLE',
+  /** U8：无可用模型路由（未配置且会话尚无 request/header）——不猜路由，向前端明确回复。 */
+  noModel: 'CE_STAR_NO_MODEL',
 } as const
 export type StarBridgeCode = (typeof STAR_BRIDGE_CODES)[keyof typeof STAR_BRIDGE_CODES]
 

@@ -127,13 +127,13 @@ function ModelRouteSelector(props: {
     <div style={rowStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <label style={labelStyle}>判别模型</label>
-        <CeTip text="判别器实际使用的服务商与模型。默认跟随预设；也可从配置目录选，或手动填（高级）。预设模型始终可选（即使未加入配置目录）。" />
+        <CeTip text="判别器实际使用的服务商与模型。留空 = 跟随会话当前模型（最近一次请求的 provider/model）；会话首条消息尚无请求记录时跳过判别（发 CE_JUDGE_NO_ROUTE 事实），从第二条消息起自动跟随。也可从配置目录选或手动填（高级）。预设模型始终可选（即使未加入配置目录）。" />
         <div style={{ flex: 1 }} />
       </div>
       {showManual ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <CeText value={providerText} placeholder="服务商（如 deepseek-official）" disabled={disabled} onChange={(t) => onEdit('discriminator.provider', t)} />
-          <CeText value={modelText} placeholder="模型（如 deepseek-v4.1-flash-expires-on-0910）" disabled={disabled} onChange={(t) => onEdit('discriminator.model', t)} />
+          <CeText value={modelText} placeholder="模型（留空 = 跟随会话当前模型）" disabled={disabled} onChange={(t) => onEdit('discriminator.model', t)} />
           <button
             type="button"
             disabled={disabled}

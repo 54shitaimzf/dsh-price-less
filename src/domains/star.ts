@@ -224,9 +224,12 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
     let errorCode: string | undefined
     let sentEffort: string | undefined
     const desiredEffort = reasoningEffortSetting(getConfig())
+    // U8：无路由（未配置 + 会话尚无 request/header）→ 不猜模型，明确回报（CE_STAR_NO_MODEL）。
+    const starRoute = deps.llmCtx === undefined ? undefined : resolveJudgeModel(getConfig(), readSessionModel(session))
     if (deps.llmCtx === undefined) errorCode = STAR_BRIDGE_CODES.llmFailed
+    else if (starRoute === undefined) errorCode = STAR_BRIDGE_CODES.noModel
     else {
-      const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
+      const { provider, model } = starRoute
       // P14f：设置里的推理档 → 能力探测（模型未声明该档就不传；宿主对不支持的档直接抛错）。
       sentEffort = desiredEffort === undefined
         ? undefined
@@ -268,6 +271,10 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
       shearPairs: parsed?.shearItems.length ?? 0, shearTokens: parsed === undefined ? 0 : shearTokensOf(dossier, parsed.shearItems),
       latencyMs, llmUsage: usage, errorCode,
     }))
+    if (errorCode === STAR_BRIDGE_CODES.noModel) {
+      counters.llmFailures++
+      return { ok: false, code: errorCode, message: '判别模型未配置：请在设置卡配置 provider/model，或发送第二条消息后自动跟随会话模型' }
+    }
     if (errorCode === STAR_BRIDGE_CODES.llmFailed) {
       counters.llmFailures++
       return { ok: false, code: errorCode, message: deps.llmCtx === undefined ? 'LLM 服务不可用' : '断面调用未正常结束' }

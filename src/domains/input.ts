@@ -39,8 +39,11 @@ import {
   type JudgeErrorFactData,
 } from './judge-facts.ts'
 
-// 默认判别模型 = 当前主对话模型（2026-09-08 定；可在设置卡覆盖，缺省时优先跟随会话当前模型）。
-const DEFAULT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' }
+// U8（2026-09-10）：**不再有内置默认模型**。原硬编码 `deepseek-v4.1-flash-expires-on-0910`
+// 按命名即 0910 到期，且"插件猜一个模型名"本身就是漂移源（上游改档/下线即静默走错路由）。
+// 现行语义（docs/11 §2）：配置两项齐全 → 用配置；否则跟随会话当前模型（最近一次 request/header）；
+// 二者都没有（**会话首条消息**，尚无 request/header）→ 跳过判别 + 发可观测事实（CE_JUDGE_NO_ROUTE），
+// 从第二条消息起自动跟随会话模型。失败方向朝安全侧（不猜路由、不误调）。
 const FACT_BUCKET_LIMIT = 2000
 const DEFAULT_CACHE_LIMIT = 1024
 
@@ -67,16 +70,25 @@ export interface AutoDiscriminator {
   settle(session: Session, newestSeq: number, timeoutMs: number): Promise<'settled' | 'timeout'>
 }
 
+/**
+ * 辅助调用（判别 / ★ / 压缩同源）模型路由解析（U8：无内置兜底）。
+ * 配置两项齐全优先 → 会话当前模型 → **undefined（无路由 = 跳过，不猜）**。
+ */
 export function resolveJudgeModel(
   config: ConfigShape,
   sessionModel?: { provider: string; model: string },
-): { provider: string; model: string } {
+): { provider: string; model: string } | undefined {
   const provider = config.discriminator?.provider?.trim()
   const model = config.discriminator?.model?.trim()
   if (provider && model) return { provider, model }
   if (sessionModel !== undefined) return sessionModel
-  return { ...DEFAULT_MODEL }
+  return undefined
 }
+
+/** 无路由跳过判别的可观测事实码（U8；01 真机冒烟①的判据）。 */
+export const CE_JUDGE_NO_ROUTE = 'CE_JUDGE_NO_ROUTE'
+export const JUDGE_NO_ROUTE_MESSAGE =
+  'judge model unconfigured (no discriminator.provider/model and no request/header yet); skipping discrimination until the session model is known'
 
 export function readJudgeTable(storage: ContextEconomyStorage, workspace: string): JudgeTable | undefined {
   const key = `optimize_artifact:latest:${workspace}`
@@ -188,7 +200,16 @@ export function mountAutoDiscriminator(ctx: Pick<Context, 'llm'>, deps: AutoDisc
       emitRecorded(session, sid, { seq, time, trigger: 't0', decision: 'continue' })
       return
     }
-    const { provider, model } = resolveJudgeModel(getConfig(), readSessionModel(session))
+    const judgeRoute = resolveJudgeModel(getConfig(), readSessionModel(session))
+    if (judgeRoute === undefined) {
+      // U8：无路由（会话首条消息，尚无 request/header）→ 跳过判别 + 可观测事实。
+      // drain 的 finally 会 trackSettled，F2 屏障不会空等。
+      const error = { code: CE_JUDGE_NO_ROUTE, message: JUDGE_NO_ROUTE_MESSAGE }
+      emitError(session, sid, seq, time, error)
+      emitRecorded(session, sid, { seq, time, trigger: 'error-fallback', decision: FAIL_LAZY_JUDGE_DECISION, error })
+      return
+    }
+    const { provider, model } = judgeRoute
     const fingerprint = freezeJudgeConfig({ provider, model, auto: true })
     const cacheKey = judgeL1CacheKey({ sessionId: sid, seq, text, configFingerprint: fingerprint })
     // L1 = 重复投递护栏（P14c §1）：键含 seq，跨消息永不命中，只防同一消息被重复处理/计费。

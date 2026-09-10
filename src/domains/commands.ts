@@ -22,9 +22,12 @@ import { clampInitGoal, parseInitOutput, renderInitPrompt } from '../core/init.t
 import { buildTaskBoundaryData } from './task-facts.ts'
 import { workspaceOf } from './workspace.ts'
 
-// 默认辅助模型 = 当前主对话模型（2026-09-08 定；设置卡可覆盖，缺省时优先跟随会话当前模型）。
-const DEFAULT_INIT_MODEL = { provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' }
+// U8（2026-09-10）：同 input.ts——**不再有内置默认模型**（原硬编码 0910 到期）。
+// 配置两项齐全 → 配置；否则跟随会话当前模型；二者都无（会话首条消息）→ undefined（命令面明确回复）。
 const PENDING_INIT_LIMIT = 32
+/** 无路由时 /init 命令面的统一指引（U8）。 */
+export const INIT_NO_ROUTE_TEXT =
+  '判别模型未配置：请在设置卡填写 discriminator.provider/model，或发送第二条消息后自动跟随会话模型'
 
 export interface CommandFaceDeps {
   commandsCtx: Pick<Context, 'commands'>
@@ -53,12 +56,12 @@ interface PendingInit {
 export function resolveInitModel(
   config: ConfigShape,
   sessionModel?: { provider: string; model: string },
-): { provider: string; model: string } {
+): { provider: string; model: string } | undefined {
   const provider = config.discriminator?.provider?.trim()
   const model = config.discriminator?.model?.trim()
   if (provider && model) return { provider, model }
   if (sessionModel !== undefined) return sessionModel
-  return { ...DEFAULT_INIT_MODEL }
+  return undefined
 }
 
 function sidOf(session: Session): string {
@@ -206,7 +209,9 @@ export function mountCommandFace(
       return { kind: 'error', text: '项目帧已存在；修订经星标/设置，不在本命令范围' }
     }
     if (deps.llmCtx === undefined) return { kind: 'error', text: 'LLM 服务不可用，无法初始化项目帧' }
-    const { provider, model } = resolveInitModel(getConfig(), readSessionModel(session))
+    const initRoute = resolveInitModel(getConfig(), readSessionModel(session))
+    if (initRoute === undefined) return { kind: 'error', text: INIT_NO_ROUTE_TEXT }
+    const { provider, model } = initRoute
     const rendered = renderInitPrompt(goal)
     let llmText = ''
     const options: CeGenerateOptions = {

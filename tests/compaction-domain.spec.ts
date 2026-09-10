@@ -48,7 +48,17 @@ class FakeSession {
     return event
   }
   eventAt(seq: number): FakeEvent | undefined { return this.events[seq] }
-  snapshotEvents(): readonly FakeEvent[] { return this.events.slice() }
+  /**
+   * U8：辅助调用路由不再有内置兜底（无路由 = 跳过）——真实会话在模型调用后**必有** `request/header`。
+   * 以**前置**合成事件提供（`readSessionModel` 自尾向首扫描 → 真实 header 仍优先；seq = -1 不碰撞、
+   * 不进 `events`，避免打乱既有断言的字面 seq 与表面节点）。
+   */
+  snapshotEvents(): readonly FakeEvent[] { return [MODEL_HEADER_EVENT, ...this.events] }
+}
+
+/** U8 夹具：合成会话模型 header（judge 路由跟随会话模型）。 */
+const MODEL_HEADER_EVENT: FakeEvent = {
+  type: 'request/header', seq: -1, time: 0, data: { header: { config: { provider: 'judge-p', model: 'judge-m' } } },
 }
 
 const textBlock = (text: string) => ({ type: 'text', text })

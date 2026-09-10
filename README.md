@@ -240,7 +240,7 @@ context-economy:
   discriminator:
     auto: false              # intent detection is off by default
     # provider: deepseek-official
-    # model: deepseek-v4.1-flash-expires-on-0910
+    # model: deepseek-v4-flash-vision-exp
     # reasoningEffort: high
 ```
 
@@ -258,7 +258,7 @@ context-economy:
 | `discriminator.provider` / `model` | string | unset | Auxiliary LLM route; set both to override, empty = follow the session model |
 | `discriminator.reasoningEffort` | string | unset | Auxiliary reasoning effort; unset = follow the model default |
 
-> The schema declares no default for `provider`/`model`. Left empty, auxiliary calls (intent detection, `/init`, star section, boundary compaction) first **follow the current session model** (provider/model of the latest request), falling back to the built-in default `deepseek-official` / `deepseek-v4.1-flash-expires-on-0910` when the session has no request yet; setting **both** values overrides it. Enabling `discriminator.auto` or using `/init`, the star button, or boundary compaction may invoke the auxiliary LLM. This can incur API costs and may send relevant prompt content to the configured provider.
+> The schema declares no default for `provider`/`model`, and the plugin ships **no built-in default model** either (2026-09-10: the previously hard-coded id was date-expired, and "the plugin guessing a model id" is itself a drift source). Left empty, auxiliary calls (intent detection, `/init`, star section, boundary compaction) **follow the current session model** (provider/model of the latest request). On the **first message of a session** there is no request record yet, so discrimination is **skipped** and an observable `CE_JUDGE_NO_ROUTE` fact is emitted (`/init` and the star button report "model not configured" instead); from the second message on it follows the session model automatically. Setting **both** values overrides all of this. Enabling `discriminator.auto` or using `/init`, the star button, or boundary compaction may invoke the auxiliary LLM. This can incur API costs and may send relevant prompt content to the configured provider.
 
 ## Commands
 

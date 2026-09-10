@@ -14,6 +14,7 @@ import {
   resolveJudgeModel,
   mountAutoDiscriminator,
   readJudgeTable,
+  CE_JUDGE_NO_ROUTE,
   type AutoDiscriminatorDeps,
 } from '../src/domains/input.ts'
 import { judgeRecordToFactData, factDataToJudgeRecord } from '../src/domains/judge-facts.ts'
@@ -61,6 +62,16 @@ function makePump() {
 }
 
 const flush = async (): Promise<void> => { await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0)) }
+/**
+ * U8 fixture：判别模型路由不再有内置兜底——无 request/header 的会话解析为 undefined（跳过判别）。
+ * 真实会话里判别/压缩/星标都发生在模型调用**之后**，必有 request/header，故夹具按真实形态补上。
+ */
+const sessionWithModel = (id: string, provider = 'judge-p', model = 'judge-m') => ({
+  header: { id },
+  snapshotEvents: () => [{ type: 'request/header', seq: 0, time: 0, data: { header: { config: { provider, model } } } }],
+})
+/** U8 fixture：无路由会话（真机 = 会话首条消息，尚无 request/header）。 */
+const sessionWithoutModel = (id: string) => ({ header: { id }, snapshotEvents: () => [] })
 const llmStream = (text: string) => ({ stream: async function* () {
   yield { type: 'text-delta', index: 0, text }
   yield { type: 'finish', reason: { kind: 'stop' } }
@@ -91,10 +102,13 @@ describe('parseT0Command', () => {
 })
 
 describe('resolveJudgeModel', () => {
-  it('缺省使用内置默认；配置覆盖优先；会话模型次之', () => {
-    expect(resolveJudgeModel(cfg(true))).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4.1-flash-expires-on-0910' })
+  it('U8：配置齐全优先；会话模型次之；两者皆无 → undefined（不再回落内置默认）', () => {
+    expect(resolveJudgeModel(cfg(true))).toBeUndefined()
     expect(resolveJudgeModel(cfg(true), { provider: 'sess-p', model: 'sess-m' })).toEqual({ provider: 'sess-p', model: 'sess-m' })
     expect(resolveJudgeModel(cfg(true, 'p', 'm'), { provider: 'sess-p', model: 'sess-m' })).toEqual({ provider: 'p', model: 'm' })
+    // 单项配置 = 不完整配置（不与其他来源拼接），回落会话模型
+    expect(resolveJudgeModel(cfg(true, 'p'), { provider: 'sess-p', model: 'sess-m' })).toEqual({ provider: 'sess-p', model: 'sess-m' })
+    expect(resolveJudgeModel(cfg(true, 'p'))).toBeUndefined()
   })
   it('readSessionModel：取最近一次 request/header 的 provider/model；无记录 → undefined', () => {
     const sessionOf = (events: unknown[]) => ({ header: { id: 's1' }, snapshotEvents: () => events }) as never
@@ -117,7 +131,7 @@ describe('auto discriminator zero behavior', () => {
     let llmCalled = false
     const llm = { stream: async function* () { llmCalled = true; yield { type: 'finish', reason: { kind: 'stop' } } } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never, getConfig: () => cfg(false) }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'hello' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: 'hello' })
     await flush()
     expect(storage.data.size).toBe(0)
     expect(llmCalled).toBe(false)
@@ -132,7 +146,7 @@ describe('auto discriminator quick paths', () => {
     let llmCalled = false
     const llm = { stream: async function* () { llmCalled = true; yield { type: 'finish', reason: { kind: 'stop' } } } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: '/task close' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: '/task close' })
     await flush()
     expect(llmCalled).toBe(false)
     expect(auto.stats().records[0]).toMatchObject({ trigger: 't0', decision: 'continue' })
@@ -148,10 +162,37 @@ describe('auto discriminator quick paths', () => {
       yield { type: 'finish', reason: { kind: 'stop' } }
     } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: '好的' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: '好的' })
     await flush()
     expect(llmCalled).toBe(true)
     expect(auto.stats().records[0]).toMatchObject({ trigger: 'llm', decision: 'continue' })
+    auto.dispose()
+  })
+
+  it('U8：无路由（会话首条消息，尚无 request/header）→ 跳过判别 + CE_JUDGE_NO_ROUTE 可观测事实；第二条起跟随会话模型', async () => {
+    const pump = makePump()
+    let calls = 0
+    const llm = { stream: async function* () {
+      calls++
+      yield { type: 'text-delta', index: 0, text: '{"decision":"continue","class":"action"}' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } }
+    const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
+    const session = sessionWithoutModel('s1')
+    pump.emit('input/user-message', { session, seq: 1, time: 1, text: '第一条' })
+    await flush()
+    // 零调用、零臆测路由；错误可观测（fact 面 + 账本 record 面）
+    expect(calls).toBe(0)
+    expect(auto.stats().records[0]).toMatchObject({
+      trigger: 'error-fallback', decision: 'continue', error: { code: CE_JUDGE_NO_ROUTE },
+    })
+    // F2 屏障不空等：drain 的 finally 已结算该 seq
+    await expect(auto.settle(session as never, 1, 10_000)).resolves.toBe('settled')
+    // 第二条消息：会话已有 request/header → 正常跟随会话模型判别
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 2, time: 2, text: '第二条' })
+    await flush()
+    expect(calls).toBe(1)
+    expect(auto.stats().records[1]).toMatchObject({ trigger: 'llm', decision: 'continue' })
     auto.dispose()
   })
 
@@ -166,7 +207,7 @@ describe('auto discriminator quick paths', () => {
       yield { type: 'finish', reason: { kind: 'stop' } }
     } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 5, time: 100, text: '改一下配置' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 5, time: 100, text: '改一下配置' })
     // 等 append 落盘（v1）且判词流已挂起在 gate 上
     const dossierEntry = async (): Promise<[string, FakeStorageRecord]> => {
       for (let i = 0; i < 50; i++) {
@@ -202,7 +243,7 @@ describe('auto discriminator llm and cache', () => {
       yield { type: 'finish', reason: { kind: 'stop' } }
     } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    const payload = { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'start something' }
+    const payload = { session: sessionWithModel('s1'), seq: 1, time: 1, text: 'start something' }
     pump.emit('input/user-message', payload)
     await flush()
     pump.emit('input/user-message', { ...payload, seq: 1, time: 2, text: 'start something' })
@@ -218,7 +259,7 @@ describe('auto discriminator llm and cache', () => {
     const storage = makeStorage()
     const llm = llmStream('{"decision":"continue","class":"action"}')
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'implement feature' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: 'implement feature' })
     await flush()
     const rec = auto.stats().records[0]
     expect(rec).toMatchObject({ trigger: 'llm', decision: 'continue', class: 'action' })
@@ -234,7 +275,7 @@ describe('auto discriminator llm and cache', () => {
       yield { type: 'finish', reason: { kind: 'stop' } }
     } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'do thing' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: 'do thing' })
     await flush()
     const recs = auto.stats().records
     expect(recs[0]).toMatchObject({ trigger: 'error-fallback', decision: 'continue' })
@@ -254,7 +295,7 @@ describe('auto discriminator table and dossier', () => {
     })
     const llm = llmStream('{"decision":"new_task","class":"action"}')
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: storage as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: 'use cache in src/a.ts' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: 'use cache in src/a.ts' })
     await flush()
     // 影子命中但 LLM 判 new-task = 一次"本会漏掉的边界"（正是短路会造成的无声错误）
     expect(auto.stats().records[0]).toMatchObject({ trigger: 'llm', decision: 'new-task', tableShadow: { hit: true, score: 4 } })
@@ -265,9 +306,9 @@ describe('auto discriminator table and dossier', () => {
     const pump = makePump()
     const storage = makeStorage()
     const auto = mountAutoDiscriminator({} as never, deps({ pump: pump as never, storage: storage as never }))
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 1, time: 1, text: '好的' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 1, time: 1, text: '好的' })
     await flush()
-    pump.emit('input/user-message', { session: { header: { id: 's1' } }, seq: 2, time: 2, text: '继续' })
+    pump.emit('input/user-message', { session: sessionWithModel('s1'), seq: 2, time: 2, text: '继续' })
     await flush()
     const rec = storage.getEntity('dossier', 'dossier:s1:task-1')
     expect(rec?.version).toBe(2)
@@ -279,8 +320,8 @@ describe('auto discriminator table and dossier', () => {
     const pump = makePump()
     const storage = makeStorage()
     const auto = mountAutoDiscriminator({} as never, deps({ pump: pump as never, storage: storage as never }))
-    pump.emit('input/user-message', { session: { header: { id: 'A' } }, seq: 1, time: 1, text: 'A 的消息' })
-    pump.emit('input/user-message', { session: { header: { id: 'B' } }, seq: 1, time: 1, text: 'B 的消息' })
+    pump.emit('input/user-message', { session: sessionWithModel('A'), seq: 1, time: 1, text: 'A 的消息' })
+    pump.emit('input/user-message', { session: sessionWithModel('B'), seq: 1, time: 1, text: 'B 的消息' })
     await flush()
     const a = storage.getEntity('dossier', 'dossier:A:task-1')
     const b = storage.getEntity('dossier', 'dossier:B:task-1')
@@ -298,8 +339,8 @@ describe('auto discriminator facts isolation', () => {
     const storage = makeStorage()
     const auto = mountAutoDiscriminator({} as never, deps({ pump: pump as never, storage: storage as never }))
     const fact = { type: 'context-economy/judge-verdict', seq: 1, time: 1, data: { verdict: 'new-task', anchorSeq: 1 } }
-    pump.emit('facts/session-event', { session: { header: { id: 'A' } }, event: fact })
-    pump.emit('facts/session-event', { session: { header: { id: 'A' } }, event: fact })
+    pump.emit('facts/session-event', { session: sessionWithModel('A'), event: fact })
+    pump.emit('facts/session-event', { session: sessionWithModel('A'), event: fact })
     await flush()
     expect(auto.stats().facts).toBe(1)
     auto.dispose()
@@ -317,7 +358,7 @@ describe('F2 边界判词屏障（settle）', () => {
       yield { type: 'finish', reason: { kind: 'stop' } }
     } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    const session = { header: { id: 's1' } }
+    const session = sessionWithModel('s1')
     pump.emit('input/user-message', { session, seq: 7, time: 1, text: '换话题' })
     let outcome: string | undefined
     const wait = auto.settle(session as never, 7, 5_000).then((o) => { outcome = o; return o })
@@ -333,10 +374,10 @@ describe('F2 边界判词屏障（settle）', () => {
     const pump = makePump()
     const llm = { stream: async function* () { await new Promise(() => {}); yield { type: 'finish', reason: { kind: 'stop' } } } }
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    const session = { header: { id: 's1' } }
+    const session = sessionWithModel('s1')
     pump.emit('input/user-message', { session, seq: 3, time: 1, text: 'x' })
     await expect(auto.settle(session as never, 3, 10)).resolves.toBe('timeout')
-    await expect(auto.settle({ header: { id: 'other' } } as never, 1, 10)).resolves.toBe('settled')
+    await expect(auto.settle(sessionWithModel('other') as never, 1, 10)).resolves.toBe('settled')
     auto.dispose()
   })
 
@@ -344,7 +385,7 @@ describe('F2 边界判词屏障（settle）', () => {
     const pump = makePump()
     const llm = llmStream('{"decision":"continue","class":"action"}')
     const auto = mountAutoDiscriminator({ llm } as never, deps({ pump: pump as never, storage: makeStorage() as never }))
-    const session = { header: { id: 's1' } }
+    const session = sessionWithModel('s1')
     pump.emit('input/user-message', { session, seq: 4, time: 1, text: '继续' })
     await flush()
     await expect(auto.settle(session as never, 4, 10)).resolves.toBe('settled')
