@@ -14,6 +14,7 @@ import {
 } from '../src/domains/shear-facts.ts'
 import { JUDGE_RECORDED_FACT_TYPE } from '../src/domains/judge-facts.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
+import { expectedReplaceOp, replaceEndpoints } from './replace-op.ts'
 
 // 测试进程内强制走 ignorable 通道直发路径（事实经 session.append 落 FakeSession）。
 ignorableChannelAvailable({ SESSION_LOG_INTENT: 1 })
@@ -35,10 +36,13 @@ class FakeSession {
     if (opts?.ignorable === true) event.ignorable = true
     this.events.push(event)
     if (event.surfaceOp === 'append') this.nodes.push(event.seq)
-    else if (event.surfaceOp && typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace') {
-      const si = this.nodes.indexOf(event.surfaceOp.start)
-      const ei = this.nodes.indexOf(event.surfaceOp.end)
-      if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+    else {
+      const span = replaceEndpoints(event.surfaceOp)
+      if (span !== undefined) {
+        const si = this.nodes.indexOf(span.start)
+        const ei = this.nodes.indexOf(span.end)
+        if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+      }
     }
     return event
   }
@@ -260,7 +264,7 @@ describe('P15b 异步相：机械档执行与门槛', () => {
     env.appendCall('r1', 'read', { file_path: 'src/foo.ts' })
     const readResult = env.appendResult('r1', READ_ENVELOPE)
     // harness 压缩遮蔽该读件节点 → 目标不再在当前表面。
-    env.session.append('tool/result', readResult.data, { surfaceOp: { op: 'replace', start: readResult.seq, end: readResult.seq }, sourceEventSeqs: [readResult.seq] })
+    env.session.append('tool/result', readResult.data, { surfaceOp: expectedReplaceOp(readResult.seq, readResult.seq), sourceEventSeqs: [readResult.seq] })
     const before = env.replacements().length
     env.appendAssistant([toolCallBlock('w1', 'write', { file_path: 'src/foo.ts', content: 'x' })])
     env.appendCall('w1', 'write', { file_path: 'src/foo.ts', content: 'x' })
@@ -342,7 +346,7 @@ describe('P16b 异步相：run 冲刷（吸收证明 → 整段换一句结论�
     const replacements = env.replacements()
     expect(replacements).toHaveLength(1)
     expect(replacements[0]!.type).toBe('user/message')
-    expect(replacements[0]!.opts.surfaceOp).toEqual({ op: 'replace', start: u1.seq, end: a1.seq })
+    expect(replacements[0]!.opts.surfaceOp).toEqual(expectedReplaceOp(u1.seq, a1.seq))
     expect(replacements[0]!.data.source).toMatchObject({ kind: 'plugin', plugin: 'context-economy', form: 'notice' })
     expect(replacements[0]!.data.content[0].text).toContain('已吸收：关于「为什么要用 A？」的 1 轮问答')
     const landedSeq = env.session.events.find((event) => typeof event.surfaceOp === 'object')!.seq

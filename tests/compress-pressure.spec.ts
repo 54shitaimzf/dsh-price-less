@@ -4,6 +4,7 @@
  * 折叠区材料转写（含被遮蔽原文）/ pressure-fired fold / 同输入同账。
  */
 import { describe, expect, it } from 'vitest'
+import { expectedReplaceOp } from './replace-op.ts'
 import {
   PRESSURE_CHAIN_LIMIT,
   PRESSURE_EMERGENCY_LIMIT,
@@ -32,7 +33,7 @@ const SAMPLE: LedgerSessionEvent[] = [
   ev(1, 'assistant/message', { message: { content: [text('mid')] } }, 'append'),
   ev(2, 'tool/result', { message: { content: [{ type: 'tool-result', toolCallId: 'c1', content: [text('tail')] }] } }, 'append'),
   ev(3, 'compaction/start', { compactionId: 'x', turn: 1 }),
-  ev(4, 'user/message', { content: [text('C1')], source: { kind: 'plugin', plugin: 'compact' } }, { op: 'replace', start: 0, end: 2 }),
+  ev(4, 'user/message', { content: [text('C1')], source: { kind: 'plugin', plugin: 'compact' } }, expectedReplaceOp(0, 2)),
   ev(5, 'context-economy/compress-run', { at: 1 }),
 ]
 

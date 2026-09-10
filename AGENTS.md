@@ -27,12 +27,7 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 检查点渲染 / 折叠区材料转写 / 地板 0.8×窗口；`domains/compaction.ts`：wire 锚定触发 → 选缝 → 检查点 + 保留区逐字 →
 缩水校验 → 档案 checkpoint → 事务，以及地板以上/溢出码紧急折叠 + `agent/request-error` retry；
 `platform/{agent-step,meter,llm}.ts` 端口扩面〔H3 收口 D14 扩面〕；`cordis.patch.yml` 覆写 compaction-basic `auto:false`；
-快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。**P20c 阀门修正**（用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针取主会话路由 `readSessionModel`；保险丝紧急折叠可越过断路器〔硬上限 +3〕；快照 §48）。**P21a 恢复编排已施工**（`core/restore/` 纯核〔步序/实体审计/卷宗日志重放/双源等价/`restoreDegraded` fold〕+ `platform/agent-step.ts` H9 端口 `onAgentSessionStart`〔D16 收口；apply 同步注册 + pending 缓冲〕+ `domains/restore.ts` 恢复序〔`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史〕+ `domains/restore-facts.ts`：09 §4 顺序 = 项目帧快照回退 / 卷宗日志重放写回 / 边界档案与优化产物只降级 / 段状态机与度量缓存纯函数重算，三类 `restore-step|restore-degraded|restore-done` ignorable 事实；快照 §49）。**P21b 全链验收已施工**（`tests/full-chain-order.spec.ts` 四触发次序闭合表〔边→边/边→压/压→边/压→压〕+ 域侧交错 e2e + 层隔离；`tests/cache-invariants.spec.ts` 四道缓存断言〔10 §6：前缀性质/同版本逐字节/同 purpose 模板前缀/档案只追加〕；`scripts/verify-p21b.mjs` R4 出门门槛汇总；**验收发现并修正 2 处**——`runBoundary` 起点定位缺陷〔多闭合段积压卡死〕/ `verify-p15a` 陈旧白名单；度量可视化 = 加分项不做；快照 §50）——**R4 完成**。`platform/`（十四文件）是唯一 harness 触点层。**双基线事实（2026-09-10 兼容性审查）**：本仓 checkout = 补丁分支
-`feat/ignorable-logintent-alpha2` @ `2fa55bc741`（ignorable 写入通道补丁，**从未进入上游**）；上游 `origin/master`
-@ `c291e7961a` = **0.1.5-rc.2**（领先 985 提交），**"gate 全绿"只对补丁分支成立**。`platform/history.ts` 的
-replace `surfaceOp` 端点名已收成单点常量 `REPLACE_OP_KEYS` 并配双向编译期锚 `ReplaceOpAnchor`——**切上游时该锚
-故意变红**（改 2 行常量即回落），漂移从此在 typecheck 阶段暴露；不可锚的 cast 与上游同步读弃用面登记在
-`docs/legacy.md §14`；双基线读数与 HC 系列落地状态见 `docs/implement/REPAIR-2026-09-10.md §8`、账本 §80。
+快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。**P20c 阀门修正**（用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针取主会话路由 `readSessionModel`；保险丝紧急折叠可越过断路器〔硬上限 +3〕；快照 §48）。**P21a 恢复编排已施工**（`core/restore/` 纯核〔步序/实体审计/卷宗日志重放/双源等价/`restoreDegraded` fold〕+ `platform/agent-step.ts` H9 端口 `onAgentSessionStart`〔D16 收口；apply 同步注册 + pending 缓冲〕+ `domains/restore.ts` 恢复序〔`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史〕+ `domains/restore-facts.ts`：09 §4 顺序 = 项目帧快照回退 / 卷宗日志重放写回 / 边界档案与优化产物只降级 / 段状态机与度量缓存纯函数重算，三类 `restore-step|restore-degraded|restore-done` ignorable 事实；快照 §49）。**P21b 全链验收已施工**（`tests/full-chain-order.spec.ts` 四触发次序闭合表〔边→边/边→压/压→边/压→压〕+ 域侧交错 e2e + 层隔离；`tests/cache-invariants.spec.ts` 四道缓存断言〔10 §6：前缀性质/同版本逐字节/同 purpose 模板前缀/档案只追加〕；`scripts/verify-p21b.mjs` R4 出门门槛汇总；**验收发现并修正 2 处**——`runBoundary` 起点定位缺陷〔多闭合段积压卡死〕/ `verify-p15a` 陈旧白名单；度量可视化 = 加分项不做；快照 §50）——**R4 完成**。`platform/`（十四文件）是唯一 harness 触点层。**现行基线 = B+（2026-09-10 用户裁定）**：上游 `origin/master` @ `c291e7961a`（**0.1.5-rc.2**）**+ 重放本仓的 ignorable 补丁**（harness 分支 `bplus-0.1.5` @ `f0dc41471c`）——跟主线 **且** 保住事实轨的会话日志真源。上一代基线 A（`feat/ignorable-logintent-alpha2`，alpha.2）**已不受支持**。replace `surfaceOp` 端点键名的**单一事实源 = `src/core/ledger/types.ts` 的 `REPLACE_OP_ENDPOINT_KEYS`**（读写两侧共用；`platform/history.ts` 另配双向编译期锚 `ReplaceOpAnchor`——上游再改端点名即 typecheck 红，**不得靠改断言消红**）。测试替身的线格式解读统一走 `tests/replace-op.ts`，**新写替身必须复用**。**升级 harness 前先读 [`docs/14-upstream-upgrade.md`](docs/14-upstream-upgrade.md)**（可复现步骤 + 8 条接触面清单 + 验收 + 回滚）；不可锚的 cast 与上游弃用面台账在 `docs/legacy.md §14/§15`；账本 §80/§81。
 `context-economy/*` 事实发射依赖 harness ignorable
 通道——**通道契约与降级设计 = `docs/12-platform-capabilities.md`（正典）**：通道当前为本仓
 harness checkout 的本地实现（上游共识形态，待合并），插件经运行期探测自动适配，通道缺失时
@@ -57,6 +52,12 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
 - `DSH_CHECKOUT=G:/deepseek-harness npm run build` —— junction 链接 checkout 依赖后 tsc 编译 host，
   随后 tsdown 编译 client（UI 壳），产物 `lib/`；build.sh 现在同时补齐 client/tsdown/react/
   @types/react/zod 链接（P1.2，干净归档可复现）。
+  **Windows 注意**：PATH 上的 `bash` 是 `C:\Windows\system32\bash.exe`（WSL），`npm run build` 会挂在
+  `set: pipefail`。用 `& 'C:\Program Files\Git\bin\bash.exe' scripts/build.sh`，或
+  `npm config set script-shell "C:\Program Files\Git\bin\bash.exe"`。
+- **换 harness 版本**：照 [`docs/14-upstream-upgrade.md`](docs/14-upstream-upgrade.md) 走
+  （可复现步骤 + 接触面清单 + 验收 + 回滚），切换用 `scripts/promote-bplus.ps1`。
+  升级后 **`DSH_CHECKOUT` 指向新 checkout 重跑 build.sh**，否则 junction 还指着旧树。
 - 改完代码必须构建通过才提交；每单验收第一行 = `npm run gate`（P0 冻结四段：typecheck +
   typecheck:client + test + assert；P1 起 `npm run typecheck:tests` 单独跑——类型级词汇派生守门）；
   `npm run assert` = 结构断言（M/S/D 规则，工单推进时追加规则 + 更新零位快照）。

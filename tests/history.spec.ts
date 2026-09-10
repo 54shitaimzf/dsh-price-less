@@ -7,6 +7,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { Session, SessionEventMap, SessionSeq } from '@deepseek-ai/dsh-session'
+import { EXPECTED_REPLACE_KEYS, expectedReplaceOp, replaceEndpoints } from './replace-op.ts'
+import { REPLACE_OP_KEYS } from '../src/platform/history.ts'
 import {
   HistoryError,
   createHistoryPort,
@@ -41,13 +43,16 @@ class FakeSession {
     }
     this.events.push(event)
     if (event.surfaceOp === 'append') this.nodes.push(event.seq)
-    if (event.surfaceOp && typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace') {
-      const start = event.surfaceOp.start as number
-      const end = event.surfaceOp.end as number
-      const si = this.nodes.indexOf(start)
-      const ei = this.nodes.indexOf(end)
-      if (si !== -1 && ei !== -1 && si <= ei) {
-        this.nodes.splice(si, ei - si + 1, event.seq)
+    else {
+      // 端点键名跟着 REPLACE_OP_KEYS 走：替身必须模拟**当前基线**的校验器，否则它会静默
+      // 不再执行 replace（表面不收敛），把真实缺陷伪装成别的原因。
+      const span = replaceEndpoints(event.surfaceOp)
+      if (span !== undefined) {
+        const si = this.nodes.indexOf(span.start)
+        const ei = this.nodes.indexOf(span.end)
+        if (si !== -1 && ei !== -1 && si <= ei) {
+          this.nodes.splice(si, ei - si + 1, event.seq)
+        }
       }
     }
     return event
@@ -84,6 +89,26 @@ function makePort(session: FakeSession, checker?: PairBalanceChecker) {
   return createHistoryPort(session as unknown as Session, checker ? { balanceChecker: checker } : {})
 }
 
+describe('replace surfaceOp 线格式契约（HC2；docs/14 升级 runbook）', () => {
+  /**
+   * **刻意字面写死**（不走 `expectedReplaceOp`）：这是本仓唯一显式复制线格式的地方，
+   * 目的是让"基线被静默切换"当场红，而不是靠一个跟着常量走的助手自我印证。
+   *
+   * 三层钉法各管一段，缺一不可：
+   *   ① 本用例 —— 线格式字面值（人可读的合同）；改基线必须**同时**改这里与 `REPLACE_OP_KEYS`；
+   *   ② `tests/history-real-session.spec.ts` —— 真 harness 校验器实际接受（端到端权威）；
+   *   ③ `ReplaceOpAnchor` / `ReplaceOpAnchorBack` —— 编译期，上游改 `SurfaceOp` 时先红。
+   */
+  it('端点键名 = startSeq/endSeq（上游 ≥0.1.5；docs/14 §2）', () => {
+    expect(REPLACE_OP_KEYS).toEqual({ start: 'startSeq', end: 'endSeq' })
+    expect(EXPECTED_REPLACE_KEYS).toEqual(['op', 'startSeq', 'endSeq'])
+  })
+
+  it('恰好三个键（harness isReplaceOp 要求 Object.keys(op).length === 3）', () => {
+    expect(Object.keys(expectedReplaceOp(1, 2)).sort()).toEqual(['endSeq', 'op', 'startSeq'])
+  })
+})
+
 describe('H4 surfaceOp replace（docs/10 §1 H4；docs/04 §1）', () => {
   it('自动补全 sourceEventSeqs = 被遮蔽表面节点，返回 replace 事件与 shadowedSeqs', () => {
     const session = makeSession([1, 2, 3])
@@ -94,7 +119,7 @@ describe('H4 surfaceOp replace（docs/10 §1 H4；docs/04 §1）', () => {
       range: { start: seq(2), end: seq(3) },
     })
     expect(result.shadowedSeqs.map(Number)).toEqual([2, 3])
-    expect(result.event.surfaceOp).toEqual({ op: 'replace', start: seq(2), end: seq(3) })
+    expect(result.event.surfaceOp).toEqual(expectedReplaceOp(seq(2), seq(3)))
     expect((result.event as FakeEvent & { sourceEventSeqs?: unknown }).sourceEventSeqs).toEqual([2, 3])
     expect(session.nodes.map(Number)).toEqual([1, 3])
   })
@@ -213,7 +238,7 @@ describe('P19a 压缩检查点提交（docs/04 §1 + docs/10 §1 H4 紧邻契约
     expect(result.landed.shadowedSeqs.map(Number)).toEqual([2, 3])
     expect(result.landed.event.type).toBe('user/message')
     expect((result.landed.event as unknown as { sourceEventSeqs: number[] }).sourceEventSeqs).toEqual([2, 3, 4])
-    expect(result.landed.event.surfaceOp).toEqual({ op: 'replace', start: seq(2), end: seq(3) })
+    expect(result.landed.event.surfaceOp).toEqual(expectedReplaceOp(seq(2), seq(3)))
     const source = (result.landed.event.data as { source: { plugin?: string; compactionId?: string } }).source
     expect(source.plugin).toBe('compact')
     expect(source.compactionId).toBe('c1')

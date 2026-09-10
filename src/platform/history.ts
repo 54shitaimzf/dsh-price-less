@@ -8,7 +8,9 @@
  * 模块: platform 改史端口（唯一 harness 触点层）
  * 平面: L0（确定性规则：表面定位 + 协议封装；无模型、无机制逻辑）
  * 回退链步数: 1（失败抛错——调用方决定重试/保留；历史变更绝不静默）
- * 审查清单: 不 import core；不改日志；sourceEventSeqs 由当前表面机械补全；
+ * 审查清单: 不 import core 的**机制逻辑**（唯一例外 = `core/ledger/types.ts` 的线格式端点常量
+ *           `REPLACE_OP_ENDPOINT_KEYS`——表面 fold 读侧与改史写侧必须同名，重复声明必然漂移，
+ *           真源须落在 core 不能 import 的中性层）；不改日志；sourceEventSeqs 由当前表面机械补全；
  *           配对平衡 = 可注入守卫（默认 harness dsh-compaction 实现）；
  *           事务扫描基于会话日志（重启后仍可从日志发现未闭合事务）。
  * 度量: 本模块无 07 字段；剪切/压缩域经返回值入账。
@@ -19,6 +21,7 @@ import { CompactionId, compactCheckpointSource, toolPairingBalancedAfter, toolPa
 import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
 import type { AssertAssignable } from './anchors.ts'
 import { readSessionEvents } from './events.ts'
+import { REPLACE_OP_ENDPOINT_KEYS } from '../core/ledger/types.ts'
 
 export type HistoryErrorCode =
   | 'INVALID_RANGE'
@@ -44,22 +47,28 @@ export interface SurfaceRange {
 }
 
 /**
- * replace surfaceOp 端点键名（HC2 单点常量；REPAIR-2026-09-10 §8.2）。
+ * replace surfaceOp 端点键名（线格式单点常量，**再导出**；真源 = `core/ledger/types.ts`）。
  *
- * 基线 A（本仓 checkout `feat/ignorable-logintent-alpha2`，base `dsh-v0.1.3-alpha.2`）= `start`/`end`；
- * 基线 B（上游 ≥ 0.1.5，`packages/core/session/src/surface.ts` 的 `isReplaceOp` 要求**恰好**
- * `op`/`startSeq`/`endSeq` 三键）= `startSeq`/`endSeq`。**切 B 只改这两行**——下面的
- * `ReplaceOpAnchor` 会由红转绿，锚本身就是切换成本的度量。
+ * 两个世界只有这一个差别，所以它只有这一个常量：
+ * - `startSeq`/`endSeq` = **上游 ≥ 0.1.5**（含 0.1.5-rc.2）。`packages/core/session/src/surface.ts`
+ *   的 `isReplaceOp` 要求**恰好** `op`/`startSeq`/`endSeq` 三键，且两个端点都必须 `< 新事件的 seq`。
+ * - `start`/`end` = 上游 ≤ 0.1.4（含本仓起点的补丁分支 `feat/ignorable-logintent-alpha2`）。
+ *
+ * **本仓现行基线 = 前者**（B+ = 0.1.5-rc.2 + 重放的 ignorable 补丁）。
+ *
+ * 常量本身居于 core（读写两侧共用，避免两份声明漂移——core 不能 import platform，故真源在中性层）；
+ * 下面的 `ReplaceOpAnchor` 才是本文件独有的价值：把该常量**钉在 harness 权威 `SurfaceOp` 类型上**，
+ * 上游再次改端点名时 typecheck 先红。锚红 = 上游漂移信号，**不得靠改断言消红**。
  */
-export const REPLACE_OP_KEYS = { start: 'start', end: 'end' } as const
+export const REPLACE_OP_KEYS = REPLACE_OP_ENDPOINT_KEYS
 
 /** harness `surfaceOp: { op: 'replace', … }` 的端点形状（键名与 `REPLACE_OP_KEYS` 同源）。 */
 export type ReplaceOp = { op: 'replace' } & Record<(typeof REPLACE_OP_KEYS)[keyof typeof REPLACE_OP_KEYS], SessionSeq>
 
 // 编译期双向锚（原语见 platform/anchors.ts）：本仓形状 ⇄ harness 权威形状互赋性。
-// 基线 A 成立；基线 B **必须红**——这正是它的价值：端点名漂移在 typecheck 阶段暴露，
-// 而不是等到运行期第一次改史时 `isReplaceOp` 抛 invalid replace surfaceOp（本次兼容性审查
-// 唯一"编译器失守"的位置，`tests/history-real-session.spec.ts` 在 B 基线上即此炸点）。
+// 现行基线（B+）成立。上游**再次**改端点名 / 改 `SurfaceOp` 形状时此处先红——
+// 而不是等到运行期第一次改史时 `isReplaceOp` 抛 invalid replace surfaceOp
+//（那正是本次兼容性审查里唯一"编译器失守"的位置）。锚红 = 上游漂移信号，**不得靠改断言消红**。
 export type ReplaceOpAnchor = AssertAssignable<ReplaceOp, Extract<SurfaceOp, { op: 'replace' }>>
 export type ReplaceOpAnchorBack = AssertAssignable<Extract<SurfaceOp, { op: 'replace' }>, ReplaceOp>
 

@@ -3230,3 +3230,69 @@ D3 断言追加 `setFactReplay` 越界即红。镜像事实无日志位 → `seq
 - **HC5**（仅选 B）：v2→v3 迁移端到端未跑通（上游文档措辞比 `assertV3EventAdmission` 严），
   且需补「压缩区间起点 > system 节点」断言；
 - **HC4 迁移**：`eventAt` 4 处 + `ownEvents` 未用，等上游给出 projections 读法后一并迁移。
+
+---
+
+## §81 基线切换 B+：升上游 0.1.5-rc.2 + 重放 ignorable 补丁（2026-09-10；提交 = 本账本同提交）
+
+**性质**：**基线与兼容性收口**，非机制变更——`docs/07` 字段零新增、零改口径。用户裁定 HC1 = **B+**
+（计划表外的第三条路）：跟上游主线 **且** 保住事实轨的会话日志真源。A 基线自此不再受支持。
+
+### 裁定与产物
+
+| | 值 |
+|---|---|
+| 现行基线 | `origin/master` @ `c291e7961a`（**0.1.5-rc.2**）+ 重放 ignorable 补丁 |
+| harness 分支 | `bplus-0.1.5` @ `f0dc41471c` = `c291e7961a` + `8ff0bceeae`（补丁重放）+ `f0dc41471c`（catalog 重生成） |
+| 上一代基线 A | `feat/ignorable-logintent-alpha2` @ `2fa55bc741`（base tag `dsh-v0.1.3-alpha.2`）——不再受支持 |
+| 补丁重放冲突 | 仅 2 处：`packages/core/session/src/index.ts`（导入行合并）、`docs/persistence-catalog.md`（生成物，重跑即好） |
+
+### 读数
+
+| 项 | 读数 |
+|---|---|
+| harness `vitest packages/core/session` | **504 passed / 15 文件**（含补丁自带 5 条用例） |
+| 插件 `npm run gate`（B+） | 退出 0：typecheck ✅ / typecheck:client ✅ / **637 passed / 59 文件** / assert `ok=true vacuous=[]` |
+| 插件 `typecheck:tests` / `build` | 退出 0 / 退出 0（host + client） |
+| 基线对照 | A 基线曾是 635 passed；B+ = 637（+2：v3 系统节点不变量 + 线格式契约） |
+| **原 B 基线 4 条红** | **全部消失**：补丁重放自动修好 3 条（`ce-logger` ×2 的 emitted 路由、`ce-logger.spec.ts:109` 的 `LogIntent` 编译闸、`harness-session` 回环），HC2 修好第 4 条（`history-real-session` 的 replace） |
+
+### lib 级冒烟（跑在构建产物上，五项全过）
+
+- `SESSION_LOG_INTENT = 1`（补丁在 0.1.5 上生效 → 事实轨保住日志真源，不必退到 KV 镜像）
+- `SESSION_FORMAT_VERSION = 3`（v3）
+- `REPLACE_OP_KEYS = {"start":"startSeq","end":"endSeq"}`，且读写两侧是**同一常量对象**
+- 真 `SessionStore` 接受一次 replace：`surface=[0,2]`、`shadowed=[1]`，**`system/message` 头节点存活**
+- `foldSurfaceNodes` 正确遮蔽（返回 `[0,2]`）——**修复前返回 `[0,1,2]`**
+- 通道可用 → `emitted` 且 append 带 `{ignorable:true}`；通道缺失 + 镜像 + 回灌 → facts 面到达
+
+### B+ 实测发现并修复的 3 处（计划外的真缺陷）
+
+1. **`core/ledger/surface.ts` 硬编码旧端点名**——基线切换后**静默跳过每一次 replace**，被遮蔽节点
+   复活成"可见"，不抛不报。与 `docs/ledger-history.md` §2578 记载的 `foldSurfaceNodes` 静默跳过**同型**。
+   修复 = 端点常量迁到 `core/ledger/types.ts` 的 `REPLACE_OP_ENDPOINT_KEYS`，读写两侧共用（core 不能
+   import platform，故真源落在中性层；`platform/history.ts` 反向 import 并保留编译期双锚）。
+2. **`core/assemble/ledger.ts` 只认 `code-dispatch` 族**——0.1.5 新增 `ptc-dispatch*` 族，PTC 会话的
+   `extraSearchCalls` 会被少算。修复 = `DISPATCH_START_TYPES` 两族同认（`docs/legacy.md §15`）。
+3. **6 处测试替身各自硬编码线格式**（`assemble-domain` / `compaction-domain` / `full-chain-order` /
+   `history` / `shear-domain` / `shear-routing`）——基线一换**全部静默失效**（替身不再执行 replace，
+   表面不收敛），失败伪装成"别的原因"。修复 = 收口 `tests/replace-op.ts`
+   （`expectedReplaceOp` / `replaceEndpoints`），并新增字面钉（`tests/history.spec.ts`）防止自我印证。
+
+### 为以后版本铺路
+
+- **`docs/14-upstream-upgrade.md`（新）**：升级 runbook——可复现步骤、**8 条接触面清单**（每条标注
+  单一事实源与漂移如何暴露）、验收清单、回滚。新发现的接触面必须补进该表。
+- **`scripts/promote-bplus.ps1`（新）**：幂等切换脚本（移除临时 worktree → 主 checkout 切分支 +
+  `pnpm install` + `build:lib` → 重链并重编译插件 + `gate`）。**不碰会话数据、不重启宿主**。
+- **`docs/legacy.md`**：§15 新增（子分发两族并存）；§14 补"`readSessionEvents` 字面上碰了上游
+  『禁止新增同步 wrapper』条"的诚实登记与迁移处方。
+- 层纪律修订：`platform/history.ts` 的审查清单由"不 import core"改为"不 import core 的**机制逻辑**
+  （唯一例外 = 线格式端点常量）"——理由是读写同名常量重复声明必然漂移（编译器抓不住）。
+
+### 待办（未做）
+
+- **数据迁移不做**：用户裁定本地会话无保存价值 → v2→v3 不迁移，直接清空 `~/.dsh/sessions` 与
+  `~/.dsh/storages`（**由用户执行**；脚本不碰数据）。故 §8.5 的"迁移未端到端验证"风险归零。
+- **HC4 的 `eventAt` 4 处**（`domains/shear.ts`）仍留：上游尚未给出替代读法（`docs/legacy.md §14`）。
+- **`docs/implement/REPAIR-2026-09-10.md §4` 的 U8–U13 + 阶段二三**：仍未开工（与本次基线切换无关）。

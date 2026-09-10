@@ -4,6 +4,7 @@
  * digest fatal 不发事实 / 共享事务原语（开闭配对、防重入、失败带 error 收尾、顺序校验）。
  */
 import { describe, expect, it } from 'vitest'
+import { replaceEndpoints } from './replace-op.ts'
 import { mountAssembleDomain, runCompactionTxn } from '../src/domains/assemble.ts'
 import { ASSEMBLE_RUN_FACT_TYPE } from '../src/domains/assemble-facts.ts'
 import { planTxn } from '../src/core/assemble/txn.ts'
@@ -32,10 +33,13 @@ class FakeSession {
     if (opts?.ignorable === true) event.ignorable = true
     this.events.push(event)
     if (event.surfaceOp === 'append') this.nodes.push(event.seq)
-    else if (event.surfaceOp && typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace') {
-      const si = this.nodes.indexOf(event.surfaceOp.start)
-      const ei = this.nodes.indexOf(event.surfaceOp.end)
-      if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+    else {
+      const span = replaceEndpoints(event.surfaceOp)
+      if (span !== undefined) {
+        const si = this.nodes.indexOf(span.start)
+        const ei = this.nodes.indexOf(span.end)
+        if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+      }
     }
     return event
   }

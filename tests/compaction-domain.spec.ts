@@ -5,6 +5,7 @@
  * 开关关闭 / 续传链（机制 A）/ T-boundary 搭车补账 / 卷宗结构性清空。
  */
 import { describe, expect, it } from 'vitest'
+import { expectedReplaceOp, replaceEndpoints } from './replace-op.ts'
 import { mountCompactionDomain, boundaryArchiveKey } from '../src/domains/compaction.ts'
 import { readArchiveStore } from '../src/core/compress/index.ts'
 import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
@@ -36,10 +37,13 @@ class FakeSession {
     if (opts?.ignorable === true) event.ignorable = true
     this.events.push(event)
     if (event.surfaceOp === 'append') this.nodes.push(event.seq)
-    else if (event.surfaceOp && typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace') {
-      const si = this.nodes.indexOf(event.surfaceOp.start)
-      const ei = this.nodes.indexOf(event.surfaceOp.end)
-      if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+    else {
+      const span = replaceEndpoints(event.surfaceOp)
+      if (span !== undefined) {
+        const si = this.nodes.indexOf(span.start)
+        const ei = this.nodes.indexOf(span.end)
+        if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+      }
     }
     return event
   }
@@ -435,7 +439,7 @@ describe('P20a 压力路径：触发与全路径', () => {
     session.append('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'read', arguments: '{"file_path":"a.ts"}' })
     session.append('tool/result', { turn: 1, step: 1, message: { id: 't1', role: 'user', source: { kind: 'tool', callId: 'c1' }, content: [{ type: 'tool-result', toolCallId: 'c1', content: [textBlock('x'.repeat(2000))] }] } }, { surfaceOp: 'append' })
     // 模拟上一次压力折叠：replace [0..3] → 检查点节点（plugin:compact）
-    session.append('user/message', { content: [textBlock('C1')], source: { kind: 'plugin', plugin: 'compact' } }, { surfaceOp: { op: 'replace', start: 0, end: 3 }, sourceEventSeqs: [0, 1, 2, 3] })
+    session.append('user/message', { content: [textBlock('C1')], source: { kind: 'plugin', plugin: 'compact' } }, { surfaceOp: expectedReplaceOp(0, 3), sourceEventSeqs: [0, 1, 2, 3] })
     session.append('assistant/message', { message: { content: [{ type: 'tool-call', toolCallId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' }] } }, { surfaceOp: 'append' })
     session.append('tool/call', { turn: 1, step: 1, callId: 'c2', name: 'read', arguments: '{"file_path":"b.ts"}' })
     session.append('tool/result', { turn: 1, step: 1, message: { id: 't2', role: 'user', source: { kind: 'tool', callId: 'c2' }, content: [{ type: 'tool-result', toolCallId: 'c2', content: [textBlock('y'.repeat(50))] }] } }, { surfaceOp: 'append' })

@@ -11,6 +11,7 @@ import { SHEAR_RUN_PLAN_FACT_TYPE } from '../src/domains/shear-facts.ts'
 import { JUDGE_RECORDED_FACT_TYPE } from '../src/domains/judge-facts.ts'
 import { createEventPump } from '../src/platform/events.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
+import { expectedReplaceOp, replaceEndpoints } from './replace-op.ts'
 
 ignorableChannelAvailable({ SESSION_LOG_INTENT: 1 })
 
@@ -29,10 +30,13 @@ class FakeSession {
     if (opts?.ignorable === true) event.ignorable = true
     this.events.push(event)
     if (event.surfaceOp === 'append') this.nodes.push(event.seq)
-    else if (event.surfaceOp && typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace') {
-      const si = this.nodes.indexOf(event.surfaceOp.start)
-      const ei = this.nodes.indexOf(event.surfaceOp.end)
-      if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+    else {
+      const span = replaceEndpoints(event.surfaceOp)
+      if (span !== undefined) {
+        const si = this.nodes.indexOf(span.start)
+        const ei = this.nodes.indexOf(span.end)
+        if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+      }
     }
     return event
   }
@@ -105,7 +109,7 @@ describe('U2：判词/星标事实经真实 pump 路由到达剪切域', () => {
     expect(env.domain.stats().runsCut).toBe(1)
     const replacements = env.replacements()
     expect(replacements).toHaveLength(1)
-    expect(replacements[0]!.surfaceOp).toEqual({ op: 'replace', start: u1.seq, end: a1.seq })
+    expect(replacements[0]!.surfaceOp).toEqual(expectedReplaceOp(u1.seq, a1.seq))
     expect(replacements[0]!.data.source).toMatchObject({ kind: 'plugin', plugin: 'context-economy', form: 'notice' })
     env.dispose()
   })

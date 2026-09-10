@@ -36,14 +36,18 @@ JSONL（账本可回放、KV 只是加速缓存）。插件事件类型按构造
 携带标记、拒绝非 true 值；append 现场对未知无标记类型去重告警（loud-write）；拒读文案指向
 仓外插件事件。读侧严格性保持原样。
 
-**现状（诚实记录）**：本仓 harness checkout 已实现，并已在 **0.1.3-alpha.2** 上按社区形态重放
-（分支 `feat/ignorable-logintent-alpha2`，commit `2fa55bc741`，base `82a5fd61a7` = tag
-`dsh-v0.1.3-alpha.2`；原始系列 `04cba8f394` + `a3c0a8bc02` + `ea04b581a5` 基于 alpha.1，
-随版本切换掉出装配栈后于 2026-09-08 重放）。验收：session 包 81 测试 + 持久化/工具目录
-360 测试全绿，api-catalog / persistence-catalog 重生成校验过，插件侧 226 测试全绿。
-上游 `origin/master` `c389f96bf3` 仍未开放写入参数（官方仅保留读侧字段，
-`.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md`）
-——插件按 §2 探测自动适配；**宿主需重启**才加载重建后的 lib。
+**现状（诚实记录；2026-09-10 基线切换后更新）**：
+- **读取侧**：上游 `origin/master` 的 vanilla 构建**仍然只有读侧字段**，没有写入参数
+  （`.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md`）。
+- **写入侧 = 本仓补丁**：插件要拿到写入参数，必须让宿主带补丁。截至 2026-09-10，本仓的
+  **现行基线 = B+**：上游 `origin/master` @ `c291e7961a`（**0.1.5-rc.2**）**+ 重放的
+  ignorable 补丁**（分支 `bplus-0.1.5` @ `f0dc41471c`；补丁重放提交 `8ff0bceeae`，
+  原系列 `04cba8f394` + `a3c0a8bc02` + `ea04b581a5`，alpha.2 重放版 `2fa55bc741`）。
+  实测：`SESSION_LOG_INTENT === 1`、`SESSION_FORMAT_VERSION === 3`、session 包 **504/504** 全绿。
+- **上一代基线 A**（`feat/ignorable-logintent-alpha2` @ `2fa55bc741`，base tag `dsh-v0.1.3-alpha.2`）
+  **已不再受支持**——插件源码的 replace 端点常量已按 B+ 写死，回 A 需改常量（`docs/14 §5`）。
+- 插件按 §2 探测自动适配；通道缺失时按 §3 降级。**换基线/换补丁后宿主需重启**才加载重建后的 lib。
+- 完整升级步骤、接触面清单、验收与回滚 = [`docs/14-upstream-upgrade.md`](14-upstream-upgrade.md)。
 
 ### C2 · 辅助调用 purpose 标记（插件侧类型适配，不修 harness）
 
@@ -85,8 +89,12 @@ optimize / compaction / init 四值）与 `CeGenerateOptions = Omit<GenerateOpti
 - **删除清单（上游合并发版后，一次原子提交完成）**：
   ① 删 `src/platform/ignorable-channel.ts`；
   ② `logger.ts` 的 `emitCeFact` 改回直连 `session.append(type, data, { ignorable: true })`（一行）；
-  ③ 删 P3 事实镜像表接线（表体可留作审计或一并删）；
-  ④ 删 D3 断言规则条目（含零位快照同步）；
+     **同时删 `registerFactMirror` / `registerFactReplay` 两个包装**（D3 单点，index.ts 只经它们）；
+  ③ 删 P3 事实镜像表接线（表体可留作审计或一并删）；**以及 HC3 的回灌钩子**——
+     `index.ts` 的 `registerFactReplay((session, event) => pump.publish(...))` 与 `events.ts` 的
+     `EventPump.publish`（§3：上游合入写入通道后事实回到 `session/event` firehose，
+     回灌成为死代码）。注意 `publish` 是 pump 的通用内部投递口，删除前确认无其他调用方；
+  ④ 删 D3 断言规则条目（含零位快照同步；含 HC3 追加的 `setFactReplay` token）；
   ⑤ 跑 `npm run gate` + harness-session 回环确认。
   机制代码零改动——这就是解耦的机械证明。
 - **升级自检**：checkout 升级后跑 `npm test` 即可——`tests/harness-session.spec.ts` 的回环

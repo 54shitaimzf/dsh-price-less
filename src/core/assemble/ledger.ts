@@ -199,6 +199,16 @@ function numberField(value: unknown, fallback = 0): number {
 /** 额外搜索窗口（压缩事件之后看多少次工具调用；docs/07 `extraSearchCalls`）。 */
 export const EXTRA_SEARCH_WINDOW = 30
 
+/**
+ * 「内层子分发」事件名（计数工具调用时与 `tool/call` 同认）。
+ *
+ * 两个族：`code-dispatch-start`（上游 ≤0.1.4 起的 run_code 子分发）与 `ptc-dispatch-start`
+ * （上游 0.1.5 新增的 PTC 呈现子分发）。**两个都认**——本插件预设固定 `native` 呈现、两者都不产生，
+ * 但账本口径不该因为宿主换了呈现模式而少算调用（上游保留 code-* 且并存 ptc-*，见
+ * `docs/legacy.md §15`）。
+ */
+const DISPATCH_START_TYPES: ReadonlySet<string> = new Set(['tool/code-dispatch-start', 'tool/ptc-dispatch-start'])
+
 /** 工具调用签名（同名同参 = 同一次调用；tool/call 与 run_code 内层 dispatch 都认）。 */
 function callSignatureOf(event: LedgerSessionEvent): string | undefined {
   const data = (event.data ?? {}) as Record<string, unknown>
@@ -240,7 +250,7 @@ export function countExtraSearchCalls(
   boundaries.sort((a, b) => a - b)
   const calls: Array<{ seq: number; signature: string }> = []
   for (const event of events) {
-    if (event.type !== 'tool/call' && event.type !== 'tool/code-dispatch-start') continue
+    if (event.type !== 'tool/call' && !DISPATCH_START_TYPES.has(event.type)) continue
     if (typeof event.seq !== 'number') continue
     const signature = callSignatureOf(event)
     if (signature === undefined) continue

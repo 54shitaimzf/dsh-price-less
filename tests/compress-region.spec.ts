@@ -3,6 +3,7 @@
  * 覆盖：四类表面节点转写 / 被遮蔽节点不入正文 / 区间过滤 / 坏形状不抛错 / 字节稳定 / 体量计量。
  */
 import { describe, expect, it } from 'vitest'
+import { expectedReplaceOp } from './replace-op.ts'
 import { estimateTokens, flatDensity } from '../src/core/meter/index.ts'
 import { REGION_TRANSCRIPT_VERSION, regionTokens, renderRegionTranscript, surfaceEventsInRange } from '../src/core/compress/index.ts'
 import type { LedgerSessionEvent } from '../src/core/ledger/types.ts'
@@ -44,7 +45,7 @@ describe('P19a 区间转写', () => {
     const events = [
       user(0, '旧'),
       user(1, '新'),
-      { type: 'user/message', seq: 2, time: 2, data: { content: [{ type: 'text', text: '替换' }] }, surfaceOp: { op: 'replace', start: 0, end: 0 } } as LedgerSessionEvent,
+      { type: 'user/message', seq: 2, time: 2, data: { content: [{ type: 'text', text: '替换' }] }, surfaceOp: expectedReplaceOp(0, 0) } as LedgerSessionEvent,
     ]
     expect(renderRegionTranscript(events, { startSeq: 0, endSeq: 2 })).toBe('[1] user/message\n新\n\n[2] user/message\n替换')
     expect(surfaceEventsInRange(events, { startSeq: 1, endSeq: 1 }).map((e) => e.seq)).toEqual([1])

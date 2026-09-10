@@ -24,6 +24,7 @@
 | 12 | **R1–R4 工单与验收脚本** | 已封存为历史记录 | 工单在 `implement/archive/`；失效脚本在 `scripts/archive/` | §12 |
 | 13 | **实验框架 evalground** | 依赖清退前生产 lib，随残留清空中断 | 封存只读（`runs/`/`datasets/` 保全） | §13；`experiments/evalground/SEALED.md` |
 | 14 | **上游同步读弃用面 + 不可锚 cast 登记**（2026-09-10 兼容性审查） | A 基线未弃用 / B 基线（≥0.1.5）已弃用但未移除；本战役不重构 | 不删码：`snapshotEvents` 已收口 `platform/events.ts`；`eventAt` 4 处留在 `domains/shear.ts` | §14；依据 [`implement/REPAIR-2026-09-10.md`](implement/REPAIR-2026-09-10.md) §8.2/§8.4 |
+| 15 | **子分发事件族并存**（`tool/code-dispatch*` + `tool/ptc-dispatch*`） | 上游 0.1.5 新增 ptc 族，旧族保留 | 不删码：`DISPATCH_START_TYPES` 两族同认（加族只改一行） | §15；升级复核点见 [`14-upstream-upgrade.md §3`](14-upstream-upgrade.md) |
 
 ## 1. 锚定段与四节产品（模板缓存 / 锚定预算）
 
@@ -176,6 +177,17 @@
 `...AnchorBack`、`SessionEventAtAnchor` / `...AnchorBack`）——形状漂移在 typecheck 阶段先红，
 而不是等十几处调用点齐炸。
 
+**诚实登记：`readSessionEvents` 字面上碰了上游的"禁止新增同步 wrapper"条**。上游该决策原文写着
+*"New aliases or wrappers that expose the same synchronous historical access are prohibited as well"*。
+本仓的辩护是"**不新增依赖**——调用点数量未变，只是把既有的 12 处集中到一个缝，属于该决策明确允许的
+『既有逻辑可延后迁移』"，且它是**迁移成本收敛**的手段而非新功能入口。但辩护归辩护，规矩要写下来：
+
+- 该 wrapper **不得**再被新的消费者使用（新增调用点 = 违反上游政策，也是本仓"不做死代码"的反面）；
+- 真正的迁移形状**不是**换一个同步 wrapper，而是上游给的处方：**projection** —— resume 时用
+  **分页异步读**重建一次状态，之后只靠新提交的事件增量维护；
+- 好消息：插件现有结构（剪切/装配的"首见折一次 + 实时增量"、恢复域的一次性审计）**已经是该形状**，
+  缺的只是那"折一次"目前是同步全量。要动的入口就是 `readSessionEvents` 与 `shear.ts` 的 `eventAt`。
+
 ### 14.2 不可锚的 harness 触点 cast（"没加锚"是结论，不是遗漏）
 
 | 位置 | cast 内容 | 为什么无法加编译期锚 |
@@ -195,6 +207,21 @@
 - `platform/star-bridge.ts` RPC 四个面 → `StarRpc*Anchor`；
 - `platform/events.ts` 同步读签名 → 见 14.1；
 - `platform/ignorable-channel.ts` 镜像事件视景字段面 → `MirroredFactFaceAnchor`。
+
+---
+
+## 15. 子分发事件族并存（`code-dispatch` / `ptc-dispatch`）
+
+**不是退役设计，是"两族并存"的登记**：上游 0.1.5 保留了旧的 `tool/code-dispatch*`，**并新增**
+`tool/ptc-dispatch*`（PTC 呈现模式的子分发）。两者都是"工具调用的内层子分发"。
+
+- **为什么要登记**：`core/assemble/ledger.ts` 的 `extraSearchCalls`（`docs/07` 压缩族）按
+  "压缩事件后 N 次工具调用"统计签名重发，需要把内层子分发与 `tool/call` 同认。原先只认
+  `tool/code-dispatch-start`——**0.1.5 上的 ptc 会话会被少算**。
+- **现行做法**：`DISPATCH_START_TYPES` 两族都认（一个常量集合，加族只改一行）。
+- **本部署的实际情况**：本插件预设固定 `tool-presentation.mode = native`，两族**都不产生**；
+  该常量是"宿主换了呈现模式也不会把账算少"的保险，不改变任何现有读数。
+- **上限**：两族若将来合并/改名，`docs/14 §3` 的接触面表第 5 条是复核点。
 
 ---
 

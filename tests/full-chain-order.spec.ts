@@ -5,6 +5,7 @@
  * ③ 层隔离（docs/10 §8：关闭任一层其余功能完整）。
  */
 import { describe, expect, it } from 'vitest'
+import { replaceEndpoints } from './replace-op.ts'
 import { mountCompactionDomain, boundaryArchiveKey } from '../src/domains/compaction.ts'
 import { COMPRESS_RUN_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
 import { planTailConsumption, TAIL_CONSUME_OPS } from '../src/core/compress/index.ts'
@@ -40,10 +41,13 @@ class FakeSession {
     if (opts?.ignorable === true) event.ignorable = true
     this.events.push(event)
     if (event.surfaceOp === 'append') this.nodes.push(event.seq)
-    else if (event.surfaceOp && typeof event.surfaceOp === 'object' && event.surfaceOp.op === 'replace') {
-      const si = this.nodes.indexOf(event.surfaceOp.start)
-      const ei = this.nodes.indexOf(event.surfaceOp.end)
-      if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+    else {
+      const span = replaceEndpoints(event.surfaceOp)
+      if (span !== undefined) {
+        const si = this.nodes.indexOf(span.start)
+        const ei = this.nodes.indexOf(span.end)
+        if (si >= 0 && ei >= si) { this.nodes.splice(si, ei - si + 1, event.seq); this.generation++ }
+      }
     }
     return event
   }

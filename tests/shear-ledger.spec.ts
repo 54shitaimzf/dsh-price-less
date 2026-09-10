@@ -4,6 +4,7 @@
  * 误伤信号（rereadAfterRepair / rerunAfterCut）、表面尾部计价、确定性双跑、空输入全 0。
  */
 import { describe, expect, it } from 'vitest'
+import { expectedReplaceOp } from './replace-op.ts'
 import {
   RUN_CLASS_FACT_TYPE,
   SHEAR_APPLIED_FACT_TYPE,
@@ -104,7 +105,7 @@ describe('表面 fold 与尾部计价', () => {
       { type: 'user/message', seq: 1, time: 1, surfaceOp: 'append' },
       { type: 'assistant/message', seq: 2, time: 2, surfaceOp: 'append' },
       { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append' },
-      { type: 'tool/result', seq: 4, time: 4, surfaceOp: { op: 'replace', start: 3, end: 3 } },
+      { type: 'tool/result', seq: 4, time: 4, surfaceOp: expectedReplaceOp(3, 3) },
     ])
     expect(seqs).toEqual([1, 2, 4])
   })

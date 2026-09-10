@@ -60,4 +60,59 @@ describe.skipIf(!hasRuntime)('真实 Session 改史冒烟（junction 在位时�
     expect(event.data.shadowedTokenCount).toBe(321)
     expect(session.surface.nodes.map((n) => Number(n))).toEqual([0])
   })
+
+  /**
+   * HC5 残余（REPAIR-2026-09-10 §8.5-3）：会话格式 v3 把系统提示词搬成 surface **节点 0**
+   * （`system/message`，`EpochHeader.system` 已移除），并加 `assertSystemHeadRewrite`：
+   * 覆盖节点 0 的 replace 必须**自身是** `system/message` 且恰好只罩那一个节点，否则抛。
+   *
+   * 本用例钉死插件的承重不变量：**压缩/剪切的区间起点永远是首条 `user/message`（序 ≥ 1），
+   * 永远不落在系统节点上**——否则第一次边界压缩就会炸。
+   */
+  it('HC5/v3：surface 节点 0 = system/message → 插件区间起点 > 0，replace 被接受且系统节点存活', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const session = ctx.sessions.create()
+    session.append(
+      'system/message',
+      { turn: 0, step: 0, message: { role: 'system', content: [{ type: 'text', text: 'system prompt' }] } } as never,
+      { surfaceOp: 'append' },
+    )
+    session.append('user/message', userMessage('u1'), { surfaceOp: 'append' })
+    session.append('user/message', userMessage('u2'), { surfaceOp: 'append' })
+
+    const nodes = session.surface.nodes.map(Number)
+    expect(nodes).toEqual([0, 1, 2])
+    const systemSeq = nodes[0]!
+    // 插件口径：区间起点 = 首条 user/message 的 seq（`firstUserSeq`）。
+    const firstUser = session.snapshotEvents().find((event) => event.type === 'user/message')!
+    const lastUser = [...session.snapshotEvents()].reverse().find((event) => event.type === 'user/message')!
+    expect(Number(firstUser.seq)).toBeGreaterThan(systemSeq)
+
+    const port = createHistoryPort(session)
+    const landed = port.replaceSurface({
+      type: 'user/message',
+      data: userMessage('summary'),
+      range: { start: firstUser.seq, end: lastUser.seq },
+    })
+    // 系统节点仍独占节点 0，压缩结果落在其后。
+    expect(session.surface.nodes.map((n) => Number(n))).toEqual([systemSeq, Number(landed.event.seq)])
+    expect(landed.shadowedSeqs.map((n) => Number(n))).toEqual([1, 2])
+
+    // 反证：起点落在系统节点上的 replace 会被 harness 拒绝——这正是上条不变量的存在理由。
+    const bare = new Context()
+    await bare.plugin(SessionStore)
+    const s2 = bare.sessions.create()
+    s2.append(
+      'system/message',
+      { turn: 0, step: 0, message: { role: 'system', content: [{ type: 'text', text: 'sys' }] } } as never,
+      { surfaceOp: 'append' },
+    )
+    s2.append('user/message', userMessage('x1'), { surfaceOp: 'append' })
+    expect(() => createHistoryPort(s2).replaceSurface({
+      type: 'user/message',
+      data: userMessage('y'),
+      range: { start: 0 as never, end: 1 as never },
+    })).toThrow(/system prompt/)
+  })
 })
