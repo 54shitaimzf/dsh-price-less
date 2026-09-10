@@ -23,6 +23,8 @@ const entityEnvelopeSchema = z.object({
 const factMirrorRecordSchema = z.object({
   type: z.string(),
   seq: z.number().int().nonnegative().optional(),
+  /** U7 v2：会话维度（旧记录缺省 = legacy，按会话过滤时排除、不参与等价核对）。 */
+  sessionId: z.string().optional(),
   time: z.number(),
   data: z.unknown(),
 })
@@ -49,7 +51,7 @@ export const CE_STORAGE_SPEC = defineDomain({
 
 export interface EntitySource { taskId: string; eventType: string; evidence: unknown }
 export interface EntityRecord { schemaVersion: number; version: number; source: EntitySource; body: unknown }
-export interface FactMirrorRecord { type: string; seq?: number; time: number; data: unknown }
+export interface FactMirrorRecord { type: string; seq?: number; sessionId?: string; time: number; data: unknown }
 export interface EntitySnapshotRecord { entityType: string; entityKey: string; record: EntityRecord; savedAt: number }
 
 export type StorageErrorCode = 'SOURCE_REQUIRED' | 'CAS_MISMATCH' | 'ROLLBACK_TARGET_NOT_FOUND'
@@ -67,8 +69,8 @@ export interface ContextEconomyStorage {
   putEntity(table: EntityTableName, key: string, body: unknown, source: EntitySource, options?: { baseVersion?: number }): Promise<EntityRecord>
   rollbackEntity(table: EntityTableName, key: string, targetVersion: number): Promise<EntityRecord>
   auditEntity(table: EntityTableName, key: string): EntityRecord[]
-  listFactMirror(): FactMirrorRecord[]
-  writeFactMirror(type: string, data: unknown): void
+  listFactMirror(sessionId?: string): FactMirrorRecord[]
+  writeFactMirror(type: string, data: unknown, meta?: { sessionId?: string }): void
   stats(): { factMirrorCount: number; factMirrorDurabilityErrors: number; entityCounts: Record<EntityTableName, number> }
   close(): Promise<void>
 }
@@ -196,13 +198,16 @@ export async function openContextEconomyStorage(
     return cloneEntityRecords([...byVersion.values()].sort((a, b) => a.record.version - b.record.version).map((x) => x.record))
   }
 
-  const listFactMirror = (): FactMirrorRecord[] =>
-    [...factMirrorTable.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, record]) => ({ ...record }))
+  /** U7：按会话维度读取镜像（缺省 = 全量；legacy 无 sessionId 记录在过滤时排除）。 */
+  const listFactMirror = (sessionId?: string): FactMirrorRecord[] =>
+    [...factMirrorTable.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([, record]) => ({ ...record }))
+      .filter((record) => sessionId === undefined || record.sessionId === sessionId)
 
-  const writeFactMirror = (type: string, data: unknown): void => {
+  const writeFactMirror = (type: string, data: unknown, meta: { sessionId?: string } = {}): void => {
     const time = now()
-    const key = JSON.stringify([type, time, mirrorSeq++])
-    const record: FactMirrorRecord = { type, time, data }
+    const key = JSON.stringify([meta.sessionId ?? '', time, mirrorSeq++])
+    const record: FactMirrorRecord = { type, time, data, ...(meta.sessionId === undefined ? {} : { sessionId: meta.sessionId }) }
     void factMirrorTable.put(key, record).catch((e: unknown) => {
       durability.factMirrorDurabilityErrors++
       logger?.warn('context-economy: fact mirror durable write failed (contained, fail-lazy)', type, e instanceof Error ? e.message : String(e))

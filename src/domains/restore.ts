@@ -260,7 +260,7 @@ export function mountRestoreDomain(deps: RestoreDomainDeps): RestoreDomain {
         return
       }
       if (spec.step === 'metrics_cache') {
-        const mirror = mirrorFactsOf(storage.listFactMirror())
+        const mirror = mirrorFactsOf(storage.listFactMirror(sessionId))
         if (mirrorDiverges(facts, mirror)) {
           emitDegraded(spec, 'mirror-divergence', { detail: `mirror=${mirror.length} log=${facts.length}` })
           emitStep(spec, 'degraded', { rebuilt: facts.length })

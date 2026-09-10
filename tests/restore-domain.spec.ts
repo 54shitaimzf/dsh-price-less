@@ -67,7 +67,7 @@ class FakeStorage {
   readonly snapshots = new Map<string, StoredRecord[]>()
   readonly writes: Array<{ table: string; key: string; body: unknown; source: any; baseVersion: number }> = []
   readonly rollbacks: Array<{ table: string; key: string; target: number }> = []
-  mirror: Array<{ type: string; seq?: number; time: number; data: unknown }> = []
+  mirror: Array<{ type: string; seq?: number; sessionId?: string; time: number; data: unknown }> = []
   private id(table: string, key: string): string { return table + ':' + key }
   seed(table: string, key: string, body: unknown, version = 1, schemaVersion = 1): void {
     const id = this.id(table, key)
@@ -108,8 +108,10 @@ class FakeStorage {
     if (current !== undefined) all.push(current)
     return all.sort((a, b) => a.version - b.version)
   }
-  listFactMirror() { return [...this.mirror] }
-  writeFactMirror(type: string, data: unknown): void { this.mirror.push({ type, time: 1, data }) }
+  listFactMirror(sessionId?: string) {
+    return [...this.mirror].filter((record) => sessionId === undefined || record.sessionId === sessionId)
+  }
+  writeFactMirror(type: string, data: unknown, meta?: { sessionId?: string }): void { this.mirror.push({ type, time: 1, ...(meta?.sessionId === undefined ? {} : { sessionId: meta.sessionId }), data }) }
   stats() { return { factMirrorCount: this.mirror.length, factMirrorDurabilityErrors: 0, entityCounts: {} as any } }
   async close(): Promise<void> {}
 }
@@ -229,14 +231,28 @@ describe('P21a 恢复域端到端', () => {
     expect(stepOf(result, 'project_frame').entityKey).toBe(projectFrameStorageKey('C:/proj/a'))
   })
 
-  it('双源漂移（镜像非空且不等价）→ mirror-divergence 降级', async () => {
+  it('U7：双源真矛盾（同 type+time 不同内容）→ mirror-divergence 降级；降级模式单侧镜像不再常真告警', async () => {
+    // 真矛盾：镜像与日志同身份（task-boundary @ time 101）但内容不同
     const storage = new FakeStorage()
-    storage.mirror = [{ type: 'context-economy/task-boundary', seq: 99, time: 1, data: { boundary: 'close' } }]
+    storage.mirror = [{ type: 'context-economy/task-boundary', sessionId: SESSION_ID, time: 101, data: { boundary: 'open', taskId: 'task-1' } }]
     const session = makeResumedSession()
     const { domain } = mount(storage)
     const result = await domain.run({ session: session as unknown as Session, source: 'resume' })
     expect(degradationsOf(result, 'metrics_cache').map((item: any) => item.code)).toEqual(['mirror-divergence'])
     expect(stepOf(result, 'metrics_cache').outcome).toBe('degraded')
+  })
+
+  it('U7：降级模式（镜像单侧持有事实）→ 不判漂移（旧实现 = 镜像非空即常真告警）', async () => {
+    const storage = new FakeStorage()
+    storage.mirror = [
+      { type: 'context-economy/judge-recorded', sessionId: SESSION_ID, time: 900, data: { seq: 0, decision: 'continue', class: 'action' } },
+      { type: 'context-economy/judge-recorded', sessionId: 'other-session', time: 101, data: { seq: 0, decision: 'new-task' } },
+    ]
+    const session = makeResumedSession()
+    const { domain } = mount(storage)
+    const result = await domain.run({ session: session as unknown as Session, source: 'resume' })
+    expect(degradationsOf(result, 'metrics_cache')).toEqual([])
+    expect(stepOf(result, 'metrics_cache').outcome).toBe('rebuilt')
   })
 
   it('事实全部 ignorable + 账本 fold 可回放（restoreDegraded）', async () => {

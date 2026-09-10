@@ -121,11 +121,16 @@ describe('P21a 卷宗日志重放重建', () => {
 })
 
 describe('P21a 双源核对与恢复族账本', () => {
-  it('镜像为空 = 通道健康（不判漂移）；等价不判；不等价判', () => {
+  it('U7：镜像为空不判；单侧独有不判（互斥路由历史）；同 type+time 不同内容判漂移', () => {
     const log = [{ type: 'context-economy/task-boundary', seq: 1, time: 1, data: { boundary: 'close' } }]
     expect(mirrorDiverges(log, [])).toBe(false)
-    expect(mirrorDiverges(log, [...log])).toBe(false)
-    expect(mirrorDiverges(log, [{ type: 'context-economy/task-boundary', seq: 2, time: 1, data: { boundary: 'close' } }])).toBe(true)
+    // 同身份同内容（等价）不判
+    expect(mirrorDiverges(log, [{ type: 'context-economy/task-boundary', time: 1, data: { boundary: 'close' } }])).toBe(false)
+    // 同 type+time、内容不同 = 真矛盾
+    expect(mirrorDiverges(log, [{ type: 'context-economy/task-boundary', time: 1, data: { boundary: 'open' } }])).toBe(true)
+    // 单侧独有（降级模式镜像 / 通道模式日志）= 各自模式历史，不判（旧实现全集相等口径恒告警）
+    expect(mirrorDiverges(log, [{ type: 'context-economy/judge-recorded', time: 99, data: { seq: 1 } }])).toBe(false)
+    expect(mirrorDiverges([], [{ type: 'context-economy/judge-recorded', time: 99, data: { seq: 1 } }])).toBe(false)
     expect(mirrorFactsOf([{ type: 'x', seq: 3, time: 4, data: { a: 1 } }])).toEqual([{ type: 'x', seq: 3, time: 4, data: { a: 1 } }])
   })
 

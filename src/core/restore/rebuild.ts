@@ -19,7 +19,6 @@ import {
   type DossierClass,
   type DossierMessage,
 } from '../dossier.ts'
-import { assertFactSourcesEquivalent } from '../ledger/facts.ts'
 import type { LedgerFact } from '../ledger/types.ts'
 import type { TaskSegment } from '../units.ts'
 
@@ -102,12 +101,20 @@ export function rebuildDossiers(input: DossierRebuildInput): DossierRebuild[] {
 }
 
 /**
- * 双源等价核对（docs/12 §3）：`fact_mirror` 为空 = 通道健康（镜像未启用）→ 不等价判 false（N5）。
- * 非空且与会话事实不等价 → true（KV 镜像漂移，需降级 + `version-mismatch` 告警）。
+ * 双源矛盾核对（U7 修订，docs/12 §3）：镜像与通道**互斥路由**——同一事实只进一侧，
+ * "全集相等"在混合模式（通道升级/切换前后）下恒假（旧实现 = 镜像非空即常真告警，
+ * 污染 07 账本 restoreDegraded）。矛盾 = **同身份**（type + time）两源内容不同；
+ * 单侧独有 = 各自模式的历史，不判漂移。镜像为空 = 通道健康 → false（N5）。
  */
 export function mirrorDiverges(logFacts: readonly LedgerFact[], mirrorFacts: readonly LedgerFact[]): boolean {
   if (mirrorFacts.length === 0) return false
-  return !assertFactSourcesEquivalent([...logFacts], [...mirrorFacts])
+  const dataOfLog = new Map<string, string>()
+  for (const fact of logFacts) dataOfLog.set(`${fact.type}\u0000${fact.time}`, JSON.stringify(fact.data))
+  for (const fact of mirrorFacts) {
+    const counterpart = dataOfLog.get(`${fact.type}\u0000${fact.time}`)
+    if (counterpart !== undefined && counterpart !== JSON.stringify(fact.data)) return true
+  }
+  return false
 }
 
 /** 事实镜像记录 → LedgerFact（域侧 listFactMirror 结果归一；纯映射）。 */

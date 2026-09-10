@@ -50,7 +50,7 @@ export function resetIgnorableChannelProbe(): void {
 export type FactWriteResult = 'emitted' | 'mirrored' | 'blocked'
 
 /** KV 事实镜像接口（降级态的事实去处；P3 storage 事实镜像表落位时经 setFactMirror 接线）。 */
-export type FactMirror = (type: string, data: unknown) => void
+export type FactMirror = (type: string, data: unknown, meta?: { sessionId?: string }) => void
 
 let factMirror: FactMirror | undefined
 
@@ -101,7 +101,10 @@ export function emitFact<T extends keyof SessionEventMap & string>(
   }
   if (factMirror !== undefined) {
     try {
-      factMirror(type, data)
+      // U7：镜像带会话维度（恢复侧按会话过滤比对，跨会话不串账）。
+      const header = (session as unknown as { header?: { id?: unknown } }).header
+      const sessionId = typeof header?.id === 'string' ? header.id : undefined
+      factMirror(type, data, { ...(sessionId === undefined ? {} : { sessionId }) })
       factStats.mirrored++
       return 'mirrored'
     } catch (e) {

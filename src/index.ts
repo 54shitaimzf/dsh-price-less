@@ -179,7 +179,7 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
             return
           }
           storage = opened
-          registerFactMirror((type, data) => opened.writeFactMirror(type, data))
+          registerFactMirror((type, data, meta) => opened.writeFactMirror(type, data, meta))
           // P21a：恢复编排（H9 恢复序；依赖 P3 四实体表 + P20 档案/检查点形态）。
           restore = mountRestoreDomain({
             storage: opened,

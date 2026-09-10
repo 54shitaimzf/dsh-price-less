@@ -102,7 +102,9 @@ optimize / compaction / init 四值）与 `CeGenerateOptions = Omit<GenerateOpti
 | **主上下文管理（剪切/压缩/优化回填）** | **零影响**——行为全部走 harness 词表内原生事件（surfaceOp replace / compaction/*），会话恢复的原生 fold 重演与通道无关 | 无 |
 
 - **缓解设计**（各工单编写时展开）：P2 账本 fold 的**事实源抽象**（`facts = 会话 ignorable
-  事件 ∨ KV 事实镜像`——同一 fold、同输入同账，[07 §5](07-metrics.md)）；P3 事实镜像表；
+  事件 ∨ KV 事实镜像`——同一 fold、同输入同账，[07 §5](07-metrics.md)）；P3 事实镜像表
+  （**v2**：记录带 `sessionId` 会话维度，恢复侧按会话过滤；等价核对 = 同身份〔type+time〕
+  内容矛盾才判漂移——镜像与通道互斥路由，单侧独有 = 各自模式历史，不判）；
   降级可见化（warn + stats，绝不静默）。
 - **净效果**：账本受损仅出现于「无通道 ∧ KV 损毁」**双重故障**同时发生，后果是重新积累而非
   数据损坏；随上游合并自动消失。
