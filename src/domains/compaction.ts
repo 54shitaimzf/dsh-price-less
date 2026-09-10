@@ -70,7 +70,7 @@ import { calibrationRatio } from '../core/meter/estimate.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createHistoryPort } from '../platform/history.ts'
 import { CE_CONTEXT_OVERFLOW_CODE, resolveContextWindow, resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlmUsage } from '../platform/llm.ts'
-import { readSessionModel, type CeLogger } from '../platform/events.ts'
+import { readSessionEvents, readSessionModel, type CeLogger } from '../platform/events.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
 import type { MeterPort } from '../platform/meter.ts'
 import { compressionInvariantOk, reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
@@ -145,7 +145,7 @@ function sessionIdOf(session: Session): string {
 }
 
 function ledgerEventsOf(session: Session): LedgerSessionEvent[] {
-  const snapshot = (session as unknown as { snapshotEvents?: () => readonly unknown[] }).snapshotEvents?.() ?? []
+  const snapshot = readSessionEvents(session) as readonly unknown[]
   const out: LedgerSessionEvent[] = []
   for (const raw of snapshot) {
     const event = raw as { type?: unknown; seq?: unknown; time?: unknown; data?: unknown; surfaceOp?: unknown }

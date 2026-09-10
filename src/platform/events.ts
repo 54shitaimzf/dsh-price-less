@@ -13,7 +13,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { Session, SessionEvent, SessionEventType, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionEventType, SessionLogOffset, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
+import type { AssertAssignable } from './anchors.ts'
 
 /** 结构化诊断通道（cordis logger 的最小结构面；由 index.ts 传 ceLogger(ctx)）。 */
 export interface CeLogger {
@@ -49,9 +50,7 @@ export const METRICS_FACE_TYPES: ReadonlySet<SessionEventType> = new Set<Session
  * 倒序扫描到首个 header 即返回；无请求记录 → undefined（调用侧回落静态默认）。
  */
 export function readSessionModel(session: Session): { provider: string; model: string } | undefined {
-  const snapshot = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents
-  if (snapshot === undefined) return undefined
-  const events = snapshot.call(session)
+  const events = readSessionEvents(session)
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i]!
     if (event.type !== 'request/header') continue
@@ -62,6 +61,36 @@ export function readSessionModel(session: Session): { provider: string; model: s
     return undefined
   }
   return undefined
+}
+
+// —— HC4 编译期锚（原语见 platform/anchors.ts）——
+// 同步读面的**签名**在 A/B 两基线一致（`2026-09-09-deprecate-synchronous-session-event-reads.md`
+// 只标 `@deprecated`、未改形状），故本锚两侧都成立；它守的是"形状漂移率"——上游真改签名
+// （如切分页异步读）时此处先红，而不是等到 13 处调用点齐炸。
+export type SessionSnapshotEventsAnchor = AssertAssignable<
+  Session['snapshotEvents'],
+  (fromSeq?: SessionLogOffset, toSeqExclusive?: SessionLogOffset) => readonly SessionEvent[]
+>
+export type SessionSnapshotEventsAnchorBack = AssertAssignable<
+  (fromSeq?: SessionLogOffset, toSeqExclusive?: SessionLogOffset) => readonly SessionEvent[],
+  Session['snapshotEvents']
+>
+export type SessionEventAtAnchor = AssertAssignable<Session['eventAt'], (seq: SessionSeq) => SessionEvent | undefined>
+export type SessionEventAtAnchorBack = AssertAssignable<(seq: SessionSeq) => SessionEvent | undefined, Session['eventAt']>
+
+/**
+ * 会话全史同步读的**唯一收口**（HC4；登记见 `docs/legacy.md §14`）。
+ *
+ * 契约：读该会话已提交的全部事件（含 fork 继承前缀），只读零副作用；会话未提供
+ * `snapshotEvents`（测试替身 / 未来上游移除）→ 空数组（失败默认保留，调用侧自会判空）。
+ *
+ * **为什么收口**：上游已把 `snapshotEvents`/`eventAt`/`ownEvents` 标 `@deprecated` 且
+ * "new calls are prohibited"（B 基线）。本战役不重构，但 `domains/*` 不允许再直读——
+ * 未来迁移（projections + 分页异步读）的改动面收敛在本文件一层，符合分层铁律。
+ */
+export function readSessionEvents(session: Session): readonly SessionEvent[] {
+  const face = session as { snapshotEvents?: () => readonly SessionEvent[] }
+  return typeof face.snapshotEvents === 'function' ? face.snapshotEvents.call(session) : []
 }
 
 /** user/message 文本（text blocks 拼接 trim）；空文本 → null（02 §2「文本非空」条件）。 */
@@ -94,7 +123,7 @@ export interface SessionUserMessage { readonly seq: number; readonly time: numbe
  * 极短消息与 task 切分由调用侧处理。只读无副作用；会话未提供 snapshotEvents 时返回空数组（防御）。
  */
 export function readSessionUserMessages(session: Session): SessionUserMessage[] {
-  const events = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents?.() ?? []
+  const events = readSessionEvents(session)
   const origin = (session as unknown as { header?: { origin?: string } }).header?.origin
   const out: SessionUserMessage[] = []
   for (const event of events) {
@@ -117,6 +146,12 @@ export interface EventPumpStats {
 export interface EventPump {
   /** 订阅领域事件；返回退订函数。 */
   on<K extends CeDomainEventKind>(kind: K, fn: (payload: CeDomainEvents[K]) => void): () => void
+  /**
+   * 内部投递入口（HC3）：把一条领域事件直接入队——与 firehose 同一条队列、同一 FIFO 派发、
+   * 同一计数（enqueued / dispose 后 dropped）。供降级态的「镜像事实回灌」使用，
+   * 使 domains 侧对事实来源保持零感知（docs/12 §2 耦合铁律）。
+   */
+  publish<K extends CeDomainEventKind>(kind: K, payload: CeDomainEvents[K]): void
   /** 停止订阅 firehose、清空队列；之后在途到达的事件计 dropped。 */
   dispose(): void
   stats(): EventPumpStats
@@ -187,6 +222,15 @@ export function createEventPump(ctx: Context, logger?: CeLogger): EventPump {
       if (!set) handlers.set(kind, (set = new Set()))
       set.add(fn as (payload: never) => void)
       return () => set!.delete(fn as (payload: never) => void)
+    },
+    publish(kind, payload) {
+      if (disposed) {
+        stats.dropped++
+        return
+      }
+      queue.push({ kind, payload } as { kind: CeDomainEventKind; payload: CeDomainEvents[CeDomainEventKind] })
+      stats.enqueued++
+      schedule()
     },
     dispose() {
       disposed = true

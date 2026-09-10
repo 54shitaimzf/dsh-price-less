@@ -36,7 +36,7 @@ import { estimateTokens, extractTextFromToolResult } from '../core/ledger/fold.t
 import { buildNoticeUserMessage, createHistoryPort, type HistoryPort } from '../platform/history.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { createShearToolPort, type ShearToolPortContext, type ToolResultView, type ToolSignatureSource } from '../platform/tools.ts'
-import type { CeDomainEvents, CeLogger, EventPump } from '../platform/events.ts'
+import { readSessionEvents, type CeDomainEvents, type CeLogger, type EventPump } from '../platform/events.ts'
 import type { Config } from '../config.ts'
 import {
   SHEAR_APPLIED_FACT_TYPE,
@@ -305,7 +305,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     counts.sessions++
     // 回填基线：重启/首次见到会话时折一遍历史，op 全部记为已消费（不执行、不发事实）——
     // 剪点必须贴近尾部，历史中部不回剪（docs/03 §1）。
-    const snapshot = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents?.() ?? []
+    const snapshot = readSessionEvents(session)
     for (const event of snapshot) ingest(state, event)
     const plan = foldToolShear(state.events, policy)
     for (const op of plan.ops) state.consumed.add(opKeyOf(op))

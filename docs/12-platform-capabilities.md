@@ -101,6 +101,26 @@ optimize / compaction / init 四值）与 `CeGenerateOptions = Omit<GenerateOpti
 | `optimize-run` / `shear-applied` / `pressure-fired` / `restore/*`（运行账） | KV 事实镜像；KV 损毁 → 该族账目变暗（不可重算） | 观测层 |
 | **主上下文管理（剪切/压缩/优化回填）** | **零影响**——行为全部走 harness 词表内原生事件（surfaceOp replace / compaction/*），会话恢复的原生 fold 重演与通道无关 | 无 |
 
+**降级态的实时投递（HC3，2026-09-10 修正）**：事实轨降级**不止是"观测层变暗"**。写侧
+`emitFact` 走 KV 镜像时**不 append**，而 `facts/session-event` 面原先只从 `session/event`
+firehose 喂——于是同一进程内**跨域实时事实全断**：
+
+| 消费者 | 依赖事实 | 降级后果（修正前） |
+|---|---|---|
+| `domains/input.ts` 判别器段状态机（`foldSegmentState`） | `TASK_BOUNDARY_FACT_TYPE`（`/task`、`/task close`） | **用户显式 Tier-0 边界在会话内不可达**——[10 §2](10-event-flow.md) 称其为"压倒自动判定的权威边界" |
+| `domains/shear.ts` 剪切 run 状态机 | `judge-recorded` / `shear-run-plan` | run 分类输入 live 断线（run 冲刷 / ★ 回填 / CLASS 回填零触发） |
+
+这破了 §2 的承重条"端口签名在两种世界里完全一致"：**签名一致，但投递路径不一致**。
+**修正**：镜像成功 → 同一 `(type, data)` 回灌领域事件面（`platform/events.ts` 的
+`EventPump.publish` + `ignorable-channel.ts` 的 `setFactReplay`；装配钩子注入点 = `index.ts`）。
+domains 侧对事实来源仍**零感知**（D3 锁定 `setFactReplay` 越界即红），回灌失败只 warn、
+不改写 `mirrored` 记账（绝不双重计数）。
+
+镜像事实没有日志位，故其 `seq` = **到达序重建**：`max(当前日志尾, 上一枚镜像事实 + 1)`——
+锚在日志尾使事实落在语义正确的时刻，严格递增保证同一步内连发的多枚事实不被消费者的按 seq
+去重误吞。不变量：通道不可用时该会话的全部事实都走镜像，合成序空间自成一套（部分可用
+/部分降级的混态在设计上不存在——探测是进程级一次性的）。
+
 - **缓解设计**（各工单编写时展开）：P2 账本 fold 的**事实源抽象**（`facts = 会话 ignorable
   事件 ∨ KV 事实镜像`——同一 fold、同输入同账，[07 §5](07-metrics.md)）；P3 事实镜像表
   （**v2**：记录带 `sessionId` 会话维度，恢复侧按会话过滤；等价核对 = 同身份〔type+time〕
@@ -115,6 +135,9 @@ optimize / compaction / init 四值）与 `CeGenerateOptions = Omit<GenerateOpti
 - [ ] 探测双侧测试：patched-sim → emitted（append 携带 `{ignorable:true}`）；vanilla-sim →
        blocked，注册镜像后 → mirrored；
 - [ ] 回环 spec 常绿 = 升级自检（§2）；
+- [ ] HC3 投递路径一致性：vanilla-sim（通道缺失）+ 已接线镜像 + 已接线回灌 → 事实仍进
+      `facts/session-event`（seq = 到达序重建；见 §3；`tests/ignorable-channel.spec.ts`），
+      `EventPump.publish` 与 firehose 共用队列/FIFO/计数（`tests/events-pump.spec.ts`）；
 - [ ] core/domains 零通道概念引用（D3 的反向即本条，新增发射方工单验收时 grep 复核）；
 - [ ] C2：`toHarnessGenerateOptions` 是 `as GenerateOptions` 唯一 cast 点（grep 断言），
       `CeGenerateOptions` 可携带四值自定义 purpose（`npm run typecheck:tests`）；`streamCeLlm` 落位，D6 锁定 cast 单点；

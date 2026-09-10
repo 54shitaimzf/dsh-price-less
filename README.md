@@ -167,6 +167,22 @@ Every item below is landed in code and recorded in the ledger; the diagram annot
 - A local DeepSeek Harness source checkout for building
 - `dsh` CLI or `dev_inject_plugin` for loading the plugin
 
+Host version: the `peerDependencies` range accepts both the patched
+`0.1.3-alpha.*` line and prerelease `0.1.5-*` hosts
+(`>=0.1.3-alpha.1 <2 || >=0.1.5-alpha.0 <2`). Two caveats, both verified on the
+harness source (2026-09-10):
+
+- The **ignorable write channel** (`SESSION_LOG_INTENT` / `LogIntent`) is a local
+  harness patch that has **not** reached upstream. On a vanilla host the fact
+  track degrades to the KV mirror; the ledger semantics are unchanged
+  ([`docs/12 §3`](docs/12-platform-capabilities.md)).
+- Upstream `0.1.5` renamed the replace `surfaceOp` endpoints
+  (`{start,end}` → `{startSeq,endSeq}`) and bumped the session format to v3.
+  `src/platform/history.ts` carries a compile-time anchor for exactly this drift:
+  targeting such a host turns that anchor **red on purpose**. Do not silence it —
+  change the one `REPLACE_OP_KEYS` constant next to it
+  ([`docs/implement/REPAIR-2026-09-10.md §8`](docs/implement/REPAIR-2026-09-10.md)).
+
 ### Source Installation
 
 This is currently a **source-build / developer installation**. There is no published npm package or tarball distribution yet.

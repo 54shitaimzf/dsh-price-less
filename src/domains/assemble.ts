@@ -37,7 +37,7 @@ import type { LedgerSessionEvent } from '../core/ledger/types.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import type { HistoryPort } from '../platform/history.ts'
 import type { FilesPort } from '../platform/files.ts'
-import type { CeDomainEvents, CeLogger, EventPump } from '../platform/events.ts'
+import { readSessionEvents, type CeDomainEvents, type CeLogger, type EventPump } from '../platform/events.ts'
 import { ASSEMBLE_RUN_FACT_TYPE, type AssembleRunFactData } from './assemble-facts.ts'
 
 /** 会话内参与装配重折的原始事件上限（超出丢最老；只影响超老材料的单元清单，失败方向 = 保留）。 */
@@ -161,7 +161,7 @@ export function mountAssembleDomain(deps: AssembleDomainDeps): AssembleDomain {
     const state: AssembleSessionState = { session, events: [], seqs: new Set() }
     states.set(session, state)
     counts.sessions++
-    const snapshot = (session as unknown as { snapshotEvents?: () => readonly SessionEvent[] }).snapshotEvents?.() ?? []
+    const snapshot = readSessionEvents(session)
     for (const event of snapshot) ingest(state, event)
     return state
   }

@@ -23,6 +23,7 @@
 | 11 | **W2 方向② 形态解析器**（测试/编译器输出形态匹配） | 实测 ≤0.44%、宽目录零增量、旧口径 90–99% 误报（账本 §74） | 未施工（仅评估探针，已删） | §11；评估记录 [`implement/archive/W2c-output-shape.md`](implement/archive/W2c-output-shape.md)（已入库） |
 | 12 | **R1–R4 工单与验收脚本** | 已封存为历史记录 | 工单在 `implement/archive/`；失效脚本在 `scripts/archive/` | §12 |
 | 13 | **实验框架 evalground** | 依赖清退前生产 lib，随残留清空中断 | 封存只读（`runs/`/`datasets/` 保全） | §13；`experiments/evalground/SEALED.md` |
+| 14 | **上游同步读弃用面 + 不可锚 cast 登记**（2026-09-10 兼容性审查） | A 基线未弃用 / B 基线（≥0.1.5）已弃用但未移除；本战役不重构 | 不删码：`snapshotEvents` 已收口 `platform/events.ts`；`eventAt` 4 处留在 `domains/shear.ts` | §14；依据 [`implement/REPAIR-2026-09-10.md`](implement/REPAIR-2026-09-10.md) §8.2/§8.4 |
 
 ## 1. 锚定段与四节产品（模板缓存 / 锚定预算）
 
@@ -155,6 +156,45 @@
   `ground:assert`/`ground:verify`/`run-*`/`rejudge` 全部不可用。
 - **后继**：`docs/08-experiment.md` 保留为历史方法学（不再是施工门禁）；实验结论已固化进 docs/02–04
   设计与常数；解封条件见 `experiments/evalground/SEALED.md`。`runs/`/`datasets/` 只读保全。
+
+---
+
+## 14. 上游同步读弃用面 + 不可锚 cast 登记（2026-09-10 兼容性审查）
+
+**不是退役设计，是"欠账台账"**：上游已把同步历史读标弃用，本仓**本轮不重构**（上游尚未移除、
+重构面大），但必须把欠账写明——否则下一个人只会看到一堆"看起来多余"的 cast。
+
+### 14.1 上游 `@deprecated` 面（B 基线 = 上游 ≥0.1.5）
+
+| 接口 | 上游状态 | 本仓现状 |
+|---|---|---|
+| `Session.snapshotEvents(from?, to?)` | `@deprecated` +「new calls are prohibited」（agent note `2026-09-09-deprecate-synchronous-session-event-reads.md`，配 lint 白名单，明确"把 waiver 复制到新的生产调用即违规"） | **已全部收口**到 `platform/events.ts: readSessionEvents`；`src/domains` 零直读 |
+| `Session.eventAt(seq)` | 同上 | **4 处保留**：`domains/shear.ts`（读被剪节点的原始 event 对象）。语义就是"按 seq 取一个事件"，无 platform 侧批量替代——留待上游给出 projections 读法后一并迁移 |
+| `Session.ownEvents()` | 同上 | 本仓未使用（不登记为欠账） |
+
+`platform/events.ts` 为这几个接口的**签名**备了双向编译期锚（`SessionSnapshotEventsAnchor` /
+`...AnchorBack`、`SessionEventAtAnchor` / `...AnchorBack`）——形状漂移在 typecheck 阶段先红，
+而不是等十几处调用点齐炸。
+
+### 14.2 不可锚的 harness 触点 cast（"没加锚"是结论，不是遗漏）
+
+| 位置 | cast 内容 | 为什么无法加编译期锚 |
+|---|---|---|
+| `platform/ignorable-channel.ts` `session.append` 适配器 | `<U>(t, d, o?: { ignorable?: true }) => SessionEvent<U>` | **设计内不可锚**：该能力（`LogIntent` / `IgnorableSessionEventMap`）只存在于 A 基线（本仓 checkout 的本地补丁，从未进上游）。任何"该 opts 必须存在"的锚都会在**受支持的** vanilla 基线上变红。它由运行期结构化能力探测（`SESSION_LOG_INTENT`）守门，并受 D3 断言锁定边界 |
+| `platform/ignorable-channel.ts` `session.header.id` | `{ header?: { id?: unknown } }` | 纯防御性读；`SessionHeader` 是公开类型，但本单元**不 import 宿主类型**（可删除单元纪律）。缺字段即回落（不写会话维度） |
+| `platform/events.ts`、`domains/{commands,compaction,input,restore}.ts` 的 `session.header.{id,origin,cwd}` 与 `session.firstLiveSeq` | 同上 | 同上：**防御性探测**，缺字段走默认值；加锚等于把"可选能力"写成"必须有"，反而制造假红 |
+| `platform/diag-sink.ts` `ctx.logger.exporter` | `{ exporter?: (ex) => () => void }` | cordis logger 的可选扩展面，跨版本非契约 |
+
+**判据（纪律）**：cast 必须带编译期锚，**除非**"被断言的能力在某个受支持基线上本就不存在"
+——此时锚会假红，代价大于收益；这类 cast 一律在此登记，并保证「失败方向 = 保留默认值」。
+
+### 14.3 已加锚（对照组，说明锚纪律在生效）
+
+- `platform/history.ts` `session.append` 适配器 → `ReplaceOpAnchor` / `ReplaceOpAnchorBack`
+  （端点名 `{start,end}` ⇄ 上游 `{startSeq,endSeq}`；**B 基线必须红**，这正是锚的价值）；
+- `platform/star-bridge.ts` RPC 四个面 → `StarRpc*Anchor`；
+- `platform/events.ts` 同步读签名 → 见 14.1；
+- `platform/ignorable-channel.ts` 镜像事件视景字段面 → `MirroredFactFaceAnchor`。
 
 ---
 

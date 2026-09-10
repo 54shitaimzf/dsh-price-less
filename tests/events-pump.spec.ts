@@ -275,3 +275,52 @@ describe('异步旁路队列（docs/11 §4 纪律②）', () => {
     expect(await run()).toEqual(await run())
   })
 })
+
+/**
+ * HC3（REPAIR-2026-09-10 §8.3）：`publish` = 与 firehose 同队列、同 FIFO、同计数的内部投递口，
+ * 供降级态"镜像事实回灌"使用（domains 侧对事实来源保持零感知）。
+ */
+describe('EventPump.publish 内部投递口（HC3）', () => {
+  it('投递到 facts 面：同 FIFO 派发、enqueued/dispatched 计数、dispose 后计 dropped', async () => {
+    const { ctx } = makeFakeCtx()
+    const pump = createEventPump(ctx as never)
+    const seen: string[] = []
+    pump.on('facts/session-event', (p) => void seen.push(String((p.event as unknown as FakeEvent).type)))
+    const session = makeSession()
+    pump.publish('facts/session-event', {
+      session: session as never,
+      event: otherEvent('context-economy/task-boundary', 9) as never,
+    })
+    pump.publish('facts/session-event', {
+      session: session as never,
+      event: otherEvent('context-economy/judge-recorded', 11) as never,
+    })
+    expect(pump.stats().depth).toBe(2)
+    await flush()
+    expect(seen).toEqual(['context-economy/task-boundary', 'context-economy/judge-recorded'])
+    expect(pump.stats().enqueued).toBe(2)
+    expect(pump.stats().dispatched).toBe(2)
+    pump.dispose()
+    pump.publish('facts/session-event', {
+      session: session as never,
+      event: otherEvent('context-economy/late', 12) as never,
+    })
+    await flush()
+    expect(seen).toHaveLength(2)
+    expect(pump.stats().dropped).toBe(1)
+  })
+
+  it('publish 与 firehose 共用一条队列：交错投递保持全局 FIFO', async () => {
+    const { ctx, fire } = makeFakeCtx()
+    const pump = createEventPump(ctx as never)
+    const log: string[] = []
+    pump.on('facts/session-event', (p) => void log.push(`p:${(p.event as unknown as FakeEvent).seq}`))
+    const session = makeSession()
+    fire(session, { ...otherEvent('x', 1), type: 'context-economy/a' })
+    pump.publish('facts/session-event', { session: session as never, event: otherEvent('context-economy/b', 2) as never })
+    fire(session, { ...otherEvent('x', 3), type: 'context-economy/c' })
+    await flush()
+    expect(log).toEqual(['p:1', 'p:2', 'p:3'])
+    pump.dispose()
+  })
+})

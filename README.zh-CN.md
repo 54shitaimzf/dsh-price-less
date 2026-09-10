@@ -167,6 +167,18 @@ docs/           # 设计文档与施工工单
 - 本地 DeepSeek Harness 源码仓库（用于构建）
 - `dsh` CLI 或 `dev_inject_plugin`（用于加载插件）
 
+宿主版本：`peerDependencies` 范围同时接受补丁版 `0.1.3-alpha.*` 与预发布 `0.1.5-*`
+（`>=0.1.3-alpha.1 <2 || >=0.1.5-alpha.0 <2`）。两条已实测的注意项（2026-09-10 于
+harness 源码上验证）：
+
+- **ignorable 写入通道**（`SESSION_LOG_INTENT` / `LogIntent`）是本仓 harness 的**本地补丁**，
+  **尚未进入上游**。在 vanilla 宿主上事实轨降级为 KV 镜像，账本口径不变
+  （[`docs/12 §3`](docs/12-platform-capabilities.md)）。
+- 上游 `0.1.5` 把 replace `surfaceOp` 端点改名（`{start,end}` → `{startSeq,endSeq}`）并把会话
+  格式升到 v3。`src/platform/history.ts` 为这一漂移备了编译期锚：对准这类宿主时该锚会
+  **故意变红**。不要去消掉它——改它旁边那一个 `REPLACE_OP_KEYS` 常量即可
+  （[`docs/implement/REPAIR-2026-09-10.md §8`](docs/implement/REPAIR-2026-09-10.md)）。
+
 ### 源码安装
 
 当前只有**源码构建 / 开发者安装**方式，还没有发布 npm 包或 tarball。

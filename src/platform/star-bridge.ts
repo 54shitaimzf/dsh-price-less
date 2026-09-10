@@ -14,6 +14,7 @@
  */
 
 import type { ConnectionRpcHandler, ConnectionRpcResult, HostConnectionHandle, HostConnectionRpc } from '@deepseek-ai/dsh-client-connection/src/rpc.ts'
+import type { AssertAssignable } from './anchors.ts'
 import type { CeLogger } from './events.ts'
 
 /** 渠道与端点（wire 契约冻结；P14b2 client 侧常量必须逐字相等）。 */
@@ -48,7 +49,7 @@ export interface StarConnectionFace {
 }
 
 // 编译期结构锚：本地面 ⇄ harness 公开契约双向可赋（任一漂移 → typecheck 红）。
-export type AssertAssignable<A extends B, B> = true
+// 原语见 platform/anchors.ts（唯一出处）。
 export type StarRpcResultAnchor = AssertAssignable<StarRpcResult, ConnectionRpcResult<unknown>>
 export type StarRpcResultAnchorBack = AssertAssignable<ConnectionRpcResult<unknown>, StarRpcResult>
 export type StarRpcHandlerAnchor = AssertAssignable<StarRpcHandler, ConnectionRpcHandler>

@@ -16,7 +16,7 @@ import { streamCeLlm, type CeGenerateOptions } from '../platform/llm.ts'
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
-import { readSessionModel, type CeLogger } from '../platform/events.ts'
+import { readSessionEvents, readSessionModel, type CeLogger } from '../platform/events.ts'
 import type { Config as ConfigShape } from '../config.ts'
 import { clampInitGoal, parseInitOutput, renderInitPrompt } from '../core/init.ts'
 import { buildTaskBoundaryData } from './task-facts.ts'
@@ -68,9 +68,7 @@ function sidOf(session: Session): string {
 }
 
 function readFacts(session: Session): LedgerFact[] {
-  const snapshot = (session as unknown as { snapshotEvents?: () => readonly LedgerSessionEvent[] }).snapshotEvents
-  const events = snapshot ? snapshot() : []
-  return factsFromSessionEvents(events as LedgerSessionEvent[])
+  return factsFromSessionEvents(readSessionEvents(session) as unknown as LedgerSessionEvent[])
 }
 
 function renderTaskStatus(storage: ContextEconomyStorage, scopedTaskId: string, displayTaskId: string = scopedTaskId): CommandResult {

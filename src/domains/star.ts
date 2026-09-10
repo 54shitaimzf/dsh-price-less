@@ -26,7 +26,7 @@ import { resolveReasoningEffort, streamCeLlm, type CeGenerateOptions, type CeLlm
 import { emitCeFact } from '../platform/logger.ts'
 import { listSkillCatalog } from '../platform/skills.ts'
 import type { ContextEconomyStorage } from '../platform/storage.ts'
-import { readSessionModel, readSessionUserMessages, type CeLogger } from '../platform/events.ts'
+import { readSessionEvents, readSessionModel, readSessionUserMessages, type CeLogger } from '../platform/events.ts'
 import { STAR_BRIDGE_CODES, STAR_PREVIEW_LIMIT, type StarBridgeOutcome } from '../platform/star-bridge.ts'
 import { reasoningEffortSetting, type Config as ConfigShape } from '../config.ts'
 import { resolveJudgeModel } from './input.ts'
@@ -173,7 +173,7 @@ export function mountStarHost(deps: StarHostDeps): StarHost {
   let seq = 0
   const emit = deps.emitFact ?? ((session: Session, type: string, data: unknown, log?: CeLogger) => emitCeFact(session, type as never, data as never, log))
   const emitRun = (session: Session, data: OptimizeRunFactData): void => { emit(session, OPTIMIZE_RUN_FACT_TYPE, data, logger) }
-  const readFacts = (session: Session): LedgerFact[] => factsFromSessionEvents(((session as unknown as { snapshotEvents?: () => readonly LedgerSessionEvent[] }).snapshotEvents?.() ?? []) as LedgerSessionEvent[])
+  const readFacts = (session: Session): LedgerFact[] => factsFromSessionEvents(readSessionEvents(session) as unknown as LedgerSessionEvent[])
 
   const preview = async (input: { sessionId: string; prompt: string }): Promise<StarBridgeOutcome<StarPreviewDto>> => {
     const session = deps.resolveSession?.(input.sessionId)

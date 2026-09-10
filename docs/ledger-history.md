@@ -3150,3 +3150,83 @@ cargo 源码帧、python traceback 回显、maven `Tests run:` 汇总）。
 
 
 
+
+---
+
+## §80 harness 兼容性收口 HC2/HC3/HC4/HC6 落地（2026-09-10；提交 = 本账本同提交）
+
+**性质**：**兼容性收口**，非机制变更——`docs/07` 字段零新增、零改口径，机制读数不动。本条目 =
+`docs/implement/REPAIR-2026-09-10.md` §8「HC 系列」的落地快照（含该节要求的 §8.0 双基线对照读数）；
+U8–U13 与阶段二三的收口账本序号顺延（§81+）。
+
+**HC1 基线裁定（现状记录，裁定权仍在用户）**：落地取**方案 A（维持补丁分支）+ 把切 B 的成本压到一处
+常量**——这正是 §8.1 的推荐路径，且对 A/B 两个选择都成立，故不阻塞落地。方案 B 相关的 HC5
+（会话格式 v2→v3）**未做**：其撤销触发器 = 真机出现 `context-economy/*` 事件，实测 62 个会话文件
+**0 命中**，当前零风险。
+
+### 双基线对照读数（§8.0 复核，2026-09-10）
+
+| 基线 | 判定 | 读数 |
+|---|---|---|
+| **A** = `G:/deepseek-harness` @ `2fa55bc741`（`feat/ignorable-logintent-alpha2`，base `dsh-v0.1.3-alpha.2`） | ✅ 全绿 | `npm run gate` 退出 0：typecheck ✅ / typecheck:client ✅ / **635 passed (635)**、59 文件 / assert `ok=true vacuous=[]`；build 退出 0（host + client，`lib/client.js` 168.49 kB）；`typecheck:tests` ✅ |
+| **B** = `origin/master` @ `c291e7961a`（0.1.5-rc.2，领先 985 提交） | 未复跑 | 沿用 §8.0 读数（typecheck ✅ / typecheck:client ✅ / typecheck:tests ❌1 / vitest ❌4）。本轮改动的 A/B 语义见下 |
+
+### 落地内容
+
+**HC2 改史端点名（P0，`platform/history.ts`）** — 本次审查唯一「编译器失守」位置。
+`as unknown as` 把 `session.append` 伪装成旧形状、端点键名硬编码在两处构造点，B 基线
+（`isReplaceOp` 要求恰好 `op`/`startSeq`/`endSeq`）下 typecheck 全绿而**运行期第一次改史即抛**。
+改为：① `REPLACE_OP_KEYS` 单点常量 + 唯一构造函数 `replaceOp()`；② 双向编译期锚
+`ReplaceOpAnchor` / `ReplaceOpAnchorBack`（新 `platform/anchors.ts` 提供 `AssertAssignable` 原语，
+`star-bridge.ts` 改从该处导入，消除重复定义）。锚在 A 成立、**在 B 必须红**——切 B 的改动面 =
+2 行常量。
+
+**HC4 同步读收口（P2）** — 上游把 `snapshotEvents`/`eventAt`/`ownEvents` 标 `@deprecated`
++「new calls are prohibited」。本轮**不重构**，只做两件低风险事：① 新增 `platform/events.ts:
+readSessionEvents` 唯一收口，`src/domains` 直读全部迁走（`assemble`/`commands`/`compaction`/
+`restore`/`shear`/`star` 六处；`history.ts` 一处），使未来切 projections/分页异步读的改动面收敛在
+platform 一层；② 为同步读**签名**加双向锚（`SessionSnapshotEventsAnchor` / `...Back`、
+`SessionEventAtAnchor` / `...Back`）。`eventAt` 4 处（`domains/shear.ts`）保留并登记。
+验收：`grep -rn snapshotEvents src/domains` **0 命中**（含注释）。
+
+**HC3 事实轨降级时的实时消费断线（P1；A 为正确性加固，B 必需）** — 原设计里 `facts/session-event`
+面只从 `session/event` firehose 喂，而降级态 `emitFact` 只写 KV 镜像、**不 append**，于是同一进程内
+跨域实时事实全断：`/task` 的 Tier-0 边界到不了 `foldSegmentState`，剪切 run 状态机收不到
+`judge-recorded`/`shear-run-plan`（= U2 刚修的那类断线，对降级模式又成立）。**签名一致但投递路径
+不一致**，破了 `docs/12 §2` 的承重条。修复 = 镜像回灌：`EventPump.publish`（与 firehose 同队列 /
+同 FIFO / 同计数）+ `ignorable-channel.setFactReplay`（镜像成功才回灌，失败只 warn、不改写
+`mirrored` 记账）+ `logger.registerFactReplay` + `index.ts` 装配钩子；domains 保持零感知，
+D3 断言追加 `setFactReplay` 越界即红。镜像事实无日志位 → `seq` = **到达序重建**
+（`max(当前日志尾, 上一枚镜像事实 + 1)`），保证严格递增互异，不被消费者按 seq 去重误吞。
+
+**HC6 peerDependencies** — `>=0.1.3-alpha.1 <2 || >=0.1.5-alpha.0 <2`。semver 实测（`semver@7.8.5`
+逐版本）：旧范围 `0.1.5-alpha.0/alpha.1/rc.2` **全部 false**；新范围三者 `true`，且 `2.0.0` 仍
+`false`。README（zh/en）环境要求段同步「宿主版本」小节 + 两条实测注意项。
+
+### 验收
+
+- `npm run gate` 退出 0：**635 passed (635) / 59 文件**（基线 627 → +8：`ignorable-channel.spec` +6、
+  `events-pump.spec` +2）、assert `ok=true vacuous=[]`（D3 追加 `setFactReplay` 面 + 负样本）；
+- `npm run typecheck:tests` 退出 0；`npm run build` 退出 0（host + client）；
+- **lib 级冒烟**（跑在构建产物上，非 src；临时脚本跑完即删）：
+  `REPLACE_OP_KEYS = {"start":"start","end":"end"}` → 真实 `SessionStore` 接受 replace，`surface=[1]`、
+  `shadowed=[0]`（HC2 端到端）；`readSessionEvents` 读到 2 条（HC4 端口可用）；
+  VANILLA 探测 + 镜像 + 回灌 → 路由 `mirrored`×2、镜像落表 2 条（带 `sessionId`）、
+  **回灌到达 facts 面 2 条**（`context-economy/task-boundary@2`、`context-economy/judge-recorded@3`，
+  锚日志尾 2、严格递增，`ignorable:true`）——修正前此处为 **0 条**；
+- 唯一需要跟改的既有断言：`tests/apply-smoke.spec.ts` 的 disposer 计数 3 → 4
+  （新增「事实回灌注销」的 `ctx.effect`）。
+
+### 文档同步
+
+`docs/12` §3（降级语义补「实时投递断线 + 回灌修正 + 到达序重建」）、§4（HC3 验收条目）；
+`docs/legacy.md` §0 + **新增 §14**（上游同步读弃用面台账 + 不可锚 cast 登记 + 已加锚对照组）；
+`README.md` / `README.zh-CN.md`（宿主版本小节）；`AGENTS.md`（双基线事实 + platform 文件数）；
+`docs/implement/REPAIR-2026-09-10.md` §8 状态标注 / §9 修订记录；`docs/implement/TODO.md` §0。
+
+### 待办（未做，留给后续）
+
+- **HC1 正式裁定**：方案 A/B 二选一写入 §1 + `docs/12 §1 C1` 现状段（本轮按 A 落地但不代裁）；
+- **HC5**（仅选 B）：v2→v3 迁移端到端未跑通（上游文档措辞比 `assertV3EventAdmission` 严），
+  且需补「压缩区间起点 > system 节点」断言；
+- **HC4 迁移**：`eventAt` 4 处 + `ownEvents` 未用，等上游给出 projections 读法后一并迁移。

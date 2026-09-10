@@ -22,7 +22,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { CeLogger } from './events.ts'
-import { emitFact, factModeStats, setFactMirror, type FactMirror } from './ignorable-channel.ts'
+import { emitFact, factModeStats, setFactMirror, setFactReplay, type FactMirror, type FactReplay } from './ignorable-channel.ts'
 
 /** 诊断通道（纪律③）：ctx.logger('context-economy')。 */
 export function ceLogger(ctx: Context): CeLogger {
@@ -49,4 +49,12 @@ export function ceFactStats(): { emitted: number; mirrored: number; blocked: num
 /** 注册/注销 KV 事实镜像（D3 单点：index.ts 只经此函数，不出现 ignorable-channel 概念）。 */
 export function registerFactMirror(mirror: FactMirror | undefined): void {
   setFactMirror(mirror)
+}
+
+/**
+ * 注册/注销事实回灌（HC3；D3 单点同上）。
+ * 装配点注入"镜像成功 → 投回领域事件面"，否则降级态跨域实时事实断线（docs/12 §3）。
+ */
+export function registerFactReplay(replay: FactReplay | undefined): void {
+  setFactReplay(replay)
 }

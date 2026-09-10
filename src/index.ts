@@ -8,7 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { type Config as ConfigShape } from './config.ts'
 import { registerContextEconomySettings } from './settings.ts'
 import { createEventPump, readSessionUserMessages } from './platform/events.ts'
-import { ceLogger, registerFactMirror } from './platform/logger.ts'
+import { ceLogger, registerFactMirror, registerFactReplay } from './platform/logger.ts'
 import { attachDiagSink } from './platform/diag-sink.ts'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import { openContextEconomyStorage, type ContextEconomyStorage } from './platform/storage.ts'
@@ -89,6 +89,13 @@ export function apply(ctx: Context, config: Partial<ConfigShape>): void {
 
   const pump = createEventPump(ctx, ceLogger(ctx))
   ctx.effect(() => () => pump.dispose())
+
+  // HC3：降级态事实回灌。通道缺失时 emitFact 只写 KV 镜像、**不 append**，而 facts 面只从
+  // session/event firehose 喂——不回灌则跨域实时事实在本进程内不可达（`/task` Tier-0 边界、
+  // judge-recorded / shear-run-plan 全部丢失，签名一致但投递路径不一致）。此处注入
+  // "镜像成功 → publish"钩子，domains 侧零感知（docs/12 §2 耦合铁律）。
+  registerFactReplay((session, event) => pump.publish('facts/session-event', { session, event }))
+  ctx.effect(() => () => registerFactReplay(undefined))
 
   // P15b：工具剪切调度（独立于 storage/llm——纯机械四档 + 事实发射；开关 = config.shear.enabled）。
   // N1 工具签名通道：cordis 服务必须经 inject 取得（直接读 ctx.tools 在真运行时抛

@@ -14,9 +14,11 @@
  * 度量: 本模块无 07 字段；剪切/压缩域经返回值入账。
  */
 
-import type { Session, SessionEvent, SessionEventMap, SessionSeq, SurfaceEventType } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionEventMap, SessionSeq, SurfaceEventType, SurfaceOp } from '@deepseek-ai/dsh-session'
 import { CompactionId, compactCheckpointSource, toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm'
+import type { AssertAssignable } from './anchors.ts'
+import { readSessionEvents } from './events.ts'
 
 export type HistoryErrorCode =
   | 'INVALID_RANGE'
@@ -39,6 +41,31 @@ export class HistoryError extends Error {
 export interface SurfaceRange {
   start: SessionSeq
   end: SessionSeq
+}
+
+/**
+ * replace surfaceOp 端点键名（HC2 单点常量；REPAIR-2026-09-10 §8.2）。
+ *
+ * 基线 A（本仓 checkout `feat/ignorable-logintent-alpha2`，base `dsh-v0.1.3-alpha.2`）= `start`/`end`；
+ * 基线 B（上游 ≥ 0.1.5，`packages/core/session/src/surface.ts` 的 `isReplaceOp` 要求**恰好**
+ * `op`/`startSeq`/`endSeq` 三键）= `startSeq`/`endSeq`。**切 B 只改这两行**——下面的
+ * `ReplaceOpAnchor` 会由红转绿，锚本身就是切换成本的度量。
+ */
+export const REPLACE_OP_KEYS = { start: 'start', end: 'end' } as const
+
+/** harness `surfaceOp: { op: 'replace', … }` 的端点形状（键名与 `REPLACE_OP_KEYS` 同源）。 */
+export type ReplaceOp = { op: 'replace' } & Record<(typeof REPLACE_OP_KEYS)[keyof typeof REPLACE_OP_KEYS], SessionSeq>
+
+// 编译期双向锚（原语见 platform/anchors.ts）：本仓形状 ⇄ harness 权威形状互赋性。
+// 基线 A 成立；基线 B **必须红**——这正是它的价值：端点名漂移在 typecheck 阶段暴露，
+// 而不是等到运行期第一次改史时 `isReplaceOp` 抛 invalid replace surfaceOp（本次兼容性审查
+// 唯一"编译器失守"的位置，`tests/history-real-session.spec.ts` 在 B 基线上即此炸点）。
+export type ReplaceOpAnchor = AssertAssignable<ReplaceOp, Extract<SurfaceOp, { op: 'replace' }>>
+export type ReplaceOpAnchorBack = AssertAssignable<Extract<SurfaceOp, { op: 'replace' }>, ReplaceOp>
+
+/** 按 `REPLACE_OP_KEYS` 组装 harness replace op（本模块唯一构造点）。 */
+function replaceOp(start: SessionSeq, end: SessionSeq): ReplaceOp {
+  return { op: 'replace', [REPLACE_OP_KEYS.start]: start, [REPLACE_OP_KEYS.end]: end }
 }
 
 export interface ReplaceSurfaceRequest<T extends SurfaceEventType = SurfaceEventType> {
@@ -179,7 +206,7 @@ function mergeSourceSeqs(extra: readonly SessionSeq[] | undefined, shadowed: rea
 
 function scanActiveCompaction(session: Session): ActiveCompaction | undefined {
   let open: ActiveCompaction | undefined
-  for (const event of session.snapshotEvents()) {
+  for (const event of readSessionEvents(session)) {
     if (event.type === 'compaction/start') {
       open = {
         compactionId: event.data.compactionId,
@@ -208,7 +235,7 @@ export function createHistoryPort(
   const appendSurface = session.append.bind(session) as unknown as <U extends SurfaceEventType>(
     type: U,
     data: SessionEventMap[U],
-    opts: { surfaceOp: { op: 'replace'; start: SessionSeq; end: SessionSeq }; sourceEventSeqs?: SessionSeq[] },
+    opts: { surfaceOp: ReplaceOp; sourceEventSeqs?: SessionSeq[] },
   ) => SessionEvent<U>
 
   const replaceSurface = <T extends SurfaceEventType>(request: ReplaceSurfaceRequest<T>): HistoryReplaceResult<T> => {
@@ -220,7 +247,7 @@ export function createHistoryPort(
       ? undefined
       : mergeSourceSeqs(request.sourceEventSeqs, span.shadowedSeqs)
     const event = appendSurface(request.type, request.data, {
-      surfaceOp: { op: 'replace', start: request.range.start, end: request.range.end },
+      surfaceOp: replaceOp(request.range.start, request.range.end),
       ...(sourceEventSeqs === undefined ? {} : { sourceEventSeqs }),
     })
     return { event, shadowedSeqs: span.shadowedSeqs }
@@ -253,7 +280,7 @@ export function createHistoryPort(
     })
     const sourceEventSeqs = mergeSourceSeqs([active.startSeq, summaryEvent.seq], span.shadowedSeqs)
     const event = appendSurface('user/message', checkpoint, {
-      surfaceOp: { op: 'replace', start: input.range.start, end: input.range.end },
+      surfaceOp: replaceOp(input.range.start, input.range.end),
       sourceEventSeqs,
     })
     return { summaryEvent, landed: { event, shadowedSeqs: span.shadowedSeqs } }

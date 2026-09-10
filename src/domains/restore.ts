@@ -2,7 +2,7 @@
  * P21a 恢复编排（docs/09 §4 恢复契约 + docs/10 §1 H9；docs/11 §2 domains/restore.ts 行）。
  *
  * 一次恢复（H9 session-start 且 `firstLiveSeq > 0`）：
- *   全史自扫（`snapshotEvents`，种子不上 firehose）→ 按 09 §4 顺序逐项审计
+ *   全史自扫（platform `readSessionEvents` 端口，种子不上 firehose）→ 按 09 §4 顺序逐项审计
  *   → 项目帧快照回退 / 卷宗日志重放写回 / 边界档案与优化产物降级 / 段状态机与度量缓存纯函数重算
  *   → `restore-step` + `restore-degraded` + `restore-done` 事实入账（07 `restoreDegraded`）。
  *
@@ -36,7 +36,7 @@ import {
   type RestoreStepSpec,
 } from '../core/restore/index.ts'
 import { emitCeFact } from '../platform/logger.ts'
-import { readSessionUserMessages, type CeLogger } from '../platform/events.ts'
+import { readSessionEvents, readSessionUserMessages, type CeLogger } from '../platform/events.ts'
 import { CE_STORAGE_SCHEMA_VERSION, type ContextEconomyStorage } from '../platform/storage.ts'
 import { boundaryArchiveKey } from './compaction.ts'
 import { workspaceOf } from './workspace.ts'
@@ -105,7 +105,7 @@ function firstLiveSeqOf(session: Session): number {
 }
 
 function ledgerEventsOf(session: Session): LedgerSessionEvent[] {
-  const snapshot = (session as unknown as { snapshotEvents?: () => readonly unknown[] }).snapshotEvents?.() ?? []
+  const snapshot = readSessionEvents(session) as readonly unknown[]
   const out: LedgerSessionEvent[] = []
   for (const raw of snapshot) {
     const event = raw as { type?: unknown; seq?: unknown; time?: unknown; data?: unknown; surfaceOp?: unknown }

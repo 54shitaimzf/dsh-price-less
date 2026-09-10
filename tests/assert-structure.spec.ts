@@ -73,6 +73,9 @@ describe('负样本（每规则 ≥1）', () => {
     expect(check('D3', 'src/domains/a.ts', "import { emitFact } from '../platform/ignorable-channel.ts'\n")).not.toEqual(NO_ISSUES)
     expect(check('D3', 'src/core/a.ts', 'type X = keyof IgnorableSessionEventMap\n')).not.toEqual(NO_ISSUES)
     expect(check('D3', 'src/index.ts', 'const capable = SESSION_LOG_INTENT === 1\n')).not.toEqual(NO_ISSUES)
+    // HC3 追加面：镜像事实回灌钩子的低层注册名同样只许居于可删除单元。
+    expect(check('D3', 'src/domains/a.ts', 'setFactReplay((s, e) => pump.publish(e))\n')).not.toEqual(NO_ISSUES)
+    expect(check('D3', 'src/platform/ignorable-channel.ts', 'export function setFactReplay() {}\n')).toEqual(NO_ISSUES)
   })
   it('D4：storageDomain/defineDomain/domainTable 越出 platform/storage.ts 与 index.ts → issue', () => {
     expect(check('D4', 'src/domains/a.ts', "ctx.storageDomain.open({ name: 'x' })\n")).not.toEqual(NO_ISSUES)
