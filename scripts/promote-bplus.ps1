@@ -86,8 +86,16 @@ if ($SkipPlugin) {
   if ($LASTEXITCODE -ne 0) { Fail '插件 build.sh 失败' }
   Push-Location $pluginRoot
   try {
+    Write-Host '--- npm run typecheck:tests ---'
+    npm run typecheck:tests
+    if ($LASTEXITCODE -ne 0) { Fail 'npm run typecheck:tests 失败——不要重启宿主' }
+    Write-Host '--- npm run gate ---'
     npm run gate
     if ($LASTEXITCODE -ne 0) { Fail 'npm run gate 失败——不要重启宿主' }
+    # 构建产物级冒烟（跑在 lib/ 上，不是 src）——src 层 vitest 全绿也照样漏构建/链接漂移。
+    Write-Host '--- npm run smoke:lib ---'
+    npm run smoke:lib
+    if ($LASTEXITCODE -ne 0) { Fail 'npm run smoke:lib 失败——lib/ 与 harness 基线不匹配，不要重启宿主' }
   } finally { Pop-Location }
 }
 
