@@ -9,7 +9,7 @@
 > **留下无价的想法，省去有价的过程。**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-development-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-experimental-orange.svg)]()
 [![DSH](https://img.shields.io/badge/DSH-plugin--bundle-blue.svg)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)]()
 
@@ -19,8 +19,36 @@
 
 ---
 
+## 先读这个：依赖要求与实验状态
+
+> **⚠️ 本插件是实验性的、未发布的，且依赖打过补丁的 harness。**
+> 它**不是**生产可用软件。它会改写会话历史，依赖一个**尚未进入上游**的 harness 补丁，
+> 触发行为仍在真实会话上验证。**安装前请先读完本节。**
+
+### 硬依赖
+
+| # | 依赖 | 缺失后果 |
+|---|---|---|
+| 1 | **一份本地的 DeepSeek Harness 源码 checkout** | *致命。* 没有已发布的 npm 包，也没有 tarball——必须对着你自己的 harness 树从源码构建（`DSH_CHECKOUT=… npm run build`）。别人机器上的绝对路径在你这里不成立。 |
+| 2 | **带本地 *ignorable 通道* 补丁的宿主**（会话包里的 `SESSION_LOG_INTENT` / `LogIntent`） | *静默降级。* 事实不再写成真正的会话事件，而是退回 KV 镜像表（`fact_mirror`），于是事实轨在回放与导出中**不可见**。**这个补丁不在上游**——原版 DSH 宿主没有它。 |
+| 3 | **`surfaceOp` 端点名与会话格式与基线一致的宿主**（格式 v3、`{startSeq,endSeq}`） | *构建期致命。* `src/platform/history.ts` 里有一道编译期锚，宿主漂移时**会故意变红**。不要去消红——改它旁边那个常量。 |
+| 4 | **Node 20+、`dev_inject_plugin` 与一次 DSH 重启** | 重新编译出的 `lib/` 只有在宿主重启后才生效。 |
+| 5 | **你自己的辅助模型路由**（可选、默认关闭） | 判别、`/init`、星标断面与边界压缩会调用辅助模型：**真实 API 花费**，且提示词内容会送到你配置的服务商。不开启就不会有任何调用。 |
+
+### 实验状态——哪些**没有**保证
+
+- **真实场景验证很薄。** R1–R4 是"施工完成"（代码写完、`npm run gate` 全绿），**不是**"规模化验证过"。真机回放里**边界压缩只成功触发过 1 次**；触发链仍在调，判别器 task 粒度在 2026-09-11 又改了一版（v5）。本 README 里的数字会变。
+- **行为会随提交变化。** task 粒度、触发阈值、提示词契约都在改。每次改动都留账本快照（[`docs/ledger-history.md`](docs/ledger-history.md)）；本 README 的任何数字都是**某个时点的快照，不是承诺**。
+- **它会改写你的会话历史。** 压缩通过 harness 的 replace API 重写消息区间。每条路径都有守卫（失败惰性：拿不准就什么都不改），但这仍是一个上下文插件能做的**风险最高**的事——**首次使用前请备份 `~/.dsh/sessions`**。
+- **它绑定在特定宿主构建上。** 验证最充分的配置是**某个本地 harness 版本，而不是发布版**。升级 harness 可能无声地把插件弄坏——照 [`docs/14-upstream-upgrade.md`](docs/14-upstream-upgrade.md) 走。
+- **省 token 是目标，不是承诺。** 没有公开的逐会话成本基准；全部开启时，辅助调用可能比省下的还贵。
+- **没有支持承诺。** 单人维护、无发布流程、无兼容矩阵、无弃用政策。MIT，无担保。
+
+---
+
 ## 目录
 
+- [先读这个：依赖要求与实验状态](#先读这个依赖要求与实验状态)
 - [项目介绍](#项目介绍)
 - [它是怎么工作的](#它是怎么工作的)
 - [当前状态](#当前状态)
@@ -321,6 +349,9 @@ context-economy:
 
 ## 已知限制
 
+> 下面是简版；完整前置警示见 [先读这个：依赖要求与实验状态](#先读这个依赖要求与实验状态)。
+
+- **真实场景验证很薄**：R1–R4 是施工完成，不是规模化验证过。真机回放里**边界压缩只成功触发过 1 次**；触发链仍在调，判别器 task 粒度在 2026-09-11 又改了一版。
 - **尚未发布**：`package.json` 仍标记为 `private`，暂无官方 npm/tarball 发布。
 - **重新构建后需重启**：机制在下次重启时加载新的 `lib/`。
 - **自动识别默认关闭**：`discriminator.auto` 默认为 `false`，避免产生非预期的辅助模型费用。

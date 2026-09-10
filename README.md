@@ -9,7 +9,7 @@
 > **Priceless thoughts. Price-less costs.**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-development-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-experimental-orange.svg)]()
 [![DSH](https://img.shields.io/badge/DSH-plugin--bundle-blue.svg)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)]()
 
@@ -19,8 +19,37 @@
 
 ---
 
+## Read First: Dependencies & Experimental Status
+
+> **⚠️ This plugin is experimental, unpublished, and needs a patched harness.**
+> It is **not** production software. It rewrites conversation history, it depends on a
+> harness patch that is **not** in upstream, and its trigger behaviour is still being
+> validated on real sessions. Read this section before you install it.
+
+### Hard dependencies
+
+| # | Dependency | If it is missing |
+|---|---|---|
+| 1 | **A local DeepSeek Harness source checkout** | *Fatal.* There is no published npm package and no tarball — you must build from source against your own harness tree (`DSH_CHECKOUT=… npm run build`). Absolute paths from someone else's machine will not work. |
+| 2 | **A host carrying the local *ignorable-channel* patch** (`SESSION_LOG_INTENT` / `LogIntent` in the session package) | *Degraded, silently.* Facts fall back to a KV mirror table (`fact_mirror`) instead of real session events, so the fact track is invisible to replay and export. **This patch is not upstream** — a stock DSH host does not have it. |
+| 3 | **A host whose `surfaceOp` endpoints and session format match the baseline** (format v3, `{startSeq,endSeq}`) | *Fatal at build time.* `src/platform/history.ts` carries a compile-time anchor that turns **red on purpose** on a drifted host. Do not silence it — fix the constant beside it. |
+| 4 | **Node 20+, `dev_inject_plugin`, and a DSH restart** | A rebuilt `lib/` only takes effect after the host is restarted. |
+| 5 | **Your own auxiliary LLM route** (optional, opt-in) | Intent detection, `/init`, the star button and boundary compaction call an auxiliary model: **real API cost**, and prompt content is sent to whatever provider you configure. Nothing is called unless you enable it. |
+
+### Experimental status — what is *not* guaranteed
+
+- **Field validation is thin.** R1–R4 are *implementation complete* (code written, `npm run gate` green) — **not** *validated at scale*. On real-traffic replay, boundary compaction has fired **once**; the trigger chain is still being tuned, and discriminator task granularity was changed again on 2026-09-11 (v5). Expect the numbers in this README to move.
+- **Behaviour changes between commits.** Task granularity, trigger thresholds and prompt contracts are under active revision. Every change lands as a ledger snapshot in [`docs/ledger-history.md`](docs/ledger-history.md); treat any figure here as a dated snapshot, never a promise.
+- **It edits your conversation history.** Compaction rewrites message ranges through the harness replace API. Every path is guarded (fail-lazy: on any doubt, nothing is changed), but this remains the highest-risk thing a context plugin can do — **back up `~/.dsh/sessions` before first use.**
+- **It is tied to a specific host build.** The best-tested configuration is one local harness revision, not a released one. Upgrading the harness can break the plugin without warning — follow [`docs/14-upstream-upgrade.md`](docs/14-upstream-upgrade.md).
+- **Savings are the goal, not a promise.** No per-session cost benchmark is published, and auxiliary calls can cost more than they save if you enable everything.
+- **No support contract.** Single maintainer, no release process, no compatibility matrix, no deprecation policy. MIT, no warranty.
+
+---
+
 ## Table of Contents
 
+- [Read First: Dependencies & Experimental Status](#read-first-dependencies--experimental-status)
 - [About The Project](#about-the-project)
 - [How It Works](#how-it-works)
 - [Current Status](#current-status)
@@ -325,6 +354,9 @@ The design canon is maintained under [`docs/`](docs/):
 
 ## Known Limitations
 
+> Short version below — the up-front warning is [Read First: Dependencies & Experimental Status](#read-first-dependencies--experimental-status).
+
+- **Field validation is thin**: R1–R4 are implementation-complete, not proven at scale. On real-traffic replay, boundary compaction has fired **once**; trigger tuning is ongoing and the discriminator's task granularity changed again on 2026-09-11.
 - **Not published**: the package is still marked `private` and there is no official npm/tarball release.
 - **A rebuilt `lib/` needs a DSH restart**: mechanisms load on the next restart.
 - **Intent detection is opt-in**: `discriminator.auto` defaults to `false` to avoid unexpected auxiliary LLM costs.
