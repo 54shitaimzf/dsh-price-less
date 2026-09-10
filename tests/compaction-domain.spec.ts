@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { mountCompactionDomain, boundaryArchiveKey } from '../src/domains/compaction.ts'
+import { readArchiveStore } from '../src/core/compress/index.ts'
 import { COMPRESS_RUN_FACT_TYPE, HARD_TRUNCATE_FACT_TYPE, PRESSURE_FIRED_FACT_TYPE } from '../src/domains/compaction-facts.ts'
 import { SHEAR_APPLIED_FACT_TYPE, SHEAR_DECISION_FACT_TYPE } from '../src/core/shear/index.ts'
 import { ignorableChannelAvailable } from '../src/platform/ignorable-channel.ts'
@@ -270,6 +271,21 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     await env.domain.onPreStep({ session: env.session as never, turn: 1 })
     expect(appendsOf(env.session, 'compaction/start')).toHaveLength(0)
     expect(env.runs()[0]).toMatchObject({ outcome: 'skipped', reason: 'storage', calls: 1 })
+  })
+
+  it('U6：事务失败（半开 TXN_ACTIVE）→ 档案补偿复位，幽灵条目不残留', async () => {
+    const session = makeSession()
+    // 预插半开事务：writeStore 成功后 beginCompaction 被拒 → txn 失败（= 档案已写未落刀的幽灵场景）
+    session.append('compaction/start', { compactionId: 'orphan-1', turn: 1 })
+    const env = makeEnv({ session })
+    await env.domain.onPreStep({ session: session as never, turn: 2 })
+    const run = env.runs().at(-1)!
+    expect(run.outcome).toBe('skipped')
+    expect(String(run.reason)).toContain('txn-')
+    // 首建路径补偿：档案体复位为空档案——幽灵 boundary 条目不进续传链
+    const rec = env.storage.getEntity('boundary_archive', ARCHIVE_KEY)
+    expect(rec).toBeDefined()
+    expect(readArchiveStore(rec!.body, WORKSPACE).entries).toEqual([])
   })
 
   it('llm 服务缺失：跳过且允许后续重试（不计入已尝试）', async () => {

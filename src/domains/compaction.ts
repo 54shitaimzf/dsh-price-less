@@ -32,6 +32,7 @@ import {
   appendArchiveEntry,
   compressSpanHash,
   composePressureArchive,
+  emptyArchiveStore,
   fuseArmed,
   fuseFloorTokens,
   isPressureMaterial,
@@ -305,6 +306,35 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     }
   }
 
+  /**
+   * U6：档案补偿——事务失败时把档案回退到写前状态（防幽灵 checkpoint/boundary 条目毒化
+   * 下一轮折叠定位、缩水分母与断路器深度）。"先档案后落刀"的写序不变（失败默认保留）；
+   * 补偿失败只降级 warn（等价旧行为），不外溢。
+   */
+  const compensateArchive = async (
+    storeKey: string,
+    workspace: string,
+    scopedTaskId: string,
+    prior: { version: number } | undefined,
+  ): Promise<void> => {
+    try {
+      const current = storage.getEntity('boundary_archive', storeKey)
+      if (current === undefined) return
+      if (prior !== undefined) {
+        await storage.rollbackEntity('boundary_archive', storeKey, prior.version)
+      } else {
+        // 首建即失败：无版本可回 → 体复位为空档案（版本前进；内容等价于从未写过）
+        await storage.putEntity(
+          'boundary_archive', storeKey, emptyArchiveStore(workspace),
+          { taskId: scopedTaskId, eventType: 'archive-compensate', evidence: {} },
+          { baseVersion: current.version },
+        )
+      }
+    } catch (e) {
+      logger.warn('context-economy: archive compensate failed (degraded, fail-lazy)', e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const compactSegment = async (
     session: Session,
     turn: number,
@@ -513,6 +543,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       })
     })
     if (!txn.ok) {
+      // U6：档案补偿——事务未落刀，档案必须回退到写前状态（防幽灵 boundary 条目）
+      await compensateArchive(storeKey, workspace, scopedTaskId, existing)
       skip(`txn-${txn.code ?? 'fail'}`, { calls: chosen.calls, retry, shadowedTokens, productTokens: chosen.productTokens, cacheHit: chosen.cacheHit, ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }) })
       return
     }
@@ -824,6 +856,8 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       })
     })
     if (!txn.ok) {
+      // U6：档案补偿——事务未落刀，档案必须回退到写前状态（防幽灵 checkpoint 毒化续传链定位）
+      await compensateArchive(storeKey, workspace, scopedTaskId, existing)
       fire('skip', { reason: `txn-${txn.code ?? 'fail'}`, chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
         at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,

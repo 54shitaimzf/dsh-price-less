@@ -96,6 +96,17 @@ export async function openContextEconomyStorage(
 
   const snapshotKey = (table: string, version: number, key: string): string => JSON.stringify([table, version, key])
 
+  /**
+   * U6：快照槽**首照为王**——`[table, version, key]` 槽已存在则不再覆盖。
+   * 旧行为在"回滚→更新"序列下会用回滚链上的新体覆盖原始 v(T+1) 快照，
+   * 多轮后原始中间版本永久丢失（audit 显示被改写的历史、再回滚到该版本静默恢复出错误内容）。
+   */
+  const putSnapshotOnce = async (table: EntityTableName, key: string, version: number, record: EntityRecord): Promise<void> => {
+    const slot = snapshotKey(table, version, key)
+    if (snapshotTable.get(slot) !== undefined) return
+    await snapshotTable.put(slot, { entityType: table, entityKey: key, record, savedAt: now() })
+  }
+
   const snapshotMatches = (table: EntityTableName, key: string): Array<{ snapKey: string; snap: EntitySnapshotRecord }> => {
     const out: Array<{ snapKey: string; snap: EntitySnapshotRecord }> = []
     for (const [snapKey, snap] of snapshotTable.entries()) {
@@ -139,8 +150,7 @@ export async function openContextEconomyStorage(
     }
     const next: EntityRecord = { schemaVersion: CE_STORAGE_SCHEMA_VERSION, version, source, body }
     if (current !== undefined) {
-      const snap: EntitySnapshotRecord = { entityType: table, entityKey: key, record: current, savedAt: now() }
-      await snapshotTable.put(snapshotKey(table, current.version, key), snap)
+      await putSnapshotOnce(table, key, current.version, current)
     }
     await tableHandle.put(key, next)
     await pruneSnapshots(table, key)
@@ -163,8 +173,7 @@ export async function openContextEconomyStorage(
       .filter(({ snap }) => snap.record.version === targetVersion)
       .sort((a, b) => b.snap.savedAt - a.snap.savedAt)[0]
     if (target === undefined) throw new StorageError('ROLLBACK_TARGET_NOT_FOUND', `no snapshot at version ${targetVersion} for '${key}'`)
-    const snap: EntitySnapshotRecord = { entityType: table, entityKey: key, record: current, savedAt: now() }
-    await snapshotTable.put(snapshotKey(table, current.version, key), snap)
+    await putSnapshotOnce(table, key, current.version, current)
     const rolled: EntityRecord = {
       schemaVersion: CE_STORAGE_SCHEMA_VERSION,
       version: targetVersion,

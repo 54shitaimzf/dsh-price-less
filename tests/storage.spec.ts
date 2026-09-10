@@ -146,6 +146,22 @@ describe('P3 持久面', () => {
     expect(audit[2]!.body).toEqual({ v: 3 })
   })
 
+  it('U6：快照槽首照为王——回滚→更新不毁原始版本快照，再回滚恢复的是原始内容', async () => {
+    const { storage } = await makeStorage()
+    await storage.putEntity('dossier', 'k', { v: 'orig-1' }, source)
+    await storage.putEntity('dossier', 'k', { v: 'orig-2' }, source, { baseVersion: 1 })
+    // 回滚到 v1（v2 快照落在槽 [2]），随后在回滚链上更新两版——
+    // 旧行为：新 v2' 会覆盖槽 [2] 的原始 v2 快照 → 再回滚恢复出错内容
+    await storage.rollbackEntity('dossier', 'k', 1)
+    await storage.putEntity('dossier', 'k', { v: 'new-2' }, source, { baseVersion: 1 })
+    await storage.putEntity('dossier', 'k', { v: 'new-3' }, source, { baseVersion: 2 })
+    const audit = storage.auditEntity('dossier', 'k')
+    const v2Audit = audit.find((r) => r.version === 2)
+    expect(v2Audit!.body).toEqual({ v: 'orig-2' })
+    const backTo2 = await storage.rollbackEntity('dossier', 'k', 2)
+    expect(backTo2.body).toEqual({ v: 'orig-2' })
+  })
+
   it('8. 事实镜像：固定 now、同 type 同 time 不互相覆盖、seq 缺省', async () => {
     const { storage } = await makeStorage(() => 1234)
     storage.writeFactMirror('context-economy/task-boundary', { x: 1 })
