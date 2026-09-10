@@ -45,6 +45,11 @@ export interface CompressRunFactData {
   // —— P19 边界路径归因（压力路径 P20a 复用同字段） ——
   /** 会话级 taskId（`sessionScopedTaskId`；一次尝试一条事实，重放可判"已归档"）。 */
   readonly taskId?: string
+  /**
+   * U9 段锚：本次尝试所压**段**的起点会话序（`TaskSegment.startSeq`；缺省 = 未知/旧事实）。
+   * 与 `taskId` 合成"已归档"键——同名 task 在不同段重开（事实窗截断导致段编号复用）不再被永久封禁。
+   */
+  readonly segmentStartSeq?: number | null
   /** 未落刀/降级原因（skipped 细分：llm-unavailable / parse / schema / shrink / storage / range / no-units）。 */
   readonly reason?: string
   /** 被压区间体量（缩水校验分母）。 */

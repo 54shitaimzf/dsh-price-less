@@ -95,8 +95,31 @@ export interface TxnRunResult {
 }
 
 /**
+ * U9.3 孤儿事务自愈：`COMPACTION_ACTIVE` 在**单线程同步窗口**内不存在真并发，
+ * 必为残留（进程崩溃 / 被强杀在 open 与 close 之间）。后果极重——`beginCompaction` 每次都被拒，
+ * 该会话的压缩**永久瘫痪**；而修复成本只是一次闭合。
+ * 返回 true = 确实闭合了一个残留事务（调用方据此把这次失败标成可重试的临时失败）。
+ */
+function closeOrphanCompaction(history: HistoryPort): boolean {
+  try {
+    const active = history.findActiveCompaction()
+    if (active === undefined) return false
+    history.endCompaction({
+      compactionId: String(active.compactionId),
+      turn: active.turn,
+      error: 'orphan-closed',
+    })
+    return true
+  } catch {
+    // 闭合失败（表面损坏 / 端口不支持）→ 维持旧语义（本次不落刀），绝不外溢。
+    return false
+  }
+}
+
+/**
  * 共享事务原语执行器（docs/04 §1）：assertNoActiveCompaction → open → 业务 op → close。
  * 业务 op 失败也**闭合事务**（带 error，绝不半开标记）；标记对与配对平衡守卫锁在 platform/history（D7）。
+ * U9.3：活动事务残留 → 先自愈闭合再如实报失败（下一次 pre-step 自然重试成功）。
  */
 export function runCompactionTxn(
   history: HistoryPort,
@@ -107,7 +130,13 @@ export function runCompactionTxn(
   try {
     history.assertNoActiveCompaction()
   } catch (e) {
-    return { ok: false, code: 'TXN_ACTIVE', message: e instanceof Error ? e.message : String(e), steps: 0 }
+    const healed = closeOrphanCompaction(history)
+    return {
+      ok: false,
+      code: healed ? 'COMPACTION_ACTIVE_ORPHAN_CLOSED' : 'TXN_ACTIVE',
+      message: e instanceof Error ? e.message : String(e),
+      steps: healed ? 1 : 0,
+    }
   }
   history.beginCompaction({ compactionId: plan.txnId, turn: plan.turn })
   let steps = 1

@@ -261,13 +261,12 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     expect(env.domain.stats().compactions).toBe(1)
   })
 
-  it('F9：重试超预算后才永久归档（防每步重复计费）', async () => {
+  it('F9/U9：重试超预算后才永久归档（预算 2 → 三次尝试；防每步重复计费）', async () => {
     const env = makeEnv({ llm: fakeLlm([{ text: 'not json' }]) })
-    await env.domain.onPreStep({ session: env.session as never, turn: 1 })
-    await env.domain.onPreStep({ session: env.session as never, turn: 2 })
-    expect(env.llm.calls).toHaveLength(2)
-    await env.domain.onPreStep({ session: env.session as never, turn: 3 })
-    expect(env.llm.calls).toHaveLength(2)
+    for (const turn of [1, 2, 3]) await env.domain.onPreStep({ session: env.session as never, turn })
+    expect(env.llm.calls).toHaveLength(3)
+    await env.domain.onPreStep({ session: env.session as never, turn: 4 })
+    expect(env.llm.calls).toHaveLength(3)
   })
 
   it('缩水失败：重试 1 次后放弃（不落刀，记 shrink + retry）', async () => {
@@ -287,7 +286,7 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     expect(env.runs()[0]).toMatchObject({ outcome: 'skipped', reason: 'storage', calls: 1 })
   })
 
-  it('U6：事务失败（半开 TXN_ACTIVE）→ 档案补偿复位，幽灵条目不残留', async () => {
+  it('U6/U9：事务失败（活动事务残留 → 自愈闭合 + TXN_ACTIVE）→ 档案补偿复位，幽灵条目不残留', async () => {
     const session = makeSession()
     // 预插半开事务：writeStore 成功后 beginCompaction 被拒 → txn 失败（= 档案已写未落刀的幽灵场景）
     session.append('compaction/start', { compactionId: 'orphan-1', turn: 1 })
@@ -300,6 +299,43 @@ describe('P19b 边界压缩：失败语义（不落刀 + 如实记账）', () =>
     const rec = env.storage.getEntity('boundary_archive', ARCHIVE_KEY)
     expect(rec).toBeDefined()
     expect(readArchiveStore(rec!.body, WORKSPACE).entries).toEqual([])
+  })
+
+  it('U9：孤儿事务自愈——首次 pre-step 闭合残留并 skip（可重试），第二次直接落刀（旧行为 = 会话永久瘫痪）', async () => {
+    const session = makeSession()
+    session.append('compaction/start', { compactionId: 'orphan-1', turn: 1 })
+    const env = makeEnv({ session })
+    await env.domain.onPreStep({ session: session as never, turn: 2 })
+    const first = env.runs().at(-1)!
+    expect(first.outcome).toBe('skipped')
+    // 残留事务被带 error 闭合 → 取锁状态解除
+    expect(session.events.filter((e) => e.type === 'compaction/end').at(-1)?.data).toMatchObject({ error: 'orphan-closed' })
+    // 第二次：txn-* 计入 transient（不永久封禁）→ 正常落刀
+    await env.domain.onPreStep({ session: session as never, turn: 3 })
+    expect(env.runs().at(-1)).toMatchObject({ outcome: 'ok' })
+    expect(readArchiveStore(env.storage.getEntity('boundary_archive', ARCHIVE_KEY)!.body, WORKSPACE).entries.map((e) => e.kind)).toEqual(['boundary'])
+  })
+
+  it('U9 段锚：同名 task 在不同段重现 → 旧事实不再永久封禁（事实窗截断致段编号复用）', async () => {
+    const archived = (segmentStartSeq: number) => {
+      const session = makeSession()
+      session.append('context-economy/compress-run', {
+        at: 1, layer: 'boundary', promptVersion: 1, policyVersion: 1,
+        taskId: 's1:task-1', segmentStartSeq, outcome: 'ok',
+      }, { ignorable: true })
+      return session
+    }
+    // ① 旧段锚（99 ≠ 当前 task-1 段起点）→ 不构成"该段已归档"→ 正常压缩
+    const reopen = archived(99)
+    const envA = makeEnv({ session: reopen })
+    await envA.domain.onPreStep({ session: reopen as never, turn: 1 })
+    expect(envA.llm.calls).toHaveLength(1)
+    expect(envA.runs().at(-1)).toMatchObject({ outcome: 'ok', segmentStartSeq: 0 })
+    // ② 同段锚 → 判为已归档，零调用（不重复计费）
+    const same = archived(0)
+    const envB = makeEnv({ session: same })
+    await envB.domain.onPreStep({ session: same as never, turn: 1 })
+    expect(envB.llm.calls).toHaveLength(0)
   })
 
   it('llm 服务缺失：跳过且允许后续重试（不计入已尝试）', async () => {

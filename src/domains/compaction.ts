@@ -166,11 +166,28 @@ function firstUserSeq(events: readonly LedgerSessionEvent[]): number {
   return events[0]?.seq ?? 0
 }
 
-/** F9：解析/schema 失败的有界重试预算（防一次坏输出把 task 永久封禁；仍防每步重复计费）。 */
-export const SCHEMA_RETRY_BUDGET = 1
+/**
+ * U9：**统一重试预算**（旧名 SCHEMA_RETRY_BUDGET = 1，只覆盖 parse/schema）。
+ * 可重试的临时失败 = parse / schema / skipped(shrink|storage|txn-*)：
+ * ① 一次坏输出不该把 task 永久封禁；② 一次瞬时落盘/事务失败（含孤儿事务自愈后的那次）同理。
+ * 预算 2 仍防"每步重复计费"（一次 task 最多 3 次真正尝试）。
+ */
+export const RETRY_BUDGET = 2
 
-/** 已尝试过的 task（事实键，重放可判）：除 llm-unavailable / 有界重试内的 parse|schema 外不再尝试。 */
-function attemptedTaskIds(facts: readonly LedgerFact[], schemaRetryBudget = SCHEMA_RETRY_BUDGET): Set<string> {
+/** 可重试的临时失败判据（U9.2；压力路径事实 `layer !== 'boundary'` 先行排除）。 */
+export function isTransientCompressFailure(data: Partial<CompressRunFactData>): boolean {
+  if (data.outcome === 'parse' || data.outcome === 'schema') return true
+  if (data.outcome !== 'skipped') return false
+  const reason = data.reason ?? ''
+  return reason === 'shrink' || reason === 'storage' || reason.startsWith('txn-')
+}
+
+/**
+ * 已尝试过的 task 段（事实键，重放可判）：除 llm-unavailable / 有界重试内的临时失败外不再尝试。
+ * U9：键 = `${scopedTaskId}:${segmentStartSeq ?? ''}`；**无该字段的旧事实保守沿用旧键**
+ * `${scopedTaskId}`（一次性影响：升级前的历史事实仍按"该 task 已归档"判，不重复计费）。
+ */
+function attemptedTaskIds(facts: readonly LedgerFact[], retryBudget = RETRY_BUDGET): Set<string> {
   const attempted = new Set<string>()
   const transient = new Map<string, number>()
   for (const fact of facts) {
@@ -180,14 +197,14 @@ function attemptedTaskIds(facts: readonly LedgerFact[], schemaRetryBudget = SCHE
     // 只有边界路径的尝试才算"该 task 已归档"；压力路径的 compress-run 不阻止 task 闭合归档。
     if (data.layer !== 'boundary') continue
     if (data.outcome === 'skipped' && data.reason === 'llm-unavailable') continue
-    // F9：解析/schema = 可重试的临时失败——有界重试后才永久归档（原缺陷 = 一次坏输出永久封禁）。
-    if (data.outcome === 'parse' || data.outcome === 'schema') {
-      transient.set(data.taskId, (transient.get(data.taskId) ?? 0) + 1)
+    const key = data.segmentStartSeq === undefined ? data.taskId : `${data.taskId}:${data.segmentStartSeq ?? ''}`
+    if (isTransientCompressFailure(data)) {
+      transient.set(key, (transient.get(key) ?? 0) + 1)
       continue
     }
-    attempted.add(data.taskId)
+    attempted.add(key)
   }
-  for (const [taskId, count] of transient) if (count > schemaRetryBudget) attempted.add(taskId)
+  for (const [key, count] of transient) if (count > retryBudget) attempted.add(key)
   return attempted
 }
 
@@ -356,7 +373,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const base = {
       at: now(), layer: 'boundary' as const,
       promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-      taskId: scopedTaskId,
+      taskId: scopedTaskId, segmentStartSeq: segment.startSeq ?? null,
     }
     const skip = (reason: string, extra: Partial<CompressRunFactData> = {}): void => {
       counts.skips++
@@ -594,7 +611,10 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (segments.length < 2) return
     const sid = sessionIdOf(session)
     const attempted = attemptedTaskIds(facts)
-    const index = segments.findIndex((segment, i) => segment.closed && i < segments.length - 1 && !attempted.has(`${sid}:${segment.taskId}`))
+    const index = segments.findIndex((segment, i) =>
+      segment.closed && i < segments.length - 1
+      && !attempted.has(`${sid}:${segment.taskId}`)                    // 旧事实键（保守）
+      && !attempted.has(`${sid}:${segment.taskId}:${segment.startSeq ?? ''}`))
     if (index < 0) return
     const nextStartSeq = segments[index + 1]?.startSeq
     if (typeof nextStartSeq !== 'number') return
@@ -660,6 +680,11 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     const segment = segments.at(-1)
     if (segment === undefined || segment.closed) { fire('skip', { reason: 'no-task' }); return stop(false) }
     const scopedTaskId = `${sid}:${segment.taskId}`
+    /** U9：压力路径 `compress-run` 的公共头（含段锚；与边界路径同字段）。 */
+    const runBase = {
+      at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION,
+      policyVersion: COMPRESS_POLICY_VERSION, taskId: scopedTaskId, segmentStartSeq: segment.startSeq ?? null,
+    }
     const existing = storage.getEntity('boundary_archive', storeKey)
     const storeBody = readArchiveStore(existing?.body, workspace)
     const priorChain = priorChainFor(storeBody, scopedTaskId, sid)
@@ -749,8 +774,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
           const unavailable = failure.code === 'CE_LLM_UNAVAILABLE'
           fire('skip', { reason: unavailable ? 'llm-unavailable' : 'llm-error', chainDepth: depth, cutPointSeq: undefined })
           emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
-            at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-            taskId: scopedTaskId, outcome: 'skipped' as const, reason: unavailable ? 'llm-unavailable' : 'llm-error',
+            ...runBase, outcome: 'skipped' as const, reason: unavailable ? 'llm-unavailable' : 'llm-error',
             calls: unavailable ? calls : calls + 1, emergency: opts.emergency,
             ...(usage === undefined ? {} : { llmUsage: usage }),
           }), logger)
@@ -761,8 +785,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
         const parsed = parseCompressProduct(llmText, 'pressure', units)
         if (!parsed.ok) {
           emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
-            at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-            taskId: scopedTaskId, outcome: parsed.reason, calls, emergency: opts.emergency,
+            ...runBase, outcome: parsed.reason, calls, emergency: opts.emergency,
             ...(usage === undefined ? {} : { llmUsage: usage }),
           }), logger)
           return undefined
@@ -806,8 +829,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (chosen === undefined) {
       fire('skip', { reason: 'shrink', chainDepth: depth, foldedTokens: lastFolded, retainedTokens: lastRetained })
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
-        at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-        taskId: scopedTaskId, outcome: 'skipped' as const, reason: 'shrink', calls, retry,
+        ...runBase, outcome: 'skipped' as const, reason: 'shrink', calls, retry,
         foldedTokens: lastFolded, retainedTokens: lastRetained, emergency: opts.emergency,
         ...(usage === undefined ? {} : { llmUsage: usage }),
       }), logger)
@@ -832,8 +854,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     if (written === undefined) {
       fire('skip', { reason: 'storage', chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
-        at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-        taskId: scopedTaskId, outcome: 'skipped' as const, reason: 'storage', calls: chosen.calls, retry,
+        ...runBase, outcome: 'skipped' as const, reason: 'storage', calls: chosen.calls, retry,
         cacheHit: chosen.cacheHit, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens,
         cutPointSeq: chosen.cutSeq, emergency: opts.emergency,
         ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
@@ -868,8 +889,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
       await compensateArchive(storeKey, workspace, scopedTaskId, existing)
       fire('skip', { reason: `txn-${txn.code ?? 'fail'}`, chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
       emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
-        at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-        taskId: scopedTaskId, outcome: 'skipped' as const, reason: 'txn', calls: chosen.calls, retry,
+        ...runBase, outcome: 'skipped' as const, reason: 'txn', calls: chosen.calls, retry,
         cacheHit: chosen.cacheHit, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens,
         cutPointSeq: chosen.cutSeq, emergency: opts.emergency,
         ...(chosen.usage === undefined ? {} : { llmUsage: chosen.usage }),
@@ -879,8 +899,7 @@ export function mountCompactionDomain(deps: CompactionDomainDeps): CompactionDom
     counts.compactions++
     fire('fired', { chainDepth: depth, foldedTokens: chosen.foldedTokens, retainedTokens: chosen.retainedTokens, cutPointSeq: chosen.cutSeq })
     emitCeFact(session, COMPRESS_RUN_FACT_TYPE, compactFact({
-      at: now(), layer: 'pressure' as const, promptVersion: COMPRESS_PROMPT_VERSION, policyVersion: COMPRESS_POLICY_VERSION,
-      taskId: scopedTaskId, outcome: 'ok' as const, calls: chosen.calls, cacheHit: chosen.cacheHit, retry,
+      ...runBase, outcome: 'ok' as const, calls: chosen.calls, cacheHit: chosen.cacheHit, retry,
       regionTokens: chosen.foldedTokens,
       ...(renderedPromptTokens === undefined ? {} : { promptTokens: renderedPromptTokens }),
       productBytes: new TextEncoder().encode(chosen.rendered).length,

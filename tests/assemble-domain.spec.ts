@@ -274,14 +274,22 @@ describe('P17b 共享事务原语执行器', () => {
     expect(session.appends.at(-1)!.data.error).toBeUndefined()
   })
 
-  it('已有活动事务 → 拒绝（持锁幂等，不嵌套）', () => {
+  it('U9：活动事务残留 → 自愈闭合 + 如实报失败；闭合后下一次正常开事务（防会话级永久瘫痪）', () => {
     const session = makeSurface()
     const history = createHistoryPort(session as never)
-    history.beginCompaction({ compactionId: 'other', turn: null })
+    history.beginCompaction({ compactionId: 'orphan-1', turn: null })
     const plan = planTxn({ txnId: 'txn-2', layer: 'boundary', taskId: 'task-1', range: { start: 0, end: 2 }, shadowedTokenCount: 1, replaceKind: 'digest' })
     const result = runCompactionTxn(history, plan, () => {})
-    expect(result).toEqual({ ok: false, code: 'TXN_ACTIVE', message: expect.any(String), steps: 0 })
-    expect(session.appends.filter((entry) => entry.type === 'compaction/start').length).toBe(1)
+    expect(result).toMatchObject({ ok: false, code: 'COMPACTION_ACTIVE_ORPHAN_CLOSED' })
+    // 残留事务被带 error 闭合（可回放辨认），持锁状态解除
+    const closes = session.appends.filter((entry) => entry.type === 'compaction/end')
+    expect(closes).toHaveLength(1)
+    expect(closes[0]!.data).toMatchObject({ compactionId: 'orphan-1', error: 'orphan-closed' })
+    expect(history.findActiveCompaction()).toBeUndefined()
+    // 旧行为 = 每次都被 TXN_ACTIVE 拒 → 该会话压缩永久瘫痪；自愈后同一 plan 正常开+闭
+    const second = runCompactionTxn(history, plan, () => {})
+    expect(second.ok).toBe(true)
+    expect(session.appends.filter((entry) => entry.type === 'compaction/start').length).toBe(2)
   })
 
   it('业务失败 → 带 error 闭合事务（绝不半开标记）', () => {
