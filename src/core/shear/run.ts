@@ -82,7 +82,7 @@ export interface RunPlanItem {
 
 export interface RunOp {
   readonly kind: 'run-flush'
-  /** 幂等键：run|<startSeq>..<endSeq>。 */
+  /** 幂等键：run|<startSeq>（U2：不含 endSeq，防冲刷后增长的残余被二次落刀）。 */
   readonly key: string
   readonly startSeq: number
   readonly endSeq: number
@@ -259,7 +259,9 @@ export function foldRunShear(events: readonly RunEvent[], policy: RunPolicy = DE
 
   const close = (closing: Closing): void => {
     const { draft } = closing
-    const key = `run|${draft.startSeq}..${closing.endSeq}`
+    // U2：幂等键只锚 startSeq——冲刷后 run 长出残余消息时新折叠产出更大 endSeq 的同源 run，
+    // 含 endSeq 的键会被当成新 run 二次落刀（残余未吸收即被重复结论替换 = 内容丢失）。
+    const key = `run|${draft.startSeq}`
     const runKey = `${draft.startSeq}..${closing.endSeq}`
     const inRun = ordered.filter((event) => event.seq >= draft.startSeq && event.seq <= closing.endSeq)
     const answerDelivered = inRun.some((event) => event.kind === 'assistant-message' && event.seq > draft.lastUserSeq)

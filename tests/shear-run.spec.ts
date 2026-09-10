@@ -32,7 +32,7 @@ describe('foldRunShear（对话 run 状态机）', () => {
     const planOut = foldRunShear(events)
     expect(planOut.ops).toHaveLength(1)
     const op = planOut.ops[0]!
-    expect(op).toMatchObject({ key: 'run|1..6', startSeq: 1, endSeq: 6, runClass: 'pureQ', pairs: 2, conclusionTier: 'mechanical-quote' })
+    expect(op).toMatchObject({ key: 'run|1', startSeq: 1, endSeq: 6, runClass: 'pureQ', pairs: 2, conclusionTier: 'mechanical-quote' })
     expect(op.conclusion).toBe('已吸收：关于「为什么要用 A？」的 2 轮问答，结论：C 也可以，但慢。（用户已确认理解）')
     expect(planOut.backlogDepth).toBe(0)
     expect(planOut.decisions[0]).toMatchObject({ runKey: '1..6', decision: 'cut', reason: 'absorbed' })

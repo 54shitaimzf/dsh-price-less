@@ -603,8 +603,22 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
     processRuns(state)
   }
 
+  // U2（live 断线修复）：判词/星标事实只经 facts 面（六类字面事件走 metrics 面）——
+  // pump 按 METRICS_FACE_TYPES 路由，context-economy/* 不进 metrics 面；不订阅本面则
+  // run 分类输入 live 永不可达（run 冲刷/★ 回填/CLASS 回填真机零触发）。
+  const onFacts = ({ session, event }: CeDomainEvents['facts/session-event']): void => {
+    if (disposed || !enabled()) return
+    if (session.header.origin === 'subagent') return
+    if (event.type !== JUDGE_RECORDED_FACT_TYPE && event.type !== SHEAR_RUN_PLAN_FACT_TYPE) return
+    const state = stateOf(session)
+    if (!ingest(state, event)) return
+    processOps(state)
+    processRuns(state)
+  }
+
   const offMetrics = pump.on('metrics/session-event', onMetrics)
   const offUser = pump.on('input/user-message', onUserMessage)
+  const offFacts = pump.on('facts/session-event', onFacts)
 
   return {
     dispose() {
@@ -612,6 +626,7 @@ export function mountShearDomain(ctx: ShearToolPortContext, deps: ShearDomainDep
       disposed = true
       offMetrics()
       offUser()
+      offFacts()
       port.dispose()
     },
     stats() { return { ...counts } },
