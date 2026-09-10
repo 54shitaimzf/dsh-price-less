@@ -80,6 +80,8 @@ npm run gate ; npm run typecheck:tests ; npm run smoke:lib ; npm run probe:chann
 | 6 | `peerDependencies` 版本范围 | `package.json` | semver 预发布规则：范围必须显式覆盖宿主元组（现 `>=0.1.3-alpha.1 <2 \|\| >=0.1.5-alpha.0 <2`） |
 | 7 | `platform/star-bridge.ts` 的源码深路径导入 | 上游 `@deepseek-ai/dsh-client-connection/src/rpc.ts` | 上游挪文件即断（本次未踩雷）；下次升级**优先核这条** |
 | 8 | 测试替身对线格式的解读 | `tests/replace-op.ts`（`expectedReplaceOp` / `replaceEndpoints`） | 2026-09-10 实测：**6 处替身**各自硬编码 `start`/`end`，基线一换全部静默失效（表面不收敛），失败伪装成别的原因。已全部收口到该助手——**新写替身必须复用它** |
+| 9 | **压缩服务缝**（U17 取代路线）：`CompactionEngine` 抽象类三方法签名 + `CompactionResult` 8 字段 + `ManualCompactionError` 分类 + `ManualCompactAgentContext.runMaintenance` | `src/platform/provider-entry.ts`（服务缝触点，D7 的第二个具名放行面）+ `src/platform/compaction-port.ts`（自有形状，零运行时 harness 依赖） | `npm run probe:provider`（11 项，**跑在 `lib/` 上**）：抽象类签名一改 → typecheck 红；`dsh-compaction` 解析出**双实例**（realpath 不同）→ 探针的 `instanceof` 转 FAIL；preset 行 `dsh-price-less/provider` 解析不了 → 探针/挂载期红 |
+| 10 | **preset 的 isolate 组形态**（`isolate: {compaction: true, toolResultPruner: true}` + 组内 `command-compact`） | 本仓 `presets/price-less/agent.cordis.yml`（复制自上游 `presets/standard`） | 上游改组名/去掉 isolate ⇒ 组内 provider 要么被 `leakedServices` 拒（挂载失败）、要么不再被 `command-compact` 解析；`probe:provider` 的前 3 项（静态面）+ 组内解析项会红。**上游改 standard 预设后必须重取 diff 同步本仓 preset** |
 
 ---
 
@@ -88,7 +90,7 @@ npm run gate ; npm run typecheck:tests ; npm run smoke:lib ; npm run probe:chann
 1. `npm run gate` 退出 0（typecheck + typecheck:client + vitest + assert `ok=true vacuous=[]`）；
 2. `npm run typecheck:tests` 退出 0（词汇派生与编译闸的类型级守门）；
 3. `& bash scripts/build.sh` 退出 0；
-4. **lib 级冒烟 + 通道探针**（两者都**跑在构建产物 `lib/` 上，不是 src**）：
+4. **lib 级冒烟 + 产物层探针**（三者都**跑在构建产物 `lib/` 上，不是 src**）：
    - `npm run smoke:lib`（常驻脚本 `scripts/smoke-lib.mjs`）必须 **24/24 PASS**，覆盖**插件侧回归锚**
      （U8–U13 起）：无路由 → `undefined`（无内置默认模型）、LLM 流硬超时、段锚/重试预算、恢复段归属、
      折叠材料判据、`run` 动词、chain 逐字替换、class 白名单、drain 分批。
@@ -98,10 +100,17 @@ npm run gate ; npm run typecheck:tests ; npm run smoke:lib ; npm run probe:chann
    > **2026-09-11 修正**：本条此前声称 `smoke:lib` 覆盖 harness 接触面（`SESSION_LOG_INTENT` /
    > `SESSION_FORMAT_VERSION` / 端点常量 / replace / `foldSurfaceNodes` / 通道→`emitted`）——**与实现不符**：
    > `scripts/smoke-lib.mjs` 里这些**零匹配**，24 项全是插件侧回归。于是"升级后必跑"的那道闸
-   > **并没有在测通道**，通道是否闭合只能靠人肉。已拆成上面两个脚本；**换基线后两个都要跑**。
+   > **并没有在测通道**，通道是否闭合只能靠人肉。已拆成上面三个脚本；**换基线后三个都要跑**。
    > 这些断言在 src 层 vitest 里也有（`tests/harness-session.spec.ts` 回环 + `tests/ignorable-channel.spec.ts`）；
    > lib 层的价值是**证明构建产物本身正确**（tsc/打包漂移、junction 指错树、`lib/` 陈旧都会在这里暴露，
    > 而 vitest 全绿也照样漏）。
+   - **`npm run probe:provider`（常驻脚本 `scripts/probe-provider.mjs`）必须 11/11 PASS** ——
+     **取代路线（U17）的接触面在此**：preset 换行的静态面（组内是 `dsh-price-less/provider`、
+     已无 `compaction-basic`、保留 `command-compact`）、`lib/` 里 provider 默认导出是 `CompactionEngine`
+     子类且**与探针 import 的是同一模块实例**（双 realpath ⇒ `ManualCompactionError instanceof` 失效，
+     人类只会看到裸错误）、复刻 isolate 组后**根 realm 无 `compaction`**（否则 `mountPreset` 的
+     `leakedServices` 拒绝挂载）、`contextEconomy` **从组内可解析**（缝）、官方 8 字段映射、
+     自动触发 decline 且不碰 host 面、非空闲 → `busy`、`compactRegion` 明确拒绝。
 5. harness 侧：`pnpm exec vitest run packages/core/session` 全绿（补丁自带的 5 条用例在内）；
 6. 真机：冒烟清单见 [`implement/REPAIR-2026-09-10.md §5.3`](implement/REPAIR-2026-09-10.md)。
 

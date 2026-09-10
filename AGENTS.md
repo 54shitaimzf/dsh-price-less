@@ -26,7 +26,8 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 **P20 压力路径与保险丝已施工**（`core/compress/{pressure,fuse}.ts`：绝对阈值 + 比例 fallback / 断路器 3 / 压力档重试 2 /
 检查点渲染 / 折叠区材料转写 / 地板 0.8×窗口；`domains/compaction.ts`：wire 锚定触发 → 选缝 → 检查点 + 保留区逐字 →
 缩水校验 → 档案 checkpoint → 事务，以及地板以上/溢出码紧急折叠 + `agent/request-error` retry；
-`platform/{agent-step,meter,llm}.ts` 端口扩面〔H3 收口 D14 扩面〕；`cordis.patch.yml` 覆写 compaction-basic `auto:false`；
+`platform/{agent-step,meter,llm}.ts` 端口扩面〔H3 收口 D14 扩面〕；`cordis.patch.yml` 声明 compaction-basic `auto:false`
+（**U16 更正：声明在、但作用不到生效实例**，见下文 U16 与账本 §87）；
 快照 §47；**需重启加载新构建**，live `pressure-fired` 当前 = 0）。**P20c 阀门修正**（用户裁定：压力阀门 = `compression.pressureRatio`（默认 **0.35**）× **主模型上下文窗口**；窗口缺失 → 假定窗口 `domainTokens` → 绝对安全网 `thresholdTokens`；窗口探针取主会话路由 `readSessionModel`；保险丝紧急折叠可越过断路器〔硬上限 +3〕；快照 §48）。**P21a 恢复编排已施工**（`core/restore/` 纯核〔步序/实体审计/卷宗日志重放/双源等价/`restoreDegraded` fold〕+ `platform/agent-step.ts` H9 端口 `onAgentSessionStart`〔D16 收口；apply 同步注册 + pending 缓冲〕+ `domains/restore.ts` 恢复序〔`firstLiveSeq>0` 才跑、同会话幂等、零模型零改史〕+ `domains/restore-facts.ts`：09 §4 顺序 = 项目帧快照回退 / 卷宗日志重放写回 / 边界档案与优化产物只降级 / 段状态机与度量缓存纯函数重算，三类 `restore-step|restore-degraded|restore-done` ignorable 事实；快照 §49）。**P21b 全链验收已施工**（`tests/full-chain-order.spec.ts` 四触发次序闭合表〔边→边/边→压/压→边/压→压〕+ 域侧交错 e2e + 层隔离；`tests/cache-invariants.spec.ts` 四道缓存断言〔10 §6：前缀性质/同版本逐字节/同 purpose 模板前缀/档案只追加〕；`scripts/verify-p21b.mjs` R4 出门门槛汇总；**验收发现并修正 2 处**——`runBoundary` 起点定位缺陷〔多闭合段积压卡死〕/ `verify-p15a` 陈旧白名单；度量可视化 = 加分项不做；快照 §50）——**R4 完成**。`platform/`（十四文件）是唯一 harness 触点层。**现行基线 = B+（2026-09-10 用户裁定）**：上游 `origin/master` @ `c291e7961a`（**0.1.5-rc.2**）**+ 重放本仓的 ignorable 补丁**（harness 分支 `bplus-0.1.5` @ `f0dc41471c`）——跟主线 **且** 保住事实轨的会话日志真源。上一代基线 A（`feat/ignorable-logintent-alpha2`，alpha.2）**已不受支持**。replace `surfaceOp` 端点键名的**单一事实源 = `src/core/ledger/types.ts` 的 `REPLACE_OP_ENDPOINT_KEYS`**（读写两侧共用；`platform/history.ts` 另配双向编译期锚 `ReplaceOpAnchor`——上游再改端点名即 typecheck 红，**不得靠改断言消红**）。测试替身的线格式解读统一走 `tests/replace-op.ts`，**新写替身必须复用**。**升级 harness 前先读 [`docs/14-upstream-upgrade.md`](docs/14-upstream-upgrade.md)**（可复现步骤 + 8 条接触面清单 + 验收 + 回滚）；不可锚的 cast 与上游弃用面台账在 `docs/legacy.md §14/§15`；账本 §80/§81/§82。
 **2026-09-10 五路审查修复战役 U1–U13 全部落地**：U8–U13（提交 `9ca139c`/`80493fe`/`dc671df`/`14172a0`/`7c14e3d`/`82af4a4`）
 = 判别/辅助调用模型**去硬编码**（无路由跳过判别 + `CE_JUDGE_NO_ROUTE`）/ 永久封禁族（段锚 + 重试预算 2 + 孤儿事务自愈）/
@@ -35,6 +36,9 @@ P14b2 真实桥与时序 B；**P14c 修正**（判别链瘦身 + ★ 断面修�
 跑在 `lib/` 上（src 层 vitest 全绿也照样漏构建/链接漂移）。**harness 接触面**（ignorable 通道是否闭合）
 由 **`npm run probe:channel`** 守（`scripts/probe-channel.mjs`：探测 + 真 Session 回环 + 存储契约正反证；
 2026-09-11 新增——此前 `docs/14 §4` 误称 `smoke:lib` 已覆盖，实测零匹配）。
+**取代路线的构建产物级探针 = `npm run probe:provider`**（`scripts/probe-provider.mjs`，11 项：preset 换行的
+静态面 + 包 `exports` 解析 + `CompactionEngine` **模块实例同一** + 根 realm **无泄漏** + 缝从 isolate 组内
+可解析 + 官方 8 字段映射 + decline/busy/拒绝；2026-09-11 新增——这条路线的前提全都不在 `src/` 层）。
 **重建 + 重启一条命令**：`pwsh -File scripts\rebuild-and-run.ps1`（重链重编译 → gate → smoke →
 probe:channel → 停旧宿主 → `pnpm dsh web`）。
 `context-economy/*` 事实发射依赖 harness ignorable
@@ -55,6 +59,47 @@ harness checkout 的本地实现（上游共识形态，待合并），插件经
 这个项目"判不合格）、continue 尾巴禁止以"都在同一个仓库"放行；判据模板 = 
 `datasets/prompt-discriminator-v2.4.txt`（与 `core/judge.ts` 同源断言）。代价（已确认接受）：
 闭合 task 变多 → compress 调用次数上涨。快照 **§83**。
+**U15 热尾申报 ID 契约（2026-09-11，真机首例边界压缩复盘）**：边界压缩**已真机跑通**
+（`session-ed9fe428` 02:57，`compress-run` layer=boundary outcome=ok；宿主 02:51 重启后
+ignorable 通道闭合、事实进 JSONL 而非只长 `fact_mirror`）。但**热尾整体退化为位置兜底**：
+模型申报的 10 条热尾 100% 被拒——清单旧渲染 `[id] 名称 …` 让模型把方括号一起抄进 `unitId`
+→ 判 `unknown-unit` → 装配器退回"区间末尾原文逐字搬运"（产物 **95.3% 是原文切片**，含 10 条
+`[tool-call]` JSON 噪声）。修法：`renderUnitList` **行首第一个词即 `unitId`**（去包裹）+
+`core/assemble/gate.ts normalizeUnitId`（剥一层成对包裹作双保险）+ prompt 抄写纪律 +
+`droppedHotTailBadDecl`/`droppedHotTailUnknownUnit` **分列落账**（只记合并数不可诊断：
+`assemble-run` 看到的已是门禁过滤后的空数组，恒 0）。`COMPRESS_PROMPT_VERSION` 3→4。快照 **§85**。
+**U16 孤儿锁与原生 provider 并存（2026-09-11，真机复盘 + 用户问"混用后果"）**：全量重放 13 会话的压缩协议
+（配对/孤儿/ID 不匹配/未闭合）**全为 0**，但追查组合层时翻出两处结构缺陷。**① `cordis.patch.yml` 的
+`compaction-basic auto:false` 不生效**：profile 补丁链 = base → web-app → dsh-price-less，而
+`web-app/cordis.patch.yml:427-428` 已把 profile 树的 compaction-basic `disabled: true`，我们的 config 覆写
+落在**禁用行**上；真正生效的是 **agent preset** 的 `isolate: {compaction: true}` 组内实例
+（`presets/standard/agent.cordis.yml:138-156`，无 config ⇒ `compaction-basic/src/config.ts:95`
+`auto: config.auto ?? true`），由 agent-presets **运行期单独挂载**，不在补丁链上。此前"13 会话 0 次自动
+原生压缩 ⇒ 补丁生效"是**混淆推断**——真因是**阈值差**（原生 0.8×窗口=800K vs 本插件 0.35×窗口=350K，
+实测 `contextWindow=1000000`/`thresholdTokens=350000`/wireTokens 峰值 423036）。**② 孤儿锁两条缺陷**：
+(a) `platform/history.ts` 的 `scanActiveCompaction` 忽略 `session/end-seed`——而 harness 官方语义是种子边界
+**作废**在途事务（`compaction/src/invariant.ts` 的 trace + `compaction-basic/src/region.ts:307-319` 的
+`latestEndSeedSeq > startSeq`），旧实现使上一生命周期残留把会话压缩**永久瘫痪**；
+(b) `domains/assemble.ts` 的 `closeOrphanCompaction` 无条件闭合它发现的任何未闭合标记，而"单线程同步窗口内
+不存在真并发"的注释前提**已被证伪**（原生 provider 括号跨一次摘要 await，且其自动档一直注册在同一步准入
+waterfall 上）⇒ 会把并行 provider 的**在途**事务关掉，对方收尾即撞 harness 不变式
+（`compaction/src/invariant.ts:246`）；这不是"手动开 auto 才响"，而是**延迟触发**。修法：`scanActiveCompaction`
+认 `session/end-seed`；新增 `CE_TXN_ID_PREFIX`/`ceTxnId` 唯一构造点（`core/assemble/txn.ts`）；
+`closeOrphanCompaction` **只闭合自家前缀**的残留，异己一律不碰、如实返回 `TXN_ACTIVE`。**取代原生压缩的
+正确形态**（修正初判）：`ctx.compaction` 作用域隔离且 `command-compact` 在**同组**解析它 ⇒ host 平面实现
+**不被解析**；必须走 preset 授权路径（复制 standard → 同组内去掉 compaction-basic、保留 command-compact、
+加入本插件薄 provider entry → 默认预设指向新 id），可行性见 `boot/app-boot/tests/config-reload.spec.ts:399-438`。
+快照 **§87**。**U17 取代路线已落地（2026-09-11）**：`platform/compaction-port.ts`（服务缝：host 平面
+`contextEconomy` 面的形状 + 名字唯一构造点，零运行时 harness 依赖）+ `platform/provider-entry.ts`
+（薄 provider = `dsh-price-less/provider` 的 default export，`CompactionEngine` 子类：`compactNow` 用
+`agent.runMaintenance` 包住并委派回 host 压缩域、`compactIfNeeded` 恒 `null`、`compactRegion` 明确拒绝）+
+`apply()` 里 `ctx.provide` 发布该面；`presets/price-less/agent.cordis.yml` 的 compaction 组已换行
+（`compaction-basic` → `dsh-price-less/provider`，`command-compact`/`tool-result-pruner` 保留）。
+**D7 因此有第二个具名放行面**（`platform/provider-entry.ts`：服务缝触点，一个事件都不写）；
+验收 = `npm run probe:provider`（11 项，构建产物级：包 exports 解析 / 模块实例同一 / 根 realm 无泄漏 /
+缝从 isolate 组内可解析 / 8 字段映射）。**默认预设仍是 `standard`**（指过去需用户确认）；装 preset 用
+`npm run preset:install`，漂移用 `npm run preset:check` 看（主目录那份是手装输入，不随包更新）。
+快照 **§90**。
 client/ 设置壳**全保留**（星标按钮 +
 度量可视化按 `docs/11 §5` 接线）；**R1–R4 工单已封存**至 `docs/implement/archive/`
 （历史记录，只读）；**N 系列「协商剪除」（语义层）已整体退役**（账本 §71；遗留登记 `docs/legacy.md` §9），原总纲与 N2/N3 工单封存于 `docs/implement/archive/`
@@ -107,6 +152,13 @@ sourceEventSeqs、自定义会话事件必须 ignorable:true、LLM 产物先版�
   （CJK 1.5 / 其余 2.9 字符/token；结构模型对齐 DSH `token-meter/estimate.ts`，`core/meter/estimate.ts`）；不变量 `retain < thresholdTokens`、`0 < pressureRatio < 0.8`。**触发器语义**：task 边界
   自动触发 = `agent/pre-step` 发现 `status==='closed' && !compactedTaskIds` 的 task 就压
   （`docs/10` 时序 A），不是 `trigger.tokenThreshold`（那是 DSH 压力/溢出触发）。
+  **A/F2（2026-09-11，真机复盘）**：主路径改为读**步准入载荷 `messages`**（本步即将落会话的用户消息，
+  此刻还没有 seq）→ `preJudge` 按文本判 → `new-task` 即调 `onBoundaryBeforeStep` 压**当前开放段**
+  （区间右端 = 表面尾，因新消息尚未提交）——这才压在**新任务第一条模型调用之前**。旧实现只按会话
+  seq 建 `settle` 屏障，而 harness 在 pre-step 返回之后才 `append('user/message')`（agent-loop
+  `agent.ts` L289→L302→L375）⇒ 屏障**恒空转**：实测判词落地时首步思考早已产出，压缩被推到第二步
+  并阻塞 62.6s。`userTexts` 过滤口径与输入面五条件**逐条对齐**（`source.kind==='user'`，
+  否则 AGENTS/插件注入的同型消息会被误判为新任务）。
 - **上下文窗口硬截断（仅防溢出安全阀）**：独立于压缩域逻辑，平时 no-op；只做防溢出，
   不是压缩域标定（结论见上一条）。
 

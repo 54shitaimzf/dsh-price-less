@@ -9,7 +9,7 @@
 > 状态：**R4 完成**（P17 边界装配器已施工：`core/assemble/` 纯核 + `platform/files.ts` 盘上取真 H15 + `domains/assemble.ts` 装配域；
 > 快照 [§42](ledger-history.md)/[§43](ledger-history.md)；**P17c 修正**：HT 软门 + 档案区 15K 硬帽 + 追加式链两形态 + 计数修复
 > （快照 [§44](ledger-history.md)）；**P18 压缩调用纯核已施工**（快照 [§45](ledger-history.md)）；**P19 边界路径编排已施工**（`core/compress/{region,store}.ts` + `platform/{agent-step,meter}.ts` + `domains/compaction.ts` + `compression.*` 配置面；快照 [§46](ledger-history.md)）；**P20 压力路径 + 保险丝已施工**（`core/compress/{pressure,fuse}.ts` +
-> `domains/compaction.ts` 压力折叠/紧急折叠 + `platform/{agent-step,meter,llm}.ts` 端口扩面 + `cordis.patch.yml` auto:false；
+> `domains/compaction.ts` 压力折叠/紧急折叠 + `platform/{agent-step,meter,llm}.ts` 端口扩面 + `cordis.patch.yml` **声明** auto:false（**U16 更正：声明在、作用不到生效实例**，见 [§87](ledger-history.md)）；
 > 快照 [§47](ledger-history.md)）；**P20c 阀门修正**（压力阀门 = 0.35 × 主模型窗口 + 假定窗口/绝对安全网回退 + 主会话路由窗口探针；快照 [§48](ledger-history.md)）；**P21a 恢复编排已施工**（`core/restore/` 纯核 + `platform/agent-step.ts` H9 端口 + `domains/restore.ts` 恢复序 + `domains/restore-facts.ts`；快照 [§49](ledger-history.md)）；**P21b 全链验收已施工**（四触发次序闭合表 + 四道缓存断言〔[10 §6](10-wiring.md)〕进 CI：`tests/full-chain-order.spec.ts` + `tests/cache-invariants.spec.ts` + `scripts/verify-p21b.mjs` R4 出门门槛汇总；**验收发现并修正 2 处**——边界区间起点定位缺陷 / 陈旧 P15a 白名单；快照 [§50](ledger-history.md)）——**R4 完成**）。R1 平台面已完成（P0–P7 全部施工；首份 07 报表见 [ledger-history.md §31](ledger-history.md)）；**R2 判别域已完成**（P8/P9/P10/P11/P12/P13/P14a/P14b1/P14b2 全部施工；段末账本快照见 [ledger-history.md §32](ledger-history.md)；**P14c–P14f 修正**（判别链瘦身 / 断面产品契约 / ★ 结果复用 / 推理档设置，快照 §33/§35/§36/§37）已施工）；**R3 剪切域已完成**（P15a 纯核 + P15b 调度接线 + **P16 对话剪切**：`core/shear/run.ts` run 状态机/吸收证明/结论三档 + `domains/shear.ts` 整段 run 冲刷（H4 多节点 replace → notice 用户消息）/ G10 尾部窗 / 第四类事实 `shear-run-plan`；`shear.enabled` 默认 true，重启后生效；快照 §38–§41），§9。
 
 ## 0. 它解决什么问题（人话版）
@@ -33,7 +33,7 @@
 |---|---|---|---|
 | name/version | `dsh-price-less` / 0.0.1 | 一致 | — |
 | peerDeps | 范围声明不硬编码版本 | cordis/dsh-settings/schemastery/dsh-session/dsh-llm/dsh-skill/dsh-storage-domain/dsh-compaction/dsh-commands 在（P1 补，P4 补 dsh-skill，P6 补 dsh-compaction/dsh-commands；junction 集随 build.sh） | **R1 补** `@deepseek-ai/dsh-tools`（剪切需要，P7），版本随 checkout 核对 |
-| dsh.bundle.patch | `./cordis.patch.yml` | 在（P1.2：`files`+`exports` 收编，npm pack 可装配） | R4 加 compaction-basic `auto:false` 覆写（防双触发，[10 §1](10-wiring.md) 辨析③） |
+| dsh.bundle.patch | `./cordis.patch.yml` | 在（P1.2：`files`+`exports` 收编，npm pack 可装配） | R4 加 compaction-basic `auto:false` 声明（[10 §1](10-wiring.md) 辨析③；**U16：声明不等于生效**——作用不到 preset 的 isolate 组实例，见 [§87](ledger-history.md)） |
 | dsh.client.* | inject + platform + `exports["./client"]` | 全在 | — |
 | 构建 | build.sh（DSH_CHECKOUT 探测 + junction 链接）→ tsc host → tsdown client | 在（P1.2：client/tsdown/react/@types/react/zod 链接补齐，干净环境可复现） | R1 起链接集随 peerDeps 扩 |
 | 入口铁律 | `export name/inject/Config/apply`；一切资源注册挂 `ctx.effect`；waterfall 必须 `return next()` | 最小闭环在 | 全程遵守 |
@@ -62,6 +62,11 @@ src/
 │  ├─ meter.ts       # H7 计量端口（ctx.tokenMeter 影子价同源；P19b，D15）
 │  ├─ logger.ts      # ctx.logger('context-economy') + ignorable 自定义事件发射
 │  ├─ star-bridge.ts # H11 星标 Connection RPC 桥端口（channel/端点/信封/错误码；P14b1）
+│  ├─ compaction-port.ts # U17 服务缝：host 平面压缩面（`contextEconomy`）的形状 + 名字唯一构造点；
+│  │                 #   零运行时 harness 依赖（type-only）⇒ 域侧 import 它不拖 harness 进纯核路径
+│  ├─ provider-entry.ts  # U17 取代路线的**薄 provider**（`dsh-price-less/provider` 的 default export）：
+│  │                 #   `CompactionEngine` 子类，挂在 preset 的 isolate 组内把活委派回 host 压缩域。
+│  │                 #   **D7 的第二个具名放行面**（服务缝触点：一个事件都不写，见 §90/§89）
 │  └─ diag-sink.ts   # 诊断落盘：ctx.logger.exporter() → 插件 logs/ JSONL（P1.1，agent 自审入口）
 ├─ core/             # 纯核（零 harness import：事件/会话类型本地重声明，结构性兼容）
 │  ├─ units.ts       # 分划单位状态机：task 段 fold、边界记录（01 §3.5 正典）
@@ -158,7 +163,7 @@ workspace 隔离（F3）：按**会话 `header.cwd`** 分域（缺失回落进�
 | `compression.domainTokens` / `retainTokens` / `thresholdTokens` | 125K / 10K / 100K | 压缩 | 标定（[04 §5](04-compactor.md)；**P19 落位 + P20c 改义**）：`domainTokens` = 模型未声明窗口时的**假定窗口**；`retainTokens` = 边界热尾预算；`thresholdTokens` = **末位绝对安全网**；`retain < threshold` 违例自动回退设计值 |
 | `compression.archiveCapTokens` | 10K | 压缩 | 档案区硬上限（只计总分；热尾单列）；超限截断最老条目（[04 §6](04-compactor.md)；**P19 落位 + F9d/F10 改值**） |
 
-关闭任一层其余功能完整；`cordis.patch.yml` 已覆写 compaction-basic `auto:false`（**P20b 落位**：自动压力与溢出恢复唯一提供者 = 本插件，防双触发）。
+关闭任一层其余功能完整；`cordis.patch.yml` **声明**了 compaction-basic `auto:false`（**P20b 落位**），但 **U16 更正：该声明作用不到生效实例**（profile 树的该行已被 web-app `disabled`；生效的是 agent preset `isolate: {compaction: true}` 组内的 compaction-basic，`auto` 走默认 true）——原生自动档一直是开的，本插件靠更低的压力阀门（0.35 窗口 vs 原生 0.8 窗口）避让，不是靠该补丁。详见 [§87](ledger-history.md)。
 
 ## 7. 提示词与工具资产登记
 
@@ -183,7 +188,7 @@ workspace 隔离（F3）：按**会话 `header.cwd`** 分域（缺失回落进�
 | **R1 平台面** | platform 七端口（含 skills）+ settings 域 + `core/ledger` 空转（只记账，不发行为） | 账本字段能从 JSONL 回放；ignorable 断言过 |
 | **R2 判别域** | core/{units,dossier,judge,optimize,prefix,init} + domains/{input,commands} + init 项目帧 + 星标按钮（H11） | 边界 F1 / 判别成本 / tableHitRate / optimizePromptTokens 入账；`auto` 开关可用（默认关）；星标端到端（断面→预览→确认→回填） |
 | **R3 剪切域** | core/shear + domains/shear（工具剪切四档 + 对话 run 冲刷）——**P15a + P15b + P16 全部施工**（快照 §38/§39/§40/§41），**R3 关门** | cut*/shear*/tableRepair/questionBacklogDepth/cutMisfireDetected 全部入账（P16 补齐后三字段）；阈值常数按既有实验结论初值落位（[03 §8](03-shear.md)，不做对照实验） |
-| **R4 压缩域（完成）** | core/{compress,assemble,restore} + domains/{compaction,restore}：边界装配 → 压力路径 → 保险丝 → 恢复编排；验收按四种触发次序组织（**P17** 装配器 §42/§43 + **P17c** §44 / **P18** 调用纯核 §45 / **P19** 边界路径 §46 / **P20+P20c** 压力与保险丝 §47/§48 / **P21a** 恢复编排 §49 / **P21b** 全链验收 §50） | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 协调生效；**四触发次序 + 四道缓存断言进 CI** |
+| **R4 压缩域（完成）** | core/{compress,assemble,restore} + domains/{compaction,restore}：边界装配 → 压力路径 → 保险丝 → 恢复编排；验收按四种触发次序组织（**P17** 装配器 §42/§43 + **P17c** §44 / **P18** 调用纯核 §45 / **P19** 边界路径 §46 / **P20+P20c** 压力与保险丝 §47/§48 / **P21a** 恢复编排 §49 / **P21b** 全链验收 §50） | hotTail*/pressure*/archiveTruncate 入账；强制重读率经 07 账本真机观测；`auto:false` 声明在（**U16：不生效，见 [§87](ledger-history.md)**）；**四触发次序 + 四道缓存断言进 CI** |
 | R5+ | 路线图条目（[00 §11](00-overview.md)） | 各条目自设门槛 |
 | **N 系列（已退役）** | **协商剪除（语义层）**：N1 身份通道 ✅ 保留（`core/shear/classify.ts`）；**N2/N3/N4/N5 协商线整体退役**（真机 0/770 配合率；账本 §71）。后续语义剪除方向 = **写时确定性**（不得依赖模型回应，不得等行为信号——都会改史/断缓存），见 [03 §2.1](03-shear.md) | — |
 

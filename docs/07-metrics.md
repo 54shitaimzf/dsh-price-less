@@ -48,6 +48,10 @@
 - `cutMisfireDetected` / `rerunAfterCut` / `rereadAfterRepair`：三族误伤信号（重问被剪内容 /
   剪后重跑 / 修复后重读）——阈值修正依据，误判不静默。
 - `hotTailSource`：热尾来自模型申报还是位置兜底——材料基准有效性的读数。
+- **U15 申报归因**（`compress-run`）：`droppedHotTailBadDecl` / `droppedHotTailUnknownUnit` = 热尾申报
+  被拒的两类原因（形状非法 / ID 不在清单）。**必须分列**：`assemble-run.dropReasons` 看到的已是
+  门禁过滤后的数组（恒 0），只记 `droppedHotTail` 合并数则"热尾为何退化为位置兜底"在账本上不可诊断
+  （真机 `session-ed9fe428`：compress-run 记 10 / assemble-run 记 0，真因是 `unitId` 被方括号包裹）。
 - **F10 摘要面**：`gistBytes/stepCount/stepTokens` = 总述与分步规模；`factLeaks` = 摘要中的
   事实泄漏命中数（应为 0；>0 = 提示词/产物需要收敛）；`quotaDrops` = 配额不足被丢弃条数
   （F10：不再产空指针条目）；`errorDrops` = 错误单元不进热尾的丢弃数；`factRejects` = `fact`

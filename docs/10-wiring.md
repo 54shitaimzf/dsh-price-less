@@ -5,7 +5,7 @@
 > append-only 落盘）与 cordis 运行时事件（waterfall/emit，不落盘）。
 > 状态：部分实现（H1/H4/H5/H6/H7/H10/H12/H13/H14 已施工于 platform/events.ts·history.ts·logger.ts·ignorable-channel.ts·llm.ts·storage.ts·skills.ts·tools.ts；**H6 四档执行已由 P15b、run 冲刷已由 P16 接线于 `domains/shear.ts`**；**H15 盘上取真已由 P17b 接线于 `platform/files.ts`（装配域 `domains/assemble.ts`，压缩触发归 P19；P17c 补 HT 软门与丢弃归因）**；**P18 压缩调用纯核已施工**（`core/compress/` 两模式 prompt + 产物 schema 校验；H12 purpose `context-economy-compaction` 的**调用契约**已定，实际 `llm.stream` 调用归 P19/P20a）；**P19 已接线 H2**（`platform/agent-step.ts` 收口 + `domains/compaction.ts` 边界触发；`compaction/summary` + checkpoint 替换经 `platform/history.ts` `commitCheckpoint`；快照 [§46](ledger-history.md)）；
 **P20 已接线 H3**（`platform/agent-step.ts` `onAgentRequestError` + `domains/compaction.ts` 压力触发/溢出接管；
-> `cordis.patch.yml` 覆写 compaction-basic `auto:false`；快照 [§47](ledger-history.md)）；
+> `cordis.patch.yml` **声明** compaction-basic `auto:false`（**U16：声明在、不生效**，见 [§87](ledger-history.md)）；快照 [§47](ledger-history.md)）；
 **P21a 已接线 H9**（`platform/agent-step.ts` `onAgentSessionStart` 收口 + `domains/restore.ts` 恢复序；
 快照 [§49](ledger-history.md)）；H8/H11 设置壳已保留，H11 星标按钮已施工于 `conversation.input.right`）。
 
@@ -20,7 +20,7 @@
 | # | 机制 | 挂点（确切名） | 通道与语义 |
 |---|---|---|---|
 | H1 | 判别器输入 | `session/event` → `user/message` | 输入面过滤同 [02 §2](02-discriminator.md)（append + `source.kind==='user'` + 主会话 + u≥1）；同步 post-commit 派发，监听器异常不外溢 |
-| H2 | 边界/步准入 | `agent/pre-step`（waterfall） | task 闭合发现（边界信号成立 → 触发边界压缩）；**必须 `return next()`**。**P19 已接线**：收口 = `platform/agent-step.ts`（唯一持有 `agent/pre-step` 字面与 `dsh-agent` 类型面，D14 断言锁定）；域侧 `domains/compaction.ts` `onPreStep` 恒放行、异常只 warn（fail-lazy） |
+| H2 | 边界/步准入 | `agent/pre-step`（waterfall，**回调在 `next()` 之前 await ⇒ 阻塞步骤**） | task 闭合发现（边界信号成立 → 触发边界压缩）；**必须 `return next()`**。**P19 已接线**：收口 = `platform/agent-step.ts`（唯一持有 `agent/pre-step` 字面与 `dsh-agent` 类型面，D14 断言锁定）；域侧 `domains/compaction.ts` `onPreStep` 恒放行、异常只 warn（fail-lazy） |
 | H3 | 压力触发 | `agent/pre-step`（压力计量）+ `agent/request-error`（`CONTEXT_WINDOW_EXCEEDED`） | `pressureRatio=0.35` × 主模型上下文窗口按 wire 锚定计量（[04 §3](04-compactor.md)；P20c 修订：窗口缺失 → 假定窗口 → 绝对安全网）；溢出恢复走 request-error 接管 |
 | H4 | **改史唯一通道** | `session.append(type, data, {surfaceOp:{op:'replace',start,end}, sourceEventSeqs})` | replace 的 `sourceEventSeqs` 必含全部被遮蔽节点；紧邻契约：`compaction/summary` ↔ 替换 `user/message`；`compaction/prune` 影子计价紧随同步 append。**P19 落位**：`platform/history.ts` `commitCheckpoint` 原子提交 summary（影子价）+ 官方 checkpoint `user/message`（`compactCheckpointSource`，`sourceEventSeqs=[start,summary,...shadowed]`）。**F9a（2026-09-09）**：replace 端点必须取自**权威表面** `HistoryPort.surfaceNodes()`（= `session.surface.nodes`）并经 `balanceRange` 收窄——从原始事件自折在事件窗截断时会复活已遮蔽节点，选到非表面 seq 即抛 `INVALID_RANGE`（快照 §62） |
 | H5 | 压缩事务 | `compaction/start` … `compaction/end`（log-only 标记对） | 持锁幂等（`turn:null` 独立事务）；`assertNoActiveCompaction` 防重入 |
@@ -42,7 +42,7 @@
 2. **改史没有任何旁路**：不能原地改写/删除会话行；一切历史变更（剪切/压缩/修复）都表达为
    "append 带 replace 的表面事件"——原生表面 fold 因此自动正确派生（原生兼容的核心承诺）。
 3. **引擎协调**：压缩实现以旁路协议写入（不动 `ctx.compaction` 服务），
-   `cordis.patch.yml` 覆写 compaction-basic `auto:false` 防双触发；整体替换引擎为后续选项
+   `cordis.patch.yml` 声明 compaction-basic `auto:false`（**U16：作用不到 preset 的 isolate 组实例，见 [§87](ledger-history.md)**）；整体替换引擎为后续选项
    （换引擎不换协议）。
 
 ## 2. 命令面（用户权威入口）
@@ -61,10 +61,20 @@
 
 ```text
 turn/end → 自动断面边界信号成立（或 /task close）
-  → H2 agent/pre-step：
-     · F2 判词屏障：`AutoDiscriminator.settle(session, newestSeq, 60s)`——等本轮判词落地才放行
-       （否则压缩迟到一步：新 task 第一步背着旧任务原文跑；超时 fail-lazy，退回下一 pre-step）
-     · 发现 closed && 未归档的 task
+  → H2 步准入瀑布（`agent/pre-step`；本端口**在 `next()` 之前 await 回调** ⇒ 回调耗时 = 步骤等待耗时，
+     边界压缩靠这一点阻塞，靠 CE_LLM_TIMEOUT_MS 有界）：
+     · **A 路径（2026-09-11 起主路径）**：载荷 `messages` = 本步**即将落会话**的用户消息
+       （harness 在 pre-step 返回后才 `append('user/message')`）。逐条按**输入面五条件**过滤
+       （`source.kind==='user'`；否则 agent-instructions / plugin / runtime-context 同型消息会被误判）
+       得 `userTexts`，取最后一条 → `AutoDiscriminator.preJudge(session, text, 60s)`：**按文本**判
+       （此刻该消息还没有 seq，按 seq 的 `settle` 对它恒空转）。判为 `new-task` ⇒ 边界已成立且
+       新消息尚未提交 ⇒ **表面尾就是边界**：`CompactionDomain.onBoundaryBeforeStep` 立刻压
+       当前开放段——这才是 F2 成文原意（"压缩发生在**新任务第一条模型调用之前**"）。
+       裁决按文本缓存，消息落盘后由泵复用（`trigger:"l1-cache"`，零二次调用）并补发
+       `judge-verdict`（带真 seq）——段状态机与防重（`attemptedTaskIds`）因此不受影响。
+     · **兜底路径（原 F2）**：本步带**已落会话**但判词仍在飞的消息时（后台唤醒注入等），
+       `AutoDiscriminator.settle(session, newestSeq, 60s)` 等判词落地再走常规 `onPreStep`
+       （发现 closed && 未归档的 task → 压）。超时 fail-lazy，退回下一 pre-step。
   → 压缩器边界装配（H4/H5）：类型化摘要 + 热尾申报 → 装配（事实层冻结 + 坐标层 + 热尾 ≤10K）
      · T-boundary 搭车：段内老调用对随大 replace 折叠（剪切层清单）
   → 档案归档 vN（H10）→ 卷宗清空（新 task 新卷宗）

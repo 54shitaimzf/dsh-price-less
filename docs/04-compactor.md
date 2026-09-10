@@ -17,7 +17,7 @@
 > （`core/compress/pressure.ts`：绝对阈值 + 比例 fallback / 断路器 3 / 压力档重试 2 / 检查点渲染 / 折叠区材料转写；
 > `domains/compaction.ts`：wire 锚定触发 → 选缝 → 调用 → 缩水校验 → 档案 checkpoint → 事务；`core/compress/fuse.ts` +
 > `platform/agent-step.ts` `onAgentRequestError`：地板 0.8×窗口 no-op / 溢出码紧急折叠 + retry；
-> `cordis.patch.yml` 覆写 compaction-basic `auto:false`；快照 [§47](ledger-history.md)；`node scripts/verify-p20.mjs` PASS）；
+> `cordis.patch.yml` **声明** compaction-basic `auto:false`（**U16 更正：声明在、作用不到生效实例**，见 [§87](ledger-history.md)）；快照 [§47](ledger-history.md)；`node scripts/verify-p20.mjs` PASS）；
 > **P20c 阀门修正**（用户裁定：压力阀门 = `pressureRatio`（默认 0.35）× **主模型上下文窗口**；窗口缺失 → 假定窗口 → 绝对安全网；
 > 窗口探针改取主会话路由；保险丝紧急折叠可越过断路器；快照 [§48](ledger-history.md)；`node scripts/verify-p20.mjs` PASS 35 checks）。
 > R4 搭建序见 [11](11-structure.md)。
@@ -98,6 +98,11 @@ task 内万一长过头（判别器失灵连续误判、用户贴入超大内容
 
 - 压缩器输入尾部机械追加单元清单（ID·名称·**相对路径**·版本·粗标体量；F9e 相对化）；
   prompt 明令按重要性降序申报、**禁止任何预算计算**。
+  **U15（2026-09-11）**：清单**行首第一个词 = `unitId` 原文**，**不用任何包裹符号**——旧渲染
+  `[id] 名称 …` 让模型把方括号一起抄进 `unitId`（真机 `session-ed9fe428` 边界压缩：10 条申报
+  100% 判 unknown-unit 被拒 → 热尾整体退化为位置兜底，产物 95% 是原文切片，含 10 条
+  `[tool-call]` JSON 噪声）。申报侧另做**剥一层成对包裹**的归一化（`normalizeUnitId`）作双保险：
+  只剥两端成对者、只剥一层，"ID 必须真实存在于清单"这一硬要求不变。
 - 热尾预算 = `min(hotTailTokens=10K, max(minShare×区间, maxShare×区间 − 摘要估算))`
   （`hotTailMaxShare=0.4` / `hotTailMinShare=0.05`）——**份额帽 = 防产物 ≥ 区间被缩水校验打回**。
   配额按 **Zipf `w_i = 1/i`** 分配（重要者多分，未用配额 carry-over），**需要定位标注的条目**先扣
